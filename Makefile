@@ -15,13 +15,13 @@ help:
 		'  make test               Run currently available tests/checks'
 
 server-build:
-	gradle -p apps/server clean build
+	mvn -f apps/server/pom.xml clean verify
 
 server-test:
-	gradle -p apps/server test
+	mvn -f apps/server/pom.xml test
 
 server-run:
-	gradle -p apps/server bootRun
+	mvn -f apps/server/pom.xml spring-boot:run
 
 console-install:
 	npm --prefix apps/console install
