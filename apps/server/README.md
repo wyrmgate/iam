@@ -6,7 +6,7 @@ Java/Spring modular-monolith backend for Wyrmgate IAM.
 
 - Java 25 LTS
 - Spring Boot 4.1.x
-- Gradle Kotlin DSL
+- Apache Maven 3.9.x
 - PostgreSQL
 - Flyway
 - Spring JDBC
