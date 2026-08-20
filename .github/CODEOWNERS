@@ -1,6 +1,12 @@
 # Default ownership
 * @wyrmgate/maintainers
 
+# Product applications
+/apps/server/ @wyrmgate/maintainers @wyrmgate/developers
+/apps/console/ @wyrmgate/maintainers @wyrmgate/developers
+/packages/ @wyrmgate/maintainers @wyrmgate/developers
+/migrations/ @wyrmgate/maintainers @wyrmgate/developers
+
 # Security-sensitive areas
 /security/ @wyrmgate/security @wyrmgate/maintainers
 /tests/security/ @wyrmgate/security @wyrmgate/maintainers
@@ -12,3 +18,7 @@
 
 # Release-related scripts
 /scripts/release/ @wyrmgate/release-managers @wyrmgate/maintainers
+/scripts/operations/ @wyrmgate/maintainers @wyrmgate/release-managers
+
+# Engineering documentation
+/docs/ @wyrmgate/maintainers
