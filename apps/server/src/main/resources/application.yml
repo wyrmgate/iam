@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: wyrmgate-iam
+  datasource:
+    url: ${IAM_DB_URL:jdbc:postgresql://localhost:5432/wyrmgate_iam}
+    username: ${IAM_DB_USER:wyrmgate}
+    password: ${IAM_DB_PASSWORD:wyrmgate}
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /api/openapi
+  swagger-ui:
+    path: /api/docs
+
+server:
+  shutdown: graceful
