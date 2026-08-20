@@ -1,0 +1,14 @@
+# Default ownership
+* @wyrmgate/maintainers
+
+# Security-sensitive areas
+/security/ @wyrmgate/security @wyrmgate/maintainers
+/tests/security/ @wyrmgate/security @wyrmgate/maintainers
+
+# CI/CD and release automation
+/.github/workflows/ @wyrmgate/maintainers @wyrmgate/release-managers
+/deploy/ @wyrmgate/maintainers @wyrmgate/release-managers
+/infra/ @wyrmgate/maintainers @wyrmgate/release-managers
+
+# Release-related scripts
+/scripts/release/ @wyrmgate/release-managers @wyrmgate/maintainers
