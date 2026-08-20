@@ -3,7 +3,7 @@
 COMPOSE_FILE := deploy/compose/local.yml
 LOCAL_ENV := deploy/config/local.env
 LOCAL_ENV_EXAMPLE := deploy/config/local.env.example
-MAVEN := ./apps/server/mvnw
+MAVEN := sh ./apps/server/mvnw
 
 help:
 	@printf '%s\n' \
