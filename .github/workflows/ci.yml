@@ -1,0 +1,89 @@
+name: Core CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: server
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: apps/server/pom.xml
+
+      - name: Verify server
+        run: make server-build
+
+  console:
+    name: console
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/console/package.json
+
+      - name: Install console dependencies
+        run: npm --prefix apps/console install --no-audit --no-fund
+
+      - name: Typecheck and build console
+        run: npm --prefix apps/console run build
+
+  repository:
+    name: repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate Docker Compose
+        run: |
+          cp deploy/config/local.env.example deploy/config/local.env
+          docker compose --env-file deploy/config/local.env -f deploy/compose/local.yml config --quiet
+
+      - name: Validate repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f .java-version
+          test -f .nvmrc
+          test -f deploy/config/local.env.example
+          test ! -f deploy/config/local.env
+
+          if git ls-files | grep -E '(^|/)(target|node_modules|dist|logs)/' >/dev/null; then
+            echo 'Generated/build directories must not be committed.' >&2
+            exit 1
+          fi
+
+          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' >/dev/null; then
+            echo 'Environment secret files must not be committed.' >&2
+            exit 1
+          fi
