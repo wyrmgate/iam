@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+deploy/config/local.env
 *.pem
 *.key
 *.p12
@@ -21,6 +22,7 @@ coverage/
 dist/
 build/
 out/
+target/
 .tmp/
 tmp/
 

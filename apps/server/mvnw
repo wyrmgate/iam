@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PROPS="$SCRIPT_DIR/.mvn/wrapper/maven-wrapper.properties"
+
+if [ ! -f "$PROPS" ]; then
+  echo "Missing Maven Wrapper properties: $PROPS" >&2
+  exit 1
+fi
+
+DISTRIBUTION_URL=$(awk -F= '$1=="distributionUrl" {print substr($0,index($0,"=")+1)}' "$PROPS")
+if [ -z "$DISTRIBUTION_URL" ]; then
+  echo "distributionUrl is not configured" >&2
+  exit 1
+fi
+
+ARCHIVE=${DISTRIBUTION_URL##*/}
+VERSION=$(printf '%s' "$ARCHIVE" | sed -E 's/^apache-maven-([0-9.]+)-bin\.zip$/\1/')
+CACHE_ROOT=${MAVEN_USER_HOME:-$HOME/.m2}/wrapper/dists
+MAVEN_HOME="$CACHE_ROOT/apache-maven-$VERSION"
+
+if [ ! -x "$MAVEN_HOME/bin/mvn" ]; then
+  TMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
+  mkdir -p "$CACHE_ROOT"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$DISTRIBUTION_URL" -o "$TMP_DIR/$ARCHIVE"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q "$DISTRIBUTION_URL" -O "$TMP_DIR/$ARCHIVE"
+  else
+    echo "Maven bootstrap requires curl or wget" >&2
+    exit 1
+  fi
+
+  command -v unzip >/dev/null 2>&1 || { echo "Maven bootstrap requires unzip" >&2; exit 1; }
+  unzip -q "$TMP_DIR/$ARCHIVE" -d "$TMP_DIR"
+  rm -rf "$MAVEN_HOME"
+  mv "$TMP_DIR/apache-maven-$VERSION" "$MAVEN_HOME"
+fi
+
+exec "$MAVEN_HOME/bin/mvn" "$@"
