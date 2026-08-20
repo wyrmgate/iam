@@ -1,0 +1,49 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+
+# Local tooling
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Build/test outputs
+coverage/
+dist/
+build/
+out/
+.tmp/
+tmp/
+
+# Logs
+*.log
+logs/
+
+# Containers / local state
+.docker/
+.local/
+
+# OpenTofu / Terraform-compatible state
+**/.terraform/
+**/.tofu/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.lock.hcl
+
+# Ansible local artifacts
+*.retry
+
+# Runtime/database dumps
+*.sql
+*.dump
+*.backup
