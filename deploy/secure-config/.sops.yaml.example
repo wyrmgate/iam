@@ -1,0 +1,5 @@
+# Copy to deploy/secure-config/.sops.yaml after generating an age recipient.
+# Never commit the corresponding age private key.
+creation_rules:
+  - path_regex: '.*\.sops\.(yaml|yml|json|env)$'
+    age: 'age1replace-with-real-public-recipient'
