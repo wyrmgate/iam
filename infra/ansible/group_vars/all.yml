@@ -1,0 +1,18 @@
+---
+wyrmgate_service_user: wyrmgate
+wyrmgate_service_group: wyrmgate
+wyrmgate_root_dir: /opt/wyrmgate/iam
+wyrmgate_config_dir: /etc/wyrmgate/iam
+wyrmgate_data_dir: /var/lib/wyrmgate/iam
+wyrmgate_backup_dir: /var/backups/wyrmgate/iam
+
+wyrmgate_admin_ssh_port: 22
+wyrmgate_enable_ufw: true
+wyrmgate_enable_unattended_upgrades: true
+
+wyrmgate_docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
