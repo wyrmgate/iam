@@ -35,11 +35,11 @@ public final class JdbcOutboxRepository {
                 event.aggregateType(),
                 event.aggregateId(),
                 event.aggregateRevision(),
-                event.occurredAt(),
+                JdbcValues.timestamp(event.occurredAt()),
                 event.correlationId(),
                 event.causationId(),
                 event.payloadJson(),
-                recordedAt);
+                JdbcValues.timestamp(recordedAt));
     }
 
     public long countPending(TenantContext tenant) {
