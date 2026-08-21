@@ -10,9 +10,9 @@ Use a full commit SHA from `main` whose required CI checks are green. Do not act
 
 ## 2. Create Neon DEV database
 
-Create a DEV-only Neon project/database and obtain a TLS-enabled PostgreSQL connection. Record the JDBC URL, username, and password only in the Railway service configuration. Never commit them.
+Create a DEV-only Neon project/database and obtain a direct PostgreSQL connection string from Neon with TLS required. The application currently runs Flyway on its main datasource at startup, so use the direct Neon endpoint for the initial DEV contract rather than a pooled endpoint.
 
-Use a JDBC-form URL for `IAM_DB_URL` and retain TLS requirements from the Neon-provided connection parameters. Do not reuse production data or credentials.
+Convert the connection to JDBC form for `IAM_DB_URL` while retaining Neon TLS query parameters. Store `IAM_DB_URL`, `IAM_DB_USER`, and `IAM_DB_PASSWORD` only in Railway service configuration. Never commit them or reuse production data/credentials.
 
 ## 3. Configure Railway iam-server
 
@@ -25,9 +25,12 @@ Set deployment variables:
 - `IAM_DB_PASSWORD`
 - `IAM_DEPLOYMENT_ENVIRONMENT=dev`
 - `IAM_OTEL_ENABLED=false`
-- `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0` for the initial serverless-friendly DEV pool posture
+- `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`
+- `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`
 
-Do not set `PORT`; Railway supplies it. Verify the service starts, Flyway completes successfully, and the Railway service health endpoint `/actuator/health` is healthy over HTTPS.
+Enable Railway Serverless for the DEV service. Do not set `PORT`; Railway supplies it. Verify the service starts, Flyway completes successfully, and `/actuator/health` is healthy over the Railway HTTPS service domain.
+
+If the service does not sleep during idle periods, inspect outbound traffic first. Database connections and telemetry can keep Railway Serverless awake; do not weaken application correctness merely to force sleeping.
 
 ## 4. Configure Cloudflare Pages
 
@@ -52,13 +55,15 @@ After provider deployments complete, verify:
 5. the browser does not need CORS access to the Railway origin because API traffic is same-origin through Pages;
 6. no secrets or database values appear in Pages build output, browser JavaScript, repository files, or CI logs.
 
+Cloudflare Pages routing must continue to use `_routes.json` with only `/api/*` included so static requests do not consume Pages Function invocations.
+
 ## 6. Custom domain and DNS
 
 A custom DEV hostname is optional for initial activation. If used, configure it through Cloudflare Pages after the provider deployments are healthy. No repository workflow should change DNS.
 
 ## 7. Observability
 
-Keep `IAM_OTEL_ENABLED=false` initially. Evaluate Grafana Cloud free-tier behavior separately before enabling remote telemetry. Any later observability activation must preserve the existing secret-redaction and data-minimization rules.
+Keep `IAM_OTEL_ENABLED=false` initially. Evaluate Grafana Cloud free-tier behavior separately before enabling remote telemetry. Any later observability activation must preserve the existing secret-redaction and data-minimization rules and should be checked for its effect on Railway Serverless sleeping.
 
 ## 8. Rollback and recovery
 
