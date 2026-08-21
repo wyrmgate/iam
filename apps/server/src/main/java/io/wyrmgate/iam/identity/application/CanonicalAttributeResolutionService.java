@@ -201,7 +201,9 @@ public final class CanonicalAttributeResolutionService {
             UUID definitionVersionId,
             ResolutionStatus status,
             Instant now) {
-        if (current != null && current.attributeDefinitionVersionId().equals(definitionVersionId)
+        if (current != null
+                && current.resolutionStatus() != ResolutionStatus.OVERRIDDEN
+                && current.attributeDefinitionVersionId().equals(definitionVersionId)
                 && !current.values().isEmpty()) {
             return desired(current, identityId, definitionId, definitionVersionId, status,
                     current.selectedCandidateId(), current.authorityRuleVersionId(), current.values(), now);
