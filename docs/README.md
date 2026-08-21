@@ -7,10 +7,10 @@ This directory contains the repository-local, implementation-facing documentatio
 Wyrmgate IAM uses three document classes with different purposes:
 
 1. **Repository Markdown** is the living source of truth for architecture, domain semantics, ADRs, implementation contracts, operational runbooks, migration notes, and developer documentation. It changes with code and is reviewed through pull requests.
-2. **Formal DOCX specifications** are controlled application deliverables for product/system requirements, security/governance specification, architecture/design specification, and integration/interface specification. They are published separately from the repository and are suitable for stakeholder review and sign-off.
-3. **Collaborative Google Docs** are working notes only. A working note is not authoritative after its decisions have been promoted into repository Markdown and/or a formal specification.
+2. **Formal specifications** are controlled stakeholder/application deliverables maintained in the IAM `Formal Specifications` Drive folder. The current v0.2 package contains the documentation register, BRD, FRD, SRS, DDD, System Architecture & Design, Data Architecture, Security & Governance, Integration & Interface, and the Requirements Traceability Matrix.
+3. **Collaborative Google Docs** are working notes only. A working note is not authoritative after its decisions have been promoted. The former Drive ADR/working-baseline collection is superseded by the repository ADRs and formal specification set.
 
-A concept must not have competing authoritative definitions in multiple formats. Where a formal specification and repository documentation cover the same subject, the formal specification defines externally reviewed requirements while repository Markdown defines the current implementable technical contract. Material deviation requires an ADR.
+A concept must not have competing authoritative definitions in multiple formats. Formal specifications define reviewed requirements/design baselines; repository Markdown defines the current implementable technical contract. Accepted ADRs may intentionally amend a formal specification between releases and must be folded into the next formal revision.
 
 ## Documentation map
 
@@ -19,20 +19,21 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`domain/canonical-model.md`](domain/canonical-model.md) — canonical IAM concepts, ownership of truth, observations, evidence, and projections.
 - [`domain/state-and-invariants.md`](domain/state-and-invariants.md) — lifecycle, concurrency, structural, temporal, and failure invariants.
 - [`security/administrative-authorization.md`](security/administrative-authorization.md) — IAM control-plane authorization and scoped administration.
-- `adr/` — architecture decision records promoted into repository-local form as implementation begins.
+- [`adr/README.md`](adr/README.md) — canonical Architecture Decision Record index.
+- [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
+- [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
 - `operations/` — deployment, backup/restore, monitoring, incident, connector, and reconciliation runbooks as those capabilities are implemented.
-- `api/` — public/internal API conventions, versioning, error model, pagination, idempotency, and generated/OpenAPI references.
 
 ## Authority hierarchy
 
 When documentation conflicts, resolve it in this order:
 
-1. accepted ADRs and current formal requirements;
-2. current repository architecture/domain contracts;
+1. accepted ADRs and current formal requirements/specifications;
+2. current repository architecture/domain/interface contracts;
 3. implementation and tests;
-4. historical design baselines and collaborative notes.
+4. explicitly retained historical material.
 
-Conflicts between implementation/tests and accepted architecture are defects or deliberate architecture changes that require an ADR; they are not silently resolved in favor of code.
+A newly accepted ADR may temporarily be newer than a formal document; that is controlled specification-update debt, not a competing permanent source of truth.
 
 ## Framework-neutral architecture rule
 
@@ -40,4 +41,4 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, o
 
 ## Current status
 
-IAM v2 is pre-release and under active design/implementation. The repository documentation is being promoted from the earlier design-baseline material into this structured documentation set.
+IAM v2 is pre-release and under active design. The v0.2 formal specification set is the current architecture checkpoint. Open design areas are workflow/process orchestration, concrete physical database/index design, machine-readable OpenAPI/AsyncAPI schemas, remote connector-worker protocol, operations/HA/DR, and legacy migration/cutover.
