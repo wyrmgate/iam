@@ -1,26 +1,26 @@
 package io.wyrmgate.iam.platform.crypto;
 
-import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Objects;
 
 /**
- * Provider-neutral signing key material exposed to cryptographic consumers.
+ * Public metadata for the currently active signing key.
+ *
+ * <p>Private key material is intentionally not exposed by this contract so the
+ * same port can be implemented by non-exportable Vault, KMS, and HSM keys.</p>
  */
 public record SigningKeyMaterial(
         String keyId,
-        String algorithm,
-        PrivateKey privateKey,
+        String signingAlgorithm,
         PublicKey publicKey) {
 
     public SigningKeyMaterial {
         if (keyId == null || keyId.isBlank()) {
             throw new IllegalArgumentException("keyId must not be blank");
         }
-        if (algorithm == null || algorithm.isBlank()) {
-            throw new IllegalArgumentException("algorithm must not be blank");
+        if (signingAlgorithm == null || signingAlgorithm.isBlank()) {
+            throw new IllegalArgumentException("signingAlgorithm must not be blank");
         }
-        Objects.requireNonNull(privateKey, "privateKey");
         Objects.requireNonNull(publicKey, "publicKey");
     }
 }
