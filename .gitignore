@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 deploy/config/local.env
+deploy/config/edge.env
 *.pem
 *.key
 *.p12
