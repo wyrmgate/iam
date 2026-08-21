@@ -17,6 +17,8 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`PROJECT_INSTRUCTIONS.md`](PROJECT_INSTRUCTIONS.md) — stable project-level instructions for AI-assisted work and fresh project sessions.
 - [`architecture/overview.md`](architecture/overview.md) — framework-neutral system architecture and capability ownership.
 - [`architecture/repository-boundaries.md`](architecture/repository-boundaries.md) — repository/module dependency rules and implementation boundary.
+- [`architecture/implementation-topology-and-persistence.md`](architecture/implementation-topology-and-persistence.md) — initial runtime and persistence direction.
+- [`architecture/physical-data-model.md`](architecture/physical-data-model.md) — concrete PostgreSQL-target physical persistence contract, ownership matrix, constraints, indexes, partitioning, retention and transaction rules for OD-002.
 - [`architecture/workflow-orchestration.md`](architecture/workflow-orchestration.md) — domain-owned workflow, timers, retries and durable orchestration boundary.
 - [`domain/canonical-model.md`](domain/canonical-model.md) — canonical IAM concepts, ownership of truth, observations, evidence, and projections.
 - [`domain/state-and-invariants.md`](domain/state-and-invariants.md) — lifecycle, concurrency, structural, temporal, and failure invariants.
@@ -43,4 +45,8 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, o
 
 ## Current status
 
-IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0009 are the current architecture checkpoint. Workflow/process orchestration is now defined. Open design areas include the concrete physical database/index/partition model, machine-readable OpenAPI/AsyncAPI schemas, remote connector-worker protocol, operations/HA/DR, and legacy migration/cutover.
+IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0010 are the current architecture checkpoint. Workflow/process orchestration and the concrete physical data model/persistence design are now defined.
+
+The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 and [`architecture/physical-data-model.md`](architecture/physical-data-model.md) are the current controlled amendment, and the next formal-specification revision must fold them into the Data Architecture/SAD/RTM package.
+
+Remaining open design areas include machine-readable OpenAPI/AsyncAPI schemas (OD-003), the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should begin only after the persistence semantics in OD-002 are treated as the implementation contract.
