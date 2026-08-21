@@ -117,7 +117,7 @@ public final class CanonicalAttributeResolutionService {
                     now, null, correlationId, causationId, values);
             CanonicalAttributeOverride persisted = repository.replaceActiveOverride(tenant, override, now);
             facts.overrideApplied(tenant, persisted, canonicalKey);
-            return resolveInside(tenant, identityId, canonicalKey, now, correlationId, persisted.id());
+            return resolveInside(tenant, identityId, canonicalKey, now, correlationId, causationId);
         });
     }
 
