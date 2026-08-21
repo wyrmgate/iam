@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -32,31 +32,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-
-      - name: Regenerate documentation dependency lock
-        working-directory: docs-site
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-
-      - name: Commit regenerated dependency lock on bootstrap branch
-        if: github.event_name == 'pull_request' && github.head_ref == 'docs/reproducible-toolchain'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add -- docs-site/package-lock.json
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git commit -m 'security: lock patched docs dependency graph'
-          git push origin HEAD:${GITHUB_HEAD_REF}
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
 
       - name: Install locked documentation dependencies
         working-directory: docs-site
@@ -81,6 +63,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
 
       - name: Install locked documentation dependencies
         working-directory: docs-site
