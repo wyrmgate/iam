@@ -27,9 +27,11 @@ Initial provider families are:
 - **CloudKMS** — future adapter for managed cloud key services.
 - **HSM** — future adapter for hardware-backed key operations.
 
-The current file adapter accepts a PKCS#8 PEM private key and X.509 PEM public key. It parses them once at construction and exposes provider-neutral Java key objects through `SigningKeyMaterial`.
+The port exposes public metadata for the active signing key and a signing operation. It deliberately does **not** expose a Java `PrivateKey`, because production providers may use non-exportable keys held by Vault transit, cloud KMS, or an HSM.
 
-The adapter does not generate keys, rotate keys, choose JWT algorithms, publish JWKS, or persist private material. Those responsibilities belong to later authorization-platform/key-lifecycle work.
+The current file adapter accepts a PKCS#8 PEM private key and X.509 PEM public key. It parses them once at construction, keeps the private key inside the adapter, exposes only public metadata, and performs signatures through the provider operation.
+
+The adapter does not generate keys, rotate keys, choose JWT/JWS algorithms, publish JWKS, or persist private material. Those responsibilities belong to later authorization-platform/key-lifecycle work.
 
 ## File-provider host layout
 
@@ -50,7 +52,9 @@ Future rotation requires overlap: a new signing key becomes active for signing w
 
 ## CI enforcement
 
-`Secrets Contract` rejects obvious tracked private-key files, restricts `deploy/secure-config` to documentation/templates or SOPS-encrypted naming, and runs the file-provider test. Existing secret scanning remains the broader detection control.
+`Secrets Contract` rejects obvious tracked private-key files, restricts `deploy/secure-config` to documentation/templates or SOPS-encrypted naming, and runs the file-provider signing test. Existing secret scanning remains the broader detection control.
+
+Filename policy is only a repository guardrail; a `*.sops.*` name does not itself prove encryption. Before real encrypted configuration is committed, CI should additionally validate the file structure with SOPS or an equivalent parser rather than relying on naming alone.
 
 ## Operational rules
 
