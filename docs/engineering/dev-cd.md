@@ -24,17 +24,21 @@ Local development is unchanged: Vite proxies `/api` and `/actuator` to `http://l
 
 ## Railway / server contract
 
-Railway builds from the repository with `apps/server/Dockerfile`. The service must provide:
+Railway builds from repository root with `apps/server/Dockerfile`. The service must provide:
 
-- `IAM_DB_URL` — Neon JDBC URL, with TLS required by the selected Neon connection string;
+- `IAM_DB_URL` — a Neon JDBC URL using the direct, TLS-required endpoint because Flyway runs on the same Spring datasource at startup;
 - `IAM_DB_USER`;
 - `IAM_DB_PASSWORD`;
 - `IAM_DEPLOYMENT_ENVIRONMENT=dev`;
-- `IAM_OTEL_ENABLED=false` until observability is deliberately activated.
+- `IAM_OTEL_ENABLED=false` until observability is deliberately activated;
+- `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`;
+- `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000` for the initial DEV serverless posture.
 
 Railway supplies `PORT`; Spring Boot binds to `${PORT:8080}`, preserving port 8080 locally and in standalone containers.
 
-For serverless-friendly DEV operation, configure the datasource pool conservatively (for example `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`) and keep migrations backward-compatible. Flyway still owns forward schema migration at server startup.
+Railway Serverless considers outbound traffic when deciding whether a service is idle, so long-lived database connections or telemetry can keep the service awake. The initial DEV posture therefore allows Hikari to drain to zero idle connections and leaves OTLP disabled. Revisit pool sizing if real DEV traffic patterns justify it.
+
+Neon offers pooled endpoints for high-concurrency/serverless workloads, but Neon also recommends direct connections for migration tools. Because this application currently runs Flyway on the application datasource, the initial DEV contract uses the direct endpoint rather than introducing a second migration datasource prematurely.
 
 ## Deployment ownership
 
