@@ -94,6 +94,23 @@ jobs:
           grep -Fq '${IAM_DB_URL:' apps/server/src/main/resources/application.yml
           grep -Fq '${IAM_DB_USER:' apps/server/src/main/resources/application.yml
           grep -Fq '${IAM_DB_PASSWORD:' apps/server/src/main/resources/application.yml
+          grep -Fq 'COPY apps/server/pom.xml' apps/server/Dockerfile
+          grep -Fq 'COPY apps/server ' apps/server/Dockerfile
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          config = json.loads(Path('apps/server/railway.json').read_text())
+          build = config.get('build', {})
+          deploy = config.get('deploy', {})
+
+          if build.get('builder') != 'DOCKERFILE':
+              raise SystemExit('Railway must use the checked-in server Dockerfile.')
+          if build.get('dockerfilePath') != 'apps/server/Dockerfile':
+              raise SystemExit('Railway Dockerfile path must be repository-root relative.')
+          if deploy.get('healthcheckPath') != '/actuator/health':
+              raise SystemExit('Railway health check must use /actuator/health.')
+          PY
 
   docs:
     name: managed-dev-docs
@@ -110,5 +127,7 @@ jobs:
           grep -Fq 'Cloudflare Pages' docs/engineering/dev-cd.md
           grep -Fq 'Railway' docs/engineering/dev-cd.md
           grep -Fq 'Neon' docs/engineering/dev-cd.md
+          grep -Fq 'repository root' docs/engineering/dev-cd.md
           grep -Fq 'optional/reference' infra/opentofu/README.md
+          test -f apps/server/railway.json
           test -f docs/operations/dev-managed-activation.md

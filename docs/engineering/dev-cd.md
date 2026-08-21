@@ -24,7 +24,11 @@ Local development is unchanged: Vite proxies `/api` and `/actuator` to `http://l
 
 ## Railway / server contract
 
-Railway builds from repository root with `apps/server/Dockerfile`. The service must provide:
+Railway builds the server from **repository root** with `apps/server/Dockerfile`. Do not set the Railway service Root Directory to `apps/server`: the Dockerfile intentionally uses repository-root paths such as `COPY apps/server/...`, so changing the build context to the service directory would break the image build.
+
+`apps/server/railway.json` is the checked-in Railway service contract. It pins the Dockerfile path and `/actuator/health` health check while leaving the repository root as the build context.
+
+The service must provide:
 
 - `IAM_DB_URL` — a Neon JDBC URL using the direct, TLS-required endpoint because Flyway runs on the same Spring datasource at startup;
 - `IAM_DB_USER`;
