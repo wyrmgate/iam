@@ -1,14 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
-FROM eclipse-temurin:25-jdk AS build
+FROM maven:3.9.16-eclipse-temurin-25 AS build
 WORKDIR /workspace
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+COPY apps/server/pom.xml /workspace/apps/server/pom.xml
+RUN mvn -f /workspace/apps/server/pom.xml dependency:go-offline
 
 COPY apps/server /workspace/apps/server
-RUN sh /workspace/apps/server/mvnw -f /workspace/apps/server/pom.xml clean package -DskipTests
+RUN mvn -f /workspace/apps/server/pom.xml clean package -DskipTests
 
 FROM eclipse-temurin:25-jre
 WORKDIR /app
