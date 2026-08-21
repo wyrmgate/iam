@@ -9,6 +9,7 @@ import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registrati
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository.ClaimedWork;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
@@ -19,7 +20,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -115,7 +115,7 @@ class PersistenceFoundationIntegrationTest {
                         VALUES (?, NULL, 'consumer', 'message', ?)
                         """,
                         idGenerator.nextId(),
-                        Instant.now()))
+                        Timestamp.from(Instant.now())))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
