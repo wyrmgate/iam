@@ -16,7 +16,9 @@ Convert the connection to JDBC form for `IAM_DB_URL` while retaining Neon TLS qu
 
 ## 3. Configure Railway iam-server
 
-Connect the repository to Railway and configure the server service to build with `apps/server/Dockerfile` from repository root.
+Connect the repository to Railway and configure the server service to build with `apps/server/Dockerfile` from **repository root**. Leave Railway Root Directory unset (repository root). Do not set it to `apps/server`, because the Dockerfile uses repository-root `COPY apps/server/...` paths.
+
+Use `apps/server/railway.json` as the checked-in service contract. It pins the Dockerfile path and the `/actuator/health` deployment health check.
 
 Set deployment variables:
 
