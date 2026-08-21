@@ -44,8 +44,9 @@ logs/
 !*.tfvars.example
 .terraform.lock.hcl
 
-# Ansible local artifacts
+# Ansible local artifacts and real inventories
 *.retry
+infra/ansible/inventory/hosts.ini
 
 # Runtime/database dumps
 *.sql
