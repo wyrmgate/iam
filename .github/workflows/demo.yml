@@ -9,6 +9,7 @@ on:
       - 'deploy/compose/edge.yml'
       - 'deploy/config/demo.env.example'
       - 'deploy/config/edge.env.example'
+      - 'deploy/config/otel-collector.runtime.yaml'
       - 'deploy/scripts/deploy-demo.sh'
       - 'deploy/scripts/reset-demo.sh'
   workflow_dispatch:
@@ -83,12 +84,14 @@ jobs:
       DEMO_PUBLIC_HOST: ${{ secrets.DEMO_PUBLIC_HOST }}
       DEMO_ACME_EMAIL: ${{ secrets.DEMO_ACME_EMAIL }}
       DEMO_DB_PASSWORD: ${{ secrets.DEMO_DB_PASSWORD }}
+      DEMO_OTEL_EXPORTER_ENDPOINT: ${{ secrets.DEMO_OTEL_EXPORTER_ENDPOINT }}
+      DEMO_OTEL_EXPORTER_AUTHORIZATION: ${{ secrets.DEMO_OTEL_EXPORTER_AUTHORIZATION }}
     steps:
       - name: Require DEMO deployment inputs
         shell: bash
         run: |
           set -euo pipefail
-          for name in DEMO_HOST DEMO_USER DEMO_SSH_PRIVATE_KEY DEMO_PUBLIC_HOST DEMO_ACME_EMAIL DEMO_DB_PASSWORD; do
+          for name in DEMO_HOST DEMO_USER DEMO_SSH_PRIVATE_KEY DEMO_PUBLIC_HOST DEMO_ACME_EMAIL DEMO_DB_PASSWORD DEMO_OTEL_EXPORTER_ENDPOINT DEMO_OTEL_EXPORTER_AUTHORIZATION; do
             if [[ -z "${!name:-}" ]]; then
               echo "Missing required GitHub Environment secret: ${name}" >&2
               exit 1
@@ -116,6 +119,8 @@ jobs:
           host = os.environ['DEMO_PUBLIC_HOST']
           password = os.environ['DEMO_DB_PASSWORD']
           email = os.environ['DEMO_ACME_EMAIL']
+          otlp_endpoint = os.environ['DEMO_OTEL_EXPORTER_ENDPOINT']
+          otlp_authorization = os.environ['DEMO_OTEL_EXPORTER_AUTHORIZATION']
 
           (config / 'demo.env').write_text('\n'.join([
               f'IAM_PUBLIC_HOST={host}',
@@ -125,6 +130,9 @@ jobs:
               f'IAM_SERVER_IMAGE=ghcr.io/wyrmgate/iam-server:sha-{sha}',
               f'IAM_CONSOLE_IMAGE=ghcr.io/wyrmgate/iam-console:sha-{sha}',
               'IAM_DEMO_MODE=true',
+              f'IAM_OTEL_EXPORTER_ENDPOINT={otlp_endpoint}',
+              f'IAM_OTEL_EXPORTER_AUTHORIZATION={otlp_authorization}',
+              'IAM_TRACE_SAMPLING_PROBABILITY=0.10',
               '',
           ]), encoding='utf-8')
 

@@ -9,6 +9,7 @@ on:
       - 'deploy/compose/edge.yml'
       - 'deploy/config/dev.env.example'
       - 'deploy/config/edge.env.example'
+      - 'deploy/config/otel-collector.runtime.yaml'
       - 'deploy/scripts/deploy-dev.sh'
       - 'apps/server/**'
   workflow_run:
@@ -75,12 +76,14 @@ jobs:
       DEV_PUBLIC_HOST: ${{ secrets.DEV_PUBLIC_HOST }}
       DEV_ACME_EMAIL: ${{ secrets.DEV_ACME_EMAIL }}
       DEV_DB_PASSWORD: ${{ secrets.DEV_DB_PASSWORD }}
+      DEV_OTEL_EXPORTER_ENDPOINT: ${{ secrets.DEV_OTEL_EXPORTER_ENDPOINT }}
+      DEV_OTEL_EXPORTER_AUTHORIZATION: ${{ secrets.DEV_OTEL_EXPORTER_AUTHORIZATION }}
     steps:
       - name: Require DEV deployment secrets
         shell: bash
         run: |
           set -euo pipefail
-          for name in DEV_HOST DEV_USER DEV_SSH_PRIVATE_KEY DEV_PUBLIC_HOST DEV_ACME_EMAIL DEV_DB_PASSWORD; do
+          for name in DEV_HOST DEV_USER DEV_SSH_PRIVATE_KEY DEV_PUBLIC_HOST DEV_ACME_EMAIL DEV_DB_PASSWORD DEV_OTEL_EXPORTER_ENDPOINT DEV_OTEL_EXPORTER_AUTHORIZATION; do
             if [[ -z "${!name:-}" ]]; then
               echo "Missing required GitHub Environment secret: ${name}" >&2
               exit 1
@@ -109,6 +112,8 @@ jobs:
           host = os.environ['DEV_PUBLIC_HOST']
           password = os.environ['DEV_DB_PASSWORD']
           email = os.environ['DEV_ACME_EMAIL']
+          otlp_endpoint = os.environ['DEV_OTEL_EXPORTER_ENDPOINT']
+          otlp_authorization = os.environ['DEV_OTEL_EXPORTER_AUTHORIZATION']
 
           (config / 'dev.env').write_text(
               '\n'.join([
@@ -118,6 +123,9 @@ jobs:
                   f'IAM_DB_PASSWORD={password}',
                   f'IAM_SERVER_IMAGE=ghcr.io/wyrmgate/iam-server:sha-{sha}',
                   f'IAM_CONSOLE_IMAGE=ghcr.io/wyrmgate/iam-console:sha-{sha}',
+                  f'IAM_OTEL_EXPORTER_ENDPOINT={otlp_endpoint}',
+                  f'IAM_OTEL_EXPORTER_AUTHORIZATION={otlp_authorization}',
+                  'IAM_TRACE_SAMPLING_PROBABILITY=0.10',
                   '',
               ]),
               encoding='utf-8',

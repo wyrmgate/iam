@@ -17,6 +17,26 @@ management:
     health:
       probes:
         enabled: true
+  tracing:
+    sampling:
+      probability: ${IAM_TRACE_SAMPLING_PROBABILITY:1.0}
+  opentelemetry:
+    enabled: ${IAM_OTEL_ENABLED:false}
+    resource-attributes:
+      deployment.environment.name: ${IAM_DEPLOYMENT_ENVIRONMENT:local}
+    tracing:
+      export:
+        otlp:
+          endpoint: ${IAM_OTEL_TRACES_ENDPOINT:http://127.0.0.1:4318/v1/traces}
+  otlp:
+    metrics:
+      export:
+        enabled: ${IAM_OTEL_ENABLED:false}
+        url: ${IAM_OTEL_METRICS_ENDPOINT:http://127.0.0.1:4318/v1/metrics}
+
+logging:
+  pattern:
+    correlation: '[%X{traceId:-},%X{spanId:-}] '
 
 springdoc:
   api-docs:
