@@ -19,6 +19,8 @@ secrets/
 .vscode/
 .DS_Store
 Thumbs.db
+node_modules/
+.docusaurus/
 
 # Build/test outputs
 coverage/
