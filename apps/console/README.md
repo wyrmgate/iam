@@ -21,7 +21,15 @@ Frontend rules:
 - explicit query-cache invalidation once server-state caching is introduced
 - business rules remain server-side
 
-The initial shell connects to `/api/system/info` through Vite's development proxy so frontend/backend integration is exercised from the start rather than using mock status data.
+The initial shell connects to `/api/system/info`. Local development preserves Vite's proxy to `http://localhost:8080`. The active managed DEV topology deploys this directory as the Cloudflare Pages project root; `functions/api/[[path]].js` proxies only `/api/*` to the server-side `IAM_BACKEND_ORIGIN`, while `public/_routes.json` keeps ordinary static requests out of Pages Functions.
+
+Cloudflare Pages settings for DEV:
+
+- root directory: `apps/console`
+- build command: `npm run build`
+- output directory: `dist`
+
+Do not expose the backend origin through a `VITE_*` build variable; the browser remains same-origin.
 
 ## Commands
 
@@ -33,5 +41,3 @@ make console-typecheck
 make console-build
 make console-dev
 ```
-
-Dependency lockfiles and the full lint/test stack are added as part of the reproducible local-development/CI bootstrap.
