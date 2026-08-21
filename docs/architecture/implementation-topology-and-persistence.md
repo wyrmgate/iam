@@ -4,6 +4,8 @@
 
 Current architecture baseline. This document maps the canonical IAM domain into an initial implementation topology without making runtime/framework choices part of the domain model.
 
+The concrete PostgreSQL-target physical persistence contract that resolves OD-002 is maintained in [`physical-data-model.md`](physical-data-model.md) and ADR-0010. This document remains the higher-level topology/persistence direction; it must not duplicate or compete with the detailed table/index/partition contract.
+
 ## Initial topology
 
 Wyrmgate IAM starts as a modular monolith. Logical capabilities remain explicit even when deployed in one runtime:
@@ -47,13 +49,13 @@ State classes are stored according to their semantics:
 
 Within one physical database, capability-specific schemas/tables are recommended because they make ownership visible. Reporting/read projections may intentionally compose across capability data; domain repositories may not use that as a mutation shortcut.
 
-Cross-capability foreign keys may be used selectively for fundamental stable references, but cross-capability `ON DELETE CASCADE` is forbidden.
+Cross-capability foreign keys may be used selectively for fundamental stable references, but cross-capability `ON DELETE CASCADE` is forbidden. The OD-002 contract makes stable typed IDs without database FKs the default for cross-capability references; selective FKs are an optional integrity optimization, never a semantic dependency.
 
 Tenant-owned rows should carry `tenant_id` from the beginning. Single-tenant deployments resolve one default tenant. Tenant isolation remains an application/domain security concern even if PostgreSQL RLS is later added as defense in depth.
 
 ## IDs and concurrency
 
-Canonical IDs are opaque, stable, globally unique identifiers and are never derived from business codes, email addresses, usernames, or provider display values.
+Canonical IDs are opaque, stable, globally unique identifiers and are never derived from business codes, email addresses, usernames, or provider display values. The initial PostgreSQL mapping uses application-generated UUIDv7 stored as native `uuid`; UUID version/order is not part of the public/domain contract.
 
 Mutable authoritative aggregates carry a revision/version when concurrent changes matter. Stale writes are rejected and re-evaluated rather than silently applying last-writer-wins.
 
@@ -62,6 +64,8 @@ Mutable authoritative aggregates carry a revision/version when concurrent change
 JSON/JSONB is appropriate for extensible/native edges such as provider metadata, connector configuration, raw source attributes, extension values, evidence snapshots, and event payloads.
 
 Core lifecycle, authorization, role composition, approval state, tenant identity, assignment provenance, and other fundamental IAM semantics remain strongly modeled and queryable rather than arbitrary JSON.
+
+Canonical dynamic attributes are not stored as untyped JSON blobs; their concrete typed physical representation is defined in `physical-data-model.md`.
 
 ## Effective and desired state
 
