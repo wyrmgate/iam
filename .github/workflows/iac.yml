@@ -1,0 +1,47 @@
+name: IaC CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/opentofu/**'
+      - '.github/workflows/iac.yml'
+      - 'Makefile'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/opentofu/**'
+      - '.github/workflows/iac.yml'
+      - 'Makefile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iac-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  opentofu:
+    name: opentofu
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.12.5
+          tofu_wrapper: false
+
+      - name: Check formatting
+        run: tofu -chdir=infra/opentofu fmt -check -recursive
+
+      - name: Initialize providers
+        run: tofu -chdir=infra/opentofu init -backend=false
+
+      - name: Validate configuration
+        run: tofu -chdir=infra/opentofu validate
