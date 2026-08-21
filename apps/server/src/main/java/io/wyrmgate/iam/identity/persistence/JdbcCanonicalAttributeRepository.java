@@ -66,6 +66,7 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
 
     @Override
     public CanonicalSchemaVersion activateSchemaVersion(TenantContext tenant, UUID schemaVersionId, Instant activatedAt) {
+        lockTenant(tenant);
         jdbc.update("""
                 UPDATE identity.canonical_schema_version
                 SET state = 'SUPERSEDED', superseded_at = ?
@@ -200,6 +201,8 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
             TenantContext tenant, UUID identityId, UUID definitionVersionId, UUID sourceSystemId,
             UUID sourceRecordId, UUID mappingVersionId, String sourcePath, Instant sourceUpdatedAt,
             Instant observedAt, List<CanonicalValue> values) {
+        AttributeDefinitionVersion version = definitionVersion(tenant, definitionVersionId);
+        version.validateValues(values);
         UUID proposedId = ids.nextId();
         jdbc.update("""
                 INSERT INTO identity.canonical_attribute_candidate
@@ -215,10 +218,13 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
                 """, proposedId, tenant.tenantId(), identityId, definitionVersionId, sourceSystemId,
                 sourceRecordId, mappingVersionId, sourcePath, timestamp(sourceUpdatedAt),
                 timestamp(observedAt), timestamp(observedAt));
-        CanonicalAttributeCandidate candidate = findCandidate(
-                tenant, identityId, definitionVersionId, sourceRecordId, mappingVersionId).orElseThrow();
-        replaceValues("canonical_attribute_candidate_value", "candidate_id", tenant, candidate.id(),
-                definitionVersionId, definitionVersion(tenant, definitionVersionId), values);
+        UUID candidateId = jdbc.queryForObject("""
+                SELECT id FROM identity.canonical_attribute_candidate
+                WHERE tenant_id = ? AND identity_id = ? AND attribute_definition_version_id = ?
+                  AND source_record_id = ? AND mapping_version_id = ?
+                """, UUID.class, tenant.tenantId(), identityId, definitionVersionId, sourceRecordId, mappingVersionId);
+        replaceValues("canonical_attribute_candidate_value", "candidate_id", tenant, candidateId,
+                definitionVersionId, version, values);
         return findCandidate(tenant, identityId, definitionVersionId, sourceRecordId, mappingVersionId).orElseThrow();
     }
 
@@ -272,6 +278,7 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
     @Override
     public Optional<CanonicalAttributeState> findStateForUpdate(
             TenantContext tenant, UUID identityId, UUID definitionId) {
+        lockIdentity(tenant, identityId);
         return jdbc.query("""
                 SELECT id, identity_id, attribute_definition_id, attribute_definition_version_id,
                        resolution_status, selected_candidate_id, authority_rule_version_id,
@@ -382,7 +389,9 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
     private void replaceValues(
             String table, String parentColumn, TenantContext tenant, UUID parentId, UUID definitionVersionId,
             AttributeDefinitionVersion version, List<CanonicalValue> values) {
-        version.validateValues(values);
+        if (!values.isEmpty()) {
+            version.validateValues(values);
+        }
         jdbc.update("DELETE FROM identity." + table + " WHERE tenant_id = ? AND " + parentColumn + " = ?",
                 tenant.tenantId(), parentId);
         for (int ordinal = 0; ordinal < values.size(); ordinal++) {
@@ -461,6 +470,12 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
                 rs.getLong("version_number"), rs.getInt("priority"),
                 AttributeAuthorityRuleVersion.State.valueOf(rs.getString("state")), rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("activated_at").toInstant(), instant(rs.getTimestamp("superseded_at")));
+    }
+
+    private void lockTenant(TenantContext tenant) {
+        List<UUID> rows = jdbc.query("SELECT id FROM platform.tenant WHERE id = ? FOR UPDATE",
+                (rs, rowNum) -> rs.getObject("id", UUID.class), tenant.tenantId());
+        if (rows.isEmpty()) throw new IllegalArgumentException("tenant does not exist");
     }
 
     private void lockSource(TenantContext tenant, UUID sourceSystemId) {
