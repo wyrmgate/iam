@@ -110,5 +110,5 @@ jobs:
           grep -Fq 'Cloudflare Pages' docs/engineering/dev-cd.md
           grep -Fq 'Railway' docs/engineering/dev-cd.md
           grep -Fq 'Neon' docs/engineering/dev-cd.md
-          grep -Fq 'reference-only' infra/opentofu/README.md
+          grep -Fq 'optional/reference' infra/opentofu/README.md
           test -f docs/operations/dev-managed-activation.md
