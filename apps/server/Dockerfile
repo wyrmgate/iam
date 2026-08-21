@@ -3,6 +3,10 @@
 FROM eclipse-temurin:25-jdk AS build
 WORKDIR /workspace
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY apps/server /workspace/apps/server
 RUN sh /workspace/apps/server/mvnw -f /workspace/apps/server/pom.xml clean package -DskipTests
 
