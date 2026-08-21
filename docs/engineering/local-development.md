@@ -15,6 +15,8 @@ Provide a reproducible developer environment without requiring application conta
 
 Maven does not need to be installed globally. `apps/server/mvnw` bootstraps the repository-pinned Maven 3.9.16 distribution into the developer Maven cache.
 
+Docker must also be available when running server verification because persistence integration tests use a disposable PostgreSQL Testcontainer. The test database is isolated from the normal local-development PostgreSQL volume.
+
 ## First-time setup
 
 ```bash
@@ -55,6 +57,26 @@ make console-dev
 ```
 
 The Vite development server proxies API calls to the Spring server.
+
+## Database migrations
+
+Flyway migration history is append-only. Do not edit or renumber an already merged migration. The current foundation uses sequential `V<version>__<description>.sql` files under `apps/server/src/main/resources/db/migration`.
+
+Platform/bootstrap migrations may establish physical topology and Platform-owned technical infrastructure. Capability-owned tables are introduced later by capability-focused migrations and must preserve the ownership rules in ADR-0010 and `docs/architecture/physical-data-model.md`.
+
+A normal server startup applies pending migrations. DEV deployment also runs the existing one-shot migration mode before starting the application container.
+
+## Persistence verification
+
+Run the full server verification with:
+
+```bash
+make server-build
+```
+
+The persistence integration tests start PostgreSQL 18.4 in Testcontainers, apply the real Flyway migration history to an empty database, validate the resulting schema, and verify tenant constraints, optimistic concurrency, transactional outbox rollback, inbox/idempotency uniqueness, and concurrent scheduled-work claiming. H2 is not used as a PostgreSQL substitute.
+
+Because the Testcontainer is disposable, these tests are the safe clean-bootstrap check; they do not run Flyway `clean` against local, DEV, DEMO, or production databases.
 
 ## Operations
 
