@@ -64,9 +64,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Validate Docker Compose
-        run: |
-          cp deploy/config/local.env.example deploy/config/local.env
-          docker compose --env-file deploy/config/local.env -f deploy/compose/local.yml config --quiet
+        run: docker compose --env-file deploy/config/local.env.example -f deploy/compose/local.yml config --quiet
 
       - name: Validate repository hygiene
         shell: bash
