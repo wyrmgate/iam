@@ -30,6 +30,7 @@ CREATE TABLE identity.source_import_run (
     checkpoint_token varchar(1024) NULL,
     partial_reason varchar(1024) NULL,
     CONSTRAINT identity_source_import_run_tenant_id_uq UNIQUE (tenant_id, id),
+    CONSTRAINT identity_source_import_run_source_ref_uq UNIQUE (tenant_id, id, source_system_id),
     CONSTRAINT identity_source_import_run_source_fk
         FOREIGN KEY (tenant_id, source_system_id)
         REFERENCES identity.source_system (tenant_id, id),
@@ -66,11 +67,11 @@ CREATE TABLE identity.source_record (
         FOREIGN KEY (tenant_id, source_system_id)
         REFERENCES identity.source_system (tenant_id, id),
     CONSTRAINT identity_source_record_last_run_fk
-        FOREIGN KEY (tenant_id, last_import_run_id)
-        REFERENCES identity.source_import_run (tenant_id, id),
+        FOREIGN KEY (tenant_id, last_import_run_id, source_system_id)
+        REFERENCES identity.source_import_run (tenant_id, id, source_system_id),
     CONSTRAINT identity_source_record_last_complete_run_fk
-        FOREIGN KEY (tenant_id, last_complete_import_run_id)
-        REFERENCES identity.source_import_run (tenant_id, id),
+        FOREIGN KEY (tenant_id, last_complete_import_run_id, source_system_id)
+        REFERENCES identity.source_import_run (tenant_id, id, source_system_id),
     CONSTRAINT identity_source_record_native_key_ck CHECK (btrim(native_key) <> ''),
     CONSTRAINT identity_source_record_attributes_ck CHECK (jsonb_typeof(observed_attributes) = 'object'),
     CONSTRAINT identity_source_record_timestamp_order_ck CHECK (last_observed_at >= first_observed_at)
