@@ -40,6 +40,20 @@ Platform infrastructure currently provides:
 
 The Platform persistence package is infrastructure, not a generic domain repository layer. Do not add `BaseEntity`, `GenericRepository`, cross-capability DAOs, or framework types to domain contracts.
 
+## Identity persistence slice
+
+The first capability-owned persistence vertical slice implements the canonical Identity aggregate without broadening the model beyond the controlled specifications:
+
+- `IdentityType` is `PERSON`, `SERVICE`, or `WORKLOAD` and is paired with exactly one compatible typed profile by the aggregate transaction;
+- `IdentityLifecycleState` is persisted independently from technical fulfillment or provider observation;
+- profile tables are typed relational boundaries and intentionally contain no invented profile-specific business fields until governed requirements define them;
+- all Identity reads and writes are explicitly tenant-scoped;
+- mutable Identity state uses optimistic revision predicates and rejects stale writes;
+- authoritative Identity mutations and internal semantic facts commit through the same transaction and shared outbox;
+- the Identity domain/application packages remain free of Spring and JDBC dependencies, with those details isolated in `identity.persistence`.
+
+This slice does not yet implement source records/correlation, organizations/relationships, principals, merge/split, dynamic canonical attributes, public Identity APIs, or public integration events.
+
 ## Commands
 
 From the repository root:
