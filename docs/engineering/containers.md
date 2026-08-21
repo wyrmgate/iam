@@ -30,7 +30,7 @@ The server image is a multi-stage Java 25 build. Maven compiles the Spring Boot 
 
 ## Console image
 
-The console image is a multi-stage Node/Vite build. The final image contains only the generated static assets and Caddy static-file runtime; Node.js and source files are not part of the runtime image.
+The console image is a multi-stage Node/Vite build. The final image contains only the generated static assets and an Alpine/BusyBox static-file runtime; Node.js, Caddy, and source files are not part of the console runtime image. Caddy is deployed separately as the public edge reverse proxy.
 
 ## Security
 
