@@ -1,0 +1,50 @@
+name: Supply Chain Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/container.yml'
+      - '.github/workflows/supply-chain.yml'
+      - 'docs/engineering/software-supply-chain.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/container.yml'
+      - '.github/workflows/supply-chain.yml'
+      - 'docs/engineering/software-supply-chain.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: supply-chain-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: 'v3.1.2'
+
+      - name: Verify Cosign version
+        run: cosign version
+
+      - name: Verify published image controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/container.yml
+
+          grep -Fq 'id-token: write' "${workflow}"
+          grep -Fq 'provenance: mode=max' "${workflow}"
+          grep -Fq 'sbom: true' "${workflow}"
+          grep -Fq 'cosign sign --yes' "${workflow}"
+          grep -Fq 'steps.build.outputs.digest' "${workflow}"
+          grep -Fq -- '--certificate-identity "https://github.com/wyrmgate/iam/.github/workflows/container.yml@refs/heads/main"' "${workflow}"
+          grep -Fq -- '--certificate-oidc-issuer "https://token.actions.githubusercontent.com"' "${workflow}"
