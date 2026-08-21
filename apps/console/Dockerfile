@@ -14,7 +14,9 @@ COPY apps/console/src ./src
 RUN npm install --no-audit --no-fund
 RUN npm run build
 
-FROM caddy:2.10.2-alpine
-COPY --from=build /workspace/apps/console/dist /srv
+FROM caddy:2.11.4-alpine
+RUN apk upgrade --no-cache
+COPY --from=build --chown=1000:1000 /workspace/apps/console/dist /srv
+USER 1000:1000
 EXPOSE 8080
 CMD ["caddy","file-server","--root","/srv","--listen",":8080"]
