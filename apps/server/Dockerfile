@@ -12,7 +12,10 @@ RUN mvn -f /workspace/apps/server/pom.xml clean package -DskipTests
 FROM eclipse-temurin:25-jre
 WORKDIR /app
 
-RUN useradd --system --uid 10001 --create-home wyrmgate
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --create-home wyrmgate
 COPY --from=build /workspace/apps/server/target/wyrmgate-iam-server-0.1.0-SNAPSHOT.jar /app/wyrmgate-iam-server.jar
 
 USER 10001
