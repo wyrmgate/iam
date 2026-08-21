@@ -24,6 +24,26 @@ Lifecycle states are independent from canonical-record state. Normal lifecycle s
 
 Identity merge/split is an explicit durable operation because it may affect source links, principals, assignments, administrative grants, ownership, requests/reviews, SoD and risk. Merge preserves provenance; historical assignment identity is not silently rewritten.
 
+### Canonical attribute resolution
+
+Dynamic canonical Identity attributes remain distinct from SourceRecord observation. `AttributeDefinition` is stable identity/key; semantic type/cardinality/classification/query-policy flags are versioned within immutable activated canonical schema versions. Mapping and authority are separately versioned concerns.
+
+Canonical resolution outcomes are explicit:
+
+- `RESOLVED` — one effective top-authority value set is selected with candidate and authority provenance.
+- `OVERRIDDEN` — an effective governed override supplies the canonical value; source observations/candidates remain unchanged.
+- `CONFLICT` — multiple equally authoritative current candidates disagree. A prior compatible source-resolved trusted value may remain readable while the conflict is exposed; conflict never silently falls back to source recency.
+- `UNRESOLVED` — candidates exist but no compatible active authority rule can select one. A prior compatible source-resolved trusted value may remain readable while degraded resolution is exposed.
+- `NO_VALUE` — no current candidate exists for the active definition version and no effective override applies.
+
+Source observation time is provenance, not authority. Last-write-wins is not a default resolution strategy. Equal authority with equal normalized values is not a value conflict; selection of equivalent provenance is deterministic but does not change the canonical value.
+
+Overrides obey semantic validity directly. An override ceases to govern at `validUntil` even if no scheduler runs, and an expired override is not retained indirectly as the trusted fallback for a later conflict/unresolved condition. Applying or replacing an override preserves override history and never rewrites SourceRecord or candidate data.
+
+Canonical `valueRevision` changes only when the effective resolution outcome, selected provenance or canonical value set changes. Re-running resolution with the same outcome is a no-op so raw source churn with no canonical impact stops before downstream lifecycle/access reevaluation.
+
+Activated canonical schema content is immutable. A replacement schema creates new definition versions; mappings, authority rules, candidates and overrides tied to an older definition version do not silently become compatible with the new version.
+
 ## Role and policy versions
 
 Recommended lifecycle:
