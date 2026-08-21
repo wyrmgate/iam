@@ -1,0 +1,74 @@
+name: Release Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/workflows/release-contract.yml'
+      - 'docs/engineering/release-pipeline.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/workflows/release-contract.yml'
+      - 'docs/engineering/release-pipeline.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-contract:
+    name: release-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: 'v3.1.2'
+
+      - name: Validate release workflow contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/release.yml
+
+          grep -Fq 'environment: release' "${workflow}"
+          grep -Fq 'id-token: write' "${workflow}"
+          grep -Fq 'packages: read' "${workflow}"
+          grep -Fq 'contents: write' "${workflow}"
+          grep -Fq 'git merge-base --is-ancestor' "${workflow}"
+          grep -Fq 'docker buildx imagetools inspect' "${workflow}"
+          grep -Fq 'cosign verify "${artifact}"' "${workflow}"
+          grep -Fq 'cosign sign-blob --yes' "${workflow}"
+          grep -Fq 'cosign verify-blob release-manifest.json' "${workflow}"
+          grep -Fq 'gh release create' "${workflow}"
+          grep -Fq 'release-manifest.json.sha256' "${workflow}"
+
+          if grep -Eq 'docker/(build-push-action|build-push-action@)|docker build([[:space:]]|$)' "${workflow}"; then
+            echo 'Release workflow must not rebuild application images.' >&2
+            exit 1
+          fi
+
+      - name: Validate semantic-version policy examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          pattern='^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z][0-9A-Za-z.-]*)?$'
+          for version in 0.3.0 1.0.0 2.1.4-rc.1; do
+            [[ "${version}" =~ ${pattern} ]]
+          done
+          for invalid in v1.0.0 1.0 1 latest; do
+            if [[ "${invalid}" =~ ${pattern} ]]; then
+              echo "Invalid release version unexpectedly accepted: ${invalid}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Validate Cosign tool pin
+        run: cosign version
