@@ -4,6 +4,7 @@
 !.env.example
 deploy/config/local.env
 deploy/config/edge.env
+deploy/config/dev.env
 *.pem
 *.key
 *.p12
