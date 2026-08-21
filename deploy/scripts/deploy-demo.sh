@@ -25,7 +25,7 @@ rollback() {
   if [[ -n "${previous_release}" && -d "${previous_release}" ]]; then
     local previous_app=(docker compose -p wyrmgate-iam-demo --env-file "${previous_release}/deploy/config/demo.env" -f "${previous_release}/deploy/compose/demo.yml")
     local previous_edge=(docker compose -p wyrmgate-demo-edge --env-file "${previous_release}/deploy/config/edge.env" -f "${previous_release}/deploy/compose/edge.yml")
-    "${previous_app[@]}" up -d --wait postgres server console || true
+    "${previous_app[@]}" up -d --wait postgres otel-collector server console || true
     "${previous_edge[@]}" up -d caddy || true
     ln -sfn "${previous_release}" "${current_link}"
   fi
@@ -37,10 +37,10 @@ trap rollback ERR
 mkdir -p "${root_dir}/releases"
 docker network inspect wyrmgate-demo-edge >/dev/null 2>&1 || docker network create wyrmgate-demo-edge >/dev/null
 
-"${app_compose[@]}" pull postgres server console
+"${app_compose[@]}" pull postgres otel-collector server console
 "${edge_compose[@]}" pull caddy
 
-"${app_compose[@]}" up -d --wait postgres
+"${app_compose[@]}" up -d --wait postgres otel-collector
 "${app_compose[@]}" run --rm --no-deps server \
   --spring.main.web-application-type=none \
   --wyrmgate.migrate-only=true
