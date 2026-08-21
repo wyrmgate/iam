@@ -26,6 +26,11 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`adr/README.md`](adr/README.md) — canonical Architecture Decision Record index.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
+- [`engineering/dev-cd.md`](engineering/dev-cd.md) — active managed DEV deployment topology: Cloudflare Pages, Railway, and Neon.
+- [`operations/dev-managed-activation.md`](operations/dev-managed-activation.md) — first managed DEV activation checklist.
+- [`engineering/edge.md`](engineering/edge.md) — standalone-host Caddy reference edge.
+- [`engineering/public-demo.md`](engineering/public-demo.md) — current DEV/demo usage and standalone DEMO reference status.
+- [`engineering/observability.md`](engineering/observability.md) — vendor-neutral telemetry contract and current managed DEV posture.
 - `operations/` — deployment, backup/restore, monitoring, incident, connector, and reconciliation runbooks as those capabilities are implemented.
 
 ## Authority hierarchy
@@ -41,7 +46,7 @@ A newly accepted ADR may temporarily be newer than a formal document; that is co
 
 ## Framework-neutral architecture rule
 
-The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, or a particular build layout. These are implementation choices. Canonical capability ownership, aggregate boundaries, state semantics, security invariants, and cross-capability contracts must remain meaningful if an implementation technology changes.
+The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, Cloudflare, Railway, Neon, OCI, Docker, or a particular build layout. Those are implementation/deployment choices. Canonical capability ownership, aggregate boundaries, state semantics, security invariants, and cross-capability contracts must remain meaningful if an implementation or deployment technology changes.
 
 ## Current status
 
@@ -49,4 +54,6 @@ IAM v2 is pre-release and under active design. The v0.2 formal specification set
 
 The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 and [`architecture/physical-data-model.md`](architecture/physical-data-model.md) are the current controlled amendment, and the next formal-specification revision must fold them into the Data Architecture/SAD/RTM package.
 
-Remaining open design areas include machine-readable OpenAPI/AsyncAPI schemas (OD-003), the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should begin only after the persistence semantics in OD-002 are treated as the implementation contract.
+The first real DEV/testing/demo deployment direction is a managed-service implementation topology documented in [`engineering/dev-cd.md`](engineering/dev-cd.md). That deployment choice does not settle production HA/DR or change canonical IAM capability architecture.
+
+Remaining open design areas include machine-readable OpenAPI/AsyncAPI schemas (OD-003), the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.

@@ -1,178 +1,114 @@
-name: DEV CD
+name: DEV Deployment Contract
 
 on:
   pull_request:
     branches: [main]
     paths:
       - '.github/workflows/dev-cd.yml'
-      - 'deploy/compose/dev.yml'
-      - 'deploy/compose/edge.yml'
-      - 'deploy/config/dev.env.example'
-      - 'deploy/config/edge.env.example'
-      - 'deploy/config/otel-collector.runtime.yaml'
-      - 'deploy/scripts/deploy-dev.sh'
+      - 'apps/console/**'
       - 'apps/server/**'
-  workflow_run:
-    workflows: ['Container CI']
-    types: [completed]
+      - 'docs/engineering/dev-cd.md'
+      - 'docs/operations/dev-managed-activation.md'
+  push:
     branches: [main]
+    paths:
+      - '.github/workflows/dev-cd.yml'
+      - 'apps/console/**'
+      - 'apps/server/**'
+      - 'docs/engineering/dev-cd.md'
+      - 'docs/operations/dev-managed-activation.md'
   workflow_dispatch:
-    inputs:
-      sha:
-        description: Immutable main commit SHA to deploy
-        required: true
-        type: string
 
 permissions:
   contents: read
-  packages: read
 
 concurrency:
-  group: dev-deployment
-  cancel-in-progress: false
+  group: dev-deployment-contract-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  validate:
-    name: dev-deployment-contract
-    if: github.event_name == 'pull_request'
+  pages:
+    name: pages-contract
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Prepare validation configuration
-        shell: bash
-        run: |
-          cp deploy/config/dev.env.example deploy/config/dev.env
-          cp deploy/config/edge.env.example deploy/config/edge.env
-          sed -i 's#sha-replace-me#sha-0000000000000000000000000000000000000000#g' deploy/config/dev.env
-          sed -i 's#iam-dev.example.com#iam.example.com#g' deploy/config/dev.env
-          sed -i 's#iam-server:8080#server:8080#g' deploy/config/edge.env
-          sed -i 's#iam-console:8080#console:8080#g' deploy/config/edge.env
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: apps/console/package.json
 
-      - name: Validate DEV Compose
-        run: docker compose --env-file deploy/config/dev.env -f deploy/compose/dev.yml config --quiet
+      - name: Install console dependencies
+        run: npm --prefix apps/console install --no-audit --no-fund
 
-      - name: Validate edge Compose
-        run: docker compose --env-file deploy/config/edge.env -f deploy/compose/edge.yml config --quiet
+      - name: Build console
+        run: npm --prefix apps/console run build
 
-      - name: Validate deployment script syntax
-        run: bash -n deploy/scripts/deploy-dev.sh
-
-  deploy:
-    name: deploy-dev
-    if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: dev
-    env:
-      TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.sha }}
-      DEV_HOST: ${{ secrets.DEV_HOST }}
-      DEV_USER: ${{ secrets.DEV_USER }}
-      DEV_SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
-      DEV_PUBLIC_HOST: ${{ secrets.DEV_PUBLIC_HOST }}
-      DEV_ACME_EMAIL: ${{ secrets.DEV_ACME_EMAIL }}
-      DEV_DB_PASSWORD: ${{ secrets.DEV_DB_PASSWORD }}
-      DEV_OTEL_EXPORTER_ENDPOINT: ${{ secrets.DEV_OTEL_EXPORTER_ENDPOINT }}
-      DEV_OTEL_EXPORTER_AUTHORIZATION: ${{ secrets.DEV_OTEL_EXPORTER_AUTHORIZATION }}
-    steps:
-      - name: Require DEV deployment secrets
+      - name: Validate Pages Function and routing contract
         shell: bash
         run: |
           set -euo pipefail
-          for name in DEV_HOST DEV_USER DEV_SSH_PRIVATE_KEY DEV_PUBLIC_HOST DEV_ACME_EMAIL DEV_DB_PASSWORD DEV_OTEL_EXPORTER_ENDPOINT DEV_OTEL_EXPORTER_AUTHORIZATION; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "Missing required GitHub Environment secret: ${name}" >&2
-              exit 1
-            fi
-          done
-          if [[ ! "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "TARGET_SHA must be a full 40-character Git commit SHA." >&2
-            exit 1
-          fi
-
-      - name: Checkout deployment revision
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ env.TARGET_SHA }}
-
-      - name: Materialize host-only configuration
-        shell: bash
-        run: |
+          node --check 'apps/console/functions/api/[[path]].js'
+          cmp apps/console/public/_routes.json apps/console/dist/_routes.json
           python - <<'PY'
-          import os
+          import json
           from pathlib import Path
 
-          config = Path('deploy/config')
-          config.mkdir(parents=True, exist_ok=True)
-          sha = os.environ['TARGET_SHA']
-          host = os.environ['DEV_PUBLIC_HOST']
-          password = os.environ['DEV_DB_PASSWORD']
-          email = os.environ['DEV_ACME_EMAIL']
-          otlp_endpoint = os.environ['DEV_OTEL_EXPORTER_ENDPOINT']
-          otlp_authorization = os.environ['DEV_OTEL_EXPORTER_AUTHORIZATION']
+          routes = json.loads(Path('apps/console/public/_routes.json').read_text())
+          if routes != {'version': 1, 'include': ['/api/*'], 'exclude': []}:
+              raise SystemExit('Pages Functions must be limited to /api/* so static routes stay static.')
 
-          (config / 'dev.env').write_text(
-              '\n'.join([
-                  f'IAM_PUBLIC_HOST={host}',
-                  'IAM_DB_NAME=wyrmgate_iam',
-                  'IAM_DB_USER=wyrmgate',
-                  f'IAM_DB_PASSWORD={password}',
-                  f'IAM_SERVER_IMAGE=ghcr.io/wyrmgate/iam-server:sha-{sha}',
-                  f'IAM_CONSOLE_IMAGE=ghcr.io/wyrmgate/iam-console:sha-{sha}',
-                  f'IAM_OTEL_EXPORTER_ENDPOINT={otlp_endpoint}',
-                  f'IAM_OTEL_EXPORTER_AUTHORIZATION={otlp_authorization}',
-                  'IAM_TRACE_SAMPLING_PROBABILITY=0.10',
-                  '',
-              ]),
-              encoding='utf-8',
-          )
-          (config / 'edge.env').write_text(
-              '\n'.join([
-                  f'IAM_PUBLIC_HOST={host}',
-                  f'IAM_ACME_EMAIL={email}',
-                  'IAM_SERVER_UPSTREAM=server:8080',
-                  'IAM_CONSOLE_UPSTREAM=console:8080',
-                  '',
-              ]),
-              encoding='utf-8',
-          )
+          function = Path('apps/console/functions/api/[[path]].js').read_text()
+          if 'IAM_BACKEND_ORIGIN' not in function:
+              raise SystemExit('Pages proxy must use IAM_BACKEND_ORIGIN.')
           PY
-          chmod 600 deploy/config/dev.env deploy/config/edge.env
 
-      - name: Configure SSH
+  server:
+    name: railway-server-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: apps/server/pom.xml
+
+      - name: Verify server
+        run: make server-build
+
+      - name: Validate managed-runtime configuration
         shell: bash
         run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "${DEV_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${DEV_HOST}" >> ~/.ssh/known_hosts
+          set -euo pipefail
+          grep -Fq 'port: ${PORT:8080}' apps/server/src/main/resources/application.yml
+          grep -Fq '${IAM_DB_URL:' apps/server/src/main/resources/application.yml
+          grep -Fq '${IAM_DB_USER:' apps/server/src/main/resources/application.yml
+          grep -Fq '${IAM_DB_PASSWORD:' apps/server/src/main/resources/application.yml
 
-      - name: Copy immutable deployment bundle
+  docs:
+    name: managed-dev-docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Require one active DEV topology
         shell: bash
         run: |
-          tar -czf /tmp/wyrmgate-dev-release.tgz deploy
-          cat /tmp/wyrmgate-dev-release.tgz | ssh "${DEV_USER}@${DEV_HOST}" \
-            "sudo mkdir -p /opt/wyrmgate/iam/releases/${TARGET_SHA} && sudo tar -xzf - -C /opt/wyrmgate/iam/releases/${TARGET_SHA}"
-
-      - name: Authenticate host to GHCR for this deployment
-        shell: bash
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          printf '%s' "${GHCR_TOKEN}" | ssh "${DEV_USER}@${DEV_HOST}" \
-            "sudo docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin"
-
-      - name: Deploy and smoke-test DEV
-        shell: bash
-        run: |
-          ssh "${DEV_USER}@${DEV_HOST}" \
-            "sudo bash /opt/wyrmgate/iam/releases/${TARGET_SHA}/deploy/scripts/deploy-dev.sh /opt/wyrmgate/iam/releases/${TARGET_SHA}"
-
-      - name: Remove temporary registry credential
-        if: always()
-        shell: bash
-        run: ssh "${DEV_USER}@${DEV_HOST}" 'sudo docker logout ghcr.io >/dev/null 2>&1 || true'
+          set -euo pipefail
+          grep -Fq 'Cloudflare Pages' docs/engineering/dev-cd.md
+          grep -Fq 'Railway' docs/engineering/dev-cd.md
+          grep -Fq 'Neon' docs/engineering/dev-cd.md
+          grep -Fq 'optional/reference' infra/opentofu/README.md
+          test -f docs/operations/dev-managed-activation.md

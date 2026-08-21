@@ -2,11 +2,21 @@
 
 ## Scope
 
-Sprint 12 establishes vendor-neutral application telemetry using OpenTelemetry Protocol (OTLP), Micrometer, Spring Boot observability support, and an OpenTelemetry Collector between the IAM server and any external backend.
+Wyrmgate IAM uses vendor-neutral application telemetry through OpenTelemetry Protocol (OTLP), Micrometer, Spring Boot observability support, and, where deployed, an OpenTelemetry Collector between the IAM server and an external backend.
 
-The application does not contain Grafana-specific APIs or credentials. Grafana Cloud is one compatible OTLP backend; another OTLP-capable service can replace it without changing application code.
+The application does not contain Grafana-specific APIs or credentials. Grafana Cloud is one compatible OTLP backend; another OTLP-capable service can replace it without changing IAM domain/application semantics.
 
-## Data flow
+## Active managed DEV posture
+
+For the first Cloudflare Pages + Railway + Neon DEV/testing/demo environment, remote telemetry is intentionally disabled with `IAM_OTEL_ENABLED=false` until Grafana Cloud free-tier behavior is confirmed suitable.
+
+The existing Collector remains a local/standalone deployment component, not a mandatory process in this initial managed DEV topology. Do not add Grafana credentials or backend endpoints to the repository.
+
+Railway Serverless considers outbound activity when determining whether a service can sleep, so any later remote telemetry activation must also verify its effect on the intended DEV serverless behavior.
+
+## Standalone/local telemetry flow
+
+The repository retains the Collector configuration used by local development and the standalone Docker Compose reference topology:
 
 ```text
 IAM server
@@ -18,13 +28,11 @@ OpenTelemetry Collector
   -> OTLP/HTTP backend
 ```
 
-The Collector remains on the internal application network in DEV and DEMO and does not publish OTLP ports to the Internet.
-
 Local development uses the existing loopback-only Collector and its debug exporter.
 
 ## Application instrumentation
 
-The server uses Spring Boot's OpenTelemetry starter for tracing and Micrometer's OTLP registry for metrics. Export is disabled unless `IAM_OTEL_ENABLED=true`.
+The server uses Spring Boot OpenTelemetry support for tracing and Micrometer for metrics. Export is disabled unless `IAM_OTEL_ENABLED=true`.
 
 Runtime variables:
 
@@ -34,20 +42,16 @@ Runtime variables:
 - `IAM_OTEL_METRICS_ENDPOINT`
 - `IAM_TRACE_SAMPLING_PROBABILITY`
 
-DEV and DEMO point the server at the internal Collector. Their default trace sampling probability is `0.10`; local development uses `1.0` for easier troubleshooting.
-
-Trace and span IDs are added to the logging correlation prefix when a trace context exists. Application logs remain ordinary process logs in this sprint; direct OTLP log export from the server is not required for correlation.
+Trace and span IDs are added to the logging correlation prefix when a trace context exists. Application logs remain ordinary process logs; direct OTLP log export from the server is not required for correlation.
 
 ## Collector backend configuration
 
-The runtime Collector receives these host-only values:
+When a deployment uses the runtime Collector, it receives backend configuration outside source control. The standalone host reference currently uses:
 
 - `IAM_OTEL_EXPORTER_ENDPOINT` — OTLP/HTTP base endpoint of the selected backend.
 - `IAM_OTEL_EXPORTER_AUTHORIZATION` — complete Authorization header value required by the backend.
 
-The DEV GitHub Environment supplies these as `DEV_OTEL_EXPORTER_ENDPOINT` and `DEV_OTEL_EXPORTER_AUTHORIZATION`. DEMO uses the corresponding `DEMO_...` secrets.
-
-These values are credentials/configuration and must not be committed or printed in CI logs.
+These values are credentials/configuration and must not be committed or printed in CI logs. They are not required for the initial managed DEV activation while telemetry is disabled.
 
 ## Redaction contract
 
@@ -63,7 +67,7 @@ Observability is not an audit log and is not a safe destination for authenticati
 - private keys or key-encryption material;
 - complete `Authorization`, `Proxy-Authorization`, `Cookie`, or `Set-Cookie` headers.
 
-The runtime Collector deletes common sensitive attribute names and common HTTP credential-header attributes before forwarding telemetry. This is defense-in-depth only: it cannot reliably sanitize arbitrary secrets embedded in free-form log bodies, exception text, SQL, URLs, or custom attribute values.
+The runtime Collector deletes common sensitive attribute names and HTTP credential-header attributes before forwarding telemetry. This is defense-in-depth only: it cannot reliably sanitize arbitrary secrets embedded in free-form log bodies, exception text, SQL, URLs, or custom attribute values.
 
 Query strings and request/response bodies must not be captured merely to improve observability. Any future body/header capture requires explicit security review and field-level allowlisting.
 
@@ -75,21 +79,20 @@ Tenant/domain identifiers may only be added to telemetry when there is a documen
 
 ## Backend independence
 
-The Collector is the backend boundary. Changing from Grafana Cloud to another OTLP-compatible backend should normally require Collector/environment configuration only.
+Changing from Grafana Cloud to another OTLP-compatible backend should normally require deployment/Collector configuration only. Do not introduce vendor SDKs into IAM domain or application code for routine traces, metrics, or logs.
 
-Do not introduce vendor SDKs into domain or application code for routine traces, metrics, or logs.
-
-## Operational checks
+## Operational checks when telemetry is enabled
 
 Before treating an environment as observable:
 
-1. verify the Collector is healthy;
+1. verify the configured telemetry path is healthy;
 2. generate a known HTTP request and confirm a trace reaches the backend;
 3. confirm server metrics arrive with `service.name=wyrmgate-iam` and the expected deployment environment;
 4. confirm logs show trace/span correlation for traced requests;
 5. run a synthetic credential-bearing request and verify forbidden headers/attributes are not present in exported telemetry;
-6. confirm Collector/backend credentials do not appear in container inspect output accessible to unprivileged users, deployment logs, or application logs.
+6. confirm Collector/backend credentials do not appear in deployment logs or application logs;
+7. for Railway Serverless DEV, verify telemetry does not unexpectedly defeat the intended idle/sleep posture.
 
 ## Known limits
 
-Sprint 12 does not yet provide production SLOs, dashboards, alert policies, centralized application-log shipping, tail sampling, or audit-event visualization. Those are operational layers on top of this telemetry foundation.
+This baseline does not provide production SLOs, dashboards, alert policies, centralized application-log shipping, tail sampling, or audit-event visualization. Those remain operational layers on top of the telemetry foundation.
