@@ -45,7 +45,7 @@ public interface SourceCorrelationRepository {
             UUID sourceSystemId,
             String nativeKey);
 
-    IdentityLink replaceAcceptedLink(
+    LinkReplacement replaceAcceptedLink(
             TenantContext tenant,
             UUID sourceRecordId,
             UUID identityId,
@@ -56,4 +56,7 @@ public interface SourceCorrelationRepository {
             UUID newLinkId);
 
     Optional<IdentityLink> findActiveAcceptedLink(TenantContext tenant, UUID sourceRecordId);
+
+    record LinkReplacement(IdentityLink link, boolean changed) {
+    }
 }
