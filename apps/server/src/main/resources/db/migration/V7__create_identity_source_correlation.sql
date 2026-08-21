@@ -42,7 +42,7 @@ CREATE TABLE identity.source_import_run (
         OR (run_state IN ('COMPLETED', 'FAILED') AND completed_at IS NOT NULL)
     ),
     CONSTRAINT identity_source_import_run_partial_reason_ck CHECK (
-        completeness = 'COMPLETE' OR partial_reason IS NOT NULL
+        completeness <> 'PARTIAL' OR (partial_reason IS NOT NULL AND btrim(partial_reason) <> '')
     )
 );
 
