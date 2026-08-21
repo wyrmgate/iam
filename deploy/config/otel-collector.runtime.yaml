@@ -1,0 +1,46 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 192
+    spike_limit_mib: 48
+  attributes/redact:
+    actions:
+      - pattern: '(?i)^(authorization|proxy-authorization|cookie|set-cookie|password|passwd|secret|client_secret|access_token|refresh_token|id_token|code|mfa|otp|private_key)$'
+        action: delete
+      - pattern: '(?i)^http\.(request|response)\.header\.(authorization|proxy_authorization|cookie|set_cookie|x_api_key)$'
+        action: delete
+  batch: {}
+
+exporters:
+  otlphttp/upstream:
+    endpoint: ${env:IAM_OTEL_EXPORTER_ENDPOINT}
+    headers:
+      Authorization: ${env:IAM_OTEL_EXPORTER_AUTHORIZATION}
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, batch]
+      exporters: [otlphttp/upstream]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, batch]
+      exporters: [otlphttp/upstream]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/redact, batch]
+      exporters: [otlphttp/upstream]
