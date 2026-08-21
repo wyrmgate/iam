@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -32,6 +32,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -42,13 +44,19 @@ jobs:
         working-directory: docs-site
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
-      - name: Upload generated dependency lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs-package-lock
-          path: docs-site/package-lock.json
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit generated dependency lock on bootstrap branch
+        if: github.event_name == 'pull_request' && github.head_ref == 'docs/reproducible-toolchain'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -- docs-site/package-lock.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'docs: lock documentation dependencies'
+          git push origin HEAD:${GITHUB_HEAD_REF}
 
       - name: Install documentation dependencies
         working-directory: docs-site
