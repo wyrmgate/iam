@@ -4,12 +4,12 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Current positive source observation; absence is inferred only from trustworthy complete import semantics. */
+/** Current positive normalized source observation; absence requires trustworthy complete import semantics. */
 public record SourceRecord(
         UUID id,
         UUID sourceSystemId,
         String nativeKey,
-        String nativePayloadJson,
+        String observedAttributesJson,
         Instant sourceUpdatedAt,
         Instant firstObservedAt,
         Instant lastObservedAt,
@@ -22,8 +22,8 @@ public record SourceRecord(
         if (nativeKey == null || nativeKey.isBlank()) {
             throw new IllegalArgumentException("nativeKey must not be blank");
         }
-        if (nativePayloadJson == null || nativePayloadJson.isBlank()) {
-            throw new IllegalArgumentException("nativePayloadJson must not be blank");
+        if (observedAttributesJson == null || observedAttributesJson.isBlank()) {
+            throw new IllegalArgumentException("observedAttributesJson must not be blank");
         }
         Objects.requireNonNull(firstObservedAt, "firstObservedAt");
         Objects.requireNonNull(lastObservedAt, "lastObservedAt");
