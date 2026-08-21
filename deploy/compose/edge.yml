@@ -22,4 +22,6 @@ networks:
 
 volumes:
   caddy-data:
+    name: wyrmgate-caddy-data
   caddy-config:
+    name: wyrmgate-caddy-config
