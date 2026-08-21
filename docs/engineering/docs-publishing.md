@@ -21,12 +21,16 @@ Customer-only and internal-only publication surfaces may be added later, but the
 
 Every pull request must:
 
-1. install the exact direct Docusaurus/React dependency versions declared by `docs-site/package.json`;
-2. run `npm run build`;
-3. fail on broken Docusaurus links;
-4. avoid entering the protected `docs` deployment environment.
+1. use the Node.js version pinned by the repository `.nvmrc`;
+2. install dependencies exactly from the committed `docs-site/package-lock.json` with `npm ci`;
+3. disable dependency lifecycle scripts during docs installation unless a reviewed dependency later proves one is required;
+4. run `npm run build`;
+5. fail on broken Docusaurus links;
+6. avoid entering the protected `docs` deployment environment.
 
-The current baseline does not commit an npm lockfile for the docs site. Direct dependencies are exact, but transitive dependency resolution is not yet fully reproducible. A generated and reviewed lockfile should be added before the docs toolchain is treated as release-grade supply-chain input.
+The documentation toolchain uses npm lockfile v3. Direct dependencies remain exact in `docs-site/package.json`; the committed lockfile pins transitive versions and records package integrity hashes. CI and publication use the same locked install contract, and the Node setup cache is keyed from the lockfile.
+
+A dependency update must update both `package.json` and `package-lock.json` when applicable and must pass the documentation build before merge. Do not regenerate the lockfile with a materially different Node/npm toolchain without reviewing the resulting dependency graph changes.
 
 ## Publication contract
 
@@ -60,10 +64,10 @@ If public documentation summarizes a canonical concept, the canonical repository
 
 ## Local validation
 
-From `docs-site/`:
+Use the repository-pinned Node.js version. From `docs-site/`:
 
 ```bash
-npm install --no-package-lock --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 npm run build
 ```
 
@@ -79,6 +83,7 @@ Before setting `DOCS_DEPLOY_ENABLED=true`:
 4. set `CLOUDFLARE_PAGES_PROJECT`;
 5. verify the intended public hostname and DNS configuration;
 6. review all files under `docs/public/` as externally distributable content;
-7. run the Docs CI/CD workflow successfully on `main`.
+7. verify `docs-site/package-lock.json` is current and reviewed;
+8. run the Docs CI/CD workflow successfully on `main`.
 
 Custom-domain/DNS activation is external infrastructure work and is intentionally not performed by the repository scaffold itself.
