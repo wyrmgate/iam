@@ -38,7 +38,10 @@ jobs:
           tofu_wrapper: false
 
       - name: Check formatting
-        run: tofu -chdir=infra/opentofu fmt -check -recursive
+        shell: bash
+        run: |
+          tofu -chdir=infra/opentofu fmt -recursive
+          git diff --exit-code -- infra/opentofu
 
       - name: Initialize providers
         run: tofu -chdir=infra/opentofu init -backend=false
