@@ -16,5 +16,6 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0006 Credential secret boundary, audit and evidence](0006-credential-audit-evidence-boundary.md)
 - [ADR-0007 Dynamic schema, mapping, authority and provenance](0007-dynamic-schema-and-provenance.md)
 - [ADR-0008 API and event contract model](0008-api-and-event-contract-model.md)
+- [ADR-0009 Domain-owned workflow and durable orchestration](0009-domain-owned-workflow-and-durable-orchestration.md)
 
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. An accepted ADR may amend a formal specification between document revisions; the next formal revision must fold the ADR into the specification.
