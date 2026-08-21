@@ -2,31 +2,39 @@
 
 ## Scope
 
-Wyrmgate IAM uses vendor-neutral OpenTelemetry-compatible application instrumentation. Observability remains an operational layer and must not leak vendor-specific concepts into IAM domain semantics.
+Wyrmgate IAM uses vendor-neutral application telemetry through OpenTelemetry Protocol (OTLP), Micrometer, Spring Boot observability support, and, where deployed, an OpenTelemetry Collector between the IAM server and an external backend.
+
+The application does not contain Grafana-specific APIs or credentials. Grafana Cloud is one compatible OTLP backend; another OTLP-capable service can replace it without changing IAM domain/application semantics.
 
 ## Active managed DEV posture
 
 For the first Cloudflare Pages + Railway + Neon DEV/testing/demo environment, remote telemetry is intentionally disabled with `IAM_OTEL_ENABLED=false` until Grafana Cloud free-tier behavior is confirmed suitable.
 
-Do not add Grafana credentials or backend endpoints to the repository. A later activation must be reviewed as an operational change and preserve the redaction/data-minimization rules below.
+The existing Collector remains a local/standalone deployment component, not a mandatory process in this initial managed DEV topology. Do not add Grafana credentials or backend endpoints to the repository.
 
-## Existing standalone/local telemetry reference
+Railway Serverless considers outbound activity when determining whether a service can sleep, so any later remote telemetry activation must also verify its effect on the intended DEV serverless behavior.
 
-The repository retains the OpenTelemetry Collector configuration used by local development and the standalone Docker Compose reference topology. That reference flow is:
+## Standalone/local telemetry flow
+
+The repository retains the Collector configuration used by local development and the standalone Docker Compose reference topology:
 
 ```text
 IAM server
   -> OTLP/HTTP traces + metrics
 OpenTelemetry Collector
-  -> redaction / batching
-  -> OTLP-compatible backend
+  -> memory limiter
+  -> attribute redaction
+  -> batch
+  -> OTLP/HTTP backend
 ```
 
-Keeping those files does not make the Collector a required process in the initial managed DEV deployment.
+Local development uses the existing loopback-only Collector and its debug exporter.
 
-## Application variables
+## Application instrumentation
 
-The server supports:
+The server uses Spring Boot OpenTelemetry support for tracing and Micrometer for metrics. Export is disabled unless `IAM_OTEL_ENABLED=true`.
+
+Runtime variables:
 
 - `IAM_OTEL_ENABLED`
 - `IAM_DEPLOYMENT_ENVIRONMENT`
@@ -34,18 +42,57 @@ The server supports:
 - `IAM_OTEL_METRICS_ENDPOINT`
 - `IAM_TRACE_SAMPLING_PROBABILITY`
 
-Export remains disabled unless `IAM_OTEL_ENABLED=true`.
+Trace and span IDs are added to the logging correlation prefix when a trace context exists. Application logs remain ordinary process logs; direct OTLP log export from the server is not required for correlation.
+
+## Collector backend configuration
+
+When a deployment uses the runtime Collector, it receives backend configuration outside source control. The standalone host reference currently uses:
+
+- `IAM_OTEL_EXPORTER_ENDPOINT` — OTLP/HTTP base endpoint of the selected backend.
+- `IAM_OTEL_EXPORTER_AUTHORIZATION` — complete Authorization header value required by the backend.
+
+These values are credentials/configuration and must not be committed or printed in CI logs. They are not required for the initial managed DEV activation while telemetry is disabled.
 
 ## Redaction contract
 
-Observability is not an audit log and is not a safe destination for authentication material. Application code must never intentionally place passwords, tokens, session identifiers, cookies, MFA/WebAuthn secrets, OAuth client secrets, connector credentials, private keys, or complete credential-bearing HTTP headers into logs, spans, metrics, events, or errors.
+Observability is not an audit log and is not a safe destination for authentication material. Application code must never intentionally place any of these values in log messages, span attributes, metric labels, events, or exception messages:
 
-Query strings and request/response bodies must not be captured merely to improve observability. Any future body/header capture requires explicit security review and allowlisting.
+- passwords or password hashes;
+- access, refresh, ID, activation, reset, or verification tokens;
+- authorization codes;
+- session identifiers or cookies;
+- MFA/OTP/WebAuthn secrets or assertions;
+- OAuth client secrets;
+- connector/API credentials;
+- private keys or key-encryption material;
+- complete `Authorization`, `Proxy-Authorization`, `Cookie`, or `Set-Cookie` headers.
+
+The runtime Collector deletes common sensitive attribute names and HTTP credential-header attributes before forwarding telemetry. This is defense-in-depth only: it cannot reliably sanitize arbitrary secrets embedded in free-form log bodies, exception text, SQL, URLs, or custom attribute values.
+
+Query strings and request/response bodies must not be captured merely to improve observability. Any future body/header capture requires explicit security review and field-level allowlisting.
 
 ## Cardinality and privacy
 
-Use bounded operational dimensions for metrics. Do not use user IDs, account IDs, email addresses, request IDs, token IDs, or arbitrary unbounded business values as metric labels. Tenant/domain identifiers require a documented operational and privacy justification.
+Use bounded, operational dimensions for metrics. Do not use user IDs, account IDs, email addresses, request IDs, token IDs, entitlement names with unbounded growth, or arbitrary error text as metric labels.
 
-## Future managed DEV activation
+Tenant/domain identifiers may only be added to telemetry when there is a documented operational requirement and an explicit privacy/cardinality decision. They are not part of the baseline.
 
-If Grafana Cloud is enabled later, verify the selected free-tier limits, data retention, credential model, and expected cost behavior first. Then confirm a known request produces expected telemetry and that no protected values appear in exported data or deployment logs.
+## Backend independence
+
+Changing from Grafana Cloud to another OTLP-compatible backend should normally require deployment/Collector configuration only. Do not introduce vendor SDKs into IAM domain or application code for routine traces, metrics, or logs.
+
+## Operational checks when telemetry is enabled
+
+Before treating an environment as observable:
+
+1. verify the configured telemetry path is healthy;
+2. generate a known HTTP request and confirm a trace reaches the backend;
+3. confirm server metrics arrive with `service.name=wyrmgate-iam` and the expected deployment environment;
+4. confirm logs show trace/span correlation for traced requests;
+5. run a synthetic credential-bearing request and verify forbidden headers/attributes are not present in exported telemetry;
+6. confirm Collector/backend credentials do not appear in deployment logs or application logs;
+7. for Railway Serverless DEV, verify telemetry does not unexpectedly defeat the intended idle/sleep posture.
+
+## Known limits
+
+This baseline does not provide production SLOs, dashboards, alert policies, centralized application-log shipping, tail sampling, or audit-event visualization. Those remain operational layers on top of the telemetry foundation.
