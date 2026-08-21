@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.identity.application;
 
+import io.wyrmgate.iam.identity.application.SourceCorrelationRepository.LinkReplacement;
 import io.wyrmgate.iam.identity.domain.IdentityLink;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
 import io.wyrmgate.iam.identity.domain.SourceImportRun;
@@ -155,8 +156,7 @@ public final class SourceCorrelationService {
             throw new IllegalArgumentException("identity does not exist");
         }
         return transactions.required(() -> {
-            IdentityLink before = repository.findActiveAcceptedLink(tenant, sourceRecordId).orElse(null);
-            IdentityLink accepted = repository.replaceAcceptedLink(
+            LinkReplacement replacement = repository.replaceAcceptedLink(
                     tenant,
                     sourceRecordId,
                     identityId,
@@ -165,10 +165,10 @@ public final class SourceCorrelationService {
                     correlationId,
                     causationId,
                     idGenerator.nextId());
-            if (before == null || !before.id().equals(accepted.id())) {
-                facts.identityLinkAccepted(tenant, accepted);
+            if (replacement.changed()) {
+                facts.identityLinkAccepted(tenant, replacement.link());
             }
-            return accepted;
+            return replacement.link();
         });
     }
 
