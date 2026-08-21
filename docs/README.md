@@ -24,6 +24,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`adr/README.md`](adr/README.md) — canonical Architecture Decision Record index.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
+- [`operations/backup-restore.md`](operations/backup-restore.md) — PostgreSQL logical backup, destructive restore, verification, and DR boundary.
 - `operations/` — deployment, backup/restore, monitoring, incident, connector, and reconciliation runbooks as those capabilities are implemented.
 
 ## Authority hierarchy
@@ -43,4 +44,6 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, o
 
 ## Current status
 
-IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0009 are the current architecture checkpoint. Workflow/process orchestration is now defined. Open design areas include the concrete physical database/index/partition model, machine-readable OpenAPI/AsyncAPI schemas, remote connector-worker protocol, operations/HA/DR, and legacy migration/cutover.
+IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0009 are the current architecture checkpoint. Workflow/process orchestration is defined. The implementation infrastructure baseline now includes DEV/DEMO deployment, secret/signing-key boundaries, vendor-neutral OpenTelemetry, and a Sprint 13 PostgreSQL logical backup/restore foundation.
+
+Open design areas include the concrete physical database/index/partition model, machine-readable OpenAPI/AsyncAPI schemas, remote connector-worker protocol, production HA/PITR and off-host disaster recovery, backup/restore monitoring and drills, and legacy migration/cutover.

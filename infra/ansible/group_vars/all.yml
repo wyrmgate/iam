@@ -6,6 +6,12 @@ wyrmgate_config_dir: /etc/wyrmgate/iam
 wyrmgate_data_dir: /var/lib/wyrmgate/iam
 wyrmgate_backup_dir: /var/backups/wyrmgate/iam
 
+wyrmgate_backup_enabled: false
+wyrmgate_backup_profile: dev
+wyrmgate_backup_retention_days: 14
+wyrmgate_backup_calendar: '*-*-* 02:15:00'
+wyrmgate_backup_randomized_delay_seconds: 900
+
 wyrmgate_admin_ssh_port: 22
 wyrmgate_enable_ufw: true
 wyrmgate_enable_unattended_upgrades: true

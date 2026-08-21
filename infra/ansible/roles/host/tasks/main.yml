@@ -105,6 +105,57 @@
   loop_control:
     label: "{{ item.path }}"
 
+- name: Install scheduled database backup service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wyrmgate-iam-backup.service
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Wyrmgate IAM PostgreSQL logical backup
+      Documentation=https://github.com/wyrmgate/iam/blob/main/docs/operations/backup-restore.md
+      Requires=docker.service
+      After=docker.service
+      ConditionPathExists={{ wyrmgate_root_dir }}/current/deploy/scripts/backup-postgres.sh
+
+      [Service]
+      Type=oneshot
+      User=root
+      Group=root
+      UMask=0077
+      Nice=10
+      IOSchedulingClass=best-effort
+      IOSchedulingPriority=7
+      TimeoutStartSec=2h
+      ExecStart={{ wyrmgate_root_dir }}/current/deploy/scripts/backup-postgres.sh {{ wyrmgate_backup_profile }} {{ wyrmgate_root_dir }}/current {{ wyrmgate_backup_dir }}/{{ wyrmgate_backup_profile }} {{ wyrmgate_backup_retention_days }}
+
+- name: Install scheduled database backup timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wyrmgate-iam-backup.timer
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Schedule Wyrmgate IAM PostgreSQL backups
+
+      [Timer]
+      OnCalendar={{ wyrmgate_backup_calendar }}
+      RandomizedDelaySec={{ wyrmgate_backup_randomized_delay_seconds }}
+      Persistent=true
+      Unit=wyrmgate-iam-backup.service
+
+      [Install]
+      WantedBy=timers.target
+
+- name: Configure scheduled database backup timer
+  ansible.builtin.systemd_service:
+    name: wyrmgate-iam-backup.timer
+    daemon_reload: true
+    enabled: "{{ wyrmgate_backup_enabled }}"
+    state: "{{ 'started' if wyrmgate_backup_enabled else 'stopped' }}"
+
 - name: Enable unattended security upgrades
   ansible.builtin.copy:
     dest: /etc/apt/apt.conf.d/20auto-upgrades

@@ -1,0 +1,138 @@
+name: Recovery Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/recovery.yml'
+      - 'deploy/scripts/backup-postgres.sh'
+      - 'deploy/scripts/restore-postgres.sh'
+      - 'deploy/compose/dev.yml'
+      - 'infra/ansible/**'
+      - 'docs/operations/backup-restore.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/recovery.yml'
+      - 'deploy/scripts/backup-postgres.sh'
+      - 'deploy/scripts/restore-postgres.sh'
+      - 'deploy/compose/dev.yml'
+      - 'infra/ansible/**'
+      - 'docs/operations/backup-restore.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  recovery-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate recovery script syntax
+        run: |
+          bash -n deploy/scripts/backup-postgres.sh
+          bash -n deploy/scripts/restore-postgres.sh
+
+      - name: Exercise PostgreSQL backup archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          work_dir="$(mktemp -d)"
+          release_dir="${work_dir}/release"
+          backup_dir="${work_dir}/backups"
+
+          cleanup() {
+            docker compose \
+              -p wyrmgate-recovery-ci \
+              --env-file "${release_dir}/deploy/config/dev.env" \
+              -f "${release_dir}/deploy/compose/dev.yml" \
+              down -v --remove-orphans >/dev/null 2>&1 || true
+            rm -rf "${work_dir}"
+          }
+          trap cleanup EXIT
+
+          mkdir -p "${release_dir}"
+          cp -a deploy "${release_dir}/"
+
+          cat >"${release_dir}/deploy/config/dev.env" <<'EOF'
+          IAM_PUBLIC_HOST=recovery.invalid
+          IAM_DB_NAME=iam
+          IAM_DB_USER=iam
+          IAM_DB_PASSWORD=recovery-ci-only
+          IAM_SERVER_IMAGE=example.invalid/wyrmgate/server:ci
+          IAM_CONSOLE_IMAGE=example.invalid/wyrmgate/console:ci
+          IAM_OTEL_EXPORTER_ENDPOINT=https://otlp.invalid
+          IAM_OTEL_EXPORTER_AUTHORIZATION=recovery-ci-only
+          IAM_TRACE_SAMPLING_PROBABILITY=0.0
+          EOF
+
+          compose=(
+            docker compose
+            -p wyrmgate-recovery-ci
+            --env-file "${release_dir}/deploy/config/dev.env"
+            -f "${release_dir}/deploy/compose/dev.yml"
+          )
+
+          "${compose[@]}" up -d --wait postgres
+
+          "${compose[@]}" exec -T postgres sh -ceu '
+            export PGPASSWORD="$POSTGRES_PASSWORD"
+            psql --host=127.0.0.1 --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" \
+              -v ON_ERROR_STOP=1 \
+              -c "CREATE TABLE recovery_probe (id integer PRIMARY KEY, value text NOT NULL)" \
+              -c "INSERT INTO recovery_probe (id, value) VALUES (1, '\''preserved'\'')"
+          '
+
+          deploy/scripts/backup-postgres.sh dev "${release_dir}" "${backup_dir}" 7
+
+          backup_file="$(find "${backup_dir}" -maxdepth 1 -type f -name 'dev-*.dump' -print -quit)"
+          test -n "${backup_file}"
+
+          (
+            cd "${backup_dir}"
+            sha256sum -c "$(basename "${backup_file}").sha256"
+          )
+
+          "${compose[@]}" exec -T postgres sh -ceu '
+            export PGPASSWORD="$POSTGRES_PASSWORD"
+            createdb --host=127.0.0.1 --username="$POSTGRES_USER" --owner="$POSTGRES_USER" iam_restore_ci
+          '
+
+          "${compose[@]}" exec -T postgres sh -ceu '
+            export PGPASSWORD="$POSTGRES_PASSWORD"
+            exec pg_restore \
+              --host=127.0.0.1 \
+              --username="$POSTGRES_USER" \
+              --dbname=iam_restore_ci \
+              --exit-on-error \
+              --no-owner \
+              --no-acl
+          ' <"${backup_file}"
+
+          restored="$("${compose[@]}" exec -T postgres sh -ceu '
+            export PGPASSWORD="$POSTGRES_PASSWORD"
+            psql --host=127.0.0.1 --username="$POSTGRES_USER" --dbname=iam_restore_ci \
+              --tuples-only --no-align \
+              -c "SELECT value FROM recovery_probe WHERE id = 1"
+          ')"
+
+          test "${restored}" = "preserved"
+
+      - name: Guard destructive restore contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'IAM_RESTORE_CONFIRM' deploy/scripts/restore-postgres.sh
+          grep -q 'sha256sum -c' deploy/scripts/restore-postgres.sh
+          grep -q 'backup-postgres.sh' deploy/scripts/restore-postgres.sh
+          grep -q 'stop server' deploy/scripts/restore-postgres.sh
+          grep -q 'wyrmgate.migrate-only=true' deploy/scripts/restore-postgres.sh
