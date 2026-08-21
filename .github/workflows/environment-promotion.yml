@@ -1,0 +1,92 @@
+name: Environment Promotion Scaffold
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/environment-promotion.yml'
+      - 'deploy/compose/standard.yml'
+      - 'deploy/config/staging.env.example'
+      - 'deploy/config/production.env.example'
+      - 'docs/engineering/staging-production.md'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Promotion target
+        required: true
+        type: choice
+        options: [staging, production]
+      release_tag:
+        description: Existing immutable GitHub Release tag (vX.Y.Z)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  validate:
+    name: staging-production-contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate staging topology
+        run: docker compose --env-file deploy/config/staging.env.example -f deploy/compose/standard.yml config --quiet
+      - name: Validate production topology
+        run: docker compose --env-file deploy/config/production.env.example -f deploy/compose/standard.yml config --quiet
+      - name: Assert non-live scaffold boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -Eq 'ssh |scp |rsync |docker login' .github/workflows/environment-promotion.yml
+          grep -q 'environment: ${{ inputs.environment }}' .github/workflows/environment-promotion.yml
+
+  verify-release:
+    name: verify-release-for-${{ inputs.environment }}
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Validate requested tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+
+      - name: Download signed release evidence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'release-manifest.json' \
+            --pattern 'release-manifest.json.sha256' \
+            --pattern 'release-manifest.sigstore.json'
+
+      - name: Verify manifest checksum
+        run: sha256sum --check release-manifest.json.sha256
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: 'v3.1.2'
+
+      - name: Verify signed release manifest
+        run: |
+          cosign verify-blob release-manifest.json \
+            --bundle release-manifest.sigstore.json \
+            --certificate-identity 'https://github.com/wyrmgate/iam/.github/workflows/release.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
+
+      - name: Explain activation boundary
+        run: |
+          echo "Release evidence verified for ${{ inputs.environment }}."
+          echo "Sprint 17 intentionally performs no host deployment."
+          echo "Activation requires environment infrastructure, secrets, backup/recovery objectives, and production HA/DR decisions."
