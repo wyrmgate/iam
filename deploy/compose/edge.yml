@@ -17,11 +17,11 @@ services:
 
 networks:
   edge:
-    name: wyrmgate-edge
+    name: ${IAM_EDGE_NETWORK:-wyrmgate-edge}
     external: true
 
 volumes:
   caddy-data:
-    name: wyrmgate-caddy-data
+    name: ${IAM_CADDY_DATA_VOLUME:-wyrmgate-caddy-data}
   caddy-config:
-    name: wyrmgate-caddy-config
+    name: ${IAM_CADDY_CONFIG_VOLUME:-wyrmgate-caddy-config}

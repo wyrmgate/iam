@@ -1,0 +1,212 @@
+name: DEMO
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/demo.yml'
+      - 'deploy/compose/demo.yml'
+      - 'deploy/compose/edge.yml'
+      - 'deploy/config/demo.env.example'
+      - 'deploy/config/edge.env.example'
+      - 'deploy/scripts/deploy-demo.sh'
+      - 'deploy/scripts/reset-demo.sh'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: DEMO operation
+        required: true
+        type: choice
+        options:
+          - deploy
+          - reset
+      sha:
+        description: Full immutable main commit SHA (required for deploy)
+        required: false
+        type: string
+  schedule:
+    - cron: '17 2 * * *'
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: demo-environment
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: demo-contract
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Prepare validation configuration
+        shell: bash
+        run: |
+          cp deploy/config/demo.env.example deploy/config/demo.env
+          cp deploy/config/edge.env.example deploy/config/edge.env
+          sed -i 's#sha-replace-me#sha-0000000000000000000000000000000000000000#g' deploy/config/demo.env
+          sed -i 's#iam-demo.example.com#iam.example.com#g' deploy/config/demo.env
+          printf '%s\n' 'IAM_EDGE_NETWORK=wyrmgate-demo-edge' >> deploy/config/edge.env
+          printf '%s\n' 'IAM_CADDY_DATA_VOLUME=wyrmgate-demo-caddy-data' >> deploy/config/edge.env
+          printf '%s\n' 'IAM_CADDY_CONFIG_VOLUME=wyrmgate-demo-caddy-config' >> deploy/config/edge.env
+          sed -i 's#iam-server:8080#server:8080#g' deploy/config/edge.env
+          sed -i 's#iam-console:8080#console:8080#g' deploy/config/edge.env
+
+      - name: Validate DEMO Compose
+        run: docker compose --env-file deploy/config/demo.env -f deploy/compose/demo.yml config --quiet
+
+      - name: Validate edge Compose
+        run: docker compose --env-file deploy/config/edge.env -f deploy/compose/edge.yml config --quiet
+
+      - name: Validate DEMO scripts
+        run: |
+          bash -n deploy/scripts/deploy-demo.sh
+          bash -n deploy/scripts/reset-demo.sh
+
+  deploy:
+    name: deploy-demo
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: demo
+    env:
+      TARGET_SHA: ${{ inputs.sha }}
+      DEMO_HOST: ${{ secrets.DEMO_HOST }}
+      DEMO_USER: ${{ secrets.DEMO_USER }}
+      DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+      DEMO_PUBLIC_HOST: ${{ secrets.DEMO_PUBLIC_HOST }}
+      DEMO_ACME_EMAIL: ${{ secrets.DEMO_ACME_EMAIL }}
+      DEMO_DB_PASSWORD: ${{ secrets.DEMO_DB_PASSWORD }}
+    steps:
+      - name: Require DEMO deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DEMO_HOST DEMO_USER DEMO_SSH_PRIVATE_KEY DEMO_PUBLIC_HOST DEMO_ACME_EMAIL DEMO_DB_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Environment secret: ${name}" >&2
+              exit 1
+            fi
+          done
+          if [[ ! "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "TARGET_SHA must be a full 40-character Git commit SHA." >&2
+            exit 1
+          fi
+
+      - name: Checkout deployment revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TARGET_SHA }}
+
+      - name: Materialize host-only DEMO configuration
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          config = Path('deploy/config')
+          sha = os.environ['TARGET_SHA']
+          host = os.environ['DEMO_PUBLIC_HOST']
+          password = os.environ['DEMO_DB_PASSWORD']
+          email = os.environ['DEMO_ACME_EMAIL']
+
+          (config / 'demo.env').write_text('\n'.join([
+              f'IAM_PUBLIC_HOST={host}',
+              'IAM_DB_NAME=wyrmgate_iam_demo',
+              'IAM_DB_USER=wyrmgate_demo',
+              f'IAM_DB_PASSWORD={password}',
+              f'IAM_SERVER_IMAGE=ghcr.io/wyrmgate/iam-server:sha-{sha}',
+              f'IAM_CONSOLE_IMAGE=ghcr.io/wyrmgate/iam-console:sha-{sha}',
+              'IAM_DEMO_MODE=true',
+              '',
+          ]), encoding='utf-8')
+
+          (config / 'edge.env').write_text('\n'.join([
+              f'IAM_PUBLIC_HOST={host}',
+              f'IAM_ACME_EMAIL={email}',
+              'IAM_SERVER_UPSTREAM=server:8080',
+              'IAM_CONSOLE_UPSTREAM=console:8080',
+              'IAM_EDGE_NETWORK=wyrmgate-demo-edge',
+              'IAM_CADDY_DATA_VOLUME=wyrmgate-demo-caddy-data',
+              'IAM_CADDY_CONFIG_VOLUME=wyrmgate-demo-caddy-config',
+              '',
+          ]), encoding='utf-8')
+          PY
+          chmod 600 deploy/config/demo.env deploy/config/edge.env
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${DEMO_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${DEMO_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Copy immutable DEMO release
+        shell: bash
+        run: |
+          tar -czf /tmp/wyrmgate-demo-release.tgz deploy
+          cat /tmp/wyrmgate-demo-release.tgz | ssh "${DEMO_USER}@${DEMO_HOST}" \
+            "sudo mkdir -p /opt/wyrmgate/iam-demo/releases/${TARGET_SHA} && sudo tar -xzf - -C /opt/wyrmgate/iam-demo/releases/${TARGET_SHA}"
+
+      - name: Authenticate host to GHCR for this deployment
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "${GHCR_TOKEN}" | ssh "${DEMO_USER}@${DEMO_HOST}" \
+            "sudo docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin"
+
+      - name: Deploy and smoke-test DEMO
+        shell: bash
+        run: |
+          ssh "${DEMO_USER}@${DEMO_HOST}" \
+            "sudo bash /opt/wyrmgate/iam-demo/releases/${TARGET_SHA}/deploy/scripts/deploy-demo.sh /opt/wyrmgate/iam-demo/releases/${TARGET_SHA}"
+
+      - name: Remove temporary registry credential
+        if: always()
+        shell: bash
+        run: ssh "${DEMO_USER}@${DEMO_HOST}" 'sudo docker logout ghcr.io >/dev/null 2>&1 || true'
+
+  reset:
+    name: reset-demo
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.action == 'reset') ||
+      (github.event_name == 'schedule' && vars.DEMO_RESET_ENABLED == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: demo
+    env:
+      DEMO_HOST: ${{ secrets.DEMO_HOST }}
+      DEMO_USER: ${{ secrets.DEMO_USER }}
+      DEMO_SSH_PRIVATE_KEY: ${{ secrets.DEMO_SSH_PRIVATE_KEY }}
+    steps:
+      - name: Require DEMO host secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in DEMO_HOST DEMO_USER DEMO_SSH_PRIVATE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Environment secret: ${name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${DEMO_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${DEMO_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Reset isolated DEMO data
+        shell: bash
+        run: ssh "${DEMO_USER}@${DEMO_HOST}" 'sudo bash /opt/wyrmgate/iam-demo/current/deploy/scripts/reset-demo.sh'
