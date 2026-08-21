@@ -30,7 +30,10 @@ public sealed interface CanonicalValue permits CanonicalValue.StringValue,
     }
 
     record DecimalValue(BigDecimal value) implements CanonicalValue {
-        public DecimalValue { Objects.requireNonNull(value, "value"); }
+        public DecimalValue {
+            Objects.requireNonNull(value, "value");
+            value = value.stripTrailingZeros();
+        }
         @Override public CanonicalAttributeType type() { return CanonicalAttributeType.DECIMAL; }
     }
 
