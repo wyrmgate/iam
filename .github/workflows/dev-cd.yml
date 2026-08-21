@@ -10,7 +10,10 @@ on:
       - 'deploy/config/dev.env.example'
       - 'deploy/config/edge.env.example'
       - 'deploy/config/otel-collector.runtime.yaml'
+      - 'deploy/caddy/Caddyfile'
       - 'deploy/scripts/deploy-dev.sh'
+      - 'docs/engineering/dev-cd.md'
+      - 'docs/operations/dev-live-activation.md'
       - 'apps/server/**'
   workflow_run:
     workflows: ['Container CI']
@@ -48,8 +51,6 @@ jobs:
           cp deploy/config/edge.env.example deploy/config/edge.env
           sed -i 's#sha-replace-me#sha-0000000000000000000000000000000000000000#g' deploy/config/dev.env
           sed -i 's#iam-dev.example.com#iam.example.com#g' deploy/config/dev.env
-          sed -i 's#iam-server:8080#server:8080#g' deploy/config/edge.env
-          sed -i 's#iam-console:8080#console:8080#g' deploy/config/edge.env
 
       - name: Validate DEV Compose
         run: docker compose --env-file deploy/config/dev.env -f deploy/compose/dev.yml config --quiet
@@ -59,6 +60,34 @@ jobs:
 
       - name: Validate deployment script syntax
         run: bash -n deploy/scripts/deploy-dev.sh
+
+      - name: Guard DEV deployment contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/dev-cd.yml').read_text(encoding='utf-8')
+          forbidden = 'ssh-key' + 'scan'
+          if forbidden in workflow:
+              raise SystemExit('DEV CD must not dynamically trust SSH host keys.')
+          PY
+          grep -Fq 'StrictHostKeyChecking=yes' .github/workflows/dev-cd.yml
+          grep -Fq 'DEV_SSH_KNOWN_HOSTS' .github/workflows/dev-cd.yml
+          grep -Fq 'IAM_SERVER_UPSTREAM=server:8080' deploy/config/edge.env.example
+          grep -Fq 'IAM_CONSOLE_UPSTREAM=console:8080' deploy/config/edge.env.example
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/dev-cd.yml').read_text(encoding='utf-8')
+          docs = Path('docs/engineering/dev-cd.md').read_text(encoding='utf-8')
+          required = sorted(set(re.findall(r'secrets\.(DEV_[A-Z0-9_]+)', workflow)))
+          missing = [name for name in required if f'`{name}`' not in docs]
+          if missing:
+              raise SystemExit(f"Undocumented DEV Environment secrets: {', '.join(missing)}")
+          PY
 
   deploy:
     name: deploy-dev
@@ -73,6 +102,7 @@ jobs:
       DEV_HOST: ${{ secrets.DEV_HOST }}
       DEV_USER: ${{ secrets.DEV_USER }}
       DEV_SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+      DEV_SSH_KNOWN_HOSTS: ${{ secrets.DEV_SSH_KNOWN_HOSTS }}
       DEV_PUBLIC_HOST: ${{ secrets.DEV_PUBLIC_HOST }}
       DEV_ACME_EMAIL: ${{ secrets.DEV_ACME_EMAIL }}
       DEV_DB_PASSWORD: ${{ secrets.DEV_DB_PASSWORD }}
@@ -83,7 +113,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in DEV_HOST DEV_USER DEV_SSH_PRIVATE_KEY DEV_PUBLIC_HOST DEV_ACME_EMAIL DEV_DB_PASSWORD DEV_OTEL_EXPORTER_ENDPOINT DEV_OTEL_EXPORTER_AUTHORIZATION; do
+          for name in DEV_HOST DEV_USER DEV_SSH_PRIVATE_KEY DEV_SSH_KNOWN_HOSTS DEV_PUBLIC_HOST DEV_ACME_EMAIL DEV_DB_PASSWORD DEV_OTEL_EXPORTER_ENDPOINT DEV_OTEL_EXPORTER_AUTHORIZATION; do
             if [[ -z "${!name:-}" ]]; then
               echo "Missing required GitHub Environment secret: ${name}" >&2
               exit 1
@@ -98,6 +128,17 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Require deployment revision on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "${TARGET_SHA}" origin/main; then
+            echo "TARGET_SHA must be an immutable commit reachable from main." >&2
+            exit 1
+          fi
 
       - name: Materialize host-only configuration
         shell: bash
@@ -143,19 +184,34 @@ jobs:
           PY
           chmod 600 deploy/config/dev.env deploy/config/edge.env
 
-      - name: Configure SSH
+      - name: Configure pinned SSH trust
         shell: bash
         run: |
+          set -euo pipefail
           install -d -m 700 ~/.ssh
           printf '%s\n' "${DEV_SSH_PRIVATE_KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${DEV_HOST}" >> ~/.ssh/known_hosts
+          printf '%s\n' "${DEV_SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          if ! ssh-keygen -l -f ~/.ssh/known_hosts >/dev/null; then
+            echo "DEV_SSH_KNOWN_HOSTS is not a valid OpenSSH known_hosts file." >&2
+            exit 1
+          fi
+          if ! ssh-keygen -F "${DEV_HOST}" -f ~/.ssh/known_hosts >/dev/null; then
+            echo "DEV_SSH_KNOWN_HOSTS does not contain a pinned key for DEV_HOST." >&2
+            exit 1
+          fi
 
       - name: Copy immutable deployment bundle
         shell: bash
         run: |
           tar -czf /tmp/wyrmgate-dev-release.tgz deploy
-          cat /tmp/wyrmgate-dev-release.tgz | ssh "${DEV_USER}@${DEV_HOST}" \
+          cat /tmp/wyrmgate-dev-release.tgz | ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            "${DEV_USER}@${DEV_HOST}" \
             "sudo mkdir -p /opt/wyrmgate/iam/releases/${TARGET_SHA} && sudo tar -xzf - -C /opt/wyrmgate/iam/releases/${TARGET_SHA}"
 
       - name: Authenticate host to GHCR for this deployment
@@ -163,16 +219,33 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf '%s' "${GHCR_TOKEN}" | ssh "${DEV_USER}@${DEV_HOST}" \
+          printf '%s' "${GHCR_TOKEN}" | ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            "${DEV_USER}@${DEV_HOST}" \
             "sudo docker login ghcr.io -u '${GITHUB_ACTOR}' --password-stdin"
 
       - name: Deploy and smoke-test DEV
         shell: bash
         run: |
-          ssh "${DEV_USER}@${DEV_HOST}" \
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            "${DEV_USER}@${DEV_HOST}" \
             "sudo bash /opt/wyrmgate/iam/releases/${TARGET_SHA}/deploy/scripts/deploy-dev.sh /opt/wyrmgate/iam/releases/${TARGET_SHA}"
 
       - name: Remove temporary registry credential
         if: always()
         shell: bash
-        run: ssh "${DEV_USER}@${DEV_HOST}" 'sudo docker logout ghcr.io >/dev/null 2>&1 || true'
+        run: |
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" \
+            "${DEV_USER}@${DEV_HOST}" \
+            'sudo docker logout ghcr.io >/dev/null 2>&1 || true' || true

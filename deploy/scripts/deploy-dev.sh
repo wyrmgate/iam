@@ -6,10 +6,17 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
-release_dir="$1"
 root_dir="/opt/wyrmgate/iam"
 current_link="${root_dir}/current"
+release_dir="$(readlink -m "$1")"
+release_name="$(basename "${release_dir}")"
+expected_release_dir="${root_dir}/releases/${release_name}"
 previous_release=""
+
+if [[ ! "${release_name}" =~ ^[0-9a-f]{40}$ || "${release_dir}" != "${expected_release_dir}" ]]; then
+  echo "release-directory must be /opt/wyrmgate/iam/releases/<40-character-git-sha>" >&2
+  exit 2
+fi
 
 if [[ -L "${current_link}" ]]; then
   previous_release="$(readlink -f "${current_link}")"
@@ -28,6 +35,10 @@ rollback() {
     "${previous_app[@]}" up -d --wait postgres otel-collector server console || true
     "${previous_edge[@]}" up -d caddy || true
     ln -sfn "${previous_release}" "${current_link}"
+  else
+    echo "No previous healthy DEV release exists; stopping the partial first deployment." >&2
+    "${edge_compose[@]}" down || true
+    "${app_compose[@]}" down || true
   fi
 
   exit "${exit_code}"

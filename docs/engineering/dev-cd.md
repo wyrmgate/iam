@@ -2,14 +2,14 @@
 
 ## Scope
 
-Sprint 9 establishes automatic deployment of a tested `main` revision to the DEV environment after Container CI successfully publishes and scans that revision's immutable GHCR images.
+DEV CD deploys a tested immutable `main` revision to the protected GitHub Environment named `dev` after Container CI has successfully published and scanned that revision's GHCR images.
 
 DEV CD never rebuilds application code. It deploys:
 
 - `ghcr.io/wyrmgate/iam-server:sha-<git-sha>`
 - `ghcr.io/wyrmgate/iam-console:sha-<git-sha>`
 
-A manual `workflow_dispatch` may redeploy a full 40-character `main` commit SHA when operational recovery requires it.
+A manual `workflow_dispatch` may redeploy a full 40-character commit SHA only when that SHA is reachable from `main`. Operators must choose a SHA whose required CI, especially Container CI, is green; manual dispatch is an operational redeploy path, not a way to bypass verification.
 
 ## Trigger ordering
 
@@ -17,18 +17,44 @@ The deployment workflow listens for successful completion of `Container CI` on `
 
 Pull requests run only the DEV deployment-contract validation job. They do not contact a host.
 
-## GitHub Environment
+## GitHub Environment contract
 
-Create a GitHub Environment named `dev` with these secrets:
+Create a GitHub Environment named `dev`. The current workflow reads these exact Environment secrets:
 
-- `DEV_HOST`: SSH host/IP for the DEV machine
-- `DEV_USER`: SSH administrator user with passwordless sudo
-- `DEV_SSH_PRIVATE_KEY`: private key used only by GitHub Actions to reach DEV
-- `DEV_PUBLIC_HOST`: public DEV hostname
-- `DEV_ACME_EMAIL`: email for Caddy ACME registration
-- `DEV_DB_PASSWORD`: DEV PostgreSQL password
+- `DEV_HOST` — SSH host or IP for the DEV machine. This exact value must have a matching entry in `DEV_SSH_KNOWN_HOSTS`.
+- `DEV_USER` — SSH administrator user with passwordless `sudo`.
+- `DEV_SSH_PRIVATE_KEY` — private key used only by GitHub Actions to reach DEV.
+- `DEV_SSH_KNOWN_HOSTS` — independently verified OpenSSH `known_hosts` line or lines pinning the DEV host identity.
+- `DEV_PUBLIC_HOST` — public DEV DNS hostname served by Caddy.
+- `DEV_ACME_EMAIL` — email used for Caddy ACME registration.
+- `DEV_DB_PASSWORD` — DEV PostgreSQL password.
+- `DEV_OTEL_EXPORTER_ENDPOINT` — OTLP/HTTP base endpoint used by the runtime collector.
+- `DEV_OTEL_EXPORTER_AUTHORIZATION` — complete authorization value required by the selected OTLP backend.
 
-The workflow uses its short-lived `GITHUB_TOKEN` only during the deployment to authenticate the target host to GHCR, then logs the host out after the deployment attempt.
+Do not put the values in repository examples, issues, pull requests, CI logs, or chat. Configure them directly in the protected GitHub Environment.
+
+The workflow deliberately fails if any required value is absent. The pull-request contract also checks that every referenced `DEV_...` Environment secret remains documented here.
+
+## Pinned SSH host trust
+
+DEV CD does not discover or trust host keys during deployment. Runtime dynamic host-key discovery is forbidden.
+
+Before configuring `DEV_SSH_KNOWN_HOSTS`, obtain the host public-key fingerprint through an independent trusted channel, compare it with a separately captured candidate key, and only then store the verified `known_hosts` entry in the `dev` Environment. The first-live procedure is detailed in [`../operations/dev-live-activation.md`](../operations/dev-live-activation.md).
+
+At runtime the workflow:
+
+1. writes the supplied private key to job-local `~/.ssh/id_ed25519` with mode `0600`;
+2. writes `DEV_SSH_KNOWN_HOSTS` to job-local `~/.ssh/known_hosts` with mode `0600`;
+3. validates that the file is parseable and contains an entry for the exact `DEV_HOST`;
+4. uses `BatchMode=yes`, `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, and the explicit known-hosts file for every SSH operation.
+
+A missing, malformed, unknown, or changed host key therefore fails the deployment closed.
+
+## Revision provenance
+
+`TARGET_SHA` must be exactly 40 lowercase hexadecimal characters. The workflow checks out that revision with full history and verifies it is an ancestor of `origin/main`.
+
+Automatic deployments inherit their SHA from the successful Container CI `workflow_run`. For manual recovery/redeployment, select an immutable SHA from `main` after confirming required checks were successful for that revision.
 
 ## Release layout
 
@@ -49,31 +75,37 @@ Persistent state is deliberately outside the release identity:
 
 ## Deployment sequence
 
-1. Pull the immutable server/console images and pinned infrastructure images.
-2. Start PostgreSQL and wait for its health check.
-3. Run the server image once with `--wyrmgate.migrate-only=true` and no web stack. Spring/Flyway applies database migrations and the process exits.
-4. Start the new server and console and wait for container health checks.
-5. Start/update Caddy.
-6. Call `https://<DEV_PUBLIC_HOST>/actuator/health` repeatedly for up to 150 seconds.
-7. Only after the public health check passes, move the `current` symlink to the new release.
+1. Copy the immutable deployment bundle to `/opt/wyrmgate/iam/releases/<git-sha>`.
+2. Authenticate the host to GHCR with the job-scoped `GITHUB_TOKEN`.
+3. Pull the immutable server/console images and pinned infrastructure images.
+4. Start PostgreSQL and the OpenTelemetry Collector and wait for health checks.
+5. Run the server image once with `--wyrmgate.migrate-only=true`. Spring/Flyway applies database migrations and the process exits.
+6. Start the new server and console and wait for container health checks.
+7. Start/update Caddy.
+8. Call `https://<DEV_PUBLIC_HOST>/actuator/health` repeatedly for up to 150 seconds.
+9. Only after the public health check passes, move the `current` symlink to the new release.
+10. Log the host out of GHCR after the deployment attempt.
 
 ## Rollback contract
 
-If migration, startup, or smoke testing fails, the deployment script attempts to restore server, console, and edge configuration from the previous `current` release using the same persistent PostgreSQL and Caddy state.
+If migration, startup, or smoke testing fails and a previous `current` release exists, the deployment script attempts to restore server, console, and edge configuration from that previous healthy release using the same persistent PostgreSQL and Caddy state.
 
-Database rollback is intentionally not automatic. Flyway migrations must remain backward-compatible under the expand/contract policy so that the previous application revision can run against the newly migrated schema.
+If the first-ever deployment fails and there is no previous healthy release, the script stops the partial application and edge stacks rather than leaving an unverified public deployment running. Named PostgreSQL/Caddy volumes are not deleted.
 
-## Network boundary
+Database rollback is intentionally not automatic. Flyway migrations must remain backward-compatible under the expand/contract policy so that the previous application revision can run against a newly migrated schema.
 
-PostgreSQL is reachable only on the DEV internal Docker network. Server joins both internal and edge networks. Console and Caddy join only the edge network. Only Caddy publishes host ports 80/443.
+## Network and TLS boundary
 
-## First deployment prerequisites
+PostgreSQL and the OpenTelemetry Collector are reachable only on the DEV internal Docker network. Server joins both internal and edge networks. Console and Caddy join the edge network. Only Caddy publishes host ports 80/443.
 
-Before enabling DEV CD:
+Before the first deployment, `DEV_PUBLIC_HOST` must resolve to the intended DEV host and inbound TCP 80/443 must be reachable so Caddy can complete ACME validation and serve a trusted certificate. Do not start DEV CD before DNS/TLS prerequisites are ready.
 
-- Sprint 6 infrastructure must have created the DEV host/network or an equivalent host must exist.
-- Sprint 7 Ansible provisioning must have prepared the host.
-- DEV DNS must resolve to the host (directly or through the intended Cloudflare setup) so Caddy can obtain/serve a valid certificate.
-- GitHub Environment `dev` secrets must be populated.
+## Observability boundary
 
-The workflow deliberately fails instead of silently skipping deployment if a required environment secret is missing.
+The DEV Collector requires a usable OTLP/HTTP endpoint and authorization value. Collector process health does not by itself prove backend delivery. After activation, verify traces/metrics at the backend as described in [`observability.md`](observability.md).
+
+## First-live activation
+
+The ordered infrastructure, SSH trust, Ansible, DNS, observability, GitHub Environment, first deployment, backup/restore, reboot, and rollback procedure is [`../operations/dev-live-activation.md`](../operations/dev-live-activation.md).
+
+Repository CI never runs `tofu apply`, provisions a live host, changes public DNS, or deploys DEV from a pull request.

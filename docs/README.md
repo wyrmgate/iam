@@ -26,6 +26,9 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`adr/README.md`](adr/README.md) — canonical Architecture Decision Record index.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
+- [`engineering/dev-cd.md`](engineering/dev-cd.md) — protected DEV deployment contract, immutable revision rules, and pinned SSH host trust.
+- [`operations/dev-live-activation.md`](operations/dev-live-activation.md) — ordered first-live single-node DEV infrastructure and deployment activation runbook.
+- [`operations/backup-recovery.md`](operations/backup-recovery.md) — PostgreSQL backup, destructive restore, and recovery proof baseline.
 - `operations/` — deployment, backup/restore, monitoring, incident, connector, and reconciliation runbooks as those capabilities are implemented.
 
 ## Authority hierarchy
