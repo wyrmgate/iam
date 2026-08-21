@@ -42,7 +42,7 @@ The Platform persistence package is infrastructure, not a generic domain reposit
 
 ## Identity persistence slices
 
-The Identity capability now has two vertical persistence slices built on the shared foundation.
+The Identity capability now has three vertical persistence slices built on the shared foundation.
 
 ### Canonical Identity
 
@@ -66,9 +66,24 @@ The Identity capability now has two vertical persistence slices built on the sha
 - same-capability composite tenant foreign keys prevent cross-tenant SourceSystem, SourceRecord, import-run, Identity and IdentityLink relationships;
 - source observation/correlation facts use the internal transactional outbox and are not automatically public integration events.
 
+### Canonical attribute mapping, authority and resolution
+
+- `AttributeDefinition` provides a stable tenant-scoped canonical key; semantic type/cardinality/classification/query-policy flags live in immutable `AttributeDefinitionVersion` rows attached to an activatable `CanonicalSchemaVersion`;
+- only draft schema versions accept new definition-version content; activating a replacement schema supersedes the prior active version instead of mutating it;
+- `AttributeMappingVersion` records which source field/path maps to one canonical definition version, while `AttributeAuthorityRuleVersion` independently ranks trusted sources; mapping never implies authority;
+- canonical values are strongly typed as STRING, BOOLEAN, INTEGER, DECIMAL, DATE, DATETIME or ENUM. MULTI values use one normalized typed row per element and are never represented as JSON arrays;
+- `CanonicalAttributeCandidate` remains source-derived candidate/observation state with explicit SourceRecord and mapping provenance; importing or mapping a candidate does not by itself make the value canonical;
+- `CanonicalAttributeState` is authoritative resolved state with explicit `RESOLVED`, `OVERRIDDEN`, `CONFLICT`, `UNRESOLVED` and `NO_VALUE` outcomes plus optimistic `valueRevision` semantics;
+- resolution uses explicit authority priority and never source recency as implicit last-write-wins. Equal top authority with differing values produces `CONFLICT`; a compatible prior trusted source value may remain readable while the conflict is exposed;
+- `CanonicalAttributeOverride` is an explicit reasoned, optionally time-bounded authoritative override. Expiry is effective by time even if no scheduler runs, and override history never rewrites SourceRecords or candidates;
+- recomputation that produces the same canonical outcome does not increment `valueRevision` or emit a new canonical-state fact;
+- internal canonical-attribute facts are data-minimized and exclude resolved/candidate/override values.
+
+The first implementation deliberately does not introduce a generic validation-rule DSL or arbitrary JSON policy surface. Classification remains a governed nonblank classification key; richer validation/configuration syntax belongs in a later controlled design when concrete requirements justify it.
+
 The Identity domain/application packages remain free of Spring and JDBC dependencies; persistence details stay isolated in `identity.persistence`.
 
-Not yet implemented in Identity: canonical attribute mapping/authority/resolution, source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, public Identity APIs, or public integration-event schemas.
+Not yet implemented in Identity: source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, public Identity APIs, or public integration-event schemas.
 
 ## Commands
 

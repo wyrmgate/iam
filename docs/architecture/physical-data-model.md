@@ -359,7 +359,7 @@ Provisioning task state/retry eligibility belongs to Integration process semanti
 
 ### Administration
 
-`administration.administrative_grant` stores tenant, actor reference, administrative role, strongly typed scope type/reference, lifecycle, temporal validity and revision. Scope is not arbitrary JSON. `administrative_delegation` separately records delegator/delegate, bounded scope and validity so delegated authority can be invalidated when the delegator loses authority.
+`administration.administrative_grant` stores tenant, actor reference, administrative role, strongly typed scope type/reference, lifecycle, temporal validity and revision. Scope is not arbitrary JSON. `administration.administrative_delegation` separately records delegator/delegate, bounded scope and validity so delegated authority can be invalidated when the delegator loses authority.
 
 ### Audit
 
@@ -389,25 +389,57 @@ Dynamic canonical attributes are governed typed state, not a universal EAV/JSON 
 
 Identity is the initial reference model; another owning capability may use the same physical convention without introducing a universal `IamObject`.
 
+The stable business identity of a canonical attribute is separated from the immutable semantic content used by an activated schema version:
+
 ```text
 identity.attribute_definition
 - id uuid PRIMARY KEY
 - tenant_id uuid NOT NULL
 - canonical_key varchar(256) NOT NULL
-- subject_type varchar(32) NOT NULL
+- subject_type varchar(32) NOT NULL CHECK (subject_type = 'IDENTITY')
+- lifecycle_state varchar(24) NOT NULL
+- revision bigint NOT NULL
+- created_at timestamptz NOT NULL
+- updated_at timestamptz NOT NULL
+- UNIQUE (tenant_id, id)
+- UNIQUE (tenant_id, canonical_key)
+
+identity.canonical_schema_version
+- id uuid PRIMARY KEY
+- tenant_id uuid NOT NULL
+- version_number bigint NOT NULL
+- state varchar(24) NOT NULL CHECK (state IN ('DRAFT','ACTIVE','SUPERSEDED'))
+- created_at timestamptz NOT NULL
+- activated_at timestamptz NULL
+- superseded_at timestamptz NULL
+- UNIQUE (tenant_id, id)
+- UNIQUE (tenant_id, version_number)
+- at most one ACTIVE row per tenant
+
+identity.attribute_definition_version
+- id uuid PRIMARY KEY
+- tenant_id uuid NOT NULL
+- schema_version_id uuid NOT NULL
+- attribute_definition_id uuid NOT NULL
 - data_type varchar(24) NOT NULL
 - cardinality varchar(16) NOT NULL CHECK (cardinality IN ('SINGLE','MULTI'))
-- classification varchar(32) NOT NULL
+- classification varchar(64) NOT NULL
 - queryable boolean NOT NULL
 - searchable boolean NOT NULL
 - policy_addressable boolean NOT NULL
-- lifecycle_state varchar(24) NOT NULL
-- revision bigint NOT NULL
+- created_at timestamptz NOT NULL
 - UNIQUE (tenant_id, id)
-- UNIQUE (tenant_id, canonical_key)
+- UNIQUE (tenant_id, schema_version_id, attribute_definition_id)
 ```
 
-Activated schema/definition versions are immutable.
+`AttributeDefinition` preserves the stable governed key/identity across schema revisions. Type, cardinality, classification and query/search/policy contracts belong to `attribute_definition_version`; they are not mutable properties of the stable definition row. A schema is assembled while `DRAFT`; once activated, its definition-version content is immutable. A change in semantic shape therefore requires a successor schema/definition version rather than editing activated content in place.
+
+Source mapping and authority remain separately versioned concerns:
+
+- `identity.attribute_mapping_version` binds one SourceSystem and one attribute-definition version to an explicit source path; replacing a mapping supersedes its predecessor rather than rewriting history;
+- `identity.attribute_authority_rule_version` assigns authority priority for one SourceSystem and one attribute-definition version; mapping does not imply authority;
+- only one active mapping and one active authority-rule version exist for a given tenant/source/definition-version tuple;
+- a new schema/definition version does not silently inherit compatibility from mappings or authority rules for an older definition version.
 
 ### Typed values
 
@@ -423,21 +455,27 @@ value_datetime timestamptz NULL
 value_enum_key varchar(256) NULL
 ```
 
-A CHECK constraint enforces exactly one populated typed value column and compatibility with the referenced definition type. For `MULTI`, each element is a row with a stable element/value ID and `value_ordinal`; values are not encoded as JSON arrays.
+A CHECK constraint enforces exactly one populated typed value column and compatibility with the referenced definition type. For `MULTI`, each element is a normalized row with `value_ordinal`; values are not encoded as JSON arrays. The parent tuple and definition-version/type/cardinality references are constrained so a value row cannot silently claim a different semantic shape from its candidate/state/override.
 
 `identity.canonical_attribute_candidate` stores:
 
-- identity + attribute definition/version;
-- typed normalized value;
-- source system + source record;
+- Identity + active attribute-definition-version context;
+- source system + SourceRecord;
 - source path/field;
 - mapping-version ID;
 - source-updated time and observed time;
-- candidate hash/revision where useful.
+- candidate revision;
+- typed normalized values in child rows.
 
-`identity.canonical_attribute_state` stores current resolution status (`RESOLVED`, `OVERRIDDEN`, `CONFLICT`, `UNRESOLVED`, `NO_VALUE`), authority-rule-version reference, selected candidate/provenance reference and `value_revision`; resolved values live in typed child value rows.
+Candidate provenance is relationally constrained: the SourceRecord must belong to the stated SourceSystem, and the mapping version must refer to the same source and definition version as the candidate. A candidate is still Observation-derived state and is never canonical truth by itself.
 
-`identity.canonical_attribute_override` is authoritative, explicit, reasoned and optionally time-bounded, with its own typed value rows. It never modifies source/candidate observation.
+`identity.canonical_attribute_state` stores the current authoritative resolution status (`RESOLVED`, `OVERRIDDEN`, `CONFLICT`, `UNRESOLVED`, `NO_VALUE`), active definition-version reference, authority-rule-version reference where applicable, selected candidate/provenance reference and `value_revision`; canonical values live in typed child value rows. Selected candidate and authority references are constrained to the same Identity/definition-version context as the state.
+
+Resolution uses explicit active authority rules. Observation recency/source timestamps are provenance and do not become an implicit last-write-wins authority rule. Equal highest-priority sources with different typed values produce `CONFLICT`; absence of a usable authority rule produces `UNRESOLVED`. A degraded resolution may retain a compatible previously trusted source-resolved value while exposing the degraded status, but it does not silently preserve an expired override as trusted source truth. A recomputation that produces the same effective outcome does not advance `value_revision` or emit another state-change fact.
+
+`identity.canonical_attribute_override` is authoritative, explicit, reasoned and optionally time-bounded, with its own typed value rows. It never modifies SourceRecord/candidate observation. Validity is semantic: an override stops governing at `valid_until` even if no scheduler has materialized a cleanup transition.
+
+Canonical attribute state changes and override application emit data-minimized internal facts through the transactional outbox; canonical values are not copied into those ordinary event payloads.
 
 Only definitions explicitly declared queryable/searchable/policy-addressable gain those contracts. Type-appropriate indexes/projections are created for declared queryable attributes; arbitrary provider-native JSON paths are not public query or policy surfaces.
 
