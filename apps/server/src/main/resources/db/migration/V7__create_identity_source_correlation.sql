@@ -54,7 +54,7 @@ CREATE TABLE identity.source_record (
     tenant_id uuid NOT NULL,
     source_system_id uuid NOT NULL,
     native_key varchar(1024) NOT NULL,
-    native_payload jsonb NOT NULL,
+    observed_attributes jsonb NOT NULL,
     source_updated_at timestamptz NULL,
     first_observed_at timestamptz NOT NULL,
     last_observed_at timestamptz NOT NULL,
@@ -72,12 +72,12 @@ CREATE TABLE identity.source_record (
         FOREIGN KEY (tenant_id, last_complete_import_run_id)
         REFERENCES identity.source_import_run (tenant_id, id),
     CONSTRAINT identity_source_record_native_key_ck CHECK (btrim(native_key) <> ''),
-    CONSTRAINT identity_source_record_payload_ck CHECK (jsonb_typeof(native_payload) = 'object'),
+    CONSTRAINT identity_source_record_attributes_ck CHECK (jsonb_typeof(observed_attributes) = 'object'),
     CONSTRAINT identity_source_record_timestamp_order_ck CHECK (last_observed_at >= first_observed_at)
 );
 
 COMMENT ON TABLE identity.source_record IS
-    'Current positive source observation. Import absence is not represented by missing rows and partial imports never erase unseen records.';
+    'Current positive normalized source observation. observed_attributes contains bounded/filtered source-native fields, not retained raw connector payload. Partial imports never erase unseen records.';
 
 CREATE TABLE identity.identity_link (
     id uuid PRIMARY KEY,
