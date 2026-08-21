@@ -14,8 +14,10 @@ A concept must not have competing authoritative definitions in multiple formats.
 
 ## Documentation map
 
+- [`PROJECT_INSTRUCTIONS.md`](PROJECT_INSTRUCTIONS.md) — stable project-level instructions for AI-assisted work and fresh project sessions.
 - [`architecture/overview.md`](architecture/overview.md) — framework-neutral system architecture and capability ownership.
 - [`architecture/repository-boundaries.md`](architecture/repository-boundaries.md) — repository/module dependency rules and implementation boundary.
+- [`architecture/workflow-orchestration.md`](architecture/workflow-orchestration.md) — domain-owned workflow, timers, retries and durable orchestration boundary.
 - [`domain/canonical-model.md`](domain/canonical-model.md) — canonical IAM concepts, ownership of truth, observations, evidence, and projections.
 - [`domain/state-and-invariants.md`](domain/state-and-invariants.md) — lifecycle, concurrency, structural, temporal, and failure invariants.
 - [`security/administrative-authorization.md`](security/administrative-authorization.md) — IAM control-plane authorization and scoped administration.
@@ -41,4 +43,4 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, o
 
 ## Current status
 
-IAM v2 is pre-release and under active design. The v0.2 formal specification set is the current architecture checkpoint. Open design areas are workflow/process orchestration, concrete physical database/index design, machine-readable OpenAPI/AsyncAPI schemas, remote connector-worker protocol, operations/HA/DR, and legacy migration/cutover.
+IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0009 are the current architecture checkpoint. Workflow/process orchestration is now defined. Open design areas include the concrete physical database/index/partition model, machine-readable OpenAPI/AsyncAPI schemas, remote connector-worker protocol, operations/HA/DR, and legacy migration/cutover.
