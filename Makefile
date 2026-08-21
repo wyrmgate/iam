@@ -1,10 +1,11 @@
-.PHONY: help dev-init dev-up dev-down dev-reset dev-logs dev-status server-build server-test server-run console-install console-build console-typecheck console-dev iac-fmt iac-init iac-validate build test
+.PHONY: help dev-init dev-up dev-down dev-reset dev-logs dev-status server-build server-test server-run console-install console-build console-typecheck console-dev iac-fmt iac-init iac-validate ansible-install ansible-lint ansible-syntax ansible-provision build test
 
 COMPOSE_FILE := deploy/compose/local.yml
 LOCAL_ENV := deploy/config/local.env
 LOCAL_ENV_EXAMPLE := deploy/config/local.env.example
 MAVEN := sh ./apps/server/mvnw
 TOFU_DIR := infra/opentofu
+ANSIBLE_DIR := infra/ansible
 
 help:
 	@printf '%s\n' \
@@ -31,6 +32,12 @@ help:
 		'  make iac-fmt            Format OpenTofu configuration' \
 		'  make iac-init           Initialize providers without a backend' \
 		'  make iac-validate       Validate OpenTofu configuration' \
+		'' \
+		'Host provisioning:' \
+		'  make ansible-install    Install pinned Ansible tooling and collections' \
+		'  make ansible-lint       Lint Ansible content' \
+		'  make ansible-syntax     Syntax-check the provisioning playbook' \
+		'  make ansible-provision  Provision hosts from the private inventory' \
 		'' \
 		'  make build              Build server and console' \
 		'  make test               Run currently available tests/checks'
@@ -88,6 +95,20 @@ iac-init:
 
 iac-validate:
 	tofu -chdir=$(TOFU_DIR) validate
+
+ansible-install:
+	python3 -m pip install -r $(ANSIBLE_DIR)/requirements.txt
+	ansible-galaxy collection install -r $(ANSIBLE_DIR)/requirements.yml
+
+ansible-lint:
+	cd $(ANSIBLE_DIR) && ansible-lint
+
+ansible-syntax:
+	cd $(ANSIBLE_DIR) && ansible-playbook -i inventory/ci.ini site.yml --syntax-check
+
+ansible-provision:
+	@test -f $(ANSIBLE_DIR)/inventory/hosts.ini || (printf '%s\n' 'Missing $(ANSIBLE_DIR)/inventory/hosts.ini; copy hosts.ini.example first.' >&2; exit 1)
+	cd $(ANSIBLE_DIR) && ansible-playbook site.yml
 
 build: server-build console-build
 

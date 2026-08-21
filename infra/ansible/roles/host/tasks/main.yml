@@ -1,0 +1,151 @@
+---
+- name: Require Ubuntu hosts
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == 'Ubuntu'
+      - ansible_distribution_major_version | int >= 24
+    fail_msg: Wyrmgate IAM host provisioning currently supports Ubuntu 24.04 or newer.
+
+- name: Refresh apt metadata and apply safe upgrades
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: safe
+
+- name: Install host baseline packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - python3-debian
+      - ufw
+      - unattended-upgrades
+    state: present
+
+- name: Ensure apt keyring directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install Docker repository signing key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Resolve Docker repository architecture
+  ansible.builtin.set_fact:
+    host_docker_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] | default(ansible_architecture) }}"
+
+- name: Configure Docker apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ host_docker_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+    filename: docker
+    state: present
+    update_cache: true
+
+- name: Install Docker Engine and Compose plugin
+  ansible.builtin.apt:
+    name: "{{ wyrmgate_docker_packages }}"
+    state: present
+
+- name: Ensure Docker service is enabled and running
+  ansible.builtin.service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Create Wyrmgate service group
+  ansible.builtin.group:
+    name: "{{ wyrmgate_service_group }}"
+    system: true
+    state: present
+
+- name: Create Wyrmgate service user
+  ansible.builtin.user:
+    name: "{{ wyrmgate_service_user }}"
+    group: "{{ wyrmgate_service_group }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+    state: present
+
+- name: Create Wyrmgate host directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ wyrmgate_root_dir }}"
+      owner: "{{ wyrmgate_service_user }}"
+      group: "{{ wyrmgate_service_group }}"
+      mode: '0750'
+    - path: "{{ wyrmgate_config_dir }}"
+      owner: root
+      group: "{{ wyrmgate_service_group }}"
+      mode: '0750'
+    - path: "{{ wyrmgate_data_dir }}"
+      owner: "{{ wyrmgate_service_user }}"
+      group: "{{ wyrmgate_service_group }}"
+      mode: '0750'
+    - path: "{{ wyrmgate_backup_dir }}"
+      owner: root
+      group: "{{ wyrmgate_service_group }}"
+      mode: '0750'
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Enable unattended security upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  when: wyrmgate_enable_unattended_upgrades
+
+- name: Set default UFW incoming policy
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+  when: wyrmgate_enable_ufw
+
+- name: Set default UFW outgoing policy
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+  when: wyrmgate_enable_ufw
+
+- name: Allow administrative SSH
+  community.general.ufw:
+    rule: allow
+    port: "{{ wyrmgate_admin_ssh_port }}"
+    proto: tcp
+  when: wyrmgate_enable_ufw
+
+- name: Allow HTTP and HTTPS ingress
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - '80'
+    - '443'
+  when: wyrmgate_enable_ufw
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+  when: wyrmgate_enable_ufw
