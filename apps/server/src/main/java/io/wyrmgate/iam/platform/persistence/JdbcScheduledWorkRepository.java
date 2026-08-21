@@ -133,14 +133,16 @@ public final class JdbcScheduledWorkRepository {
                 """
                 UPDATE platform.scheduled_work
                 SET delivery_state = 'COMPLETED', lease_owner = NULL, lease_until = NULL, updated_at = ?
-                WHERE tenant_id = ? AND id = ? AND delivery_state = 'READY' AND lease_owner = ?
+                WHERE tenant_id = ? AND id = ? AND delivery_state = 'READY'
+                  AND lease_owner = ? AND lease_until > ?
                 """,
                 JdbcValues.timestamp(now),
                 tenant.tenantId(),
                 workId,
-                leaseOwner);
+                leaseOwner,
+                JdbcValues.timestamp(now));
         if (affected != 1) {
-            throw new IllegalStateException("Scheduled work is not held by the expected lease owner");
+            throw new IllegalStateException("Scheduled work is not held by an active lease for the expected owner");
         }
     }
 
