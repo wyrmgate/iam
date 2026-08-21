@@ -14,9 +14,11 @@ COPY apps/console/src ./src
 RUN npm install --no-audit --no-fund
 RUN npm run build
 
-FROM caddy:2.11.4-alpine
-RUN apk upgrade --no-cache
-COPY --from=build --chown=1000:1000 /workspace/apps/console/dist /srv
-USER 1000:1000
+FROM alpine:3.23.5
+RUN apk upgrade --no-cache \
+    && addgroup -S -g 10001 wyrmgate \
+    && adduser -S -D -H -u 10001 -G wyrmgate wyrmgate
+COPY --from=build --chown=10001:10001 /workspace/apps/console/dist /srv
+USER 10001:10001
 EXPOSE 8080
-CMD ["caddy","file-server","--root","/srv","--listen",":8080"]
+CMD ["busybox","httpd","-f","-p","8080","-h","/srv"]
