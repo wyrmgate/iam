@@ -159,22 +159,41 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
             UUID sourceSystemId,
             UUID importRunId,
             String nativeKey,
-            String nativePayloadJson,
+            String observedAttributesJson,
             Instant sourceUpdatedAt,
             Instant observedAt) {
         requireText(nativeKey, "nativeKey");
-        requireText(nativePayloadJson, "nativePayloadJson");
+        requireText(observedAttributesJson, "observedAttributesJson");
+        Objects.requireNonNull(observedAt, "observedAt");
+
+        List<UUID> activeRunSources = jdbcTemplate.query(
+                """
+                SELECT source_system_id
+                FROM identity.source_import_run
+                WHERE tenant_id = ? AND id = ? AND run_state = 'RUNNING'
+                FOR UPDATE
+                """,
+                (rs, rowNum) -> rs.getObject("source_system_id", UUID.class),
+                tenant.tenantId(),
+                importRunId);
+        if (activeRunSources.isEmpty()) {
+            throw new IllegalStateException("source observations require a running import");
+        }
+        if (!activeRunSources.getFirst().equals(sourceSystemId)) {
+            throw new IllegalArgumentException("source import run belongs to a different source system");
+        }
+
         UUID proposedId = idGenerator.nextId();
         jdbcTemplate.update(
                 """
                 INSERT INTO identity.source_record (
-                    id, tenant_id, source_system_id, native_key, native_payload,
+                    id, tenant_id, source_system_id, native_key, observed_attributes,
                     source_updated_at, first_observed_at, last_observed_at,
                     last_import_run_id, last_complete_import_run_id)
                 VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, NULL)
                 ON CONFLICT (tenant_id, source_system_id, native_key)
                 DO UPDATE SET
-                    native_payload = EXCLUDED.native_payload,
+                    observed_attributes = EXCLUDED.observed_attributes,
                     source_updated_at = EXCLUDED.source_updated_at,
                     last_observed_at = EXCLUDED.last_observed_at,
                     last_import_run_id = EXCLUDED.last_import_run_id
@@ -183,7 +202,7 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                 tenant.tenantId(),
                 sourceSystemId,
                 nativeKey,
-                nativePayloadJson,
+                observedAttributesJson,
                 timestamp(sourceUpdatedAt),
                 Timestamp.from(observedAt),
                 Timestamp.from(observedAt),
@@ -284,7 +303,8 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     private Optional<SourceRecord> querySourceRecord(String whereClause, Object... args) {
         List<SourceRecord> rows = jdbcTemplate.query(
                 """
-                SELECT id, source_system_id, native_key, native_payload::text AS native_payload,
+                SELECT id, source_system_id, native_key,
+                       observed_attributes::text AS observed_attributes,
                        source_updated_at, first_observed_at, last_observed_at,
                        last_import_run_id, last_complete_import_run_id
                 FROM identity.source_record
@@ -293,7 +313,7 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                         rs.getObject("id", UUID.class),
                         rs.getObject("source_system_id", UUID.class),
                         rs.getString("native_key"),
-                        rs.getString("native_payload"),
+                        rs.getString("observed_attributes"),
                         instant(rs.getTimestamp("source_updated_at")),
                         rs.getTimestamp("first_observed_at").toInstant(),
                         rs.getTimestamp("last_observed_at").toInstant(),
