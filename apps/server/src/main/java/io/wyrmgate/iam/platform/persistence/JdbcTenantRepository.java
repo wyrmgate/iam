@@ -28,8 +28,8 @@ public final class JdbcTenantRepository {
                 """,
                 id,
                 displayName,
-                now,
-                now);
+                JdbcValues.timestamp(now),
+                JdbcValues.timestamp(now));
         return new Tenant(id, displayName, 1, now, now);
     }
 
@@ -65,7 +65,7 @@ public final class JdbcTenantRepository {
                 WHERE id = ? AND revision = ?
                 """,
                 displayName,
-                now,
+                JdbcValues.timestamp(now),
                 id,
                 expectedRevision);
         OptimisticUpdate.requireSingleRow(affected, "tenant", id, expectedRevision);
