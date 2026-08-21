@@ -209,6 +209,37 @@ class PersistenceFoundationIntegrationTest {
     }
 
     @Test
+    void expiredLeaseCanBeReclaimedAndStaleWorkerCannotComplete() {
+        Instant now = Instant.now();
+        JdbcTenantRepository.Tenant tenant = tenants.create("Lease Tenant", now);
+        TenantContext context = new TenantContext(tenant.id());
+        assertThat(scheduledWork.enqueue(
+                        context,
+                        "projection.refresh",
+                        "lease-recovery",
+                        null,
+                        now.minusSeconds(1),
+                        now))
+                .isTrue();
+
+        ClaimedWork firstClaim = scheduledWork
+                .claimDue(context, "worker-a", now, Duration.ofSeconds(1), 1)
+                .getFirst();
+        Instant afterExpiry = now.plusSeconds(2);
+
+        assertThatThrownBy(() -> scheduledWork.markCompleted(
+                        context, firstClaim.id(), "worker-a", afterExpiry))
+                .isInstanceOf(IllegalStateException.class);
+
+        ClaimedWork reclaimed = scheduledWork
+                .claimDue(context, "worker-b", afterExpiry, Duration.ofMinutes(1), 1)
+                .getFirst();
+        assertThat(reclaimed.id()).isEqualTo(firstClaim.id());
+        assertThat(reclaimed.attemptCount()).isEqualTo(2);
+        scheduledWork.markCompleted(context, reclaimed.id(), "worker-b", afterExpiry.plusSeconds(1));
+    }
+
+    @Test
     void concurrentWorkersClaimEachDueItemAtMostOnce() throws Exception {
         Instant now = Instant.now();
         JdbcTenantRepository.Tenant tenant = tenants.create("Worker Tenant", now);
