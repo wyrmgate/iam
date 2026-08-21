@@ -312,7 +312,7 @@ class CanonicalAttributePersistenceIntegrationTest {
 
         Integer leaked = jdbc.queryForObject("""
                 SELECT count(*) FROM platform.outbox_event
-                WHERE tenant_id = ? AND (payload_json::text LIKE ? OR payload_json::text LIKE ?)
+                WHERE tenant_id = ? AND (payload::text LIKE ? OR payload::text LIKE ?)
                 """, Integer.class, tenant.tenantId(), "%" + sensitiveValue + "%", "%OVERRIDE-SECRET-VALUE%");
         assertThat(leaked).isZero();
     }
