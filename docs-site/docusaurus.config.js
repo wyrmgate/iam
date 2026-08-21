@@ -1,5 +1,3 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Wyrmgate IAM',
@@ -9,7 +7,6 @@ const config = {
   trailingSlash: false,
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'throw',
-  favicon: undefined,
   organizationName: 'wyrmgate',
   projectName: 'iam',
   presets: [
@@ -42,10 +39,6 @@ const config = {
     footer: {
       style: 'dark',
       copyright: `Copyright © ${new Date().getFullYear()} Wyrmgate.`,
-    },
-    prism: {
-      theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
     },
   },
 };
