@@ -1,5 +1,9 @@
 package io.wyrmgate.iam.identity.persistence;
 
+import io.wyrmgate.iam.identity.application.CanonicalAttributeConfigurationService;
+import io.wyrmgate.iam.identity.application.CanonicalAttributeFactSink;
+import io.wyrmgate.iam.identity.application.CanonicalAttributeRepository;
+import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
@@ -33,11 +37,7 @@ public class IdentityPersistenceConfiguration {
             IdentityFactSink identityFactSink,
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
-        return new IdentityCommandService(
-                identityRepository,
-                identityFactSink,
-                idGenerator,
-                transactionExecutor);
+        return new IdentityCommandService(identityRepository, identityFactSink, idGenerator, transactionExecutor);
     }
 
     @Bean
@@ -47,8 +47,7 @@ public class IdentityPersistenceConfiguration {
 
     @Bean
     SourceCorrelationFactSink sourceCorrelationFactSink(
-            JdbcOutboxRepository outboxRepository,
-            IdGenerator idGenerator) {
+            JdbcOutboxRepository outboxRepository, IdGenerator idGenerator) {
         return new JdbcSourceCorrelationFactSink(outboxRepository, idGenerator);
     }
 
@@ -60,10 +59,43 @@ public class IdentityPersistenceConfiguration {
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
         return new SourceCorrelationService(
-                sourceCorrelationRepository,
-                identityRepository,
-                sourceCorrelationFactSink,
-                idGenerator,
-                transactionExecutor);
+                sourceCorrelationRepository, identityRepository, sourceCorrelationFactSink,
+                idGenerator, transactionExecutor);
+    }
+
+    @Bean
+    CanonicalAttributeRepository canonicalAttributeRepository(JdbcTemplate jdbcTemplate, IdGenerator idGenerator) {
+        return new JdbcCanonicalAttributeRepository(jdbcTemplate, idGenerator);
+    }
+
+    @Bean
+    CanonicalAttributeFactSink canonicalAttributeFactSink(
+            JdbcOutboxRepository outboxRepository, IdGenerator idGenerator) {
+        return new JdbcCanonicalAttributeFactSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
+    CanonicalAttributeConfigurationService canonicalAttributeConfigurationService(
+            CanonicalAttributeRepository canonicalAttributeRepository,
+            SourceCorrelationRepository sourceCorrelationRepository,
+            CanonicalAttributeFactSink canonicalAttributeFactSink,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new CanonicalAttributeConfigurationService(
+                canonicalAttributeRepository, sourceCorrelationRepository, canonicalAttributeFactSink,
+                idGenerator, transactionExecutor);
+    }
+
+    @Bean
+    CanonicalAttributeResolutionService canonicalAttributeResolutionService(
+            CanonicalAttributeRepository canonicalAttributeRepository,
+            SourceCorrelationRepository sourceCorrelationRepository,
+            IdentityRepository identityRepository,
+            CanonicalAttributeFactSink canonicalAttributeFactSink,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new CanonicalAttributeResolutionService(
+                canonicalAttributeRepository, sourceCorrelationRepository, identityRepository,
+                canonicalAttributeFactSink, idGenerator, transactionExecutor);
     }
 }
