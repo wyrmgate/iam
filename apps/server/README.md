@@ -40,19 +40,35 @@ Platform infrastructure currently provides:
 
 The Platform persistence package is infrastructure, not a generic domain repository layer. Do not add `BaseEntity`, `GenericRepository`, cross-capability DAOs, or framework types to domain contracts.
 
-## Identity persistence slice
+## Identity persistence slices
 
-The first capability-owned persistence vertical slice implements the canonical Identity aggregate without broadening the model beyond the controlled specifications:
+The Identity capability now has two vertical persistence slices built on the shared foundation.
+
+### Canonical Identity
 
 - `IdentityType` is `PERSON`, `SERVICE`, or `WORKLOAD` and is paired with exactly one compatible typed profile by the aggregate transaction;
 - `IdentityLifecycleState` is persisted independently from technical fulfillment or provider observation;
 - profile tables are typed relational boundaries and intentionally contain no invented profile-specific business fields until governed requirements define them;
 - all Identity reads and writes are explicitly tenant-scoped;
 - mutable Identity state uses optimistic revision predicates and rejects stale writes;
-- authoritative Identity mutations and internal semantic facts commit through the same transaction and shared outbox;
-- the Identity domain/application packages remain free of Spring and JDBC dependencies, with those details isolated in `identity.persistence`.
+- authoritative Identity mutations and internal semantic facts commit through the same transaction and shared outbox.
 
-This slice does not yet implement source records/correlation, organizations/relationships, principals, merge/split, dynamic canonical attributes, public Identity APIs, or public integration events.
+### Source observation and correlation
+
+- `SourceSystem` is Identity-owned authoritative configuration with tenant-scoped stable identity and business code uniqueness;
+- `SourceImportRun` keeps execution state and coverage completeness separate; completed imports must resolve coverage as `COMPLETE` or `PARTIAL`;
+- `SourceRecord` is current positive source observation, keyed by tenant + source system + native key, and remains independent from canonical Identity state;
+- positive observations are upserted without treating records missing from an import as absent;
+- a `PARTIAL` import can refresh records it saw but cannot erase unseen records or replace their prior complete-run provenance;
+- a `COMPLETE` import advances `lastCompleteImportRunId` only for records positively observed by that run; destructive absence handling remains a separate future operation with stronger coverage checks;
+- `IdentityLink` preserves authoritative correlation history, with a database-enforced maximum of one active accepted link per SourceRecord;
+- replacing a correlation supersedes the prior accepted link rather than rewriting/deleting history;
+- same-capability composite tenant foreign keys prevent cross-tenant SourceSystem, SourceRecord, import-run, Identity and IdentityLink relationships;
+- source observation/correlation facts use the internal transactional outbox and are not automatically public integration events.
+
+The Identity domain/application packages remain free of Spring and JDBC dependencies; persistence details stay isolated in `identity.persistence`.
+
+Not yet implemented in Identity: canonical attribute mapping/authority/resolution, source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, public Identity APIs, or public integration-event schemas.
 
 ## Commands
 

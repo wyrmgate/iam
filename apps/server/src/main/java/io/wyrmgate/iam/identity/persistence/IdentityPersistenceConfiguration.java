@@ -3,6 +3,9 @@ package io.wyrmgate.iam.identity.persistence;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
+import io.wyrmgate.iam.identity.application.SourceCorrelationFactSink;
+import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
+import io.wyrmgate.iam.identity.application.SourceCorrelationService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -33,6 +36,33 @@ public class IdentityPersistenceConfiguration {
         return new IdentityCommandService(
                 identityRepository,
                 identityFactSink,
+                idGenerator,
+                transactionExecutor);
+    }
+
+    @Bean
+    SourceCorrelationRepository sourceCorrelationRepository(JdbcTemplate jdbcTemplate, IdGenerator idGenerator) {
+        return new JdbcSourceCorrelationRepository(jdbcTemplate, idGenerator);
+    }
+
+    @Bean
+    SourceCorrelationFactSink sourceCorrelationFactSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator idGenerator) {
+        return new JdbcSourceCorrelationFactSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
+    SourceCorrelationService sourceCorrelationService(
+            SourceCorrelationRepository sourceCorrelationRepository,
+            IdentityRepository identityRepository,
+            SourceCorrelationFactSink sourceCorrelationFactSink,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new SourceCorrelationService(
+                sourceCorrelationRepository,
+                identityRepository,
+                sourceCorrelationFactSink,
                 idGenerator,
                 transactionExecutor);
     }
