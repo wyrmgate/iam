@@ -45,8 +45,8 @@ public final class JdbcIdempotencyRepository {
                 operationNamespace,
                 idempotencyKey,
                 fingerprint.value(),
-                createdAt,
-                expiresAt);
+                JdbcValues.timestamp(createdAt),
+                JdbcValues.nullableTimestamp(expiresAt));
 
         if (affected == 1) {
             return new Registration(recordId, RegistrationKind.NEW, "IN_PROGRESS", null, null);
@@ -105,7 +105,7 @@ public final class JdbcIdempotencyRepository {
                 """,
                 resourceType,
                 resourceId,
-                completedAt,
+                JdbcValues.timestamp(completedAt),
                 tenant.tenantId(),
                 operationNamespace,
                 idempotencyKey,
