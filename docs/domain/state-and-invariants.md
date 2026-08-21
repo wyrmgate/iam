@@ -40,23 +40,26 @@ An active usable Role/Policy has exactly one active version. Superseded content 
 Recommended lifecycle:
 
 ```text
-PENDING_ACTIVATION → ACTIVE → PENDING_REVOCATION → REVOKED
-                         ↕
-                     SUSPENDED
+SCHEDULED → ACTIVE
+               ↕
+           SUSPENDED
 
-PENDING_ACTIVATION/ACTIVE/SUSPENDED → EXPIRED
-PENDING_ACTIVATION → CANCELLED
+SCHEDULED/ACTIVE/SUSPENDED → REVOKED
+SCHEDULED/ACTIVE/SUSPENDED → EXPIRED
+SCHEDULED → CANCELLED
 ```
 
-`CANCELLED`, `EXPIRED` and `REVOKED` are terminal. Access effectiveness additionally evaluates the ValidityWindow and relevant identity/catalog state.
+`CANCELLED`, `EXPIRED` and `REVOKED` are terminal. `SCHEDULED` means the assignment exists as authoritative intent but is not yet effective because its valid-from time has not arrived. Technical provisioning or revocation progress is never encoded as assignment business state.
 
-Integration fulfillment is not stored as assignment business state. A legitimate composite view may therefore be:
+Once revocation is authoritatively decided, the assignment becomes `REVOKED` immediately and no longer contributes to EffectiveAccess. Provider-side removal is tracked independently through fulfillment and observations. A legitimate composite view may therefore be:
 
 ```text
-Assignment = EXPIRED
-Fulfillment = FAILED_REVOCATION
+Assignment = REVOKED
+Fulfillment = FAILED
 ObservedGrant = PRESENT
 ```
+
+This is visible drift, not an ambiguous still-pending governance state.
 
 ## Request and approval
 
@@ -87,17 +90,17 @@ Finding lifecycle distinguishes unresolved, acknowledged/remediation-pending, mi
 
 ## Credential
 
-Credential does not use `ROTATING` as a lifecycle state. Rotation is an orchestration involving replacement/cutover/revocation.
+Credential does not use `ROTATING` or `PENDING_REVOCATION` as lifecycle states. Rotation/revocation technical progress is an orchestration/fulfillment concern.
 
 Typical credential progression:
 
 ```text
-PENDING_ACTIVATION → ACTIVE → PENDING_REVOCATION → REVOKED
-                         ↘ EXPIRED
-                         ↘ COMPROMISED
+SCHEDULED? → ACTIVE → REVOKED
+                 ↘ EXPIRED
+                 ↘ COMPROMISED
 ```
 
-A compromised credential stops being considered safe immediately even when external revocation has not succeeded yet.
+`SCHEDULED` is optional where a credential has a future activation time. A compromised credential stops being considered safe immediately even when external revocation has not succeeded yet. Once revocation is authoritatively decided, the Credential is `REVOKED`; any provider residue is tracked as observation/finding/remediation state.
 
 ## Provisioning
 
