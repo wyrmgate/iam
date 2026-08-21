@@ -38,6 +38,18 @@ jobs:
         with:
           node-version-file: .nvmrc
 
+      - name: Generate documentation dependency lock
+        working-directory: docs-site
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Upload generated dependency lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-package-lock
+          path: docs-site/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Install documentation dependencies
         working-directory: docs-site
         run: npm install --no-package-lock --no-audit --no-fund
