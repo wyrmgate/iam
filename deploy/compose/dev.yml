@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:18.4-alpine
+    environment:
+      POSTGRES_DB: ${IAM_DB_NAME}
+      POSTGRES_USER: ${IAM_DB_USER}
+      POSTGRES_PASSWORD: ${IAM_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${IAM_DB_USER} -d ${IAM_DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks:
+      - internal
+    restart: unless-stopped
+
+  server:
+    image: ${IAM_SERVER_IMAGE}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${IAM_DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${IAM_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${IAM_DB_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks:
+      - internal
+      - edge
+    restart: unless-stopped
+
+  console:
+    image: ${IAM_CONSOLE_IMAGE}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    networks:
+      - edge
+    restart: unless-stopped
+
+networks:
+  internal:
+    name: wyrmgate-iam-dev-internal
+  edge:
+    name: wyrmgate-edge
+    external: true
+
+volumes:
+  postgres-data:
+    name: wyrmgate-iam-dev-postgres-data
