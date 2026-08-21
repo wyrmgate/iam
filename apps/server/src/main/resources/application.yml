@@ -45,4 +45,5 @@ springdoc:
     path: /api/docs
 
 server:
+  port: ${PORT:8080}
   shutdown: graceful
