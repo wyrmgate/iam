@@ -38,7 +38,7 @@ public final class JdbcInboxRepository {
                 tenant.tenantId(),
                 consumerName,
                 messageId,
-                firstSeenAt);
+                JdbcValues.timestamp(firstSeenAt));
         return affected == 1;
     }
 
@@ -60,7 +60,7 @@ public final class JdbcInboxRepository {
                 WHERE tenant_id = ? AND consumer_name = ? AND message_id = ?
                   AND processing_state = 'RECEIVED'
                 """,
-                completedAt,
+                JdbcValues.timestamp(completedAt),
                 outcomeCode,
                 tenant.tenantId(),
                 consumerName,
