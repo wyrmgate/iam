@@ -34,12 +34,14 @@ logs/
 .docker/
 .local/
 
-# OpenTofu / Terraform-compatible state
+# OpenTofu / Terraform-compatible state and environment values
 **/.terraform/
 **/.tofu/
 *.tfstate
 *.tfstate.*
 *.tfplan
+*.tfvars
+!*.tfvars.example
 .terraform.lock.hcl
 
 # Ansible local artifacts

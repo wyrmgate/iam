@@ -1,9 +1,10 @@
-.PHONY: help dev-init dev-up dev-down dev-reset dev-logs dev-status server-build server-test server-run console-install console-build console-typecheck console-dev build test
+.PHONY: help dev-init dev-up dev-down dev-reset dev-logs dev-status server-build server-test server-run console-install console-build console-typecheck console-dev iac-fmt iac-init iac-validate build test
 
 COMPOSE_FILE := deploy/compose/local.yml
 LOCAL_ENV := deploy/config/local.env
 LOCAL_ENV_EXAMPLE := deploy/config/local.env.example
 MAVEN := sh ./apps/server/mvnw
+TOFU_DIR := infra/opentofu
 
 help:
 	@printf '%s\n' \
@@ -25,6 +26,12 @@ help:
 		'  make console-build      Typecheck and build the React console' \
 		'  make console-typecheck  Typecheck the React console' \
 		'  make console-dev        Run the Vite development server' \
+		'' \
+		'Infrastructure as code:' \
+		'  make iac-fmt            Format OpenTofu configuration' \
+		'  make iac-init           Initialize providers without a backend' \
+		'  make iac-validate       Validate OpenTofu configuration' \
+		'' \
 		'  make build              Build server and console' \
 		'  make test               Run currently available tests/checks'
 
@@ -72,6 +79,15 @@ console-typecheck:
 
 console-dev:
 	npm --prefix apps/console run dev
+
+iac-fmt:
+	tofu -chdir=$(TOFU_DIR) fmt -recursive
+
+iac-init:
+	tofu -chdir=$(TOFU_DIR) init -backend=false
+
+iac-validate:
+	tofu -chdir=$(TOFU_DIR) validate
 
 build: server-build console-build
 

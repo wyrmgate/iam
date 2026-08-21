@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars for local planning/apply. terraform.tfvars is ignored.
+# Never place API private keys or other secrets in this file.
+
+region              = "ap-singapore-1"
+compartment_ocid    = "ocid1.compartment.oc1..replace-me"
+availability_domain = "replace-with-region-availability-domain"
+image_ocid           = "ocid1.image.oc1.ap-singapore-1.replace-me"
+admin_cidr           = "203.0.113.10/32"
+ssh_public_key       = "ssh-ed25519 AAAA... developer@example"
+
+# Defaults target a small OCI Arm flexible instance.
+# instance_shape     = "VM.Standard.A1.Flex"
+# instance_ocpus     = 1
+# instance_memory_gb = 6
