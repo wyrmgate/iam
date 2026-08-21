@@ -15,7 +15,9 @@ app_compose=(docker compose -p wyrmgate-iam-demo --env-file "${release_dir}/depl
 
 "${app_compose[@]}" down
 
-docker volume rm "${volume_name}" >/dev/null 2>&1 || true
+if docker volume inspect "${volume_name}" >/dev/null 2>&1; then
+  docker volume rm "${volume_name}" >/dev/null
+fi
 
 "${app_compose[@]}" up -d --wait postgres
 "${app_compose[@]}" run --rm --no-deps server \
