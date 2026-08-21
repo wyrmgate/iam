@@ -58,8 +58,10 @@ public final class IdentityCommandService {
 
         return transactions.required(() -> {
             repository.insert(tenant, identity);
-            factSink.identityCreated(tenant, identity, correlationId, causationId);
-            return identity;
+            Identity persisted = repository.findById(tenant, identity.id())
+                    .orElseThrow(() -> new IllegalStateException("created identity could not be reloaded"));
+            factSink.identityCreated(tenant, persisted, correlationId, causationId);
+            return persisted;
         });
     }
 
