@@ -13,7 +13,11 @@ class PersistenceArchitectureTest {
     @ArchTest
     static final ArchRule frameworkNeutralDomainAndContextBoundaries = noClasses()
             .that()
-            .resideInAnyPackage("..domain..", "..platform.id..", "..platform.tenant..")
+            .resideInAnyPackage(
+                    "..domain..",
+                    "..identity.application..",
+                    "..platform.id..",
+                    "..platform.tenant..")
             .should()
             .dependOnClassesThat()
             .resideInAnyPackage("org.springframework..", "java.sql..", "javax.sql..");
