@@ -1,7 +1,7 @@
 package io.wyrmgate.iam.platform.crypto;
 
 /**
- * Port for obtaining the currently active asymmetric signing key material.
+ * Port for asymmetric signing without exposing private key material.
  *
  * <p>Authorization/OIDC code depends on this interface, never on files, Vault,
  * cloud KMS APIs, or HSM-specific clients.</p>
@@ -9,4 +9,6 @@ package io.wyrmgate.iam.platform.crypto;
 public interface SigningKeyProvider {
 
     SigningKeyMaterial currentSigningKey();
+
+    byte[] sign(byte[] payload);
 }
