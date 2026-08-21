@@ -1,12 +1,17 @@
-# Copy to terraform.tfvars for local planning/apply. terraform.tfvars is ignored.
-# Never place API private keys or other secrets in this file.
+# Generic bootstrap example. Copy to terraform.tfvars only for a reviewed environment.
+# terraform.tfvars is ignored. Never place API private keys or other secrets here.
 
 region              = "ap-singapore-1"
 compartment_ocid    = "ocid1.compartment.oc1..replace-me"
 availability_domain = "replace-with-region-availability-domain"
 image_ocid           = "ocid1.image.oc1.ap-singapore-1.replace-me"
 admin_cidr           = "203.0.113.10/32"
-ssh_public_key       = "ssh-ed25519 AAAA... developer@example"
+ssh_public_key       = "ssh-ed25519 AAAA... operator@example"
+
+# Naming defaults remain demo-compatible unless an environment overrides them.
+# name_prefix   = "wyrmgate-iam-demo"
+# vcn_dns_label = "iamdemo"
+# hostname_label = "iamdemo"
 
 # Defaults target a small OCI Arm flexible instance.
 # instance_shape     = "VM.Standard.A1.Flex"

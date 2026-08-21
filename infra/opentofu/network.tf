@@ -2,7 +2,7 @@ resource "oci_core_vcn" "demo" {
   compartment_id = var.compartment_ocid
   cidr_blocks    = [var.vcn_cidr]
   display_name   = "${var.name_prefix}-vcn"
-  dns_label      = "iamdemo"
+  dns_label      = var.vcn_dns_label
 }
 
 resource "oci_core_internet_gateway" "demo" {

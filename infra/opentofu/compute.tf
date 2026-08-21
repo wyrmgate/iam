@@ -12,7 +12,7 @@ resource "oci_core_instance" "demo" {
   create_vnic_details {
     assign_public_ip = true
     display_name     = "${var.name_prefix}-vnic"
-    hostname_label   = "iamdemo"
+    hostname_label   = var.hostname_label
     subnet_id        = oci_core_subnet.public.id
   }
 

@@ -1,5 +1,5 @@
 [iam_hosts]
-iam-demo ansible_host=203.0.113.10 ansible_user=ubuntu
+iam-dev ansible_host=203.0.113.10 ansible_user=ubuntu
 
 [iam_hosts:vars]
-ansible_ssh_private_key_file=~/.ssh/wyrmgate-iam-demo
+ansible_ssh_private_key_file=~/.ssh/wyrmgate-iam-dev

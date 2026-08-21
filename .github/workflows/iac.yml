@@ -48,3 +48,13 @@ jobs:
 
       - name: Validate configuration
         run: tofu -chdir=infra/opentofu validate
+
+      - name: Guard environment-neutral DEV naming
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Eq 'name_prefix[[:space:]]*=[[:space:]]*"wyrmgate-iam-dev"' infra/opentofu/dev.tfvars.example
+          grep -Eq 'vcn_dns_label[[:space:]]*=[[:space:]]*"iamdev"' infra/opentofu/dev.tfvars.example
+          grep -Eq 'hostname_label[[:space:]]*=[[:space:]]*"iamdev"' infra/opentofu/dev.tfvars.example
+          ! grep -Eq 'dns_label[[:space:]]*=[[:space:]]*"iamdemo"' infra/opentofu/network.tf
+          ! grep -Eq 'hostname_label[[:space:]]*=[[:space:]]*"iamdemo"' infra/opentofu/compute.tf
