@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.identity.persistence;
 
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
+import io.wyrmgate.iam.identity.application.SourceCorrelationRepository.LinkReplacement;
 import io.wyrmgate.iam.identity.domain.IdentityLink;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
 import io.wyrmgate.iam.identity.domain.SourceImportRun;
@@ -232,7 +233,7 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     }
 
     @Override
-    public IdentityLink replaceAcceptedLink(
+    public LinkReplacement replaceAcceptedLink(
             TenantContext tenant,
             UUID sourceRecordId,
             UUID identityId,
@@ -242,9 +243,18 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
             UUID causationId,
             UUID newLinkId) {
         requireText(correlationReason, "correlationReason");
+        List<UUID> lockedRecords = jdbcTemplate.query(
+                "SELECT id FROM identity.source_record WHERE tenant_id = ? AND id = ? FOR UPDATE",
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                tenant.tenantId(),
+                sourceRecordId);
+        if (lockedRecords.isEmpty()) {
+            throw new IllegalArgumentException("source record does not exist");
+        }
+
         Optional<IdentityLink> existing = findActiveAcceptedLink(tenant, sourceRecordId);
         if (existing.isPresent() && existing.get().identityId().equals(identityId)) {
-            return existing.get();
+            return new LinkReplacement(existing.get(), false);
         }
         existing.ifPresent(link -> jdbcTemplate.update(
                 """
@@ -271,8 +281,9 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                 correlationReason,
                 correlationId,
                 causationId);
-        return findActiveAcceptedLink(tenant, sourceRecordId)
+        IdentityLink accepted = findActiveAcceptedLink(tenant, sourceRecordId)
                 .orElseThrow(() -> new IllegalStateException("accepted identity link could not be reloaded"));
+        return new LinkReplacement(accepted, true);
     }
 
     @Override
