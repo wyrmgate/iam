@@ -83,7 +83,7 @@ public final class SourceCorrelationService {
             TenantContext tenant,
             UUID importRunId,
             String nativeKey,
-            String nativePayloadJson,
+            String observedAttributesJson,
             Instant sourceUpdatedAt,
             Instant observedAt,
             UUID correlationId,
@@ -103,7 +103,7 @@ public final class SourceCorrelationService {
                     run.sourceSystemId(),
                     run.id(),
                     nativeKey,
-                    nativePayloadJson,
+                    observedAttributesJson,
                     sourceUpdatedAt,
                     observedAt);
             facts.sourceRecordObserved(tenant, record, correlationId, causationId);
