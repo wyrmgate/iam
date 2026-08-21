@@ -24,7 +24,6 @@ services:
       SPRING_DATASOURCE_USERNAME: ${IAM_DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${IAM_DB_PASSWORD}
       WYRMGATE_DEMO_MODE: ${IAM_DEMO_MODE:-true}
-      WYRMGATE_DEMO_RESET_TOKEN: ${IAM_DEMO_RESET_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy
