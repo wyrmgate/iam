@@ -166,6 +166,31 @@ class SourceCorrelationPersistenceIntegrationTest {
     }
 
     @Test
+    void completedImportRejectsFurtherObservation() {
+        Instant now = Instant.now();
+        TenantContext tenant = tenant("Closed Import Tenant", now);
+        SourceSystem source = sourceCommands.createSourceSystem(
+                tenant, "closed", "Closed Source", now, ids.nextId(), null);
+        SourceImportRun run = sourceCommands.startImport(tenant, source.id(), now.plusSeconds(1));
+        sourceCommands.completeImport(
+                tenant, run.id(), SourceImportCompleteness.COMPLETE, null, null,
+                now.plusSeconds(2), ids.nextId(), null);
+
+        assertThatThrownBy(() -> sourceCommands.observe(
+                        tenant,
+                        run.id(),
+                        "late-record",
+                        "{\"late\":true}",
+                        null,
+                        now.plusSeconds(3),
+                        ids.nextId(),
+                        null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("running import");
+        assertThat(sources.findSourceRecordByNativeKey(tenant, source.id(), "late-record")).isEmpty();
+    }
+
+    @Test
     void acceptedCorrelationSupersedesPriorLinkAndPreservesHistory() {
         Instant now = Instant.now();
         TenantContext tenant = tenant("Correlation Tenant", now);
@@ -195,6 +220,35 @@ class SourceCorrelationPersistenceIntegrationTest {
         assertThat(accepted).isEqualTo(1);
         assertThat(superseded).isEqualTo(1);
         assertThat(secondLink.identityId()).isEqualTo(secondIdentity.id());
+    }
+
+    @Test
+    void repeatedSameCorrelationIsNoOpWithoutDuplicateFact() {
+        Instant now = Instant.now();
+        TenantContext tenant = tenant("No-op Correlation Tenant", now);
+        SourceSystem source = sourceCommands.createSourceSystem(
+                tenant, "noop", "No-op Source", now, ids.nextId(), null);
+        SourceImportRun run = sourceCommands.startImport(tenant, source.id(), now.plusSeconds(1));
+        SourceRecord record = sourceCommands.observe(
+                tenant, run.id(), "subject-1", "{\"subject\":1}", null,
+                now.plusSeconds(2), ids.nextId(), null);
+        Identity identity = identity(tenant, "Canonical", now.plusSeconds(3));
+
+        UUID correlationId = ids.nextId();
+        var first = sourceCommands.acceptCorrelation(
+                tenant, record.id(), identity.id(), "exact source key",
+                now.plusSeconds(4), correlationId, null);
+        long factsAfterFirst = outbox.countPending(tenant);
+        var replay = sourceCommands.acceptCorrelation(
+                tenant, record.id(), identity.id(), "same target retry",
+                now.plusSeconds(5), correlationId, null);
+
+        assertThat(replay.id()).isEqualTo(first.id());
+        assertThat(outbox.countPending(tenant)).isEqualTo(factsAfterFirst);
+        Integer links = jdbc.queryForObject(
+                "SELECT count(*) FROM identity.identity_link WHERE tenant_id = ? AND source_record_id = ?",
+                Integer.class, tenant.tenantId(), record.id());
+        assertThat(links).isEqualTo(1);
     }
 
     @Test
