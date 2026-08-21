@@ -17,14 +17,38 @@ services:
       - internal
     restart: unless-stopped
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.159.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      IAM_OTEL_EXPORTER_ENDPOINT: ${IAM_OTEL_EXPORTER_ENDPOINT}
+      IAM_OTEL_EXPORTER_AUTHORIZATION: ${IAM_OTEL_EXPORTER_AUTHORIZATION}
+    volumes:
+      - ../config/otel-collector.runtime.yaml:/etc/otelcol-contrib/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "components"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - internal
+    restart: unless-stopped
+
   server:
     image: ${IAM_SERVER_IMAGE}
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${IAM_DB_NAME}
       SPRING_DATASOURCE_USERNAME: ${IAM_DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${IAM_DB_PASSWORD}
+      IAM_OTEL_ENABLED: "true"
+      IAM_DEPLOYMENT_ENVIRONMENT: dev
+      IAM_OTEL_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      IAM_OTEL_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
+      IAM_TRACE_SAMPLING_PROBABILITY: ${IAM_TRACE_SAMPLING_PROBABILITY:-0.10}
     depends_on:
       postgres:
+        condition: service_healthy
+      otel-collector:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health >/dev/null"]
