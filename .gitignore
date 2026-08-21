@@ -5,6 +5,7 @@
 deploy/config/local.env
 deploy/config/edge.env
 deploy/config/dev.env
+deploy/config/demo.env
 *.pem
 *.key
 *.p12
