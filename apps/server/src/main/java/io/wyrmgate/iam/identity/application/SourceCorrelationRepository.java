@@ -34,7 +34,7 @@ public interface SourceCorrelationRepository {
             UUID sourceSystemId,
             UUID importRunId,
             String nativeKey,
-            String nativePayloadJson,
+            String observedAttributesJson,
             Instant sourceUpdatedAt,
             Instant observedAt);
 
