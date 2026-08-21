@@ -1,0 +1,102 @@
+name: Backup Recovery Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/backup-recovery.yml'
+      - 'deploy/scripts/backup-postgres.sh'
+      - 'deploy/scripts/restore-postgres.sh'
+      - 'docs/operations/backup-recovery.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/backup-recovery.yml'
+      - 'deploy/scripts/backup-postgres.sh'
+      - 'deploy/scripts/restore-postgres.sh'
+      - 'docs/operations/backup-recovery.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate shell syntax
+        run: |
+          bash -n deploy/scripts/backup-postgres.sh
+          bash -n deploy/scripts/restore-postgres.sh
+
+      - name: Prepare disposable PostgreSQL topology
+        shell: bash
+        run: |
+          cat > /tmp/backup-test.env <<'EOF'
+          IAM_DB_NAME=wyrmgate_restore_test
+          IAM_DB_USER=wyrmgate
+          IAM_DB_PASSWORD=restore_test_password
+          EOF
+          cat > /tmp/backup-test.compose.yml <<'EOF'
+          services:
+            postgres:
+              image: postgres:18.4-alpine
+              environment:
+                POSTGRES_DB: ${IAM_DB_NAME}
+                POSTGRES_USER: ${IAM_DB_USER}
+                POSTGRES_PASSWORD: ${IAM_DB_PASSWORD}
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U ${IAM_DB_USER} -d ${IAM_DB_NAME}"]
+                interval: 2s
+                timeout: 2s
+                retries: 30
+          EOF
+          chmod +x deploy/scripts/backup-postgres.sh deploy/scripts/restore-postgres.sh
+          docker compose -p wyrmgate-backup-test --env-file /tmp/backup-test.env -f /tmp/backup-test.compose.yml up -d --wait postgres
+
+      - name: Create representative state
+        run: |
+          docker compose -p wyrmgate-backup-test --env-file /tmp/backup-test.env -f /tmp/backup-test.compose.yml exec -T postgres \
+            psql -U wyrmgate -d wyrmgate_restore_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE TABLE recovery_probe (id integer PRIMARY KEY, value text NOT NULL);
+          INSERT INTO recovery_probe (id, value) VALUES (1, 'durable-governance-state');
+          SQL
+
+      - name: Backup using repository script
+        run: |
+          deploy/scripts/backup-postgres.sh \
+            /tmp/backup-test.env \
+            /tmp/backup-test.compose.yml \
+            wyrmgate-backup-test \
+            /tmp/wyrmgate-backups \
+            7
+          test -s "$(find /tmp/wyrmgate-backups -name '*.dump' -print -quit)"
+
+      - name: Destroy state before restore
+        run: |
+          docker compose -p wyrmgate-backup-test --env-file /tmp/backup-test.env -f /tmp/backup-test.compose.yml exec -T postgres \
+            psql -U wyrmgate -d wyrmgate_restore_test -v ON_ERROR_STOP=1 -c 'DROP TABLE recovery_probe;'
+
+      - name: Restore using repository script
+        shell: bash
+        run: |
+          backup="$(find /tmp/wyrmgate-backups -name '*.dump' -print -quit)"
+          IAM_RESTORE_CONFIRM=RESTORE deploy/scripts/restore-postgres.sh \
+            /tmp/backup-test.env \
+            /tmp/backup-test.compose.yml \
+            wyrmgate-backup-test \
+            "${backup}"
+
+      - name: Verify restored state
+        run: |
+          value="$(docker compose -p wyrmgate-backup-test --env-file /tmp/backup-test.env -f /tmp/backup-test.compose.yml exec -T postgres \
+            psql -U wyrmgate -d wyrmgate_restore_test -Atc 'SELECT value FROM recovery_probe WHERE id = 1;')"
+          test "${value}" = 'durable-governance-state'
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -p wyrmgate-backup-test --env-file /tmp/backup-test.env -f /tmp/backup-test.compose.yml down -v || true
