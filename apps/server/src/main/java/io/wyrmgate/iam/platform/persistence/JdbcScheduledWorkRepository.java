@@ -49,9 +49,9 @@ public final class JdbcScheduledWorkRepository {
                 subject == null ? null : subject.subjectType(),
                 subject == null ? null : subject.subjectId(),
                 subject == null ? null : subject.subjectRevision(),
-                availableAt,
-                now,
-                now);
+                JdbcValues.timestamp(availableAt),
+                JdbcValues.timestamp(now),
+                JdbcValues.timestamp(now));
         return affected == 1;
     }
 
@@ -110,12 +110,12 @@ public final class JdbcScheduledWorkRepository {
                         rs.getInt("attempt_count"),
                         rs.getTimestamp("lease_until").toInstant()),
                 tenant.tenantId(),
-                now,
-                now,
+                JdbcValues.timestamp(now),
+                JdbcValues.timestamp(now),
                 limit,
                 leaseOwner,
-                leaseUntil,
-                now,
+                JdbcValues.timestamp(leaseUntil),
+                JdbcValues.timestamp(now),
                 tenant.tenantId());
     }
 
@@ -135,7 +135,7 @@ public final class JdbcScheduledWorkRepository {
                 SET delivery_state = 'COMPLETED', lease_owner = NULL, lease_until = NULL, updated_at = ?
                 WHERE tenant_id = ? AND id = ? AND delivery_state = 'READY' AND lease_owner = ?
                 """,
-                now,
+                JdbcValues.timestamp(now),
                 tenant.tenantId(),
                 workId,
                 leaseOwner);
