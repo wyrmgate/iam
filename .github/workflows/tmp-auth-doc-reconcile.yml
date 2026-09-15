@@ -1,0 +1,61 @@
+name: Temporary Auth Documentation Reconcile
+
+on:
+  push:
+    branches:
+      - feature/control-plane-auth-bootstrap
+    paths:
+      - .github/workflows/tmp-auth-doc-reconcile.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/control-plane-auth-bootstrap
+      - name: Reconcile living documentation and remove temporary workflow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('docs/api/identity-contracts.md'): [
+                  (
+                      'This slice is **contract-first and not yet runtime-exposed**. Wyrmgate does not expose Identity mutation endpoints until control-plane authentication and scoped Administrative Authorization can default-deny and evaluate the required `identity:*` permission at operation time. This avoids creating a temporary unauthenticated administration surface.',
+                      'This slice remains **contract-first and not yet runtime-exposed**. Provider-neutral bearer validation, server-side tenant/governed-actor resolution, burn-once initial-administrator bootstrap, and the scoped Administrative Authorization evaluator now exist. Runtime Identity controllers remain absent until each HTTP operation is wired to both the trusted actor context and the required `identity:*` permission at operation time.'
+                  ),
+                  (
+                      'Actual authorization must default deny and evaluate actor, tenant/isolation boundary, permission, resource, typed scope, relationship/ownership context, policy, and required authentication assurance. The runtime endpoints remain disabled until that control-plane layer exists.',
+                      'Actual authorization must default deny and evaluate actor, tenant/isolation boundary, permission, resource, typed scope, relationship/ownership context, policy, and required authentication assurance. The authentication and direct-grant foundations now exist; runtime endpoints remain disabled until the HTTP adapters enforce both layers for every operation.'
+                  ),
+              ],
+              Path('apps/server/README.md'): [
+                  (
+                      'This is not an authentication or bootstrap bypass. Transport bearer authentication/tenant+actor resolution, a governed initial-administrator provisioning path, role/grant management commands, delegation/elevation, assurance/policy context and sensitive authorization-decision audit hooks remain subsequent slices.',
+                      'Bearer authentication, server-side tenant+actor resolution, and a burn-once governed initial-administrator bootstrap are now implemented under ADR-0011. Role/grant management commands, delegation/elevation, stronger assurance/policy context, governed recovery, and sensitive authorization-decision audit hooks remain subsequent slices.'
+                  ),
+                  (
+                      'These contracts are intentionally **not runtime-exposed yet**. The persisted Administration evaluator now exists, but publishing Identity endpoints still requires trusted transport authentication/tenant+actor resolution and a safe initial-administrator provisioning path. Internal outbox facts are likewise not automatically external events; publication wiring remains a separate adapter/integration concern.',
+                      'These contracts are intentionally **not runtime-exposed yet**. The Administration evaluator plus trusted bearer authentication, server-side tenant+actor resolution, and burn-once initial-administrator provisioning now exist. The next slice must wire each Identity HTTP operation to both the authenticated actor context and semantic Administration permission checks. Internal outbox facts are likewise not automatically external events; publication wiring remains a separate adapter/integration concern.'
+                  ),
+              ],
+          }
+
+          for path, changes in replacements.items():
+              text = path.read_text()
+              for old, new in changes:
+                  if old not in text:
+                      raise SystemExit(f'expected documentation text not found in {path}: {old[:80]}')
+                  text = text.replace(old, new)
+              path.write_text(text)
+          PY
+          git rm .github/workflows/tmp-auth-doc-reconcile.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/api/identity-contracts.md apps/server/README.md
+          git commit -m "docs: reconcile Identity runtime security gate"
+          git push origin HEAD:feature/control-plane-auth-bootstrap
