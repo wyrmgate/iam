@@ -74,10 +74,14 @@ CREATE TABLE administration.administrative_grant (
     CONSTRAINT administration_grant_scope_shape_ck CHECK (
         (scope_type = 'GLOBAL' AND scope_resource_type IS NULL AND scope_ref_id IS NULL)
         OR
-        (scope_type = 'SPECIFIC_RESOURCE' AND btrim(scope_resource_type) <> '' AND scope_ref_id IS NOT NULL)
+        (scope_type = 'SPECIFIC_RESOURCE'
+            AND scope_resource_type IS NOT NULL
+            AND btrim(scope_resource_type) <> ''
+            AND scope_ref_id IS NOT NULL)
         OR
         (scope_type NOT IN ('GLOBAL', 'SPECIFIC_RESOURCE')
-            AND scope_resource_type IS NULL AND scope_ref_id IS NOT NULL)
+            AND scope_resource_type IS NULL
+            AND scope_ref_id IS NOT NULL)
     ),
     CONSTRAINT administration_grant_state_ck CHECK (state IN ('ACTIVE', 'REVOKED')),
     CONSTRAINT administration_grant_validity_ck CHECK (
