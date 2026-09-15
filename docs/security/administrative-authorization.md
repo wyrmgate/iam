@@ -110,6 +110,23 @@ When tenancy is enabled, tenant isolation is checked before normal administrativ
 
 Authorization is evaluated at operation time. Cached effective-admin projections may accelerate evaluation/UI navigation but must be invalidated promptly on grant revocation, owner change, identity suspension, delegation expiry, policy change or temporary-elevation expiry.
 
+## First implementation slice
+
+The first persisted Administration authorization slice implements the direct-grant evaluation foundation needed before public IAM control-plane resources can be exposed. It deliberately does not create a bootstrap superuser or turn transport authentication claims into authoritative IAM permissions.
+
+The current implementation persists tenant-scoped semantic `AdministrativePermission`, `AdministrativeRole`, role-permission membership and `AdministrativeGrant`. Grant actor references are stable governed Identity IDs; Administration does not mutate or directly own Identity state. Identity implements the narrow `GovernedActorStatusQuery` consumed by Administration.
+
+Evaluation is operation-time and default-deny. An actor must resolve to an `ACTIVE` Identity in the same tenant; missing, foreign-tenant, `PENDING`, `SUSPENDED`, `INACTIVE` or `DECOMMISSIONED` actors are ineligible. Grant state and `validFrom`/`validUntil` are evaluated directly from time, so a delayed scheduler cannot extend authority.
+
+All canonical scope types are structurally modeled. The first evaluator intentionally grants authority only for:
+
+- `GLOBAL`, which applies to a matching semantic permission in the tenant; and
+- `SPECIFIC_RESOURCE`, which requires an exact semantic resource type and stable resource ID match.
+
+`ORGANIZATION`, `APPLICATION`, `APPLICATION_TARGET`, `SOURCE_SYSTEM`, `CONNECTOR_INSTANCE` and `IDENTITY_POPULATION` remain fail-closed until their concrete hierarchy/population semantics and owning-capability queries are implemented. A resource-specific grant never authorizes a collection query.
+
+A fresh installation contains no administrative roles or grants and therefore denies protected control-plane operations. Initial-administrator bootstrap/provisioning, role/grant management commands, delegation/elevation, assurance-aware policy, security-audit emission for sensitive authorization decisions, and transport authentication/actor resolution are separate implementation slices. Public Identity runtime endpoints remain gated until the required authentication/actor-resolution and safe administration provisioning path exist.
+
 ## Security invariants
 
 - default deny;

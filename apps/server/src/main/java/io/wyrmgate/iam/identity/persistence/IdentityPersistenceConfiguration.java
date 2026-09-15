@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.identity.persistence;
 
+import io.wyrmgate.iam.administration.application.GovernedActorStatusQuery;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeConfigurationService;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeFactSink;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeRepository;
@@ -24,6 +25,11 @@ public class IdentityPersistenceConfiguration {
     @Bean
     IdentityRepository identityRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcIdentityRepository(jdbcTemplate);
+    }
+
+    @Bean
+    GovernedActorStatusQuery governedActorStatusQuery(IdentityRepository identityRepository) {
+        return new IdentityGovernedActorStatusQuery(identityRepository);
     }
 
     @Bean
