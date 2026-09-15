@@ -83,7 +83,18 @@ The first implementation deliberately does not introduce a generic validation-ru
 
 The Identity domain/application packages remain free of Spring and JDBC dependencies; persistence details stay isolated in `identity.persistence`.
 
-Not yet implemented in Identity: source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, public Identity APIs, or public integration-event schemas.
+## Identity API/event contract slice
+
+OD-003 now has a first checked-in, contract-first Identity interface slice:
+
+- `src/main/resources/contracts/openapi/identity-v1.json` defines semantic Identity create/read/list/non-lifecycle metadata update and governed canonical-attribute reads;
+- `src/main/resources/contracts/asyncapi/identity-events-v1.json` defines curated, minimized public `identity.created` and `identity.metadata-changed` integration events;
+- `docs/api/identity-contracts.md` records the implementation-facing semantics and completion boundary;
+- `scripts/verify-api-contracts.py` runs in Core CI to protect project-specific API/event invariants.
+
+These contracts are intentionally **not runtime-exposed yet**. The Administration/default-deny control-plane authorization layer required by FR-ADM-001 and SRS-SEC-001 is not implemented, so publishing mutating Identity endpoints now would create an insecure temporary administration surface. Internal outbox facts are likewise not automatically external events; publication wiring remains a separate adapter/integration concern.
+
+Not yet implemented in Identity: source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, runtime public Identity controllers, control-plane authorization enforcement, or external integration-event publication.
 
 ## Commands
 

@@ -26,6 +26,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`adr/README.md`](adr/README.md) — canonical Architecture Decision Record index.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
+- [`api/identity-contracts.md`](api/identity-contracts.md) — first OD-003 machine-readable Identity OpenAPI/AsyncAPI implementation slice and runtime authorization boundary.
 - [`engineering/dev-cd.md`](engineering/dev-cd.md) — active managed DEV deployment topology: Cloudflare Pages, Railway, and Neon.
 - [`operations/dev-managed-activation.md`](operations/dev-managed-activation.md) — first managed DEV activation checklist.
 - [`engineering/edge.md`](engineering/edge.md) — standalone-host Caddy reference edge.
@@ -56,4 +57,6 @@ The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 a
 
 The first real DEV/testing/demo deployment direction is a managed-service implementation topology documented in [`engineering/dev-cd.md`](engineering/dev-cd.md). That deployment choice does not settle production HA/DR or change canonical IAM capability architecture.
 
-Remaining open design areas include machine-readable OpenAPI/AsyncAPI schemas (OD-003), the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
+OD-003 is now **partially implemented**: the first contract-first Identity slice provides checked-in OpenAPI/AsyncAPI resources/schemas, semantic concurrency/idempotency/pagination rules, governed canonical-attribute views, curated minimized public Identity events, and CI contract checks. Runtime public Identity mutation endpoints remain intentionally unavailable until the Administration/default-deny control-plane authorization layer exists. OD-003 remains open for the remaining public capability surfaces, runtime publication/compatibility process, and later contract slices.
+
+Remaining open design areas therefore include completion of OD-003 machine-readable API/event coverage, the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
