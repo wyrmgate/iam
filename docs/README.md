@@ -23,6 +23,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`domain/canonical-model.md`](domain/canonical-model.md) — canonical IAM concepts, ownership of truth, observations, evidence, and projections.
 - [`domain/state-and-invariants.md`](domain/state-and-invariants.md) — lifecycle, concurrency, structural, temporal, and failure invariants.
 - [`security/administrative-authorization.md`](security/administrative-authorization.md) — IAM control-plane authorization and scoped administration.
+- [`security/control-plane-authentication.md`](security/control-plane-authentication.md) — external bearer authentication, governed actor binding and burn-once first-admin bootstrap.
 - [`adr/README.md`](adr/README.md) — canonical Architecture Decision Record index.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
@@ -51,12 +52,14 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, C
 
 ## Current status
 
-IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0010 are the current architecture checkpoint. Workflow/process orchestration and the concrete physical data model/persistence design are now defined.
+IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0011 are the current architecture checkpoint. ADR-0011 is the latest controlled amendment and must be folded into the next formal Security/SAD/Integration/RTM revision.
 
 The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 and [`architecture/physical-data-model.md`](architecture/physical-data-model.md) are the current controlled amendment, and the next formal-specification revision must fold them into the Data Architecture/SAD/RTM package.
 
 The first real DEV/testing/demo deployment direction is a managed-service implementation topology documented in [`engineering/dev-cd.md`](engineering/dev-cd.md). That deployment choice does not settle production HA/DR or change canonical IAM capability architecture.
 
-OD-003 is **partially implemented**: the first contract-first Identity slice provides checked-in OpenAPI/AsyncAPI resources/schemas, semantic concurrency/idempotency/pagination rules, governed canonical-attribute views, curated minimized public Identity events, and CI contract checks. Administration now also has its first persisted default-deny direct-grant evaluator with tenant-safe roles/permissions/grants, operation-time actor/validity checks, and fail-closed scope semantics. Runtime public Identity endpoints remain intentionally unavailable until transport authentication can resolve tenant + governed actor and a governed initial-administrator provisioning/management path exists. OD-003 remains open for runtime publication/compatibility and the remaining public capability contract slices.
+OD-003 is **partially implemented**. The first Identity OpenAPI/AsyncAPI slice is checked in, Administration has a persisted default-deny direct-grant evaluator, and the control plane now has provider-neutral JWT bearer validation, an Administration-owned server-side issuer+subject binding to tenant + governed Identity, and a burn-once first-administrator bootstrap path. OAuth/OIDC claims do not become Wyrmgate administrative permissions.
+
+Runtime Identity controllers are still intentionally absent. The next OD-003 runtime slice must bind each Identity HTTP operation to the authenticated actor context and `AdministrativeAuthorizationService`, including semantic permissions, revision/idempotency/pagination/error behavior from the existing contract. Bearer possession alone is never authorization.
 
 Remaining open design areas therefore include completion of OD-003 machine-readable API/event coverage and runtime activation, the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
