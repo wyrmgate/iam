@@ -5,9 +5,11 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationSer
 import io.wyrmgate.iam.administration.application.ControlPlaneActorBindingRepository;
 import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
 import io.wyrmgate.iam.administration.application.GovernedActorStatusQuery;
+import io.wyrmgate.iam.administration.application.InitialAdminBootstrapFactSink;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapRepository;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
+import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,16 +47,25 @@ public class AdministrationPersistenceConfiguration {
     }
 
     @Bean
+    InitialAdminBootstrapFactSink initialAdminBootstrapFactSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator idGenerator) {
+        return new JdbcInitialAdminBootstrapFactSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
     InitialAdminBootstrapService initialAdminBootstrapService(
             InitialAdminBootstrapRepository bootstrapRepository,
             ControlPlaneActorBindingRepository actorBindingRepository,
             GovernedActorStatusQuery governedActorStatusQuery,
+            InitialAdminBootstrapFactSink factSink,
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
         return new InitialAdminBootstrapService(
                 bootstrapRepository,
                 actorBindingRepository,
                 governedActorStatusQuery,
+                factSink,
                 idGenerator,
                 transactionExecutor);
     }

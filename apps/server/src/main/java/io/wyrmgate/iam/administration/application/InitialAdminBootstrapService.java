@@ -29,6 +29,7 @@ public final class InitialAdminBootstrapService {
     private final InitialAdminBootstrapRepository bootstrapRepository;
     private final ControlPlaneActorBindingRepository actorBindingRepository;
     private final GovernedActorStatusQuery governedActorStatusQuery;
+    private final InitialAdminBootstrapFactSink factSink;
     private final IdGenerator idGenerator;
     private final TransactionExecutor transactionExecutor;
 
@@ -36,11 +37,13 @@ public final class InitialAdminBootstrapService {
             InitialAdminBootstrapRepository bootstrapRepository,
             ControlPlaneActorBindingRepository actorBindingRepository,
             GovernedActorStatusQuery governedActorStatusQuery,
+            InitialAdminBootstrapFactSink factSink,
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
         this.bootstrapRepository = Objects.requireNonNull(bootstrapRepository, "bootstrapRepository");
         this.actorBindingRepository = Objects.requireNonNull(actorBindingRepository, "actorBindingRepository");
         this.governedActorStatusQuery = Objects.requireNonNull(governedActorStatusQuery, "governedActorStatusQuery");
+        this.factSink = Objects.requireNonNull(factSink, "factSink");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator");
         this.transactionExecutor = Objects.requireNonNull(transactionExecutor, "transactionExecutor");
     }
@@ -79,13 +82,7 @@ public final class InitialAdminBootstrapService {
         UUID roleId = idGenerator.nextId();
         UUID grantId = idGenerator.nextId();
         InitialAdminBootstrap marker = new InitialAdminBootstrap(
-                bootstrapId,
-                actorIdentityId,
-                bindingId,
-                roleId,
-                grantId,
-                now,
-                correlationId);
+                bootstrapId, actorIdentityId, bindingId, roleId, grantId, now, correlationId);
         if (!bootstrapRepository.claimBootstrap(tenant, marker)) {
             throw new InitialAdminAlreadyBootstrappedException(tenant.tenantId());
         }
@@ -103,11 +100,12 @@ public final class InitialAdminBootstrapService {
             throw new InitialAdminBootstrapNotAllowedException("external_subject_already_bound");
         }
 
-        Map<AdministrativePermission, UUID> permissionIds = new LinkedHashMap<>();
+        Map<AdministrativePermission, java.util.UUID> permissionIds = new LinkedHashMap<>();
         for (AdministrativePermission permission : AdministrativePermissions.INITIAL_TENANT_ADMIN) {
-            UUID permissionId = bootstrapRepository.ensurePermission(
-                    tenant, idGenerator.nextId(), permission, now);
-            permissionIds.put(permission, permissionId);
+            permissionIds.put(
+                    permission,
+                    bootstrapRepository.ensurePermission(
+                            tenant, idGenerator.nextId(), permission, now));
         }
 
         AdministrativeRole role = new AdministrativeRole(
@@ -133,6 +131,7 @@ public final class InitialAdminBootstrapService {
                 now,
                 now);
         bootstrapRepository.insertGrant(tenant, grant);
+        factSink.bootstrapped(tenant, marker);
 
         return new InitialAdminBootstrapResult(
                 bootstrapId, bindingId, roleId, grantId, correlationId);

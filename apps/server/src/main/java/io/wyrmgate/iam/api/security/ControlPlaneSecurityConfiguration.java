@@ -8,7 +8,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -17,7 +16,6 @@ import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.SupplierJwtDecoder;
@@ -42,10 +40,7 @@ public class ControlPlaneSecurityConfiguration {
         String issuer = properties.requiredIssuerUri();
         String audience = properties.requiredAudience();
         return new SupplierJwtDecoder(() -> {
-            JwtDecoder discovered = JwtDecoders.fromIssuerLocation(issuer);
-            if (!(discovered instanceof NimbusJwtDecoder decoder)) {
-                throw new IllegalStateException("issuer discovery did not produce a Nimbus JWT decoder");
-            }
+            NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
             OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
                     JwtValidators.createDefaultWithIssuer(issuer),
                     new RequiredAudienceValidator(audience));
@@ -66,6 +61,7 @@ public class ControlPlaneSecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/api/system/info").permitAll()
+                        .requestMatchers("/api/openapi/**", "/api/docs/**", "/swagger-ui/**").permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint))
@@ -96,6 +92,7 @@ public class ControlPlaneSecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/api/system/info").permitAll()
+                        .requestMatchers("/api/openapi/**", "/api/docs/**", "/swagger-ui/**").permitAll()
                         .requestMatchers("/api/v1/**").denyAll()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint));
