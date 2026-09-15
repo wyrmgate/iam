@@ -1,0 +1,137 @@
+{
+  "asyncapi": "3.1.0",
+  "info": {
+    "title": "Wyrmgate IAM Identity Integration Events",
+    "version": "0.1.0",
+    "description": "Curated public Identity event contract for OD-003. Internal domain facts/outbox records are not public integration events and are not described here."
+  },
+  "defaultContentType": "application/json",
+  "channels": {
+    "identityCreatedV1": {
+      "address": "iam.identity.created.v1",
+      "messages": {
+        "identityCreatedV1": {"$ref": "#/components/messages/IdentityCreatedV1"}
+      }
+    },
+    "identityMetadataChangedV1": {
+      "address": "iam.identity.metadata-changed.v1",
+      "messages": {
+        "identityMetadataChangedV1": {"$ref": "#/components/messages/IdentityMetadataChangedV1"}
+      }
+    }
+  },
+  "operations": {
+    "sendIdentityCreatedV1": {
+      "action": "send",
+      "channel": {"$ref": "#/channels/identityCreatedV1"},
+      "messages": [
+        {"$ref": "#/channels/identityCreatedV1/messages/identityCreatedV1"}
+      ]
+    },
+    "sendIdentityMetadataChangedV1": {
+      "action": "send",
+      "channel": {"$ref": "#/channels/identityMetadataChangedV1"},
+      "messages": [
+        {"$ref": "#/channels/identityMetadataChangedV1/messages/identityMetadataChangedV1"}
+      ]
+    }
+  },
+  "components": {
+    "messages": {
+      "IdentityCreatedV1": {
+        "name": "IdentityCreatedV1",
+        "title": "Identity created",
+        "summary": "A governed Identity was created.",
+        "contentType": "application/json",
+        "payload": {"$ref": "#/components/schemas/IdentityCreatedEnvelope"}
+      },
+      "IdentityMetadataChangedV1": {
+        "name": "IdentityMetadataChangedV1",
+        "title": "Identity metadata changed",
+        "summary": "Non-lifecycle public Identity metadata changed.",
+        "contentType": "application/json",
+        "payload": {"$ref": "#/components/schemas/IdentityMetadataChangedEnvelope"}
+      }
+    },
+    "schemas": {
+      "IdentityType": {
+        "type": "string",
+        "enum": ["PERSON", "SERVICE", "WORKLOAD"]
+      },
+      "IdentityLifecycleState": {
+        "type": "string",
+        "enum": ["PENDING", "ACTIVE", "SUSPENDED", "INACTIVE", "DECOMMISSIONED"]
+      },
+      "ResourceReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "id", "revision"],
+        "properties": {
+          "type": {"const": "Identity"},
+          "id": {"type": "string", "format": "uuid"},
+          "revision": {"type": "integer", "minimum": 1}
+        }
+      },
+      "IdentityCreatedPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["identityType", "lifecycleState"],
+        "properties": {
+          "identityType": {"$ref": "#/components/schemas/IdentityType"},
+          "lifecycleState": {"$ref": "#/components/schemas/IdentityLifecycleState"}
+        },
+        "description": "Deliberately excludes displayName, canonical attribute values, source payloads, credentials, secrets, and provider-native data. Consumers needing richer current context query an authorized API."
+      },
+      "IdentityMetadataChangedPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["changedFields"],
+        "properties": {
+          "changedFields": {
+            "type": "array",
+            "uniqueItems": true,
+            "minItems": 1,
+            "items": {"type": "string", "enum": ["displayName"]}
+          }
+        },
+        "description": "Signals semantic change without publishing the changed value."
+      },
+      "IdentityCreatedEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["eventId", "eventType", "eventVersion", "occurredAt", "tenantId", "resource", "correlationId", "payload"],
+        "properties": {
+          "eventId": {"type": "string", "format": "uuid"},
+          "eventType": {"const": "iam.identity.created"},
+          "eventVersion": {"const": 1},
+          "occurredAt": {"type": "string", "format": "date-time"},
+          "tenantId": {"type": "string", "format": "uuid"},
+          "resource": {"$ref": "#/components/schemas/ResourceReference"},
+          "correlationId": {"type": "string", "format": "uuid"},
+          "causationId": {"type": ["string", "null"], "format": "uuid"},
+          "payload": {"$ref": "#/components/schemas/IdentityCreatedPayload"}
+        }
+      },
+      "IdentityMetadataChangedEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["eventId", "eventType", "eventVersion", "occurredAt", "tenantId", "resource", "correlationId", "payload"],
+        "properties": {
+          "eventId": {"type": "string", "format": "uuid"},
+          "eventType": {"const": "iam.identity.metadata-changed"},
+          "eventVersion": {"const": 1},
+          "occurredAt": {"type": "string", "format": "date-time"},
+          "tenantId": {"type": "string", "format": "uuid"},
+          "resource": {"$ref": "#/components/schemas/ResourceReference"},
+          "correlationId": {"type": "string", "format": "uuid"},
+          "causationId": {"type": ["string", "null"], "format": "uuid"},
+          "payload": {"$ref": "#/components/schemas/IdentityMetadataChangedPayload"}
+        }
+      }
+    }
+  },
+  "x-wyrmgate-delivery-semantics": "at-least-once; consumers must tolerate duplicate, replay, and out-of-order delivery",
+  "x-wyrmgate-ordering": "No global ordering guarantee. resource.revision provides local change ordering/gap detection where applicable.",
+  "x-wyrmgate-publication-status": "schema-defined-not-yet-wired-to-external-delivery",
+  "x-wyrmgate-transport": "protocol-neutral; broker/webhook transport remains outside this first contract slice"
+}
