@@ -44,6 +44,8 @@ The protected GitHub Environment `docs` then requires:
 - secret `CLOUDFLARE_ACCOUNT_ID`;
 - variable `CLOUDFLARE_PAGES_PROJECT`.
 
+`CLOUDFLARE_PAGES_PROJECT` must identify a documentation-only Cloudflare Pages project. The public documentation project is separate from the IAM application console Pages project used by the managed DEV environment. Do not share one Pages project between these surfaces: they have different build outputs, routing behavior, environment variables and publication controls, and a shared project could overwrite or route the wrong application.
+
 The workflow uses Cloudflare Wrangler Action v4 and Wrangler v4-compatible Pages deployment commands. Cloudflare credentials are never stored in repository content or Docusaurus configuration.
 
 ## Public-content security boundary
@@ -77,10 +79,10 @@ The generated site is written to `docs-site/build/` and is not committed.
 
 Before setting `DOCS_DEPLOY_ENABLED=true`:
 
-1. create the Cloudflare Pages project;
+1. create a dedicated Cloudflare Pages project for public documentation, separate from the IAM application console Pages project;
 2. create/configure the `docs` GitHub Environment;
 3. add the Cloudflare account ID and scoped API token as environment secrets;
-4. set `CLOUDFLARE_PAGES_PROJECT`;
+4. set `CLOUDFLARE_PAGES_PROJECT` to the documentation-only Pages project;
 5. verify the intended public hostname and DNS configuration;
 6. review all files under `docs/public/` as externally distributable content;
 7. verify `docs-site/package-lock.json` is current and reviewed;

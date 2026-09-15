@@ -111,9 +111,11 @@ A GitHub prerelease flag is release metadata only. It does not weaken artifact v
 
 Creating a product release does not deploy it anywhere.
 
-Current DEV and DEMO deployment pipelines continue to consume immutable commit-derived artifacts according to their own environment policies. A later production/staging scaffold may choose to consume a release manifest/version, but it must preserve the same immutable artifact identity rather than rebuilding the application.
+The active managed DEV/testing/demo environment does not consume the GHCR release images as its deployment mechanism. Cloudflare Pages and Railway Git integrations build and deploy reviewed `main` revisions under the provider controls documented in [`dev-cd.md`](dev-cd.md); GitHub Actions validates that contract but is not the DEV deployment authority.
 
-DEMO remains a manual promotion target and must still satisfy its public-exposure safety gate before Internet exposure.
+The signed GHCR images and release manifest remain the controlled immutable artifact path for staging/production promotion and for any optional standalone-host/reference environment that deliberately consumes released images. The retained standalone DEMO/host material is reference-only and must not be confused with the active managed DEV topology.
+
+A future staging or production deployment implementation must preserve the release manifest's exact artifact identity rather than rebuilding application images during promotion.
 
 ## Verification contract
 

@@ -4,6 +4,8 @@
 
 Sprint 17 establishes non-live staging and production promotion boundaries. It does not declare Wyrmgate IAM production-ready, define final HA/DR architecture, or activate any host.
 
+The active managed DEV/testing/demo topology on Cloudflare Pages, Railway and Neon is a low-cost development implementation choice and is not the staging/production topology or a production architecture precedent.
+
 ## Artifact promotion
 
 Staging and production consume an existing GitHub Release created by the Sprint 16 release pipeline. Promotion must not rebuild application artifacts. The release manifest is the source for exact server and console OCI digests.
@@ -24,7 +26,7 @@ Sprint 17 does not place deployment credentials in these environments because no
 
 ## Standard single-node topology
 
-`deploy/compose/standard.yml` is a reusable single-node topology compatible with the existing DEV/DEMO model:
+`deploy/compose/standard.yml` is a reusable standalone-host compatibility scaffold for environments that deliberately consume released OCI artifacts. It is not the active managed DEV topology:
 
 - PostgreSQL authoritative relational store;
 - server and console using exact released image digests;
@@ -32,7 +34,7 @@ Sprint 17 does not place deployment credentials in these environments because no
 - isolated internal/edge network names and PostgreSQL volumes per environment;
 - external edge network, leaving TLS/routing to the existing edge boundary.
 
-This topology is a compatibility scaffold, not the final production availability architecture.
+This topology is a compatibility scaffold, not the final production availability architecture. The active managed DEV provider topology must not be used to bypass the production activation decisions below, and this host scaffold must not be described as the current DEV deployment model.
 
 ## Production activation gate
 
@@ -53,7 +55,7 @@ If those decisions materially alter the architecture baseline, record them in an
 
 ## Staging activation
 
-Staging may be activated earlier as a production-like validation environment, but it still requires explicit infrastructure, DNS, secrets and operational ownership. It should exercise the same release artifacts and migration model intended for production.
+Staging may be activated earlier as a production-like validation environment, but it still requires explicit infrastructure, DNS, secrets and operational ownership. It should exercise the same immutable release artifacts and migration model intended for production rather than relying on the managed DEV provider-build path.
 
 ## What the workflow does not do
 

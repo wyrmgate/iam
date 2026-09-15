@@ -18,7 +18,9 @@ Convert the connection to JDBC form for `IAM_DB_URL` while retaining Neon TLS qu
 
 Connect the repository to Railway and configure the server service to build with `apps/server/Dockerfile` from **repository root**. Leave Railway Root Directory unset (repository root). Do not set it to `apps/server`, because the Dockerfile uses repository-root `COPY apps/server/...` paths.
 
-Use `apps/server/railway.json` as the checked-in service contract. It pins the Dockerfile path and the `/actuator/health` deployment health check.
+Use `apps/server/railway.json` as the checked-in service contract. It pins the Dockerfile path, `/actuator/health` deployment health check, and change detection for both `apps/server/**` and the repository-root `.dockerignore` build input.
+
+Configure the Git source to deploy `main`, keep automatic deployment enabled, and enable **Wait for CI** so Railway does not begin deployment until the commit's GitHub check suites have completed successfully.
 
 Set deployment variables:
 
@@ -36,15 +38,22 @@ If the service does not sleep during idle periods, inspect outbound traffic firs
 
 ## 4. Configure Cloudflare Pages
 
-Create a Pages project connected to the repository with:
+Create the IAM console Pages project connected to the repository with:
 
+- production branch: `main`
+- automatic production deployment: enabled
+- Preview branch deployments: `None` / disabled initially
 - root directory: `apps/console`
 - build command: `npm run build`
 - build output: `dist`
 
+Preview deployments stay disabled until a future design provides isolated backend and database state for feature-branch previews. A feature-branch console must not silently use the shared Railway/Neon DEV backend.
+
 Set the Pages Function server-side variable `IAM_BACKEND_ORIGIN` to the HTTPS Railway service origin, with no `/api` suffix and no credentials embedded in the URL.
 
 Do not create a browser-exposed `VITE_IAM_BACKEND_ORIGIN`. Browser code remains same-origin.
+
+The IAM console Pages project is distinct from any Pages project used to publish curated public documentation. Do not configure the docs publication workflow to deploy into this application project.
 
 ## 5. Verify routing behavior
 
@@ -75,6 +84,6 @@ Before treating DEV as durable enough for meaningful testing, verify Neon backup
 
 ## 9. Completion criteria
 
-DEV activation is complete only when the console loads from Pages, `/api/system/info` succeeds through the same-origin Function, Railway health is green, Neon connectivity is TLS-protected, no real secret exists in Git, and the selected revision is traceable to green `main` CI.
+DEV activation is complete only when the console loads from Pages, `/api/system/info` succeeds through the same-origin Function, Railway health is green, Neon connectivity is TLS-protected, Railway `Wait for CI` is enabled, Cloudflare preview branch deployments are disabled, no real secret exists in Git, and the selected revision is traceable to green `main` CI.
 
 This topology is DEV/demo only and is not a production HA/DR decision.
