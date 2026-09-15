@@ -63,7 +63,7 @@ class PersistenceFoundationIntegrationTest {
         scheduledWork = new JdbcScheduledWorkRepository(jdbc, idGenerator);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("9");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
     }
 
     @AfterAll
