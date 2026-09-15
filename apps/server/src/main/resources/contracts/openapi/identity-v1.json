@@ -1,0 +1,488 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "Wyrmgate IAM Identity API",
+    "version": "0.1.0",
+    "description": "Contract-first public Identity API slice for OD-003. Runtime exposure remains gated on IAM control-plane authentication and scoped administrative authorization."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "controlPlaneBearer": []
+    }
+  ],
+  "paths": {
+    "/identities": {
+      "get": {
+        "operationId": "listIdentities",
+        "summary": "List governed identities",
+        "description": "Returns authoritative Identity resources ordered deterministically by createdAt, then id. The cursor is opaque to clients.",
+        "parameters": [
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Identity page",
+            "headers": {
+              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/IdentityPage"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/AuthenticationRequired"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        },
+        "x-wyrmgate-authority": "Identity authoritative state",
+        "x-wyrmgate-administrative-permission": "identity:read"
+      },
+      "post": {
+        "operationId": "createIdentity",
+        "summary": "Create a governed identity",
+        "description": "Creates exactly one PERSON, SERVICE, or WORKLOAD Identity with a compatible typed profile. This is a semantic create operation, not a persistence-entity API.",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreateIdentityRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Identity created",
+            "headers": {
+              "ETag": {"$ref": "#/components/headers/RevisionEtag"},
+              "Location": {
+                "description": "Canonical URI of the created Identity",
+                "schema": {"type": "string"}
+              },
+              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/IdentityResource"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/ValidationError"},
+          "401": {"$ref": "#/components/responses/AuthenticationRequired"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"}
+        },
+        "x-wyrmgate-authority": "Identity authoritative state",
+        "x-wyrmgate-administrative-permission": "identity:create",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
+    },
+    "/identities/{identityId}": {
+      "get": {
+        "operationId": "getIdentity",
+        "summary": "Get a governed identity",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdentityId"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative Identity resource",
+            "headers": {
+              "ETag": {"$ref": "#/components/headers/RevisionEtag"},
+              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/IdentityResource"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/AuthenticationRequired"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        },
+        "x-wyrmgate-authority": "Identity authoritative state",
+        "x-wyrmgate-administrative-permission": "identity:read"
+      },
+      "patch": {
+        "operationId": "updateIdentityMetadata",
+        "summary": "Update non-lifecycle Identity metadata",
+        "description": "The first slice permits display-name maintenance only. Lifecycle transitions are intentionally excluded from PATCH and will be modeled as explicit business operations once their command semantics are implemented.",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdentityId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/UpdateIdentityMetadataRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identity updated",
+            "headers": {
+              "ETag": {"$ref": "#/components/headers/RevisionEtag"},
+              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/IdentityResource"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/ValidationError"},
+          "401": {"$ref": "#/components/responses/AuthenticationRequired"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/StaleRevision"}
+        },
+        "x-wyrmgate-authority": "Identity authoritative state",
+        "x-wyrmgate-administrative-permission": "identity:update",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
+    },
+    "/identities/{identityId}/canonical-attributes": {
+      "get": {
+        "operationId": "listIdentityCanonicalAttributes",
+        "summary": "List governed canonical attribute state",
+        "description": "Returns governed canonical resolution state. Provider-native observations, mapping rows, candidate rows, and raw source payloads are not exposed. Attribute values may be redacted according to classification and administrative authorization.",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdentityId"},
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical attribute page ordered by key, then definitionId",
+            "headers": {
+              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/CanonicalAttributePage"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/AuthenticationRequired"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        },
+        "x-wyrmgate-authority": "Identity canonical authoritative state with provenance summary",
+        "x-wyrmgate-administrative-permission": "identity:read"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "controlPlaneBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "implementation-defined",
+        "description": "Coarse transport authentication only. Resource/action authorization is separately evaluated by IAM Administrative Authorization and defaults to deny."
+      }
+    },
+    "parameters": {
+      "IdentityId": {
+        "name": "identityId",
+        "in": "path",
+        "required": true,
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque deterministic continuation cursor. Clients must not construct or interpret it.",
+        "schema": {"type": "string", "minLength": 1}
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}
+      },
+      "CorrelationId": {
+        "name": "X-Correlation-Id",
+        "in": "header",
+        "required": false,
+        "description": "Client-supplied correlation identifier when continuing an existing causal chain. The server returns the effective correlation identifier.",
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Stable causal key for a retryable mutation. Reuse with a different normalized request fingerprint is rejected.",
+        "schema": {"type": "string", "minLength": 8, "maxLength": 200}
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "Strong revision ETag returned by the latest authoritative read, for example \"rev-7\".",
+        "schema": {"type": "string", "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"}
+      }
+    },
+    "headers": {
+      "RevisionEtag": {
+        "description": "Strong ETag derived from the authoritative semantic revision, for example \"rev-7\".",
+        "schema": {"type": "string"}
+      },
+      "CorrelationId": {
+        "description": "Effective correlation identifier for the request chain.",
+        "schema": {"type": "string", "format": "uuid"}
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Request validation failed",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "AuthenticationRequired": {
+        "description": "Authentication is required",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "Forbidden": {
+        "description": "Administrative authorization denied the operation",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "NotFound": {
+        "description": "The requested resource was not found in the caller's tenant/isolation boundary",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "Conflict": {
+        "description": "Semantic or idempotency conflict",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "StaleRevision": {
+        "description": "If-Match revision is stale",
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      }
+    },
+    "schemas": {
+      "IdentityType": {
+        "type": "string",
+        "enum": ["PERSON", "SERVICE", "WORKLOAD"]
+      },
+      "IdentityLifecycleState": {
+        "type": "string",
+        "enum": ["PENDING", "ACTIVE", "SUSPENDED", "INACTIVE", "DECOMMISSIONED"]
+      },
+      "PersonProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind"],
+        "properties": {"kind": {"const": "PERSON"}}
+      },
+      "ServiceProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind"],
+        "properties": {"kind": {"const": "SERVICE"}}
+      },
+      "WorkloadProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind"],
+        "properties": {"kind": {"const": "WORKLOAD"}}
+      },
+      "IdentityProfile": {
+        "oneOf": [
+          {"$ref": "#/components/schemas/PersonProfile"},
+          {"$ref": "#/components/schemas/ServiceProfile"},
+          {"$ref": "#/components/schemas/WorkloadProfile"}
+        ]
+      },
+      "CreateIdentityRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "profile", "lifecycleState", "displayName"],
+        "properties": {
+          "type": {"$ref": "#/components/schemas/IdentityType"},
+          "profile": {"$ref": "#/components/schemas/IdentityProfile"},
+          "lifecycleState": {"$ref": "#/components/schemas/IdentityLifecycleState"},
+          "displayName": {"type": "string", "minLength": 1, "maxLength": 300}
+        },
+        "description": "profile.kind must equal type. No profile-specific business attributes are invented in this specification slice."
+      },
+      "UpdateIdentityMetadataRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["displayName"],
+        "properties": {
+          "displayName": {"type": "string", "minLength": 1, "maxLength": 300}
+        }
+      },
+      "IdentityResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "profile", "lifecycleState", "displayName", "revision", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid", "readOnly": true},
+          "type": {"$ref": "#/components/schemas/IdentityType"},
+          "profile": {"$ref": "#/components/schemas/IdentityProfile"},
+          "lifecycleState": {"$ref": "#/components/schemas/IdentityLifecycleState"},
+          "displayName": {"type": "string"},
+          "revision": {"type": "integer", "format": "int64", "minimum": 1, "readOnly": true},
+          "createdAt": {"type": "string", "format": "date-time", "readOnly": true},
+          "updatedAt": {"type": "string", "format": "date-time", "readOnly": true}
+        }
+      },
+      "IdentityPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/IdentityResource"}},
+          "nextCursor": {"type": ["string", "null"]}
+        }
+      },
+      "CanonicalAttributeResolutionStatus": {
+        "type": "string",
+        "enum": ["RESOLVED", "OVERRIDDEN", "CONFLICT", "UNRESOLVED", "NO_VALUE"]
+      },
+      "CanonicalAttributeType": {
+        "type": "string",
+        "enum": ["STRING", "BOOLEAN", "INTEGER", "DECIMAL", "DATE", "DATETIME", "ENUM"]
+      },
+      "CanonicalAttributeCardinality": {
+        "type": "string",
+        "enum": ["SINGLE", "MULTI"]
+      },
+      "CanonicalValue": {
+        "oneOf": [
+          {"$ref": "#/components/schemas/StringCanonicalValue"},
+          {"$ref": "#/components/schemas/BooleanCanonicalValue"},
+          {"$ref": "#/components/schemas/IntegerCanonicalValue"},
+          {"$ref": "#/components/schemas/DecimalCanonicalValue"},
+          {"$ref": "#/components/schemas/DateCanonicalValue"},
+          {"$ref": "#/components/schemas/DateTimeCanonicalValue"},
+          {"$ref": "#/components/schemas/EnumCanonicalValue"}
+        ]
+      },
+      "StringCanonicalValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value"],
+        "properties": {"type": {"const": "STRING"}, "value": {"type": "string"}}
+      },
+      "BooleanCanonicalValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value"],
+        "properties": {"type": {"const": "BOOLEAN"}, "value": {"type": "boolean"}}
+      },
+      "IntegerCanonicalValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value"],
+        "properties": {"type": {"const": "INTEGER"}, "value": {"type": "integer", "format": "int64"}}
+      },
+      "DecimalCanonicalValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value"],
+        "properties": {"type": {"const": "DECIMAL"}, "value": {"type": "string", "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"}}
+      },
+      "DateCanonicalValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value"],
+        "properties": {"type": {"const": "DATE"}, "value": {"type": "string", "format": "date"}}
+      },
+      "DateTimeCanonicalValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value"],
+        "properties": {"type": {"const": "DATETIME"}, "value": {"type": "string", "format": "date-time"}}
+      },
+      "EnumCanonicalValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "key"],
+        "properties": {"type": {"const": "ENUM"}, "key": {"type": "string", "minLength": 1}}
+      },
+      "CanonicalAttributeProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceSystemId": {"type": "string", "format": "uuid"},
+          "sourceRecordId": {"type": "string", "format": "uuid"},
+          "mappingVersionId": {"type": "string", "format": "uuid"},
+          "authorityRuleVersionId": {"type": "string", "format": "uuid"},
+          "overrideId": {"type": "string", "format": "uuid"}
+        }
+      },
+      "CanonicalAttributeView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["definitionId", "definitionVersionId", "key", "classification", "type", "cardinality", "resolutionStatus", "valueRevision", "visibility", "hasTrustedValue"],
+        "properties": {
+          "definitionId": {"type": "string", "format": "uuid"},
+          "definitionVersionId": {"type": "string", "format": "uuid"},
+          "key": {"type": "string", "minLength": 1},
+          "classification": {"type": "string", "minLength": 1},
+          "type": {"$ref": "#/components/schemas/CanonicalAttributeType"},
+          "cardinality": {"$ref": "#/components/schemas/CanonicalAttributeCardinality"},
+          "resolutionStatus": {"$ref": "#/components/schemas/CanonicalAttributeResolutionStatus"},
+          "valueRevision": {"type": "integer", "format": "int64", "minimum": 1},
+          "visibility": {"type": "string", "enum": ["VALUE", "REDACTED"]},
+          "hasTrustedValue": {"type": "boolean"},
+          "values": {"type": "array", "items": {"$ref": "#/components/schemas/CanonicalValue"}},
+          "provenance": {"$ref": "#/components/schemas/CanonicalAttributeProvenance"}
+        },
+        "description": "values is omitted when visibility is REDACTED or when no readable trusted value exists. CONFLICT/UNRESOLVED may still expose a compatible prior trusted value while the degraded resolutionStatus remains visible."
+      },
+      "CanonicalAttributePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/CanonicalAttributeView"}},
+          "nextCursor": {"type": ["string", "null"]}
+        }
+      },
+      "FieldError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "code", "message"],
+        "properties": {
+          "field": {"type": "string"},
+          "code": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "correlationId"],
+        "properties": {
+          "code": {"type": "string", "examples": ["validation_failed", "not_found", "forbidden", "idempotency_conflict", "stale_revision"]},
+          "message": {"type": "string"},
+          "correlationId": {"type": "string", "format": "uuid"},
+          "fieldErrors": {"type": "array", "items": {"$ref": "#/components/schemas/FieldError"}}
+        }
+      }
+    }
+  },
+  "x-wyrmgate-contract-status": "contract-first-not-runtime-exposed",
+  "x-wyrmgate-tenant-resolution": "Tenant/isolation boundary is derived from authenticated control-plane context, not writable resource fields."
+}
