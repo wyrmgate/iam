@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/dev-cd.yml'
+      - '.dockerignore'
       - 'apps/console/**'
       - 'apps/server/**'
       - 'docs/engineering/dev-cd.md'
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/dev-cd.yml'
+      - '.dockerignore'
       - 'apps/console/**'
       - 'apps/server/**'
       - 'docs/engineering/dev-cd.md'
@@ -103,11 +105,16 @@ jobs:
           config = json.loads(Path('apps/server/railway.json').read_text())
           build = config.get('build', {})
           deploy = config.get('deploy', {})
+          watch_patterns = build.get('watchPatterns', [])
 
           if build.get('builder') != 'DOCKERFILE':
               raise SystemExit('Railway must use the checked-in server Dockerfile.')
           if build.get('dockerfilePath') != 'apps/server/Dockerfile':
               raise SystemExit('Railway Dockerfile path must be repository-root relative.')
+          if 'apps/server/**' not in watch_patterns:
+              raise SystemExit('Railway must redeploy for server source changes.')
+          if '.dockerignore' not in watch_patterns:
+              raise SystemExit('Railway must redeploy when the repository-root Docker build input .dockerignore changes.')
           if deploy.get('healthcheckPath') != '/actuator/health':
               raise SystemExit('Railway health check must use /actuator/health.')
           PY
@@ -128,6 +135,8 @@ jobs:
           grep -Fq 'Railway' docs/engineering/dev-cd.md
           grep -Fq 'Neon' docs/engineering/dev-cd.md
           grep -Fq 'repository root' docs/engineering/dev-cd.md
+          grep -Fq 'Wait for CI' docs/engineering/dev-cd.md
+          grep -Fq 'Preview branch deployments' docs/engineering/dev-cd.md
           grep -Fq 'optional/reference' infra/opentofu/README.md
           test -f apps/server/railway.json
           test -f docs/operations/dev-managed-activation.md
