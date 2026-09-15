@@ -83,6 +83,23 @@ The first implementation deliberately does not introduce a generic validation-ru
 
 The Identity domain/application packages remain free of Spring and JDBC dependencies; persistence details stay isolated in `identity.persistence`.
 
+## Administration authorization foundation
+
+The first Administration persistence/evaluation slice implements the default-deny control-plane authorization core required by ADR-0005 and FR-ADM-001:
+
+- tenant-scoped semantic `AdministrativePermission` records use stable `resourceType + action` meaning rather than framework authorities;
+- `AdministrativeRole` bundles permissions and remains distinct from Catalog/business IAM Role;
+- `AdministrativeGrant` binds a governed actor Identity ID, role, strongly typed scope, lifecycle, temporal validity and optimistic revision metadata;
+- same-capability role/permission/grant references are protected by tenant-aware relational constraints, while the actor Identity is a cross-capability stable ID without a database FK;
+- Administration consumes a narrow `GovernedActorStatusQuery`; Identity owns the adapter and considers only a current `ACTIVE` Identity administratively eligible in this first slice;
+- direct grants are evaluated at operation time. `GLOBAL` and exact `SPECIFIC_RESOURCE` scopes are currently executable; all other canonical scope kinds fail closed until their hierarchy/population semantics exist;
+- a resource-specific grant cannot authorize collection access, and expired/future/revoked grants do not authorize even when no scheduler has materialized any state change;
+- a fresh database has no administrative grants and therefore denies protected actions.
+
+This is not an authentication or bootstrap bypass. Transport bearer authentication/tenant+actor resolution, a governed initial-administrator provisioning path, role/grant management commands, delegation/elevation, assurance/policy context and sensitive authorization-decision audit hooks remain subsequent slices.
+
+Administration domain/application code remains framework-neutral; JDBC/Spring composition stays in `administration.persistence`.
+
 ## Identity API/event contract slice
 
 OD-003 now has a first checked-in, contract-first Identity interface slice:
@@ -92,9 +109,9 @@ OD-003 now has a first checked-in, contract-first Identity interface slice:
 - `docs/api/identity-contracts.md` records the implementation-facing semantics and completion boundary;
 - `scripts/verify-api-contracts.py` runs in Core CI to protect project-specific API/event invariants.
 
-These contracts are intentionally **not runtime-exposed yet**. The Administration/default-deny control-plane authorization layer required by FR-ADM-001 and SRS-SEC-001 is not implemented, so publishing mutating Identity endpoints now would create an insecure temporary administration surface. Internal outbox facts are likewise not automatically external events; publication wiring remains a separate adapter/integration concern.
+These contracts are intentionally **not runtime-exposed yet**. The persisted Administration evaluator now exists, but publishing Identity endpoints still requires trusted transport authentication/tenant+actor resolution and a safe initial-administrator provisioning path. Internal outbox facts are likewise not automatically external events; publication wiring remains a separate adapter/integration concern.
 
-Not yet implemented in Identity: source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, runtime public Identity controllers, control-plane authorization enforcement, or external integration-event publication.
+Not yet implemented in Identity: source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, runtime public Identity controllers, or external integration-event publication.
 
 ## Commands
 
