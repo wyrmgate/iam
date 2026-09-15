@@ -1,0 +1,36 @@
+name: Temporary docs lock refresh
+
+on:
+  push:
+    branches:
+      - chore/docs-site-security-overrides
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+
+      - name: Refresh lockfile
+        working-directory: docs-site
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Upload refreshed lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site-package-lock
+          path: docs-site/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
