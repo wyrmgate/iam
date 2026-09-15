@@ -66,7 +66,7 @@ The initial role contains only:
 
 Bootstrap is permanently one-time per tenant.
 
-The tenant-unique bootstrap marker is durable even if the original grant is later revoked. The system must never infer bootstrap eligibility from the current absence of an active administrator. Losing all administrative authority after bootstrap therefore requires a future governed recovery mechanism.
+The tenant-unique bootstrap marker is durable even if the original grant is later revoked. The system must never infer bootstrap eligibility from the current absence of an active administrator. Losing all administrative authority after bootstrap therefore requires a future governed recovery mechanism. Bootstrap must never be repurposed as that recovery mechanism.
 
 The marker is inserted inside the same database transaction as the binding, role, grant and internal fact. Deferred same-capability constraints permit the marker to act as the concurrency guard while referenced rows are created later in that same transaction. If any part fails, the transaction rolls back and the marker is not burned.
 
