@@ -147,8 +147,13 @@ def verify_asyncapi(document: dict) -> None:
         assert forbidden not in serialized, f"public event contract leaked sensitive/internal field: {forbidden}"
 
     changed_payload = schemas["IdentityMetadataChangedPayload"]
-    assert "value" not in json.dumps(changed_payload, sort_keys=True).lower(), (
+    changed_properties = changed_payload.get("properties", {})
+    assert set(changed_properties) == {"changedFields"}, (
         "metadata-changed event must signal changed fields without publishing PII values"
+    )
+    changed_field_items = changed_properties["changedFields"]["items"]
+    assert changed_field_items.get("enum") == ["displayName"], (
+        "metadata-changed event must expose only the semantic field name in this slice"
     )
 
 
