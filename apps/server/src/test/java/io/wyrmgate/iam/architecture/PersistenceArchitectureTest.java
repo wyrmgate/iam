@@ -16,6 +16,7 @@ class PersistenceArchitectureTest {
             .resideInAnyPackage(
                     "..domain..",
                     "..identity.application..",
+                    "..administration.application..",
                     "..platform.id..",
                     "..platform.tenant..")
             .should()
