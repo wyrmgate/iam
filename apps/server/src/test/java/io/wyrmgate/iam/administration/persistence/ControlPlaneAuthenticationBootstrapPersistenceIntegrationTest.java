@@ -132,7 +132,7 @@ class ControlPlaneAuthenticationBootstrapPersistenceIntegrationTest {
 
         var resolved = actorResolver.resolve(subject).orElseThrow();
         assertThat(resolved.tenant()).isEqualTo(tenant);
-        assertThat(resolved.actorIdentityId()).isEqualTo(actor.id());
+        assertThat(resolved.identityId()).isEqualTo(actor.id());
 
         var identityRead = authorization.authorize(
                 resolved,

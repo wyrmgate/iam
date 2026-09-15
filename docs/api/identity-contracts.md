@@ -9,7 +9,7 @@ The checked-in artifacts are:
 - `apps/server/src/main/resources/contracts/openapi/identity-v1.json`
 - `apps/server/src/main/resources/contracts/asyncapi/identity-events-v1.json`
 
-This slice is **contract-first and not yet runtime-exposed**. The Administration capability now has a persisted default-deny direct-grant evaluator, but Wyrmgate still does not expose Identity mutation endpoints until transport authentication can resolve a caller to a governed actor/tenant and an initial administrator can be provisioned through a governed, non-self-escalating path. This avoids creating a temporary unauthenticated or unbootstrappable administration surface.
+This slice remains **contract-first and not yet runtime-exposed**. Provider-neutral bearer validation, server-side tenant/governed-actor resolution, burn-once initial-administrator bootstrap, and the scoped Administrative Authorization evaluator now exist. Runtime Identity controllers remain absent until each HTTP operation is wired to both the trusted actor context and the required `identity:*` permission at operation time.
 
 The machine-readable files describe implementation contracts; they do not replace the canonical Identity domain model, ADR-0008, formal requirements, or capability ownership.
 
@@ -105,7 +105,7 @@ The OpenAPI document models bearer transport authentication as the first impleme
 
 The first Administration persistence/evaluator slice now supplies operation-time default-deny matching for semantic permissions plus tenant-scoped `GLOBAL` and exact `SPECIFIC_RESOURCE` grants. It also revalidates the governed actor's current Identity state and temporal grant validity for every decision. Other canonical scope types remain deliberately fail-closed until their hierarchy/population semantics exist.
 
-That evaluator is necessary but not sufficient to expose the HTTP endpoints. Runtime activation still requires transport authentication and trusted actor/tenant resolution, plus a safe initial-administrator provisioning/management path that cannot become a self-escalation bypass. Relationship/ownership context, policy/assurance requirements and sensitive authorization-decision audit hooks are added as the corresponding governed operations require them.
+The authentication, trusted actor/tenant resolution, burn-once bootstrap, and direct-grant evaluator foundations now exist. Runtime activation still requires each HTTP adapter to enforce both the authenticated actor context and the semantic Administration decision for the requested operation. Relationship/ownership context, policy/assurance requirements and sensitive authorization-decision audit hooks are added as the corresponding governed operations require them.
 
 ## Public Identity integration events
 
