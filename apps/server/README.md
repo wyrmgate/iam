@@ -96,7 +96,7 @@ The first Administration persistence/evaluation slice implements the default-den
 - a resource-specific grant cannot authorize collection access, and expired/future/revoked grants do not authorize even when no scheduler has materialized any state change;
 - a fresh database has no administrative grants and therefore denies protected actions.
 
-This is not an authentication or bootstrap bypass. Transport bearer authentication/tenant+actor resolution, a governed initial-administrator provisioning path, role/grant management commands, delegation/elevation, assurance/policy context and sensitive authorization-decision audit hooks remain subsequent slices.
+Bearer authentication, server-side tenant+actor resolution, and a burn-once governed initial-administrator bootstrap are now implemented under ADR-0011. Role/grant management commands, delegation/elevation, stronger assurance/policy context, governed recovery, and sensitive authorization-decision audit hooks remain subsequent slices.
 
 Administration domain/application code remains framework-neutral; JDBC/Spring composition stays in `administration.persistence`.
 
@@ -109,7 +109,7 @@ OD-003 now has a first checked-in, contract-first Identity interface slice:
 - `docs/api/identity-contracts.md` records the implementation-facing semantics and completion boundary;
 - `scripts/verify-api-contracts.py` runs in Core CI to protect project-specific API/event invariants.
 
-These contracts are intentionally **not runtime-exposed yet**. The persisted Administration evaluator now exists, but publishing Identity endpoints still requires trusted transport authentication/tenant+actor resolution and a safe initial-administrator provisioning path. Internal outbox facts are likewise not automatically external events; publication wiring remains a separate adapter/integration concern.
+These contracts are intentionally **not runtime-exposed yet**. The Administration evaluator plus trusted bearer authentication, server-side tenant+actor resolution, and burn-once initial-administrator provisioning now exist. The next slice must wire each Identity HTTP operation to both the authenticated actor context and semantic Administration permission checks. Internal outbox facts are likewise not automatically external events; publication wiring remains a separate adapter/integration concern.
 
 Not yet implemented in Identity: source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, runtime public Identity controllers, or external integration-event publication.
 

@@ -44,6 +44,19 @@ springdoc:
   swagger-ui:
     path: /api/docs
 
+iam:
+  auth:
+    enabled: ${IAM_AUTH_ENABLED:false}
+    issuer-uri: ${IAM_AUTH_ISSUER_URI:}
+    audience: ${IAM_AUTH_AUDIENCE:}
+  bootstrap:
+    initial-admin:
+      enabled: ${IAM_INITIAL_ADMIN_BOOTSTRAP_ENABLED:false}
+      tenant-id: ${IAM_INITIAL_ADMIN_TENANT_ID:}
+      identity-id: ${IAM_INITIAL_ADMIN_IDENTITY_ID:}
+      issuer: ${IAM_INITIAL_ADMIN_ISSUER:}
+      subject: ${IAM_INITIAL_ADMIN_SUBJECT:}
+
 server:
   port: ${PORT:8080}
   shutdown: graceful

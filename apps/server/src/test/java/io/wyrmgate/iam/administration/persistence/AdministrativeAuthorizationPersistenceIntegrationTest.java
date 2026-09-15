@@ -67,7 +67,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("9");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
     }
 
     @AfterAll
@@ -164,7 +164,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
 
     @Test
     void validityStateAndUnsupportedScopeFailClosed() {
-        Instant now = Instant.now();
+        Instant now = Instant.parse("2026-09-15T11:00:00Z");
         TenantContext tenant = tenant("Validity", now);
         Identity actor = actor(tenant, IdentityLifecycleState.ACTIVE, now);
         UUID roleId = roleWithPermission(tenant, "identity", "read", now);
