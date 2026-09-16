@@ -49,7 +49,7 @@ def verify_openapi(document: dict) -> None:
     assert isinstance(version, str) and version.startswith("3.1."), (
         "Identity OpenAPI must stay on the approved 3.1.x toolchain for this slice"
     )
-    assert document.get("x-wyrmgate-contract-status") == "contract-first-not-runtime-exposed"
+    assert document.get("x-wyrmgate-contract-status") == "runtime-exposed-authenticated-authorized"
     assert document.get("security"), "public contract must declare transport authentication"
 
     paths = document.get("paths")

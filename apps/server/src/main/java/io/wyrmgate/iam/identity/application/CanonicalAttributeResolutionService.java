@@ -1,13 +1,12 @@
 package io.wyrmgate.iam.identity.application;
 
-import io.wyrmgate.iam.identity.domain.AttributeAuthorityRuleVersion;
+import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluator.EffectiveResolution;
 import io.wyrmgate.iam.identity.domain.AttributeDefinition;
 import io.wyrmgate.iam.identity.domain.AttributeDefinitionVersion;
 import io.wyrmgate.iam.identity.domain.AttributeMappingVersion;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeCandidate;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeOverride;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeState;
-import io.wyrmgate.iam.identity.domain.CanonicalAttributeState.ResolutionStatus;
 import io.wyrmgate.iam.identity.domain.CanonicalSchemaVersion;
 import io.wyrmgate.iam.identity.domain.CanonicalValue;
 import io.wyrmgate.iam.identity.domain.IdentityLink;
@@ -16,13 +15,9 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /** Resolves typed canonical values from mapped candidates, authority and explicit governed overrides. */
 public final class CanonicalAttributeResolutionService {
@@ -33,6 +28,7 @@ public final class CanonicalAttributeResolutionService {
     private final CanonicalAttributeFactSink facts;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
+    private final CanonicalAttributeResolutionEvaluator evaluator;
 
     public CanonicalAttributeResolutionService(
             CanonicalAttributeRepository repository,
@@ -41,12 +37,25 @@ public final class CanonicalAttributeResolutionService {
             CanonicalAttributeFactSink facts,
             IdGenerator ids,
             TransactionExecutor transactions) {
+        this(repository, sources, identities, facts, ids, transactions,
+                new CanonicalAttributeResolutionEvaluator());
+    }
+
+    public CanonicalAttributeResolutionService(
+            CanonicalAttributeRepository repository,
+            SourceCorrelationRepository sources,
+            IdentityRepository identities,
+            CanonicalAttributeFactSink facts,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            CanonicalAttributeResolutionEvaluator evaluator) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.sources = Objects.requireNonNull(sources, "sources");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.facts = Objects.requireNonNull(facts, "facts");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.evaluator = Objects.requireNonNull(evaluator, "evaluator");
     }
 
     public CanonicalAttributeCandidate recordCandidate(
@@ -133,82 +142,33 @@ public final class CanonicalAttributeResolutionService {
         }
         AttributeDefinition definition = requireDefinition(tenant, canonicalKey);
         AttributeDefinitionVersion version = requireActiveDefinitionVersion(tenant, canonicalKey);
-        CanonicalAttributeState current = repository.findStateForUpdate(tenant, identityId, definition.id()).orElse(null);
+        CanonicalAttributeState current = repository.findStateForUpdate(
+                tenant, identityId, definition.id()).orElse(null);
+        CanonicalAttributeOverride override = repository.findActiveOverride(
+                tenant, identityId, definition.id()).orElse(null);
 
-        CanonicalAttributeState desired;
-        CanonicalAttributeOverride override = repository.findActiveOverride(tenant, identityId, definition.id()).orElse(null);
-        if (override != null && override.attributeDefinitionVersionId().equals(version.id()) && override.effectiveAt(now)) {
-            desired = desired(current, identityId, definition.id(), version.id(), ResolutionStatus.OVERRIDDEN,
-                    null, null, override.values(), now);
-        } else {
-            List<CanonicalAttributeCandidate> candidates = repository.findCandidates(tenant, identityId, version.id());
-            desired = resolveCandidates(tenant, current, identityId, definition.id(), version, candidates, now);
-        }
-
-        if (sameOutcome(current, desired)) {
+        EffectiveResolution effective = evaluator.evaluate(
+                current,
+                version,
+                override,
+                repository.findCandidates(tenant, identityId, version.id()),
+                repository.findActiveAuthorityRules(tenant, version.id()),
+                now);
+        if (evaluator.sameOutcome(current, effective)) {
             return current;
         }
+
+        CanonicalAttributeState desired = desired(
+                current,
+                identityId,
+                definition.id(),
+                version.id(),
+                effective,
+                now);
         CanonicalAttributeState persisted = repository.saveState(
                 tenant, desired, current == null ? null : current.valueRevision(), version);
         facts.stateChanged(tenant, persisted, canonicalKey, correlationId, causationId);
         return persisted;
-    }
-
-    private CanonicalAttributeState resolveCandidates(
-            TenantContext tenant,
-            CanonicalAttributeState current,
-            UUID identityId,
-            UUID definitionId,
-            AttributeDefinitionVersion version,
-            List<CanonicalAttributeCandidate> candidates,
-            Instant now) {
-        if (candidates.isEmpty()) {
-            return desired(current, identityId, definitionId, version.id(), ResolutionStatus.NO_VALUE,
-                    null, null, List.of(), now);
-        }
-        Map<UUID, AttributeAuthorityRuleVersion> rules = repository.findActiveAuthorityRules(tenant, version.id()).stream()
-                .collect(Collectors.toMap(AttributeAuthorityRuleVersion::sourceSystemId, Function.identity()));
-        List<CanonicalAttributeCandidate> authorized = candidates.stream()
-                .filter(candidate -> rules.containsKey(candidate.sourceSystemId()))
-                .toList();
-        if (authorized.isEmpty()) {
-            return preserveTrusted(current, identityId, definitionId, version.id(), ResolutionStatus.UNRESOLVED, now);
-        }
-        int bestPriority = authorized.stream()
-                .map(candidate -> rules.get(candidate.sourceSystemId()).priority())
-                .min(Integer::compareTo)
-                .orElseThrow();
-        List<CanonicalAttributeCandidate> top = authorized.stream()
-                .filter(candidate -> rules.get(candidate.sourceSystemId()).priority() == bestPriority)
-                .toList();
-        List<CanonicalValue> firstValues = top.getFirst().values();
-        boolean conflict = top.stream().anyMatch(candidate -> !candidate.values().equals(firstValues));
-        if (conflict) {
-            return preserveTrusted(current, identityId, definitionId, version.id(), ResolutionStatus.CONFLICT, now);
-        }
-        CanonicalAttributeCandidate selected = top.stream()
-                .min(Comparator.comparing(candidate -> candidate.sourceSystemId().toString()))
-                .orElseThrow();
-        AttributeAuthorityRuleVersion rule = rules.get(selected.sourceSystemId());
-        return desired(current, identityId, definitionId, version.id(), ResolutionStatus.RESOLVED,
-                selected.id(), rule.id(), selected.values(), now);
-    }
-
-    private CanonicalAttributeState preserveTrusted(
-            CanonicalAttributeState current,
-            UUID identityId,
-            UUID definitionId,
-            UUID definitionVersionId,
-            ResolutionStatus status,
-            Instant now) {
-        if (current != null
-                && current.resolutionStatus() != ResolutionStatus.OVERRIDDEN
-                && current.attributeDefinitionVersionId().equals(definitionVersionId)
-                && !current.values().isEmpty()) {
-            return desired(current, identityId, definitionId, definitionVersionId, status,
-                    current.selectedCandidateId(), current.authorityRuleVersionId(), current.values(), now);
-        }
-        return desired(current, identityId, definitionId, definitionVersionId, status, null, null, List.of(), now);
     }
 
     private CanonicalAttributeState desired(
@@ -216,25 +176,20 @@ public final class CanonicalAttributeResolutionService {
             UUID identityId,
             UUID definitionId,
             UUID definitionVersionId,
-            ResolutionStatus status,
-            UUID selectedCandidateId,
-            UUID authorityRuleId,
-            List<CanonicalValue> values,
+            EffectiveResolution effective,
             Instant now) {
         return new CanonicalAttributeState(
-                current == null ? ids.nextId() : current.id(), identityId, definitionId, definitionVersionId,
-                status, selectedCandidateId, authorityRuleId,
+                current == null ? ids.nextId() : current.id(),
+                identityId,
+                definitionId,
+                definitionVersionId,
+                effective.resolutionStatus(),
+                effective.selectedCandidateId(),
+                effective.authorityRuleVersionId(),
                 current == null ? 1 : current.valueRevision() + 1,
-                current == null ? now : current.createdAt(), now, values);
-    }
-
-    private boolean sameOutcome(CanonicalAttributeState current, CanonicalAttributeState desired) {
-        return current != null
-                && current.attributeDefinitionVersionId().equals(desired.attributeDefinitionVersionId())
-                && current.resolutionStatus() == desired.resolutionStatus()
-                && Objects.equals(current.selectedCandidateId(), desired.selectedCandidateId())
-                && Objects.equals(current.authorityRuleVersionId(), desired.authorityRuleVersionId())
-                && current.values().equals(desired.values());
+                current == null ? now : current.createdAt(),
+                now,
+                effective.values());
     }
 
     private AttributeDefinition requireDefinition(TenantContext tenant, String canonicalKey) {
