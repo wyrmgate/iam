@@ -3,7 +3,7 @@
   "info": {
     "title": "Wyrmgate IAM Identity API",
     "version": "0.1.0",
-    "description": "Contract-first public Identity API slice for OD-003. Runtime exposure remains gated on IAM control-plane authentication and scoped administrative authorization."
+    "description": "Runtime public Identity API slice for OD-003. Every operation is gated by trusted control-plane authentication, server-side tenant/governed-actor resolution, and scoped Administrative Authorization."
   },
   "servers": [
     {
@@ -483,6 +483,6 @@
       }
     }
   },
-  "x-wyrmgate-contract-status": "contract-first-not-runtime-exposed",
+  "x-wyrmgate-contract-status": "runtime-exposed-authenticated-authorized",
   "x-wyrmgate-tenant-resolution": "Tenant/isolation boundary is derived from authenticated control-plane context, not writable resource fields."
 }

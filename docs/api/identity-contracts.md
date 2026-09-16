@@ -9,7 +9,7 @@ The checked-in artifacts are:
 - `apps/server/src/main/resources/contracts/openapi/identity-v1.json`
 - `apps/server/src/main/resources/contracts/asyncapi/identity-events-v1.json`
 
-This slice remains **contract-first and not yet runtime-exposed**. Provider-neutral bearer validation, server-side tenant/governed-actor resolution, burn-once initial-administrator bootstrap, and the scoped Administrative Authorization evaluator now exist. Runtime Identity controllers remain absent until each HTTP operation is wired to both the trusted actor context and the required `identity:*` permission at operation time.
+This slice is now **runtime-exposed when control-plane authentication is enabled**. Provider-neutral bearer validation resolves the external subject through the Administration-owned tenant/governed-actor binding, and every Identity HTTP operation evaluates the required `identity:*` permission through `AdministrativeAuthorizationService` at operation time. When bearer authentication is not configured, `/api/v1/**` remains closed.
 
 The machine-readable files describe implementation contracts; they do not replace the canonical Identity domain model, ADR-0008, formal requirements, or capability ownership.
 
@@ -80,7 +80,7 @@ Each canonical attribute view exposes governed semantic metadata:
 
 Values are strongly typed rather than arbitrary JSON. `MULTI` values are arrays of typed scalar values. Provider-native raw payloads and internal candidate/mapping rows are never substituted for canonical state.
 
-A `CONFLICT` or `UNRESOLVED` state may still expose a compatible prior trusted value where the domain resolution rules permit it; the degraded resolution outcome remains explicit. A classified value can be redacted while its governed metadata remains visible.
+A `CONFLICT` or `UNRESOLVED` state may still expose a compatible prior trusted value where the domain resolution rules permit it; the degraded resolution outcome remains explicit. A classified value can be redacted while its governed metadata remains visible. In this first runtime slice, canonical values and provenance are deliberately returned as `REDACTED` metadata-only views until a classification-aware value-visibility policy is implemented; `identity:read` alone does not imply permission to read every classified canonical value. Effective read evaluation honors override validity and current authority/candidate state without turning GET into a mutating resolution command.
 
 ## Error contract
 
@@ -105,7 +105,7 @@ The OpenAPI document models bearer transport authentication as the first impleme
 
 The first Administration persistence/evaluator slice now supplies operation-time default-deny matching for semantic permissions plus tenant-scoped `GLOBAL` and exact `SPECIFIC_RESOURCE` grants. It also revalidates the governed actor's current Identity state and temporal grant validity for every decision. Other canonical scope types remain deliberately fail-closed until their hierarchy/population semantics exist.
 
-The authentication, trusted actor/tenant resolution, burn-once bootstrap, and direct-grant evaluator foundations now exist. Runtime activation still requires each HTTP adapter to enforce both the authenticated actor context and the semantic Administration decision for the requested operation. Relationship/ownership context, policy/assurance requirements and sensitive authorization-decision audit hooks are added as the corresponding governed operations require them.
+The authentication, trusted actor/tenant resolution, burn-once bootstrap, direct-grant evaluator, and Identity HTTP adapters now form one enforced chain. Collection operations require a grant that can authorize the collection; exact resource operations evaluate that resource ID. Relationship/ownership context, policy/assurance requirements and sensitive authorization-decision audit hooks are added as corresponding governed operations require them.
 
 ## Public Identity integration events
 

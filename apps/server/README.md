@@ -102,16 +102,16 @@ Administration domain/application code remains framework-neutral; JDBC/Spring co
 
 ## Identity API/event contract slice
 
-OD-003 now has a first checked-in, contract-first Identity interface slice:
+OD-003 now has a first secured runtime Identity interface slice:
 
 - `src/main/resources/contracts/openapi/identity-v1.json` defines semantic Identity create/read/list/non-lifecycle metadata update and governed canonical-attribute reads;
 - `src/main/resources/contracts/asyncapi/identity-events-v1.json` defines curated, minimized public `identity.created` and `identity.metadata-changed` integration events;
 - `docs/api/identity-contracts.md` records the implementation-facing semantics and completion boundary;
 - `scripts/verify-api-contracts.py` runs in Core CI to protect project-specific API/event invariants.
 
-These contracts are intentionally **not runtime-exposed yet**. The Administration evaluator plus trusted bearer authentication, server-side tenant+actor resolution, and burn-once initial-administrator provisioning now exist. The next slice must wire each Identity HTTP operation to both the authenticated actor context and semantic Administration permission checks. Internal outbox facts are likewise not automatically external events; publication wiring remains a separate adapter/integration concern.
+The corresponding `/api/v1/identities` runtime adapter is now implemented. Trusted bearer authentication resolves tenant + governed actor server-side, and every operation re-evaluates semantic Administration permissions. Create and display-name mutation use causal idempotency; display-name update also enforces `If-Match`; list surfaces use deterministic opaque cursors; semantic public errors hide framework/database details. Canonical-attribute values are currently metadata-only and `REDACTED` until classification-aware value visibility is implemented. Internal outbox facts are still not automatically external events; publication wiring remains a separate adapter/integration concern.
 
-Not yet implemented in Identity: source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, runtime public Identity controllers, or external integration-event publication.
+Not yet implemented in Identity: source-import destructive absence processing, organizations/manager/owner relationships, principals, merge/split, lifecycle transition HTTP operations, classification-aware canonical-value disclosure, or external integration-event publication.
 
 ## Commands
 
