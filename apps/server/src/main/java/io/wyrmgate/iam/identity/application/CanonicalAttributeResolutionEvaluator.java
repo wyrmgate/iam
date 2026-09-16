@@ -35,6 +35,7 @@ public final class CanonicalAttributeResolutionEvaluator {
                 && override.attributeDefinitionVersionId().equals(version.id())
                 && override.effectiveAt(now)) {
             return new EffectiveResolution(
+                    version.id(),
                     ResolutionStatus.OVERRIDDEN,
                     null,
                     null,
@@ -43,7 +44,8 @@ public final class CanonicalAttributeResolutionEvaluator {
         }
 
         if (candidates.isEmpty()) {
-            return new EffectiveResolution(ResolutionStatus.NO_VALUE, null, null, null, List.of());
+            return new EffectiveResolution(
+                    version.id(), ResolutionStatus.NO_VALUE, null, null, null, List.of());
         }
 
         Map<UUID, AttributeAuthorityRuleVersion> rules = authorityRules.stream()
@@ -76,6 +78,7 @@ public final class CanonicalAttributeResolutionEvaluator {
                 .orElseThrow();
         AttributeAuthorityRuleVersion rule = rules.get(selected.sourceSystemId());
         return new EffectiveResolution(
+                version.id(),
                 ResolutionStatus.RESOLVED,
                 selected.id(),
                 rule.id(),
@@ -85,6 +88,7 @@ public final class CanonicalAttributeResolutionEvaluator {
 
     public boolean sameOutcome(CanonicalAttributeState current, EffectiveResolution effective) {
         return current != null
+                && current.attributeDefinitionVersionId().equals(effective.attributeDefinitionVersionId())
                 && current.resolutionStatus() == effective.resolutionStatus()
                 && Objects.equals(current.selectedCandidateId(), effective.selectedCandidateId())
                 && Objects.equals(current.authorityRuleVersionId(), effective.authorityRuleVersionId())
@@ -107,22 +111,25 @@ public final class CanonicalAttributeResolutionEvaluator {
                 && current.attributeDefinitionVersionId().equals(definitionVersionId)
                 && !current.values().isEmpty()) {
             return new EffectiveResolution(
+                    definitionVersionId,
                     status,
                     current.selectedCandidateId(),
                     current.authorityRuleVersionId(),
                     null,
                     current.values());
         }
-        return new EffectiveResolution(status, null, null, null, List.of());
+        return new EffectiveResolution(definitionVersionId, status, null, null, null, List.of());
     }
 
     public record EffectiveResolution(
+            UUID attributeDefinitionVersionId,
             ResolutionStatus resolutionStatus,
             UUID selectedCandidateId,
             UUID authorityRuleVersionId,
             UUID overrideId,
             List<CanonicalValue> values) {
         public EffectiveResolution {
+            Objects.requireNonNull(attributeDefinitionVersionId, "attributeDefinitionVersionId");
             Objects.requireNonNull(resolutionStatus, "resolutionStatus");
             values = List.copyOf(Objects.requireNonNull(values, "values"));
         }
