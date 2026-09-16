@@ -29,7 +29,8 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
 - [`api/identity-contracts.md`](api/identity-contracts.md) — first OD-003 machine-readable Identity OpenAPI/AsyncAPI implementation slice and runtime authorization boundary.
 - [`engineering/dev-cd.md`](engineering/dev-cd.md) — active managed DEV deployment topology: Cloudflare Pages, Railway, and Neon.
-- [`operations/dev-managed-activation.md`](operations/dev-managed-activation.md) — first managed DEV activation checklist.
+- [`operations/dev-managed-activation.md`](operations/dev-managed-activation.md) — first managed DEV activation checklist and recovery verification.
+- [`operations/backup-recovery.md`](operations/backup-recovery.md) — managed Neon DEV and standalone PostgreSQL recovery boundaries.
 - [`engineering/edge.md`](engineering/edge.md) — standalone-host Caddy reference edge.
 - [`engineering/public-demo.md`](engineering/public-demo.md) — current DEV/demo usage and standalone DEMO reference status.
 - [`engineering/observability.md`](engineering/observability.md) — vendor-neutral telemetry contract and current managed DEV posture.
@@ -56,10 +57,10 @@ IAM v2 is pre-release and under active design. The v0.2 formal specification set
 
 The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 and [`architecture/physical-data-model.md`](architecture/physical-data-model.md) are the current controlled amendment, and the next formal-specification revision must fold them into the Data Architecture/SAD/RTM package.
 
-The first real DEV/testing/demo deployment direction is a managed-service implementation topology documented in [`engineering/dev-cd.md`](engineering/dev-cd.md). That deployment choice does not settle production HA/DR or change canonical IAM capability architecture.
+The first real DEV/testing/demo environment is activated on the managed-service topology documented in [`engineering/dev-cd.md`](engineering/dev-cd.md): Cloudflare Pages/Functions, Railway Serverless, and Neon PostgreSQL. The deployment path, same-origin API proxy, Railway health path, database connectivity, and Flyway startup migration path have been validated. This DEV/demo deployment choice does not settle production HA/DR or change canonical IAM capability architecture. Grafana/OTLP remains intentionally disabled in managed DEV pending a deliberate serverless-idle test.
 
 OD-003 is **partially implemented**. The first Identity OpenAPI/AsyncAPI slice is checked in, Administration has a persisted default-deny direct-grant evaluator, and the control plane now has provider-neutral JWT bearer validation, an Administration-owned server-side issuer+subject binding to tenant + governed Identity, and a burn-once first-administrator bootstrap path. OAuth/OIDC claims do not become Wyrmgate administrative permissions.
 
-Runtime Identity controllers are still intentionally absent. The next OD-003 runtime slice must bind each Identity HTTP operation to the authenticated actor context and `AdministrativeAuthorizationService`, including semantic permissions, revision/idempotency/pagination/error behavior from the existing contract. Bearer possession alone is never authorization.
+Runtime Identity controllers are still intentionally absent. The next canonical application slice is OD-003 runtime Identity API activation: bind every Identity HTTP operation to the authenticated actor context and `AdministrativeAuthorizationService`, while preserving the existing revision, idempotency, deterministic pagination, semantic error, tenant-isolation, and default-deny authorization contracts. Bearer possession alone is never authorization.
 
 Remaining open design areas therefore include completion of OD-003 machine-readable API/event coverage and runtime activation, the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
