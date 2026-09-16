@@ -96,16 +96,26 @@ public final class JdbcIdentityQueryRepository implements IdentityQueryRepositor
 
     private static Identity identity(ResultSet rs) throws SQLException {
         IdentityType type = IdentityType.valueOf(rs.getString("identity_type"));
-        int count = (rs.getBoolean("has_person_profile") ? 1 : 0)
-                + (rs.getBoolean("has_service_profile") ? 1 : 0)
-                + (rs.getBoolean("has_workload_profile") ? 1 : 0);
+        boolean hasPerson = rs.getBoolean("has_person_profile");
+        boolean hasService = rs.getBoolean("has_service_profile");
+        boolean hasWorkload = rs.getBoolean("has_workload_profile");
+        int count = (hasPerson ? 1 : 0) + (hasService ? 1 : 0) + (hasWorkload ? 1 : 0);
         if (count != 1) {
             throw new IllegalStateException("identity must have exactly one typed profile");
         }
         IdentityProfile profile = switch (type) {
-            case PERSON -> new IdentityProfile.PersonProfile();
-            case SERVICE -> new IdentityProfile.ServiceProfile();
-            case WORKLOAD -> new IdentityProfile.WorkloadProfile();
+            case PERSON -> {
+                if (!hasPerson) throw new IllegalStateException("PERSON identity is missing its person profile");
+                yield new IdentityProfile.PersonProfile();
+            }
+            case SERVICE -> {
+                if (!hasService) throw new IllegalStateException("SERVICE identity is missing its service profile");
+                yield new IdentityProfile.ServiceProfile();
+            }
+            case WORKLOAD -> {
+                if (!hasWorkload) throw new IllegalStateException("WORKLOAD identity is missing its workload profile");
+                yield new IdentityProfile.WorkloadProfile();
+            }
         };
         return new Identity(
                 rs.getObject("id", UUID.class),
