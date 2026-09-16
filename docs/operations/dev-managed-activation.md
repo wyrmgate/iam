@@ -31,10 +31,26 @@ Set deployment variables:
 - `IAM_OTEL_ENABLED=false`
 - `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`
 - `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`
+- `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5`
 
 Enable Railway Serverless for the DEV service. Do not set `PORT`; Railway supplies it. Verify the service starts, Flyway completes successfully, and `/actuator/health` is healthy over the Railway HTTPS service domain.
 
+The maximum pool size of `5` is part of the validated initial DEV posture. During first activation an effective pool size of `2` caused Flyway startup to time out. Keep `5` unless measured DEV behavior justifies a deliberate change. This is not production sizing guidance.
+
 If the service does not sleep during idle periods, inspect outbound traffic first. Database connections and telemetry can keep Railway Serverless awake; do not weaken application correctness merely to force sleeping.
+
+### Flyway startup verification
+
+For the current Spring Boot 4.1.1 server, Flyway auto-configuration depends on `spring-boot-starter-flyway` plus the PostgreSQL Flyway database module. A direct `flyway-core` dependency alone was insufficient during first activation: the server could start and report healthy while the empty Neon database remained unmigrated.
+
+The repository now contains an application-startup regression test that boots the real application against an empty PostgreSQL database and verifies `flyway_schema_history`, the current migration version, and the capability schemas. Keep that test green whenever Spring Boot or Flyway dependencies change.
+
+For a new or reset managed DEV database, verify both:
+
+1. Railway `/actuator/health` is `UP`;
+2. the latest successful version in `public.flyway_schema_history` matches the repository's current migration set.
+
+A green HTTP health check by itself is not migration evidence.
 
 ## 4. Configure Cloudflare Pages
 
@@ -80,10 +96,22 @@ Keep `IAM_OTEL_ENABLED=false` initially. Evaluate Grafana Cloud free-tier behavi
 
 Use Cloudflare Pages and Railway deployment history to roll application revisions back to a previously green `main` SHA. Do not automatically down-migrate Neon. Database migrations must remain backward-compatible under expand/contract practices.
 
-Before treating DEV as durable enough for meaningful testing, verify Neon backup/restore/recovery capabilities appropriate to the selected plan and document any plan-specific retention limits.
+The active managed DEV database uses Neon provider-native recovery rather than the standalone-host backup timer. Neon supports point-in-time restore within the project's configured restore window, and current restore-window limits depend on the Neon plan. As of the current provider documentation, the Free plan supports Instant Restore up to 6 hours or 1 GB of changes (whichever is smaller), Launch can configure up to 7 days, and Scale up to 30 days. Provider limits can change, so the Neon console for the actual project remains the source of truth for the selected plan and configured window.
+
+Before declaring a newly created DEV project recoverable:
+
+1. record the active Neon plan and configured restore window in the operator's environment inventory, not in application secrets;
+2. confirm the Backup & Restore / restore-history controls are available for the project;
+3. create a harmless test row or schema object, wait long enough to establish a distinct recovery point, and verify a point-in-time recovery can be created/restored without overwriting the active branch unexpectedly;
+4. remove the disposable recovery branch/object after verification;
+5. repeat a recovery drill after major provider-plan changes or before destructive migration testing.
+
+For additional logical portability or longer retention than the selected Neon plan provides, use an independent `pg_dump`/`pg_restore` process to external protected storage. Do not assume provider PITR is a substitute for every future production backup requirement.
+
+See [`backup-recovery.md`](backup-recovery.md) for the managed-DEV versus standalone-host recovery boundary.
 
 ## 9. Completion criteria
 
-DEV activation is complete only when the console loads from Pages, `/api/system/info` succeeds through the same-origin Function, Railway health is green, Neon connectivity is TLS-protected, Railway `Wait for CI` is enabled, Cloudflare preview branch deployments are disabled, no real secret exists in Git, and the selected revision is traceable to green `main` CI.
+DEV activation is complete only when the console loads from Pages, `/api/system/info` succeeds through the same-origin Function, Railway health is green, Neon connectivity is TLS-protected, Railway `Wait for CI` is enabled, Cloudflare preview branch deployments are disabled, no real secret exists in Git, the selected revision is traceable to green `main` CI, Flyway startup is proven against the target database, and the active Neon recovery window has been verified for the selected plan.
 
 This topology is DEV/demo only and is not a production HA/DR decision.
