@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.api.identity;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
@@ -23,9 +22,9 @@ import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
@@ -85,7 +84,7 @@ public class IdentityController {
     @PostMapping
     public ResponseEntity<IdentityResource> create(
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
-            @RequestBody JsonNode body,
+            @RequestBody Map<String, Object> body,
             HttpServletRequest request) {
         UUID correlationId = IdentityApiRequestContext.resolveCorrelationId(request, ids);
         String causalKey = validateIdempotencyKey(idempotencyKey, correlationId);
@@ -131,7 +130,7 @@ public class IdentityController {
             @PathVariable UUID identityId,
             @RequestHeader(name = "If-Match", required = false) String ifMatch,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
-            @RequestBody JsonNode body,
+            @RequestBody Map<String, Object> body,
             HttpServletRequest request) {
         UUID correlationId = IdentityApiRequestContext.resolveCorrelationId(request, ids);
         long expectedRevision = parseIfMatch(ifMatch, correlationId);
@@ -280,18 +279,19 @@ public class IdentityController {
         }
     }
 
-    private static CreateRequest parseCreate(JsonNode body, UUID correlationId) {
+    private static CreateRequest parseCreate(Map<String, Object> body, UUID correlationId) {
         requireObject(body, correlationId);
         requireExactFields(body, Set.of("type", "profile", "lifecycleState", "displayName"), correlationId);
         IdentityType type = parseEnum(body, "type", IdentityType.class, correlationId);
         IdentityLifecycleState lifecycleState = parseEnum(
                 body, "lifecycleState", IdentityLifecycleState.class, correlationId);
         String displayName = requireDisplayName(body, correlationId);
-        JsonNode profile = body.get("profile");
-        if (profile == null || !profile.isObject()) {
+        Object rawProfile = body.get("profile");
+        if (!(rawProfile instanceof Map<?, ?> profileValues)) {
             throw IdentityApiException.validation(
                     correlationId, "profile", "required_object", "profile must be an object.");
         }
+        Map<String, Object> profile = stringKeyedMap(profileValues, "profile", correlationId);
         requireExactFields(profile, Set.of("kind"), correlationId);
         String kind = requireText(profile, "kind", correlationId);
         if (!type.name().equals(kind)) {
@@ -301,22 +301,39 @@ public class IdentityController {
         return new CreateRequest(type, lifecycleState, displayName);
     }
 
-    private static String parseUpdate(JsonNode body, UUID correlationId) {
+    private static String parseUpdate(Map<String, Object> body, UUID correlationId) {
         requireObject(body, correlationId);
         requireExactFields(body, Set.of("displayName"), correlationId);
         return requireDisplayName(body, correlationId);
     }
 
-    private static void requireObject(JsonNode body, UUID correlationId) {
-        if (body == null || !body.isObject()) {
+    private static void requireObject(Map<String, Object> body, UUID correlationId) {
+        if (body == null) {
             throw IdentityApiException.validation(
                     correlationId, "request", "required_object", "Request body must be a JSON object.");
         }
     }
 
-    private static void requireExactFields(JsonNode node, Set<String> expected, UUID correlationId) {
-        Set<String> actual = new HashSet<>();
-        node.fieldNames().forEachRemaining(actual::add);
+    private static Map<String, Object> stringKeyedMap(
+            Map<?, ?> raw,
+            String field,
+            UUID correlationId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : raw.entrySet()) {
+            if (!(entry.getKey() instanceof String key)) {
+                throw IdentityApiException.validation(
+                        correlationId, field, "invalid_object", field + " must use string property names.");
+            }
+            result.put(key, entry.getValue());
+        }
+        return result;
+    }
+
+    private static void requireExactFields(
+            Map<String, Object> node,
+            Set<String> expected,
+            UUID correlationId) {
+        Set<String> actual = new HashSet<>(node.keySet());
         for (String required : expected) {
             if (!actual.contains(required)) {
                 throw IdentityApiException.validation(
@@ -331,7 +348,7 @@ public class IdentityController {
         }
     }
 
-    private static String requireDisplayName(JsonNode body, UUID correlationId) {
+    private static String requireDisplayName(Map<String, Object> body, UUID correlationId) {
         String value = requireText(body, "displayName", correlationId);
         if (value.isBlank() || value.length() > 300 || value.indexOf('\u0000') >= 0) {
             throw IdentityApiException.validation(
@@ -343,17 +360,17 @@ public class IdentityController {
         return value;
     }
 
-    private static String requireText(JsonNode node, String field, UUID correlationId) {
-        JsonNode value = node.get(field);
-        if (value == null || !value.isTextual()) {
+    private static String requireText(Map<String, Object> node, String field, UUID correlationId) {
+        Object value = node.get(field);
+        if (!(value instanceof String text)) {
             throw IdentityApiException.validation(
                     correlationId, field, "required_string", field + " must be a string.");
         }
-        return value.textValue();
+        return text;
     }
 
     private static <E extends Enum<E>> E parseEnum(
-            JsonNode node,
+            Map<String, Object> node,
             String field,
             Class<E> type,
             UUID correlationId) {
