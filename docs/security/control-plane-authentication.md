@@ -111,8 +111,10 @@ Authentication failures return stable semantic errors and correlation IDs rather
 
 ## Current completion boundary
 
-This slice establishes trusted bearer validation, server-side tenant/governed-actor resolution, and burn-once initial-administrator provisioning. It does **not** yet expose the Identity OpenAPI operations as runtime controllers.
+Trusted bearer validation, server-side tenant/governed-actor resolution, and burn-once initial-administrator provisioning are implemented and now gate the first runtime Identity API slice.
 
-The next Identity HTTP slice must combine `ControlPlaneActorRequestContext` with `AdministrativeAuthorizationService` for every semantic operation. Bearer possession alone is never sufficient.
+The protected `/api/v1/identities` operations combine `ControlPlaneActorRequestContext` with `AdministrativeAuthorizationService` for every semantic operation. Bearer possession alone never grants IAM authority: the resolved governed actor still requires the operation-specific `identity:read`, `identity:create`, or `identity:update` permission in the same tenant.
+
+The current Identity runtime slice covers authoritative create/read/list, non-lifecycle display-name update, and canonical-attribute metadata reads. Canonical attribute values/provenance remain fail-closed/redacted until classification-aware value visibility is implemented, and curated public Identity event publication remains a separate future adapter/integration concern.
 
 Authentication assurance (`acr`/`amr`), step-up, administrative delegation, maker-checker elevation, break-glass, and post-bootstrap recovery remain future governed security slices rather than implicit token behavior.
