@@ -6,7 +6,7 @@ This document is the living OD-004 interface contract for remote connector execu
 
 - `apps/server/src/main/resources/contracts/openapi/connector-worker-v1.json`
 
-The v1 wire contract is **defined but not runtime-exposed yet**. Runtime implementation follows with the first real Integration-owned provisioning/reconciliation persistence slice so implementation convenience does not redefine the protocol.
+The v1 wire contract is now **runtime-exposed** for the first bounded Integration slice. The server provides dedicated connector-worker bearer authentication, Integration-owned server-side worker registration/scope, session/runtime/schema negotiation, leased claim/renew fencing, PRINCIPAL reconciliation observation batches, and normalized completion. Provisioning process persistence also exists, but remote provisioning claims fail closed unless a semantic `DesiredStateRevisionQuery` can verify the current desired revision before execution.
 
 ## Purpose and boundary
 
@@ -38,7 +38,7 @@ Session IDs are negotiation/correlation state, not credentials. Every request re
 
 The worker advertises supported protocol majors plus connector runtime descriptors, semantic capabilities, and connector contract/schema versions.
 
-The server chooses one compatible protocol major and returns server limits such as claim size, long-poll maximum, observation batch maximum, and lease duration.
+The server chooses one compatible protocol major and returns server limits such as claim size, long-poll maximum, observation batch maximum, lease duration, and the accepted runtime/schema compatibility set. The checked-in OpenAPI was corrected before runtime exposure to include the ADR-0014-required `acceptedRuntimes` field.
 
 Protocol-major compatibility is distinct from connector runtime compatibility and connector payload schema compatibility. The server never assigns a connector payload version the worker did not advertise.
 
@@ -106,6 +106,14 @@ New connector-specific work capability or payload schema can evolve independentl
 
 A causal work attempt is not silently upgraded to a different wire/schema version during retry.
 
-## Implementation boundary
+## Current implementation boundary
 
-This phase intentionally does not expose the endpoints yet because the Integration-owned provisioning/reconciliation aggregates and persistence needed to back them are not implemented. The first runtime slice must implement the accepted contract rather than changing the protocol to fit an accidental table/API shape.
+The first runtime slice is intentionally bounded:
+
+- worker registrations are Integration-owned server-side state; no worker registration management API is exposed yet;
+- remote reconciliation supports `PRINCIPAL` observations only;
+- positive observations from PARTIAL/UNKNOWN runs may materialize, but unseen observations are marked absent only after Integration validates effective `COMPLETE` coverage;
+- ProvisioningJob, ProvisioningTask and immutable ProvisioningAttempt persistence are implemented;
+- provisioning work is not remotely claimable unless `DesiredStateRevisionQuery` verifies the task's desired revision; mismatch becomes `SUPERSEDED`, and verifier unavailability leaves work unclaimed;
+- connector/provider credentials remain external opaque secret references and never transit ordinary worker payloads;
+- multi-region routing, broker transport, raw-secret delivery, and additional discovery object classes remain future slices.
