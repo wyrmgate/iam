@@ -146,6 +146,12 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 .isInstanceOf(IntegrationAdministrationException.class)
                 .hasMessageContaining("ApplicationTarget");
 
+        TenantContext otherTenant = tenant("mapping-other");
+        assertThatThrownBy(() -> mappingService.map(
+                otherTenant, binding, "g-1", entitlementA, NOW, ids.nextId()))
+                .isInstanceOf(IntegrationAdministrationException.class)
+                .hasMessageContaining("binding");
+
         var mapped = mappingService.map(
                 tenant, binding, "g-1", entitlementA, NOW, ids.nextId());
         assertThat(mapped.lifecycleState()).isEqualTo("ACTIVE");
