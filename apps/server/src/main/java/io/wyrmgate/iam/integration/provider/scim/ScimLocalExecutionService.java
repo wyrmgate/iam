@@ -7,6 +7,8 @@ import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Freshness;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Status;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository;
+import io.wyrmgate.iam.integration.application.ConnectorPayloadGuard;
+import io.wyrmgate.iam.integration.application.WorkerProtocolException;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository.ExecutionConfiguration;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.PrincipalObservation;
@@ -182,6 +184,7 @@ public final class ScimLocalExecutionService {
         }
 
         try {
+            ConnectorPayloadGuard.requireSecretFree(candidate.payload());
             ScimPrincipalProviderAdapter.Configuration scimConfiguration =
                     scimConfiguration(configuration.configuration());
             Map<String,Object> payload = candidate.payload();
@@ -208,6 +211,10 @@ public final class ScimLocalExecutionService {
                     Map.of(), null, null));
         } catch (ScimProviderException provider) {
             complete(owner, leased, providerCompletion(provider, null, null));
+        } catch (WorkerProtocolException secretViolation) {
+            complete(owner, leased, new WorkCompletion(
+                    "FAILED_FINAL", "VALIDATION", "secret_material_forbidden",
+                    null, null, null, null, Map.of(), null, null));
         } catch (IllegalArgumentException | UnsupportedOperationException invalid) {
             complete(owner, leased, new WorkCompletion(
                     "FAILED_FINAL", "VALIDATION", "invalid_scim_work",
@@ -337,7 +344,8 @@ public final class ScimLocalExecutionService {
     }
 
     private boolean isCompatible(ExecutionConfiguration configuration) {
-        return ScimPrincipalProviderAdapter.RUNTIME_ID.equals(configuration.runtimeId())
+        return "SCIM_2".equals(configuration.connectorType())
+                && ScimPrincipalProviderAdapter.RUNTIME_ID.equals(configuration.runtimeId())
                 && ScimPrincipalProviderAdapter.RUNTIME_VERSION.equals(configuration.runtimeVersion())
                 && ScimPrincipalProviderAdapter.CONTRACT_ID.equals(configuration.contractId())
                 && ScimPrincipalProviderAdapter.CONTRACT_VERSION == configuration.contractVersion();
@@ -348,12 +356,14 @@ public final class ScimLocalExecutionService {
         String baseUri = requiredText(configuration, "baseUri");
         int pageSize = integer(configuration, "pageSize", 100);
         int maxPages = integer(configuration, "maxPagesPerExecution", 1000);
-        int timeoutSeconds = integer(configuration, "requestTimeoutSeconds", 30);
+        Duration requestTimeout = duration(
+                configuration, "requestTimeout",
+                Duration.ofSeconds(integer(configuration, "requestTimeoutSeconds", 30)));
         return new ScimPrincipalProviderAdapter.Configuration(
                 URI.create(baseUri),
                 pageSize,
                 maxPages,
-                Duration.ofSeconds(timeoutSeconds),
+                requestTimeout,
                 text(configuration, "idempotencyHeader"));
     }
 
@@ -409,6 +419,19 @@ public final class ScimLocalExecutionService {
             return Integer.parseInt(String.valueOf(value));
         } catch (NumberFormatException invalid) {
             throw new IllegalArgumentException(key + " must be an integer");
+        }
+    }
+
+    private static Duration duration(
+            Map<String,Object> map,
+            String key,
+            Duration defaultValue) {
+        Object value = map.get(key);
+        if (value == null) return defaultValue;
+        try {
+            return Duration.parse(String.valueOf(value));
+        } catch (RuntimeException invalid) {
+            throw new IllegalArgumentException(key + " must be an ISO-8601 duration");
         }
     }
 
