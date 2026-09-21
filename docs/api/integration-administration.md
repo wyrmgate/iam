@@ -45,7 +45,7 @@ Creation binds one ConnectorInstance to one technical target ID and target kind.
 
 ConnectorInstance, target kind and target ID are immutable after creation.
 
-Contract ID/version and complete-principal-discovery capability are revisioned mutable metadata.
+Contract ID/version plus object-class-specific `supportsCompletePrincipalDiscovery`, `supportsCompleteEntitlementDiscovery`, and `supportsCompleteGrantDiscovery` capabilities are revisioned mutable metadata. A COMPLETE report is destructive-authoritative for absence only when the matching capability is enabled and the binding/configuration/runtime/contract still match the run snapshot.
 
 Same-tenant ConnectorInstance references are enforced structurally.
 
