@@ -1,14 +1,16 @@
-package io.wyrmgate.iam.api.security;
+package io.wyrmgate.iam.integration.api.security;
 
-import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
+import io.wyrmgate.iam.api.security.RequiredAudienceValidator;
+import io.wyrmgate.iam.api.security.SemanticAuthenticationEntryPoint;
+import io.wyrmgate.iam.integration.application.WorkerRegistrationRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -25,20 +27,14 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
-/** Provider-neutral bearer authentication boundary for Wyrmgate control-plane APIs. */
 @Configuration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@EnableConfigurationProperties(ControlPlaneAuthProperties.class)
-public class ControlPlaneSecurityConfiguration {
+@EnableConfigurationProperties(ConnectorWorkerAuthProperties.class)
+public class ConnectorWorkerSecurityConfiguration {
 
-    @Bean
-    SemanticAuthenticationEntryPoint semanticAuthenticationEntryPoint(IdGenerator idGenerator) {
-        return new SemanticAuthenticationEntryPoint(idGenerator);
-    }
-
-    @Bean
-    @ConditionalOnProperty(prefix = "iam.auth", name = "enabled", havingValue = "true")
-    JwtDecoder controlPlaneJwtDecoder(ControlPlaneAuthProperties properties) {
+    @Bean("connectorWorkerJwtDecoder")
+    @ConditionalOnProperty(prefix = "iam.integration.worker-auth", name = "enabled", havingValue = "true")
+    JwtDecoder connectorWorkerJwtDecoder(ConnectorWorkerAuthProperties properties) {
         String issuer = properties.requiredIssuerUri();
         String audience = properties.requiredAudience();
         return new SupplierJwtDecoder(() -> {
@@ -52,53 +48,43 @@ public class ControlPlaneSecurityConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "iam.auth", name = "enabled", havingValue = "true")
-    @Order(2)
-    SecurityFilterChain authenticatedControlPlaneSecurity(
+    @Order(1)
+    @ConditionalOnProperty(prefix = "iam.integration.worker-auth", name = "enabled", havingValue = "true")
+    SecurityFilterChain authenticatedConnectorWorkerSecurity(
             HttpSecurity http,
-            @Qualifier("controlPlaneJwtDecoder") JwtDecoder controlPlaneJwtDecoder,
-            ControlPlaneActorResolver actorResolver,
-            IdGenerator idGenerator,
+            @Qualifier("connectorWorkerJwtDecoder") JwtDecoder decoder,
+            WorkerRegistrationRepository workers,
+            IdGenerator ids,
             SemanticAuthenticationEntryPoint entryPoint) throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable)
+        http.securityMatcher("/internal/connector-worker/v1/**")
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health/**", "/actuator/info", "/api/system/info").permitAll()
-                        .requestMatchers("/api/openapi/**", "/api/docs/**", "/swagger-ui/**").permitAll()
-                        .requestMatchers("/api/v1/**").authenticated()
-                        .anyRequest().denyAll())
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint))
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .authenticationEntryPoint(entryPoint)
-                        .jwt(jwt -> jwt
-                                .decoder(controlPlaneJwtDecoder)
-                                .jwtAuthenticationConverter(token -> new JwtAuthenticationToken(
-                                        token,
-                                        List.<GrantedAuthority>of(),
-                                        token.getSubject()))))
+                        .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(token ->
+                                new JwtAuthenticationToken(token, List.<GrantedAuthority>of(), token.getSubject()))))
                 .addFilterAfter(
-                        new ControlPlaneActorResolutionFilter(actorResolver, idGenerator),
+                        new ConnectorWorkerResolutionFilter(workers, ids),
                         BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 
     @Bean
+    @Order(1)
     @ConditionalOnProperty(
-            prefix = "iam.auth",
+            prefix = "iam.integration.worker-auth",
             name = "enabled",
             havingValue = "false",
             matchIfMissing = true)
-    @Order(2)
-    SecurityFilterChain closedControlPlaneSecurity(
+    SecurityFilterChain closedConnectorWorkerSecurity(
             HttpSecurity http,
             SemanticAuthenticationEntryPoint entryPoint) throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable)
+        http.securityMatcher("/internal/connector-worker/v1/**")
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health/**", "/actuator/info", "/api/system/info").permitAll()
-                        .requestMatchers("/api/openapi/**", "/api/docs/**", "/swagger-ui/**").permitAll()
-                        .requestMatchers("/api/v1/**").denyAll()
-                        .anyRequest().denyAll())
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint));
         return http.build();
     }

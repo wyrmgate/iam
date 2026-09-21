@@ -355,6 +355,19 @@ integration.provisioning_task
 
 Provisioning task state/retry eligibility belongs to Integration process semantics. Generic worker claim ownership (`lease_owner`, `lease_until`) is **not** stored as business/task authority here; Platform delivery/claim storage references the task when a worker needs a technical lease.
 
+The first remote-worker implementation materializes that separation with:
+
+- Integration-owned `connector_worker_registration`, binding-scope/runtime-permission and negotiated-session tables;
+- Integration-owned `provisioning_job`, `provisioning_task`, immutable `provisioning_attempt`;
+- Integration-owned `reconciliation_run`, idempotent observation-batch metadata, PRINCIPAL staging, and current `observed_principal`;
+- Platform-owned `connector_work_lease` carrying only technical session/work/lease ID, monotonic lease epoch and expiry.
+
+`connector_work_lease` is not authoritative process state. Expiry/reclaim increments the fencing epoch; stale completions cannot overwrite a newer lease generation.
+
+For the first reconciliation slice, `reconciliation_run.reported_coverage` is worker evidence while `effective_completeness` is Integration-owned. Positive PRINCIPAL observations may materialize from incomplete runs. Existing observations are marked absent only when effective completeness is `COMPLETE`, which requires successful worker completion plus current binding/configuration/runtime/contract checks and connector support for trustworthy complete principal discovery.
+
+Provisioning work carries the desired revision. Remote claim requires a semantic current-revision verifier; a mismatch transitions the task to `SUPERSEDED`, while unavailable verification leaves the task unclaimed. This keeps stale desired-state execution fail-closed without making Integration authoritative for Access projections.
+
 `integration.provisioning_attempt` is immutable evidence with task ID, attempt number, start/end time, normalized operation, provider request/idempotency reference where safe, outcome/failure category, correlation/causation and data-minimized evidence. Provider secret/private values are prohibited.
 
 ### Administration
