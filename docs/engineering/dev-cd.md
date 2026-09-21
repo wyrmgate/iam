@@ -38,15 +38,24 @@ The service must provide:
 - `IAM_DEPLOYMENT_ENVIRONMENT=dev`;
 - `IAM_OTEL_ENABLED=false` until observability is deliberately activated;
 - `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`;
-- `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000` for the initial DEV serverless posture.
+- `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`;
+- `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5` for the validated initial DEV serverless baseline.
 
 Railway supplies `PORT`; Spring Boot binds to `${PORT:8080}`, preserving port 8080 locally and in standalone containers.
 
 Configure Railway's Git integration to deploy `main` and enable **Wait for CI**. Railway remains the deployment engine, but a `main` revision must not begin its provider deployment until the associated GitHub check suites have completed successfully.
 
-Railway Serverless considers outbound traffic when deciding whether a service is idle, so long-lived database connections or telemetry can keep the service awake. The initial DEV posture therefore allows Hikari to drain to zero idle connections and leaves OTLP disabled. Revisit pool sizing if real DEV traffic patterns justify it.
+Railway Serverless considers outbound traffic when deciding whether a service is idle, so long-lived database connections or telemetry can keep the service awake. The initial DEV posture therefore allows Hikari to drain to zero idle connections and leaves OTLP disabled. A maximum pool size of `5` is the validated DEV compatibility baseline; an effective maximum of `2` caused Flyway startup timeout during activation. Treat `5` as an observed DEV baseline, not production sizing guidance.
 
-Neon offers pooled endpoints for high-concurrency/serverless workloads, but Neon also recommends direct connections for migration tools. Because this application currently runs Flyway on the application datasource, the initial DEV contract uses the direct endpoint rather than introducing a second migration datasource prematurely.
+Neon offers pooled endpoints for high-concurrency/serverless workloads, but migration tooling may need a direct connection. Because this application currently runs Flyway on the application datasource, the initial DEV contract uses the direct endpoint rather than introducing a second migration datasource prematurely.
+
+## Spring Boot / Flyway startup contract
+
+The server relies on Spring Boot to run Flyway migrations before normal application operation. In the current Spring Boot 4.1.1 dependency layout, `spring-boot-starter-flyway` plus `flyway-database-postgresql` is the validated dependency contract.
+
+`ApplicationFlywayStartupIntegrationTest` boots the real application against an empty PostgreSQL instance and verifies that `flyway_schema_history`, the expected migration version, and the capability schemas are created. Do not replace the starter with a direct Flyway dependency unless equivalent startup behavior is deliberately re-established and this application-startup regression test remains green.
+
+A provider health check alone is not proof that migrations ran. For a new or reset DEV database, verify both `/actuator/health` and the expected latest successful Flyway version in the database.
 
 ## Deployment ownership
 
@@ -55,6 +64,14 @@ Cloudflare, Railway, and Neon deployment/configuration are external operator/pro
 Provider Git integrations deploy reviewed `main` revisions under the controls above. The managed DEV environment does not consume the GHCR release images as its deployment mechanism: Cloudflare Pages and Railway build from the reviewed repository revision. GHCR images and signed release manifests remain controlled release artifacts for staging/production and optional standalone-host/reference environments.
 
 Rollback uses provider deployment history for application revisions; database down-migrations remain out of scope, so schema changes follow expand/contract compatibility.
+
+## Managed DEV recovery posture
+
+The active Neon-backed DEV environment uses provider-native restore/history capabilities as its first recovery path rather than the standalone-host `pg_dump` timer. The exact restore window and controls are plan/provider-state dependent; verify the actual `wyrmgate-iam-dev` project configuration in Neon before destructive tests or risky data/schema changes.
+
+Provider-native recovery is not an independently retained logical backup. If DEV needs longer retention, cross-provider portability, or protection against provider-account loss, add an independently protected `pg_dump`/`pg_restore` process.
+
+See [`../operations/backup-recovery.md`](../operations/backup-recovery.md) for the managed-DEV versus standalone-host recovery boundary.
 
 ## Superseded host-based DEV path
 
