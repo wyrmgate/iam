@@ -63,11 +63,17 @@ iam:
   integration:
     events:
       enabled: ${IAM_INTEGRATION_EVENTS_ENABLED:false}
+      transport: ${IAM_INTEGRATION_EVENTS_TRANSPORT:}
       poll-interval: ${IAM_INTEGRATION_EVENTS_POLL_INTERVAL:PT1S}
       claim-lease: ${IAM_INTEGRATION_EVENTS_CLAIM_LEASE:PT30S}
       batch-size: ${IAM_INTEGRATION_EVENTS_BATCH_SIZE:50}
       retry-base-delay: ${IAM_INTEGRATION_EVENTS_RETRY_BASE_DELAY:PT5S}
       retry-max-delay: ${IAM_INTEGRATION_EVENTS_RETRY_MAX_DELAY:PT5M}
+      webhook:
+        endpoint: ${IAM_INTEGRATION_EVENTS_WEBHOOK_ENDPOINT:}
+        secret: ${IAM_INTEGRATION_EVENTS_WEBHOOK_SECRET:}
+        connect-timeout: ${IAM_INTEGRATION_EVENTS_WEBHOOK_CONNECT_TIMEOUT:PT5S}
+        request-timeout: ${IAM_INTEGRATION_EVENTS_WEBHOOK_REQUEST_TIMEOUT:PT10S}
   bootstrap:
     initial-admin:
       enabled: ${IAM_INITIAL_ADMIN_BOOTSTRAP_ENABLED:false}
