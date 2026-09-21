@@ -731,107 +731,105 @@ public final class JdbcIntegrationRuntimeRepository
                 (rs,row) -> new Existing(
                         rs.getObject(1) == null ? null : rs.getLong(1), rs.getString(2)),
                 session.tenant().tenantId(), runId);
-        if (existing.isEmpty()) throw new WorkerProtocolException("work_not_found", "reconciliation work does not exist");
+        if (existing.isEmpty()) {
+            throw new WorkerProtocolException("work_not_found", "reconciliation work does not exist");
+        }
         if (existing.getFirst().epoch() != null) {
             if (existing.getFirst().epoch() == leaseEpoch
                     && Objects.equals(existing.getFirst().fingerprint(), fingerprint)) {
                 return CompletionResult.REPLAY;
             }
-            throw new WorkerProtocolException("completion_conflict", "reconciliation run is already completed");
+            throw new WorkerProtocolException(
+                    "completion_conflict", "reconciliation run is already completed");
         }
         requireCurrentLease(session, WorkKind.RECONCILE, runId, leaseId, leaseEpoch, now, true);
 
-        record Run(UUID bindingId, long configurationVersion, String runtimeId, String runtimeVersion,
-                   String contractId, int contractVersion) {}
+        record Run(
+                UUID bindingId,
+                String objectClass,
+                long configurationVersion,
+                String runtimeId,
+                String runtimeVersion,
+                String contractId,
+                int contractVersion) {}
         Run run = jdbc.queryForObject("""
-                SELECT connector_binding_id, configuration_version, runtime_id, runtime_version,
-                       contract_id, contract_version
+                SELECT connector_binding_id, scope_object_class, configuration_version,
+                       runtime_id, runtime_version, contract_id, contract_version
                 FROM integration.reconciliation_run
                 WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
                 """,
                 (rs,row) -> new Run(
-                        rs.getObject(1, UUID.class), rs.getLong(2), rs.getString(3),
-                        rs.getString(4), rs.getString(5), rs.getInt(6)),
+                        rs.getObject(1, UUID.class), rs.getString(2), rs.getLong(3),
+                        rs.getString(4), rs.getString(5), rs.getString(6), rs.getInt(7)),
                 session.tenant().tenantId(), runId);
-        if (run == null) throw new WorkerProtocolException("work_not_running", "reconciliation run is not running");
+        if (run == null) {
+            throw new WorkerProtocolException("work_not_running", "reconciliation run is not running");
+        }
 
         ReconciliationCompleteness reported = completion.discoveryCoverage() == null
                 ? ReconciliationCompleteness.UNKNOWN : completion.discoveryCoverage();
+        String completenessColumn = switch (run.objectClass()) {
+            case "PRINCIPAL" -> "supports_complete_principal_discovery";
+            case "ENTITLEMENT" -> "supports_complete_entitlement_discovery";
+            case "GRANT" -> "supports_complete_grant_discovery";
+            default -> throw new WorkerProtocolException(
+                    "unsupported_object_class", "unsupported reconciliation object class");
+        };
+        Boolean contractStillTrusted = jdbc.queryForObject("""
+                SELECT (
+                    CASE ?
+                        WHEN 'supports_complete_principal_discovery'
+                            THEN b.supports_complete_principal_discovery
+                        WHEN 'supports_complete_entitlement_discovery'
+                            THEN b.supports_complete_entitlement_discovery
+                        WHEN 'supports_complete_grant_discovery'
+                            THEN b.supports_complete_grant_discovery
+                        ELSE false
+                    END
+                    AND b.contract_id = ?
+                    AND b.contract_version = ?
+                    AND ci.configuration_version = ?
+                    AND ci.runtime_id = ?
+                    AND ci.runtime_version = ?
+                    AND b.lifecycle_state = 'ACTIVE'
+                    AND ci.lifecycle_state = 'ACTIVE'
+                )
+                FROM integration.connector_binding b
+                JOIN integration.connector_instance ci
+                  ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
+                WHERE b.tenant_id = ? AND b.id = ?
+                """,
+                Boolean.class,
+                completenessColumn,
+                run.contractId(), run.contractVersion(), run.configurationVersion(),
+                run.runtimeId(), run.runtimeVersion(),
+                session.tenant().tenantId(), run.bindingId());
         boolean trustedComplete = "SUCCEEDED".equals(completion.outcome())
                 && reported == ReconciliationCompleteness.COMPLETE
-                && Boolean.TRUE.equals(jdbc.queryForObject("""
-                        SELECT (
-                            b.supports_complete_principal_discovery
-                            AND b.contract_id = ?
-                            AND b.contract_version = ?
-                            AND ci.configuration_version = ?
-                            AND ci.runtime_id = ?
-                            AND ci.runtime_version = ?
-                            AND b.lifecycle_state = 'ACTIVE'
-                            AND ci.lifecycle_state = 'ACTIVE'
-                        )
-                        FROM integration.connector_binding b
-                        JOIN integration.connector_instance ci
-                          ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
-                        WHERE b.tenant_id = ? AND b.id = ?
-                        """, Boolean.class,
-                        run.contractId(), run.contractVersion(), run.configurationVersion(),
-                        run.runtimeId(), run.runtimeVersion(),
-                        session.tenant().tenantId(), run.bindingId()));
+                && Boolean.TRUE.equals(contractStillTrusted);
         ReconciliationCompleteness effective = trustedComplete
                 ? ReconciliationCompleteness.COMPLETE
                 : (reported == ReconciliationCompleteness.PARTIAL
-                    ? ReconciliationCompleteness.PARTIAL : ReconciliationCompleteness.UNKNOWN);
+                    ? ReconciliationCompleteness.PARTIAL
+                    : ReconciliationCompleteness.UNKNOWN);
 
-        record StagedPrincipal(String stableId, String version, String stateJson, Instant observedAt) {}
-        List<StagedPrincipal> staged = jdbc.query("""
-                SELECT provider_stable_id, provider_version, observed_state::text, observed_at
-                FROM integration.reconciliation_principal_staging
-                WHERE tenant_id = ? AND reconciliation_run_id = ?
-                ORDER BY provider_stable_id
-                """,
-                (rs,row) -> new StagedPrincipal(
-                        rs.getString(1), rs.getString(2), rs.getString(3),
-                        rs.getTimestamp(4).toInstant()),
-                session.tenant().tenantId(), runId);
-        for (StagedPrincipal principal : staged) {
-            jdbc.update("""
-                    INSERT INTO integration.observed_principal (
-                        id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
-                        observed_state, present, last_observed_run_id, observed_at, absent_at)
-                    VALUES (?, ?, ?, ?, ?, ?::jsonb, true, ?, ?, NULL)
-                    ON CONFLICT (tenant_id, connector_binding_id, provider_stable_id) DO UPDATE
-                    SET provider_version = EXCLUDED.provider_version,
-                        observed_state = EXCLUDED.observed_state,
-                        present = true,
-                        last_observed_run_id = EXCLUDED.last_observed_run_id,
-                        observed_at = EXCLUDED.observed_at,
-                        absent_at = NULL
-                    """,
-                    ids.nextId(), session.tenant().tenantId(), run.bindingId(),
-                    principal.stableId(), principal.version(), principal.stateJson(),
-                    runId, Timestamp.from(principal.observedAt()));
-        }
-
-        if (effective == ReconciliationCompleteness.COMPLETE) {
-            jdbc.update("""
-                    UPDATE integration.observed_principal p
-                    SET present = false, absent_at = ?, last_observed_run_id = ?
-                    WHERE p.tenant_id = ? AND p.connector_binding_id = ? AND p.present
-                      AND NOT EXISTS (
-                          SELECT 1 FROM integration.reconciliation_principal_staging s
-                          WHERE s.tenant_id = p.tenant_id
-                            AND s.reconciliation_run_id = ?
-                            AND s.provider_stable_id = p.provider_stable_id
-                      )
-                    """, Timestamp.from(now), runId, session.tenant().tenantId(), run.bindingId(), runId);
+        switch (run.objectClass()) {
+            case "PRINCIPAL" -> materializePrincipals(
+                    session, runId, run.bindingId(), effective, now);
+            case "ENTITLEMENT" -> materializeEntitlements(
+                    session, runId, run.bindingId(), effective, now);
+            case "GRANT" -> materializeGrants(
+                    session, runId, run.bindingId(), effective, now);
+            default -> throw new WorkerProtocolException(
+                    "unsupported_object_class", "unsupported reconciliation object class");
         }
 
         String state = switch (completion.outcome()) {
             case "SUCCEEDED" -> "SUCCEEDED";
             case "FAILED_RETRYABLE", "FAILED_FINAL" -> "FAILED";
             case "SUPERSEDED", "SKIPPED" -> "CANCELLED";
-            default -> throw new WorkerProtocolException("invalid_outcome", "unsupported work outcome");
+            default -> throw new WorkerProtocolException(
+                    "invalid_outcome", "unsupported work outcome");
         };
         jdbc.update("""
                 UPDATE integration.reconciliation_run
@@ -848,22 +846,166 @@ public final class JdbcIntegrationRuntimeRepository
         return CompletionResult.ACCEPTED;
     }
 
-    private LeaseRow requireCurrentLease(
-            WorkerSession session, WorkKind kind, UUID workId, UUID leaseId,
-            long leaseEpoch, Instant now, boolean requireUnexpired) {
-        List<LeaseRow> rows = jdbc.query("""
-                SELECT claimed_at, lease_expires_at
-                FROM platform.connector_work_lease
-                WHERE tenant_id = ? AND work_kind = ? AND work_id = ? AND execution_owner_id = ?
-                  AND lease_id = ? AND lease_epoch = ?
+    private void materializePrincipals(
+            WorkerSession session,
+            UUID runId,
+            UUID bindingId,
+            ReconciliationCompleteness effective,
+            Instant now) {
+        record Row(String stableId, String version, String state, Instant observedAt) {}
+        List<Row> staged = jdbc.query("""
+                SELECT provider_stable_id, provider_version, observed_state::text, observed_at
+                FROM integration.reconciliation_principal_staging
+                WHERE tenant_id = ? AND reconciliation_run_id = ?
+                ORDER BY provider_stable_id
                 """,
-                (rs,row) -> new LeaseRow(
-                        rs.getTimestamp(1).toInstant(), rs.getTimestamp(2).toInstant()),
-                session.tenant().tenantId(), kind.name(), workId, session.id(), leaseId, leaseEpoch);
-        if (rows.isEmpty() || (requireUnexpired && !rows.getFirst().expiresAt().isAfter(now))) {
-            throw staleLease();
+                (rs,row) -> new Row(
+                        rs.getString(1), rs.getString(2), rs.getString(3),
+                        rs.getTimestamp(4).toInstant()),
+                session.tenant().tenantId(), runId);
+        for (Row row : staged) {
+            jdbc.update("""
+                    INSERT INTO integration.observed_principal (
+                        id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
+                        observed_state, present, last_observed_run_id, observed_at, absent_at)
+                    VALUES (?, ?, ?, ?, ?, ?::jsonb, true, ?, ?, NULL)
+                    ON CONFLICT (tenant_id, connector_binding_id, provider_stable_id) DO UPDATE
+                    SET provider_version = EXCLUDED.provider_version,
+                        observed_state = EXCLUDED.observed_state,
+                        present = true,
+                        last_observed_run_id = EXCLUDED.last_observed_run_id,
+                        observed_at = EXCLUDED.observed_at,
+                        absent_at = NULL
+                    """,
+                    ids.nextId(), session.tenant().tenantId(), bindingId,
+                    row.stableId(), row.version(), row.state(),
+                    runId, Timestamp.from(row.observedAt()));
         }
-        return rows.getFirst();
+        if (effective == ReconciliationCompleteness.COMPLETE) {
+            markUnseenAbsent(
+                    "observed_principal",
+                    "reconciliation_principal_staging",
+                    session.tenant().tenantId(), bindingId, runId, now);
+        }
+    }
+
+    private void materializeEntitlements(
+            WorkerSession session,
+            UUID runId,
+            UUID bindingId,
+            ReconciliationCompleteness effective,
+            Instant now) {
+        record Row(String stableId, String version, String state, Instant observedAt) {}
+        List<Row> staged = jdbc.query("""
+                SELECT provider_stable_id, provider_version, observed_state::text, observed_at
+                FROM integration.reconciliation_entitlement_staging
+                WHERE tenant_id = ? AND reconciliation_run_id = ?
+                ORDER BY provider_stable_id
+                """,
+                (rs,row) -> new Row(
+                        rs.getString(1), rs.getString(2), rs.getString(3),
+                        rs.getTimestamp(4).toInstant()),
+                session.tenant().tenantId(), runId);
+        for (Row row : staged) {
+            jdbc.update("""
+                    INSERT INTO integration.observed_entitlement (
+                        id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
+                        observed_state, present, last_observed_run_id, observed_at, absent_at)
+                    VALUES (?, ?, ?, ?, ?, ?::jsonb, true, ?, ?, NULL)
+                    ON CONFLICT (tenant_id, connector_binding_id, provider_stable_id) DO UPDATE
+                    SET provider_version = EXCLUDED.provider_version,
+                        observed_state = EXCLUDED.observed_state,
+                        present = true,
+                        last_observed_run_id = EXCLUDED.last_observed_run_id,
+                        observed_at = EXCLUDED.observed_at,
+                        absent_at = NULL
+                    """,
+                    ids.nextId(), session.tenant().tenantId(), bindingId,
+                    row.stableId(), row.version(), row.state(),
+                    runId, Timestamp.from(row.observedAt()));
+        }
+        if (effective == ReconciliationCompleteness.COMPLETE) {
+            markUnseenAbsent(
+                    "observed_entitlement",
+                    "reconciliation_entitlement_staging",
+                    session.tenant().tenantId(), bindingId, runId, now);
+        }
+    }
+
+    private void materializeGrants(
+            WorkerSession session,
+            UUID runId,
+            UUID bindingId,
+            ReconciliationCompleteness effective,
+            Instant now) {
+        record Row(
+                String stableId,
+                String version,
+                String principalProviderId,
+                String entitlementProviderId,
+                String state,
+                Instant observedAt) {}
+        List<Row> staged = jdbc.query("""
+                SELECT provider_stable_id, provider_version,
+                       principal_provider_id, entitlement_provider_id,
+                       observed_state::text, observed_at
+                FROM integration.reconciliation_grant_staging
+                WHERE tenant_id = ? AND reconciliation_run_id = ?
+                ORDER BY provider_stable_id
+                """,
+                (rs,row) -> new Row(
+                        rs.getString(1), rs.getString(2), rs.getString(3),
+                        rs.getString(4), rs.getString(5), rs.getTimestamp(6).toInstant()),
+                session.tenant().tenantId(), runId);
+        for (Row row : staged) {
+            jdbc.update("""
+                    INSERT INTO integration.observed_grant (
+                        id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
+                        principal_provider_id, entitlement_provider_id,
+                        observed_state, present, last_observed_run_id, observed_at, absent_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?, ?, NULL)
+                    ON CONFLICT (tenant_id, connector_binding_id, provider_stable_id) DO UPDATE
+                    SET provider_version = EXCLUDED.provider_version,
+                        principal_provider_id = EXCLUDED.principal_provider_id,
+                        entitlement_provider_id = EXCLUDED.entitlement_provider_id,
+                        observed_state = EXCLUDED.observed_state,
+                        present = true,
+                        last_observed_run_id = EXCLUDED.last_observed_run_id,
+                        observed_at = EXCLUDED.observed_at,
+                        absent_at = NULL
+                    """,
+                    ids.nextId(), session.tenant().tenantId(), bindingId,
+                    row.stableId(), row.version(),
+                    row.principalProviderId(), row.entitlementProviderId(), row.state(),
+                    runId, Timestamp.from(row.observedAt()));
+        }
+        if (effective == ReconciliationCompleteness.COMPLETE) {
+            markUnseenAbsent(
+                    "observed_grant",
+                    "reconciliation_grant_staging",
+                    session.tenant().tenantId(), bindingId, runId, now);
+        }
+    }
+
+    private void markUnseenAbsent(
+            String observedTable,
+            String stagingTable,
+            UUID tenantId,
+            UUID bindingId,
+            UUID runId,
+            Instant now) {
+        jdbc.update("""
+                UPDATE integration.%s o
+                SET present = false, absent_at = ?, last_observed_run_id = ?
+                WHERE o.tenant_id = ? AND o.connector_binding_id = ? AND o.present
+                  AND NOT EXISTS (
+                      SELECT 1 FROM integration.%s s
+                      WHERE s.tenant_id = o.tenant_id
+                        AND s.reconciliation_run_id = ?
+                        AND s.provider_stable_id = o.provider_stable_id
+                  )
+                """.formatted(observedTable, stagingTable),
+                Timestamp.from(now), runId, tenantId, bindingId, runId);
     }
 
     private static String requiredObservationText(Map<String,Object> state, String key) {
