@@ -8,6 +8,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -51,9 +53,10 @@ public class ControlPlaneSecurityConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "iam.auth", name = "enabled", havingValue = "true")
+    @Order(2)
     SecurityFilterChain authenticatedControlPlaneSecurity(
             HttpSecurity http,
-            JwtDecoder controlPlaneJwtDecoder,
+            @Qualifier("controlPlaneJwtDecoder") JwtDecoder controlPlaneJwtDecoder,
             ControlPlaneActorResolver actorResolver,
             IdGenerator idGenerator,
             SemanticAuthenticationEntryPoint entryPoint) throws Exception {
@@ -85,6 +88,7 @@ public class ControlPlaneSecurityConfiguration {
             name = "enabled",
             havingValue = "false",
             matchIfMissing = true)
+    @Order(2)
     SecurityFilterChain closedControlPlaneSecurity(
             HttpSecurity http,
             SemanticAuthenticationEntryPoint entryPoint) throws Exception {
