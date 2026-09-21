@@ -101,17 +101,26 @@ public final class JdbcIntegrationAdministrationRepository
     public ConnectorBinding createBinding(
             TenantContext tenant, UUID id, UUID connectorInstanceId, String targetKind,
             UUID targetId, String contractId, int contractVersion,
-            boolean supportsCompletePrincipalDiscovery, Instant now) {
+            boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery,
+            Instant now) {
         requireActiveConnector(tenant, connectorInstanceId);
         jdbc.update("""
                 INSERT INTO integration.connector_binding (
                     id, tenant_id, connector_instance_id, target_kind, target_id,
-                    contract_id, contract_version, supports_complete_principal_discovery,
+                    contract_id, contract_version,
+                    supports_complete_principal_discovery,
+                    supports_complete_entitlement_discovery,
+                    supports_complete_grant_discovery,
                     lifecycle_state, revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?)
                 """,
                 id, tenant.tenantId(), connectorInstanceId, targetKind, targetId,
-                contractId, contractVersion, supportsCompletePrincipalDiscovery,
+                contractId, contractVersion,
+                supportsCompletePrincipalDiscovery,
+                supportsCompleteEntitlementDiscovery,
+                supportsCompleteGrantDiscovery,
                 Timestamp.from(now), Timestamp.from(now));
         return findBinding(tenant, id).orElseThrow();
     }
@@ -120,7 +129,10 @@ public final class JdbcIntegrationAdministrationRepository
     public Optional<ConnectorBinding> findBinding(TenantContext tenant, UUID id) {
         return jdbc.query("""
                 SELECT id, connector_instance_id, target_kind, target_id, contract_id,
-                       contract_version, supports_complete_principal_discovery,
+                       contract_version,
+                       supports_complete_principal_discovery,
+                       supports_complete_entitlement_discovery,
+                       supports_complete_grant_discovery,
                        lifecycle_state, revision, created_at, updated_at
                 FROM integration.connector_binding
                 WHERE tenant_id = ? AND id = ?
@@ -128,23 +140,32 @@ public final class JdbcIntegrationAdministrationRepository
                 (rs,row) -> new ConnectorBinding(
                         rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getString(3), rs.getObject(4, UUID.class), rs.getString(5),
-                        rs.getInt(6), rs.getBoolean(7), rs.getString(8), rs.getLong(9),
-                        rs.getTimestamp(10).toInstant(), rs.getTimestamp(11).toInstant()),
+                        rs.getInt(6), rs.getBoolean(7), rs.getBoolean(8), rs.getBoolean(9),
+                        rs.getString(10), rs.getLong(11),
+                        rs.getTimestamp(12).toInstant(), rs.getTimestamp(13).toInstant()),
                 tenant.tenantId(), id).stream().findFirst();
     }
 
     @Override
     public ConnectorBinding updateBinding(
             TenantContext tenant, UUID id, String contractId, int contractVersion,
-            boolean supportsCompletePrincipalDiscovery, long expectedRevision, Instant now) {
+            boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery,
+            long expectedRevision, Instant now) {
         int affected = jdbc.update("""
                 UPDATE integration.connector_binding
                 SET contract_id = ?, contract_version = ?,
                     supports_complete_principal_discovery = ?,
+                    supports_complete_entitlement_discovery = ?,
+                    supports_complete_grant_discovery = ?,
                     revision = revision + 1, updated_at = ?
                 WHERE tenant_id = ? AND id = ? AND revision = ? AND lifecycle_state = 'ACTIVE'
                 """,
-                contractId, contractVersion, supportsCompletePrincipalDiscovery,
+                contractId, contractVersion,
+                supportsCompletePrincipalDiscovery,
+                supportsCompleteEntitlementDiscovery,
+                supportsCompleteGrantDiscovery,
                 Timestamp.from(now), tenant.tenantId(), id, expectedRevision);
         requireUpdated(affected, "connector-binding", tenant, id, expectedRevision);
         return findBinding(tenant, id).orElseThrow();
