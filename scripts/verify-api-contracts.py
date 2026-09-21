@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/identity-v1.json"
 ASYNCAPI = ROOT / "apps/server/src/main/resources/contracts/asyncapi/identity-events-v1.json"
 CONNECTOR_WORKER_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/connector-worker-v1.json"
+INTEGRATION_ADMIN_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/integration-admin-v1.json"
 
 
 def load_json(path: Path) -> dict:
@@ -296,10 +297,39 @@ def verify_connector_worker_openapi(document: dict) -> None:
         )
 
 
+
+def verify_integration_admin_openapi(document: dict) -> None:
+    assert document.get("openapi", "").startswith("3.1.")
+    expected_paths = {
+        "/api/v1/connectors",
+        "/api/v1/connectors/{id}",
+        "/api/v1/connectors/{id}:disable",
+        "/api/v1/connector-bindings",
+        "/api/v1/connector-bindings/{id}",
+        "/api/v1/connector-bindings/{id}:disable",
+        "/api/v1/connector-workers",
+        "/api/v1/connector-workers/{id}",
+        "/api/v1/connector-workers/{id}:disable",
+    }
+    assert set(document.get("paths", {})) == expected_paths
+    assert document.get("security") == [{"bearerAuth": []}]
+    assert document.get("x-wyrmgate-idempotency") == "all mutations require Idempotency-Key"
+    assert document.get("x-wyrmgate-concurrency") == (
+        "updates and disable operations require strong revision If-Match"
+    )
+    schemas = document["components"]["schemas"]
+    assert "secretReference" not in schemas["ConnectorResource"]["properties"]
+    secret_reference = schemas["ConnectorCreateRequest"]["properties"]["secretReference"]
+    assert secret_reference.get("writeOnly") is True
+    for name in ("ConnectorResource", "ConnectorCreateRequest",
+                 "ConnectorBindingResource", "ConnectorWorkerResource", "WorkerPermission"):
+        assert schemas[name].get("additionalProperties") is False
+
 def main() -> None:
     verify_openapi(load_json(OPENAPI))
     verify_asyncapi(load_json(ASYNCAPI))
     verify_connector_worker_openapi(load_json(CONNECTOR_WORKER_OPENAPI))
+    verify_integration_admin_openapi(load_json(INTEGRATION_ADMIN_OPENAPI))
     print("API contracts verified")
 
 
