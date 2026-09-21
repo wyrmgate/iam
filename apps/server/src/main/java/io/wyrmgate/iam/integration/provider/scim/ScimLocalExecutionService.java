@@ -41,6 +41,7 @@ public final class ScimLocalExecutionService {
     private final DesiredAccessStateQuery desiredState;
     private final TransactionExecutor transactions;
     private final ScimPrincipalProviderAdapter scim;
+    private final ScimGroupProviderAdapter groups;
     private final ScimLocalExecutionProperties properties;
     private final ObjectMapper json;
     private final Clock clock;
@@ -51,9 +52,10 @@ public final class ScimLocalExecutionService {
             DesiredAccessStateQuery desiredState,
             TransactionExecutor transactions,
             ScimPrincipalProviderAdapter scim,
+            ScimGroupProviderAdapter groups,
             ScimLocalExecutionProperties properties,
             ObjectMapper json) {
-        this(execution, work, desiredState, transactions, scim, properties, json, Clock.systemUTC());
+        this(execution, work, desiredState, transactions, scim, groups, properties, json, Clock.systemUTC());
     }
 
     ScimLocalExecutionService(
@@ -62,6 +64,7 @@ public final class ScimLocalExecutionService {
             DesiredAccessStateQuery desiredState,
             TransactionExecutor transactions,
             ScimPrincipalProviderAdapter scim,
+            ScimGroupProviderAdapter groups,
             ScimLocalExecutionProperties properties,
             ObjectMapper json,
             Clock clock) {
@@ -70,6 +73,7 @@ public final class ScimLocalExecutionService {
         this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
         this.scim = Objects.requireNonNull(scim, "scim");
+        this.groups = Objects.requireNonNull(groups, "groups");
         this.properties = Objects.requireNonNull(properties, "properties");
         this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -97,14 +101,27 @@ public final class ScimLocalExecutionService {
 
     private List<ClaimedProvisioning> claimProvisioning(int limit) {
         Instant now = clock.instant();
-        List<ClaimedProvisioning> claimed = new ArrayList<>();
-        for (ProvisioningCandidate candidate : execution.lockLocalProvisioningCandidates(
+        List<ProvisioningCandidate> candidates = new ArrayList<>();
+        candidates.addAll(execution.lockLocalProvisioningCandidates(
                 ScimPrincipalProviderAdapter.RUNTIME_ID,
                 ScimPrincipalProviderAdapter.RUNTIME_VERSION,
                 ScimPrincipalProviderAdapter.CONTRACT_ID,
                 ScimPrincipalProviderAdapter.CONTRACT_VERSION,
                 limit,
-                now)) {
+                now));
+        int remaining = limit - candidates.size();
+        if (remaining > 0) {
+            candidates.addAll(execution.lockLocalProvisioningCandidates(
+                    ScimGroupProviderAdapter.RUNTIME_ID,
+                    ScimGroupProviderAdapter.RUNTIME_VERSION,
+                    ScimGroupProviderAdapter.CONTRACT_ID,
+                    ScimGroupProviderAdapter.CONTRACT_VERSION,
+                    remaining,
+                    now));
+        }
+
+        List<ClaimedProvisioning> claimed = new ArrayList<>();
+        for (ProvisioningCandidate candidate : candidates) {
             DesiredAccessStateQuery.SubjectKind subjectKind;
             try {
                 subjectKind = DesiredAccessStateQuery.SubjectKind.valueOf(candidate.subjectKind());
@@ -133,14 +150,26 @@ public final class ScimLocalExecutionService {
 
     private List<LeasedConnectorWork> claimReconciliation(int limit) {
         Instant now = clock.instant();
-        List<LeasedConnectorWork> claimed = new ArrayList<>();
-        for (ReconciliationCandidate candidate : execution.lockLocalReconciliationCandidates(
+        List<ReconciliationCandidate> candidates = new ArrayList<>();
+        candidates.addAll(execution.lockLocalReconciliationCandidates(
                 ScimPrincipalProviderAdapter.RUNTIME_ID,
                 ScimPrincipalProviderAdapter.RUNTIME_VERSION,
                 ScimPrincipalProviderAdapter.CONTRACT_ID,
                 ScimPrincipalProviderAdapter.CONTRACT_VERSION,
                 limit,
-                now)) {
+                now));
+        int remaining = limit - candidates.size();
+        if (remaining > 0) {
+            candidates.addAll(execution.lockLocalReconciliationCandidates(
+                    ScimGroupProviderAdapter.RUNTIME_ID,
+                    ScimGroupProviderAdapter.RUNTIME_VERSION,
+                    ScimGroupProviderAdapter.CONTRACT_ID,
+                    ScimGroupProviderAdapter.CONTRACT_VERSION,
+                    remaining,
+                    now));
+        }
+        List<LeasedConnectorWork> claimed = new ArrayList<>();
+        for (ReconciliationCandidate candidate : candidates) {
             WorkerSession owner = localOwner(new TenantContext(candidate.tenantId()));
             claimed.add(work.leaseReconciliation(
                     owner, candidate, now, properties.effectiveLeaseDuration()));
@@ -173,7 +202,7 @@ public final class ScimLocalExecutionService {
 
         ExecutionConfiguration configuration = execution
                 .findExecutionConfiguration(leased.tenant(), leased.connectorBindingId())
-                .filter(this::isCompatible)
+                .filter(value -> isCompatible(value, leased.contractId(), leased.contractVersion()))
                 .orElse(null);
         if (configuration == null || configuration.secretReference() == null
                 || configuration.secretReference().isBlank()) {
@@ -185,30 +214,62 @@ public final class ScimLocalExecutionService {
 
         try {
             ConnectorPayloadGuard.requireSecretFree(candidate.payload());
-            ScimPrincipalProviderAdapter.Configuration scimConfiguration =
-                    scimConfiguration(configuration.configuration());
             Map<String,Object> payload = candidate.payload();
-            ScimPrincipalProviderAdapter.ProvisioningResult result =
-                    switch (candidate.operationType()) {
-                        case "UPSERT_PRINCIPAL" -> upsert(
-                                scimConfiguration,
-                                configuration.secretReference(),
-                                payload,
-                                candidate.idempotencyKey());
-                        case "DISABLE_PRINCIPAL", "DEACTIVATE_PRINCIPAL" ->
-                                scim.disablePrincipal(
-                                        scimConfiguration,
-                                        configuration.secretReference(),
-                                        requiredText(payload, "providerStableId"),
-                                        text(payload, "providerVersion"),
-                                        candidate.idempotencyKey());
-                        default -> throw new UnsupportedOperationException(
-                                "unsupported SCIM provisioning operation");
-                    };
-            complete(owner, leased, new WorkCompletion(
-                    "SUCCEEDED", null, null, result.providerRequestId(), null,
-                    result.providerStableId(), result.providerVersion(),
-                    Map.of(), null, null));
+            if (ScimPrincipalProviderAdapter.CONTRACT_ID.equals(leased.contractId())) {
+                ScimPrincipalProviderAdapter.ProvisioningResult result =
+                        switch (candidate.operationType()) {
+                            case "UPSERT_PRINCIPAL" -> upsert(
+                                    scimConfiguration(configuration.configuration()),
+                                    configuration.secretReference(),
+                                    payload,
+                                    candidate.idempotencyKey());
+                            case "DISABLE_PRINCIPAL", "DEACTIVATE_PRINCIPAL" ->
+                                    scim.disablePrincipal(
+                                            scimConfiguration(configuration.configuration()),
+                                            configuration.secretReference(),
+                                            requiredText(payload, "providerStableId"),
+                                            text(payload, "providerVersion"),
+                                            candidate.idempotencyKey());
+                            default -> throw new UnsupportedOperationException(
+                                    "unsupported SCIM principal provisioning operation");
+                        };
+                complete(owner, leased, new WorkCompletion(
+                        "SUCCEEDED", null, null, result.providerRequestId(), null,
+                        result.providerStableId(), result.providerVersion(),
+                        Map.of(), null, null));
+            } else if (ScimGroupProviderAdapter.CONTRACT_ID.equals(leased.contractId())) {
+                if (!"DESIRED_GRANT".equals(candidate.subjectKind())) {
+                    throw new UnsupportedOperationException(
+                            "SCIM Group membership work requires DESIRED_GRANT");
+                }
+                ScimGroupProviderAdapter.Configuration groupConfiguration =
+                        groupConfiguration(configuration.configuration());
+                ScimGroupProviderAdapter.ProvisioningResult result =
+                        switch (candidate.operationType()) {
+                            case "ADD_GRANT" -> groups.addGrant(
+                                    groupConfiguration,
+                                    configuration.secretReference(),
+                                    requiredText(payload, "providerGroupId"),
+                                    text(payload, "providerGroupVersion"),
+                                    requiredText(payload, "providerPrincipalId"),
+                                    candidate.idempotencyKey());
+                            case "REMOVE_GRANT" -> groups.removeGrant(
+                                    groupConfiguration,
+                                    configuration.secretReference(),
+                                    requiredText(payload, "providerGroupId"),
+                                    text(payload, "providerGroupVersion"),
+                                    requiredText(payload, "providerPrincipalId"),
+                                    candidate.idempotencyKey());
+                            default -> throw new UnsupportedOperationException(
+                                    "unsupported SCIM grant provisioning operation");
+                        };
+                complete(owner, leased, new WorkCompletion(
+                        "SUCCEEDED", null, null, result.providerRequestId(), null,
+                        result.providerStableId(), result.providerVersion(),
+                        Map.of(), null, null));
+            } else {
+                throw new UnsupportedOperationException("unsupported SCIM contract");
+            }
         } catch (ScimProviderException provider) {
             complete(owner, leased, providerCompletion(provider, null, null));
         } catch (WorkerProtocolException secretViolation) {
@@ -226,7 +287,7 @@ public final class ScimLocalExecutionService {
         WorkerSession owner = localOwner(leased.tenant());
         ExecutionConfiguration configuration = execution
                 .findExecutionConfiguration(leased.tenant(), leased.connectorBindingId())
-                .filter(this::isCompatible)
+                .filter(value -> isCompatible(value, leased.contractId(), leased.contractVersion()))
                 .orElse(null);
         if (configuration == null || configuration.secretReference() == null
                 || configuration.secretReference().isBlank()) {
@@ -240,15 +301,53 @@ public final class ScimLocalExecutionService {
         AtomicInteger sequence = new AtomicInteger(transactions.required(
                 () -> execution.nextObservationSequence(leased.tenant(), leased.workId())));
         try {
-            var result = scim.discoverPrincipals(
-                    scimConfiguration(configuration.configuration()),
-                    configuration.secretReference(),
-                    leased.checkpoint(),
-                    observations -> appendObservationBatch(
-                            owner, leased, sequence.getAndIncrement(), observations));
+            ReconciliationCompleteness coverage;
+            String nextCheckpoint;
+            String objectClass = text(leased.payload(), "objectClass");
+            if (ScimPrincipalProviderAdapter.CONTRACT_ID.equals(leased.contractId())) {
+                if (!"PRINCIPAL".equals(objectClass)) {
+                    throw new IllegalArgumentException(
+                            "principal contract requires PRINCIPAL reconciliation scope");
+                }
+                var result = scim.discoverPrincipals(
+                        scimConfiguration(configuration.configuration()),
+                        configuration.secretReference(),
+                        leased.checkpoint(),
+                        observations -> appendObservationBatch(
+                                owner, leased, sequence.getAndIncrement(), observations));
+                coverage = result.coverage();
+                nextCheckpoint = result.nextCheckpoint();
+            } else if (ScimGroupProviderAdapter.CONTRACT_ID.equals(leased.contractId())) {
+                ScimGroupProviderAdapter.Configuration groupConfiguration =
+                        groupConfiguration(configuration.configuration());
+                ScimGroupProviderAdapter.DiscoveryResult result;
+                if ("ENTITLEMENT".equals(objectClass)) {
+                    result = groups.discoverEntitlements(
+                            groupConfiguration,
+                            configuration.secretReference(),
+                            leased.checkpoint(),
+                            observations -> appendObservationBatch(
+                                    owner, leased, sequence.getAndIncrement(), observations));
+                } else if ("GRANT".equals(objectClass)) {
+                    result = groups.discoverGrants(
+                            groupConfiguration,
+                            configuration.secretReference(),
+                            leased.checkpoint(),
+                            observations -> appendObservationBatch(
+                                    owner, leased, sequence.getAndIncrement(), observations));
+                } else {
+                    throw new IllegalArgumentException(
+                            "group contract requires ENTITLEMENT or GRANT reconciliation scope");
+                }
+                coverage = result.coverage();
+                nextCheckpoint = result.nextCheckpoint();
+            } else {
+                throw new IllegalArgumentException("unsupported SCIM contract");
+            }
+
             complete(owner, leased, new WorkCompletion(
                     "SUCCEEDED", null, null, null, null, null, null, Map.of(),
-                    result.coverage(), result.nextCheckpoint()));
+                    coverage, nextCheckpoint));
         } catch (ScimProviderException provider) {
             complete(owner, leased, providerCompletion(
                     provider, ReconciliationCompleteness.UNKNOWN, leased.checkpoint()));
@@ -343,12 +442,21 @@ public final class ScimLocalExecutionService {
                 checkpoint);
     }
 
-    private boolean isCompatible(ExecutionConfiguration configuration) {
+    private boolean isCompatible(
+            ExecutionConfiguration configuration,
+            String contractId,
+            int contractVersion) {
         return "SCIM_2".equals(configuration.connectorType())
                 && ScimPrincipalProviderAdapter.RUNTIME_ID.equals(configuration.runtimeId())
                 && ScimPrincipalProviderAdapter.RUNTIME_VERSION.equals(configuration.runtimeVersion())
-                && ScimPrincipalProviderAdapter.CONTRACT_ID.equals(configuration.contractId())
-                && ScimPrincipalProviderAdapter.CONTRACT_VERSION == configuration.contractVersion();
+                && contractId.equals(configuration.contractId())
+                && contractVersion == configuration.contractVersion()
+                && (
+                    (ScimPrincipalProviderAdapter.CONTRACT_ID.equals(contractId)
+                        && ScimPrincipalProviderAdapter.CONTRACT_VERSION == contractVersion)
+                    || (ScimGroupProviderAdapter.CONTRACT_ID.equals(contractId)
+                        && ScimGroupProviderAdapter.CONTRACT_VERSION == contractVersion)
+                );
     }
 
     private static ScimPrincipalProviderAdapter.Configuration scimConfiguration(
@@ -360,6 +468,22 @@ public final class ScimLocalExecutionService {
                 configuration, "requestTimeout",
                 Duration.ofSeconds(integer(configuration, "requestTimeoutSeconds", 30)));
         return new ScimPrincipalProviderAdapter.Configuration(
+                URI.create(baseUri),
+                pageSize,
+                maxPages,
+                requestTimeout,
+                text(configuration, "idempotencyHeader"));
+    }
+
+    private static ScimGroupProviderAdapter.Configuration groupConfiguration(
+            Map<String,Object> configuration) {
+        String baseUri = requiredText(configuration, "baseUri");
+        int pageSize = integer(configuration, "pageSize", 100);
+        int maxPages = integer(configuration, "maxPagesPerExecution", 1000);
+        Duration requestTimeout = duration(
+                configuration, "requestTimeout",
+                Duration.ofSeconds(integer(configuration, "requestTimeoutSeconds", 30)));
+        return new ScimGroupProviderAdapter.Configuration(
                 URI.create(baseUri),
                 pageSize,
                 maxPages,
@@ -382,9 +506,13 @@ public final class ScimLocalExecutionService {
                         ScimPrincipalProviderAdapter.RUNTIME_ID,
                         ScimPrincipalProviderAdapter.RUNTIME_VERSION,
                         List.of(WorkerCapability.PROVISION, WorkerCapability.RECONCILE),
-                        List.of(new WorkerSession.ContractSupport(
-                                ScimPrincipalProviderAdapter.CONTRACT_ID,
-                                List.of(ScimPrincipalProviderAdapter.CONTRACT_VERSION))))));
+                        List.of(
+                                new WorkerSession.ContractSupport(
+                                        ScimPrincipalProviderAdapter.CONTRACT_ID,
+                                        List.of(ScimPrincipalProviderAdapter.CONTRACT_VERSION)),
+                                new WorkerSession.ContractSupport(
+                                        ScimGroupProviderAdapter.CONTRACT_ID,
+                                        List.of(ScimGroupProviderAdapter.CONTRACT_VERSION))))));
     }
 
     private String fingerprint(Object value) {
