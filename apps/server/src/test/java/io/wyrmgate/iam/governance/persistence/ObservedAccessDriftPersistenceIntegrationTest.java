@@ -295,13 +295,15 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                     scope_object_class, state, reported_coverage,
                     effective_completeness, configuration_version,
                     runtime_id, runtime_version, contract_id, contract_version,
-                    correlation_id, revision, started_at, created_at, updated_at)
+                    correlation_id, revision, started_at, completed_at,
+                    created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, 'SUCCEEDED', 'COMPLETE', 'COMPLETE',
                         1, 'runtime.test', '1.0', 'test.group', 1,
-                        ?, 1, ?, ?, ?)
+                        ?, 1, ?, ?, ?, ?)
                 """,
                 id, tenant.tenantId(), bindingId, ids.nextId(), objectClass,
-                ids.nextId(), Timestamp.from(NOW), Timestamp.from(NOW), Timestamp.from(NOW));
+                ids.nextId(), Timestamp.from(NOW), Timestamp.from(NOW),
+                Timestamp.from(NOW), Timestamp.from(NOW));
         return id;
     }
 
