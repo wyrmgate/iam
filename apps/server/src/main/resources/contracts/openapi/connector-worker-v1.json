@@ -736,7 +736,7 @@
       }
     }
   },
-  "x-wyrmgate-contract-status": "architecture-interface-contract-runtime-not-yet-implemented",
+  "x-wyrmgate-contract-status": "runtime-exposed-dedicated-bearer-server-authorized",
   "x-wyrmgate-protocol-major": 1,
   "x-wyrmgate-delivery-semantics": "at-least-once leased work with leaseId+leaseEpoch fencing; duplicate/replay/out-of-order completion must be tolerated",
   "x-wyrmgate-secret-boundary": "ordinary work/result/observation payloads must not contain raw secret/private credential material",
