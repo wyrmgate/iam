@@ -41,6 +41,15 @@ public final class JdbcIntegrationAdministrationFactSink
         append(tenant, factType, "connector-worker", workerId, revision, occurredAt, correlationId);
     }
 
+    @Override
+    public void mappingChanged(
+            TenantContext tenant, String factType, UUID mappingId, long revision,
+            Instant occurredAt, UUID correlationId) {
+        append(
+                tenant, factType, "entitlement-observation-mapping",
+                mappingId, revision, occurredAt, correlationId);
+    }
+
     private void append(
             TenantContext tenant, String factType, String aggregateType, UUID aggregateId,
             long revision, Instant occurredAt, UUID correlationId) {
