@@ -119,7 +119,10 @@ public final class IntegrationAdministrationController {
         AuthenticatedAdministrativeActor actor=ControlPlaneActorRequestContext.require(request);
         var value=mutations.createBinding(
                 actor,body.connectorInstanceId(),body.targetKind(),body.targetId(),
-                body.contractId(),body.contractVersion(),body.supportsCompletePrincipalDiscovery(),
+                body.contractId(),body.contractVersion(),
+                body.supportsCompletePrincipalDiscovery(),
+                body.supportsCompleteEntitlementDiscovery(),
+                body.supportsCompleteGrantDiscovery(),
                 key(key,correlationId),fingerprint(body),Instant.now(),correlationId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .header(HttpHeaders.ETAG,etag(value.revision()))
@@ -149,7 +152,10 @@ public final class IntegrationAdministrationController {
         AuthenticatedAdministrativeActor actor=ControlPlaneActorRequestContext.require(request);
         long revision=revision(ifMatch,correlationId);
         var value=mutations.updateBinding(actor,id,body.contractId(),body.contractVersion(),
-                body.supportsCompletePrincipalDiscovery(),revision,key(idem,correlationId),
+                body.supportsCompletePrincipalDiscovery(),
+                body.supportsCompleteEntitlementDiscovery(),
+                body.supportsCompleteGrantDiscovery(),
+                revision,key(idem,correlationId),
                 fingerprint(List.of(id,revision,body)),Instant.now(),correlationId);
         return ok(binding(value),value.revision(),correlationId);
     }
@@ -272,7 +278,11 @@ public final class IntegrationAdministrationController {
             IntegrationAdministrationRepository.ConnectorBinding v) {
         return new IntegrationAdminApiModels.BindingResource(
                 v.id(),v.connectorInstanceId(),v.targetKind(),v.targetId(),v.contractId(),
-                v.contractVersion(),v.supportsCompletePrincipalDiscovery(),v.lifecycleState(),
+                v.contractVersion(),
+                v.supportsCompletePrincipalDiscovery(),
+                v.supportsCompleteEntitlementDiscovery(),
+                v.supportsCompleteGrantDiscovery(),
+                v.lifecycleState(),
                 v.revision(),v.createdAt(),v.updatedAt());
     }
 
