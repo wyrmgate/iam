@@ -218,7 +218,7 @@ class ScimPrincipalProviderAdapterTest {
         AtomicReference<String> detail = new AtomicReference<>("secret detail connector-secret");
         server.createContext("/scim/v2/Users", exchange -> {
             requests.add(record(exchange));
-            respond(exchange, status.get(), """
+            respond(exchange, activeStatus.get(), """
                     {
                       "schemas":["urn:ietf:params:scim:api:messages:2.0:Error"],
                       "status":"%d",
@@ -258,13 +258,6 @@ class ScimPrincipalProviderAdapterTest {
 
     private AtomicInteger activeStatus;
 
-    private AtomicInteger findStatusHolder() {
-        return activeStatus;
-    }
-
-    private void voidStatus(AtomicInteger status, int ignored) {
-        // Helper exists only to keep the mutable test status strongly referenced until assertions finish.
-    }
 
     private ScimPrincipalProviderAdapter adapter() {
         ConnectorSecretProvider secretProvider = reference -> {
