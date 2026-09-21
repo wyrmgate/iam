@@ -31,6 +31,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`engineering/dev-cd.md`](engineering/dev-cd.md) — active managed DEV deployment topology: Cloudflare Pages, Railway, and Neon.
 - [`operations/dev-managed-activation.md`](operations/dev-managed-activation.md) — managed DEV activation checklist and recovery verification.
 - [`operations/backup-recovery.md`](operations/backup-recovery.md) — managed Neon DEV and standalone PostgreSQL recovery boundaries.
+- [`operations/public-event-webhook.md`](operations/public-event-webhook.md) — signed public-event webhook activation, receiver, retry, rotation, and failure runbook.
 - [`engineering/edge.md`](engineering/edge.md) — standalone-host Caddy reference edge.
 - [`engineering/public-demo.md`](engineering/public-demo.md) — current DEV/demo usage and standalone DEMO reference status.
 - [`engineering/observability.md`](engineering/observability.md) — vendor-neutral telemetry contract and current managed DEV posture.
@@ -65,6 +66,6 @@ The first runtime Identity HTTP slice is now implemented for the checked-in cont
 
 The curated Identity integration-event slice now has a durable transport-neutral runtime dispatcher. Internal Identity facts remain distinct from public `iam.identity.created.v1` and `iam.identity.metadata-changed.v1` events; publication uses outbox leasing, curated mapping, normalized retry/terminal failure state, and an explicit external publisher port outside the authoritative transaction. A concrete broker/webhook/cloud transport is still a deployment/integration choice and is not selected by the canonical event contract.
 
-ADR-0013 now fixes the first external event transport boundary as one deployment-configured signed HTTPS webhook destination, with exact-version public-event compatibility and explicit deferral of multi-subscriber fan-out until per-destination delivery state or a broker exists.
+ADR-0013 fixes the first external event transport boundary as one deployment-configured signed HTTPS webhook destination, with exact-version public-event compatibility and explicit deferral of multi-subscriber fan-out until per-destination delivery state or a broker exists. The corresponding runtime adapter and operations runbook are now implemented; environment activation still requires an operator-provided receiver URL and deployment secret.
 
-Remaining open design areas therefore include implementation/activation of that first webhook transport, completion of OD-003 coverage beyond this Identity runtime slice, later multi-subscriber/broker evolution when justified, the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
+Remaining open design areas therefore include completion of OD-003 coverage beyond this Identity runtime slice, later multi-subscriber/broker evolution when justified, the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
