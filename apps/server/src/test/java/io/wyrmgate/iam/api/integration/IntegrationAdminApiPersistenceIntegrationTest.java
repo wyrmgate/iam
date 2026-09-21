@@ -176,7 +176,8 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 actor, "SCIM", "runtime.scim", "1.0", 1,
                 Map.of("client_secret", "forbidden"), null,
                 "connector-create-002", fp("secret"), now.plusSeconds(3), ids.nextId()))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IntegrationAdministrationException.class)
+                .hasMessageContaining("forbidden secret-shaped");
 
         assertThat(AdministrativePermissions.INITIAL_TENANT_ADMIN)
                 .doesNotContain(
