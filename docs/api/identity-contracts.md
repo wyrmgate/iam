@@ -141,7 +141,13 @@ Successful delivery marks the internal outbox row `PUBLISHED`. Retryable externa
 
 The created internal fact captures Identity type and lifecycle state at mutation time so the public `identity.created` event does not reconstruct historical event data from later current state. Display names and other richer values remain excluded.
 
-No broker, webhook product, cloud-messaging product, or connector transport is selected by this contract. Publication is disabled by default and requires an explicit `IntegrationEventPublisher` transport adapter. Enabling publication without such an adapter fails runtime composition rather than dropping or pretending to publish events.
+ADR-0013 selects the first runtime delivery adapter as one deployment-configured signed HTTPS webhook destination while keeping `IntegrationEventPublisher` transport-neutral. Delivery is disabled by default. Activation requires `IAM_INTEGRATION_EVENTS_ENABLED=true`, `IAM_INTEGRATION_EVENTS_TRANSPORT=webhook`, an HTTPS endpoint, and a deployment secret of at least 32 UTF-8 bytes.
+
+Each webhook POST sends the AsyncAPI JSON bytes unchanged and carries event ID, versioned event address, Unix delivery timestamp, and an HMAC-SHA-256 signature over `<timestamp>.<raw-body>`. Redirects are not followed. 2xx succeeds; 408/425/429/5xx and transient I/O retry; 3xx and other 4xx become terminal technical delivery failures with normalized error codes. Remote response bodies and exception detail are not persisted.
+
+The current outbox has one publication result per event, so this adapter supports exactly one destination per deployment. Multiple independent subscribers require later per-destination delivery state or a broker/cloud fan-out transport; they are not simulated by posting to an arbitrary list of URLs.
+
+The current closed v1 schemas are exact compatibility surfaces. Any payload/envelope shape or semantic change—including an optional field addition while `additionalProperties: false` remains in force—creates a new event version. A successor version coexists with an actively consumed predecessor until an explicit controlled deprecation/removal step. Retries never transform an event into another version.
 
 ## Verification
 
@@ -161,6 +167,6 @@ The lightweight verifier does not pretend to be a complete OpenAPI/AsyncAPI stan
 
 ## OD-003 completion boundary
 
-This first slice materially advances OD-003 but does not close it globally. The Identity surface now has concrete OpenAPI/AsyncAPI contracts plus a controlled transport-neutral runtime publication pipeline. OD-003 remains open for broader implemented public capability coverage, explicit external transport activation/operations, and repository-wide compatibility/deprecation process as additional public surfaces are introduced.
+This first slice materially advances OD-003 but does not close it globally. The Identity surface now has concrete OpenAPI/AsyncAPI contracts, a controlled outbox publication pipeline, an ADR-governed signed HTTPS webhook adapter, and an explicit exact-version compatibility/deprecation policy. OD-003 remains open for broader implemented public capability coverage and later multi-subscriber/broker evolution when concrete demand requires it.
 
 A later formal-specification checkpoint should fold the accepted ADR amendments and completed OD-003 slices into the Integration/SAD/RTM package rather than updating v0.2 for every incremental contract commit.
