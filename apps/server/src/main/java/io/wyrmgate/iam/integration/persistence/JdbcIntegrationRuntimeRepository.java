@@ -569,22 +569,35 @@ public final class JdbcIntegrationRuntimeRepository
                 : (reported == ReconciliationCompleteness.PARTIAL
                     ? ReconciliationCompleteness.PARTIAL : ReconciliationCompleteness.UNKNOWN);
 
-        jdbc.update("""
-                INSERT INTO integration.observed_principal (
-                    id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
-                    observed_state, present, last_observed_run_id, observed_at, absent_at)
-                SELECT gen_random_uuid(), s.tenant_id, ?, s.provider_stable_id, s.provider_version,
-                       s.observed_state, true, s.reconciliation_run_id, s.observed_at, NULL
-                FROM integration.reconciliation_principal_staging s
-                WHERE s.tenant_id = ? AND s.reconciliation_run_id = ?
-                ON CONFLICT (tenant_id, connector_binding_id, provider_stable_id) DO UPDATE
-                SET provider_version = EXCLUDED.provider_version,
-                    observed_state = EXCLUDED.observed_state,
-                    present = true,
-                    last_observed_run_id = EXCLUDED.last_observed_run_id,
-                    observed_at = EXCLUDED.observed_at,
-                    absent_at = NULL
-                """, run.bindingId(), session.tenant().tenantId(), runId);
+        record StagedPrincipal(String stableId, String version, String stateJson, Instant observedAt) {}
+        List<StagedPrincipal> staged = jdbc.query("""
+                SELECT provider_stable_id, provider_version, observed_state::text, observed_at
+                FROM integration.reconciliation_principal_staging
+                WHERE tenant_id = ? AND reconciliation_run_id = ?
+                ORDER BY provider_stable_id
+                """,
+                (rs,row) -> new StagedPrincipal(
+                        rs.getString(1), rs.getString(2), rs.getString(3),
+                        rs.getTimestamp(4).toInstant()),
+                session.tenant().tenantId(), runId);
+        for (StagedPrincipal principal : staged) {
+            jdbc.update("""
+                    INSERT INTO integration.observed_principal (
+                        id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
+                        observed_state, present, last_observed_run_id, observed_at, absent_at)
+                    VALUES (?, ?, ?, ?, ?, ?::jsonb, true, ?, ?, NULL)
+                    ON CONFLICT (tenant_id, connector_binding_id, provider_stable_id) DO UPDATE
+                    SET provider_version = EXCLUDED.provider_version,
+                        observed_state = EXCLUDED.observed_state,
+                        present = true,
+                        last_observed_run_id = EXCLUDED.last_observed_run_id,
+                        observed_at = EXCLUDED.observed_at,
+                        absent_at = NULL
+                    """,
+                    ids.nextId(), session.tenant().tenantId(), run.bindingId(),
+                    principal.stableId(), principal.version(), principal.stateJson(),
+                    runId, Timestamp.from(principal.observedAt()));
+        }
 
         if (effective == ReconciliationCompleteness.COMPLETE) {
             jdbc.update("""
