@@ -48,6 +48,7 @@ public interface ConnectorWorkRepository {
             UUID operationId,
             UUID tenantId,
             UUID connectorBindingId,
+            String operationType,
             String subjectKind,
             UUID subjectId,
             long desiredRevision,

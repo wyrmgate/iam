@@ -364,7 +364,7 @@ The first remote-worker implementation materializes that separation with:
 - Integration-owned `connector_worker_registration`, binding-scope/runtime-permission and negotiated-session tables;
 - Integration-owned `provisioning_job`, `provisioning_task`, immutable `provisioning_attempt`;
 - Integration-owned `reconciliation_run`, idempotent observation-batch metadata, PRINCIPAL staging, and current `observed_principal`;
-- Platform-owned `connector_work_lease` carrying only technical session/work/lease ID, monotonic lease epoch and expiry.
+- Platform-owned `connector_work_lease` carrying only an opaque technical execution-owner ID, work/lease ID, monotonic lease epoch and expiry. Remote workers use negotiated session IDs as execution-owner IDs; in-process executors use stable runtime owner IDs.
 
 `connector_work_lease` is not authoritative process state. Expiry/reclaim increments the fencing epoch; stale completions cannot overwrite a newer lease generation.
 

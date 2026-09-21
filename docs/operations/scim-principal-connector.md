@@ -12,7 +12,7 @@ Runtime identity:
 - principal contract ID: `scim-2.principal`
 - contract version: `1`
 
-The adapter is currently a server-side provider implementation available to Integration composition. The existing remote connector-worker v1 protocol remains unchanged.
+The adapter is a server-side provider implementation available to Integration composition. When `iam.integration.scim-local.enabled=true`, an Integration-owned local executor claims durable SCIM work from the same ProvisioningTask/ReconciliationRun and connector-work lease model used by remote execution. The existing remote connector-worker v1 protocol remains unchanged.
 
 ## Scope
 
@@ -142,3 +142,49 @@ To disable execution, use the governed ConnectorInstance/ConnectorBinding/worker
 - secret/provider-detail non-leakage.
 
 The existing Integration persistence suite remains the authority for tenant isolation, lease/fencing, immutable attempts, desired-state freshness, and COMPLETE/PARTIAL observation materialization behavior.
+
+
+## Local durable execution
+
+Local execution is disabled by default. Enable it with:
+
+`IAM_SCIM_LOCAL_EXECUTION_ENABLED=true`
+
+Optional controls:
+
+- `IAM_SCIM_LOCAL_EXECUTION_POLL_INTERVAL` — scheduler delay, default `PT1S`;
+- `IAM_SCIM_LOCAL_EXECUTION_LEASE_DURATION` — technical work lease, default `PT30S`, constrained to 5 seconds–10 minutes;
+- `IAM_SCIM_LOCAL_EXECUTION_BATCH_SIZE` — maximum claimed work per scheduler pass, default 10.
+
+The local executor selects only active ConnectorBindings/ConnectorInstances whose runtime and contract exactly match:
+
+- runtime `scim-2 / 1.0`;
+- contract `scim-2.principal / 1`.
+
+It does not bypass durable Integration state. Provisioning and reconciliation are claimed under the existing fenced connector-work lease. Provider calls happen only after the claim transaction has committed, and observations/completion are written in later bounded transactions. A stale lease generation cannot append observations or commit completion.
+
+### Provisioning payload contract
+
+For `UPSERT_PRINCIPAL`, the connector-edge task payload may contain:
+
+- `providerStableId` — omit to create; include to update;
+- `providerVersion` — optional provider version/ETag for conditional update;
+- `userName`;
+- `displayName`;
+- `externalId`;
+- `active`.
+
+For `DISABLE_PRINCIPAL` or `DEACTIVATE_PRINCIPAL`:
+
+- `providerStableId` is required;
+- `providerVersion` is optional.
+
+These fields are provider-edge execution data and do not redefine canonical Principal or Identity semantics.
+
+Before claim, and again immediately before provider mutation, the executor checks Access-owned `DesiredAccessStateQuery`. A missing or changed desired revision is superseded without a provider mutation. If Access is unavailable before claim, the work remains unclaimed. If availability is lost after claim but before the provider call, the attempt is normalized as retryable without making the provider call.
+
+### Local versus remote execution
+
+Local SCIM execution and remote connector workers are alternative execution placements over the same Integration-owned business/process state. They must not execute the same active lease simultaneously. The shared lease ID/epoch fencing, desired-state freshness, immutable ProvisioningAttempt, reconciliation completeness, and secret rules remain authoritative regardless of placement.
+
+Provider credentials are resolved only by the execution environment that performs the outbound SCIM call. Local execution currently uses the `ConnectorSecretProvider` implementation documented above; remote workers continue to receive only opaque configuration/reference information permitted by the connector-worker protocol and never raw secret material.
