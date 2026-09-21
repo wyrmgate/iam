@@ -129,8 +129,8 @@ class IdentityIntegrationEventPublicationIntegrationTest {
         String combined = publisher.events.stream()
                 .map(event -> new String(event.payload(), StandardCharsets.UTF_8))
                 .reduce("", (left, right) -> left + right);
-        assertThat(combined).contains("\\\"lifecycleState\\\":\\\"PENDING\\\"");
-        assertThat(combined).contains("\\\"changedFields\\\":[\\\"displayName\\\"]");
+        assertThat(combined).contains("\"lifecycleState\":\"PENDING\"");
+        assertThat(combined).contains("\"changedFields\":[\"displayName\"]");
         assertThat(combined).doesNotContain("Do Not Publish This Name");
         assertThat(combined).doesNotContain("Still Private");
 
