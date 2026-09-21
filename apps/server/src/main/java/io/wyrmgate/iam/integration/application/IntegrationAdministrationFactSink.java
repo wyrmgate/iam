@@ -17,4 +17,8 @@ public interface IntegrationAdministrationFactSink {
     void workerChanged(
             TenantContext tenant, String factType, UUID workerId, long revision,
             Instant occurredAt, UUID correlationId);
+
+    void mappingChanged(
+            TenantContext tenant, String factType, UUID mappingId, long revision,
+            Instant occurredAt, UUID correlationId);
 }
