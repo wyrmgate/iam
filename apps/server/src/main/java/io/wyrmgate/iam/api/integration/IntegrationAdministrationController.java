@@ -250,7 +250,7 @@ public final class IntegrationAdministrationController {
     }
 
     private static long revision(String value,UUID correlationId) {
-        if(value==null||!value.matches("\\"rev-[1-9][0-9]*\\""))
+        if(value==null||!value.matches("\\\"rev-[1-9][0-9]*\\\""))
             throw IntegrationAdminApiException.validation(correlationId,
                     "If-Match must be a strong revision ETag such as \"rev-7\".");
         try { return Long.parseLong(value.substring(5,value.length()-1)); }
