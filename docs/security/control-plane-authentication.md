@@ -99,6 +99,8 @@ IAM_AUTH_ISSUER_URI=https://issuer.example
 IAM_AUTH_AUDIENCE=wyrmgate-api
 ```
 
+Protected runtime Identity APIs also require the ADR-0012 application-signing boundary used for integrity-protected continuation cursors. When `IAM_AUTH_ENABLED=true`, runtime startup fails closed unless signing is enabled and the active signing key material is configured. Retired public verification keys may remain configured for the bounded cursor-verification window; private signing material remains behind the platform signing adapter and is not exposed to Identity domain code.
+
 Issuer discovery is lazy so migration/bootstrap startup does not require contacting the identity provider unless a bearer token is actually decoded.
 
 ## Sensitive-data rules
@@ -111,8 +113,10 @@ Authentication failures return stable semantic errors and correlation IDs rather
 
 ## Current completion boundary
 
-This slice establishes trusted bearer validation, server-side tenant/governed-actor resolution, and burn-once initial-administrator provisioning. It does **not** yet expose the Identity OpenAPI operations as runtime controllers.
+Trusted bearer validation, server-side tenant/governed-actor resolution, and burn-once initial-administrator provisioning are implemented and gate the first runtime Identity API slice.
 
-The next Identity HTTP slice must combine `ControlPlaneActorRequestContext` with `AdministrativeAuthorizationService` for every semantic operation. Bearer possession alone is never sufficient.
+The protected `/api/v1/identities` operations combine `ControlPlaneActorRequestContext` with `AdministrativeAuthorizationService` for every semantic operation. Bearer possession alone never grants IAM authority: the resolved governed actor still requires the operation-specific `identity:read`, `identity:create`, or `identity:update` permission in the same tenant.
+
+The current Identity runtime slice covers authoritative create/read/list, non-lifecycle display-name update, and canonical-attribute metadata reads. Its collection cursors are integrity-protected under ADR-0012 and are bound to the trusted tenant context; canonical-attribute cursors are additionally bound to the Identity resource. Canonical attribute values/provenance remain fail-closed/redacted until classification-aware value visibility is implemented, and curated public Identity event publication remains a separate future adapter/integration concern.
 
 Authentication assurance (`acr`/`amr`), step-up, administrative delegation, maker-checker elevation, break-glass, and post-bootstrap recovery remain future governed security slices rather than implicit token behavior.
