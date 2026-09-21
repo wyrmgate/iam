@@ -276,6 +276,10 @@ access.access_assignment
 
 Identity, Role, Entitlement and Principal references are cross-capability stable IDs. Access uses semantic queries to validate material current facts when an assignment mutation requires them; the references never authorize direct foreign repository mutation.
 
+The first Access desired-state implementation materializes `access.desired_principal_state` and `access.desired_grant_state` as rebuildable projections. Each row carries tenant scope, stable projection ID, technical target context, desired state, positive `desired_revision`, positive `source_generation`, and `computed_at`; grant rows additionally carry entitlement and optional principal context. Cross-capability references remain stable IDs without database foreign keys.
+
+`desired_revision` is the freshness identity carried into Integration provisioning tasks. `source_generation` and `computed_at` describe projection provenance/rebuild generation rather than authoritative aggregate revision. Integration never reads these tables directly: it consumes framework-neutral `DesiredAccessStateQuery`, which returns `CURRENT(revision)`, `ABSENT`, or `UNAVAILABLE`. Missing or mismatched desired state supersedes stale provisioning; query unavailability leaves work unclaimed so provider-side privilege changes fail closed.
+
 ### Governance
 
 Initial table families include:
