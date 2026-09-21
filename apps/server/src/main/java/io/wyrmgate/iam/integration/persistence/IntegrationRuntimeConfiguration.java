@@ -5,7 +5,12 @@ import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolProperties
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolService;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationCommandService;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationFactSink;
-import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository;import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
+import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository;
+import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository;
+import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
+import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
+import io.wyrmgate.iam.catalog.application.CatalogEntitlementReferenceQuery;
+import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -37,6 +42,24 @@ public class IntegrationRuntimeConfiguration {
     }
 
     @Bean
+    JdbcIntegrationObservationRepository jdbcIntegrationObservationRepository(
+            JdbcTemplate jdbcTemplate) {
+        return new JdbcIntegrationObservationRepository(jdbcTemplate);
+    }
+
+    @Bean
+    IntegrationEntitlementMappingRepository integrationEntitlementMappingRepository(
+            JdbcIntegrationObservationRepository repository) {
+        return repository;
+    }
+
+    @Bean
+    IntegrationObservedAccessQuery integrationObservedAccessQuery(
+            JdbcIntegrationObservationRepository repository) {
+        return repository;
+    }
+
+    @Bean
     IntegrationAdministrationFactSink integrationAdministrationFactSink(
             JdbcOutboxRepository outboxRepository,
             IdGenerator idGenerator) {
@@ -51,6 +74,18 @@ public class IntegrationRuntimeConfiguration {
             TransactionExecutor transactions) {
         return new IntegrationAdministrationCommandService(
                 repository, factSink, idGenerator, transactions);
+    }
+
+    @Bean
+    IntegrationEntitlementMappingService integrationEntitlementMappingService(
+            IntegrationAdministrationRepository administration,
+            IntegrationEntitlementMappingRepository mappings,
+            CatalogEntitlementReferenceQuery catalog,
+            IntegrationAdministrationFactSink facts,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new IntegrationEntitlementMappingService(
+                administration, mappings, catalog, facts, ids, transactions);
     }
 
     @Bean
