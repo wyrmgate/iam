@@ -30,7 +30,8 @@ public final class JdbcIdentityFactSink implements IdentityFactSink {
                 tenant,
                 identity,
                 "identity.identity-created",
-                "{\"identityType\":\"" + identity.type().name() + "\"}",
+                "{\"identityType\":\"" + identity.type().name()
+                        + "\",\"lifecycleState\":\"" + identity.lifecycleState().name() + "\"}",
                 correlationId,
                 causationId);
     }

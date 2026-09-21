@@ -107,7 +107,7 @@ def verify_openapi(document: dict) -> None:
 def verify_asyncapi(document: dict) -> None:
     assert document.get("asyncapi") == "3.1.0"
     assert document.get("x-wyrmgate-publication-status") == (
-        "schema-defined-not-yet-wired-to-external-delivery"
+        "runtime-dispatcher-implemented-transport-adapter-required"
     )
 
     operations = document.get("operations")

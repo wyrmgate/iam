@@ -603,6 +603,15 @@ If native/raw payloads must be retained for troubleshooting, they are stored sep
 
 The authoritative mutation and its outbox fact commit atomically in the same database transaction.
 
+Publication state is technical delivery state, not domain state. The active outbox lifecycle is:
+
+```text
+PENDING -> PUBLISHED
+       \-> FAILED
+```
+
+`PENDING` rows may carry attempt count, next-attempt time, last-attempt time and a normalized last error code. Retryable transport failures remain `PENDING` and are re-eligible after bounded backoff. `FAILED` is terminal technical/manual-remediation state for permanent mapping/contract defects and has no next-attempt time. Publication workers claim bounded batches with short leases/locking; external delivery occurs after the claim statement/transaction completes. A lease expiry after worker crash makes a still-`PENDING` row eligible again, preserving at-least-once semantics.
+
 ### Inbox/deduplication
 
 `platform.inbox_message` uses tenant-aware consumer identity, normally:
