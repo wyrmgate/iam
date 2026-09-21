@@ -28,6 +28,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
 - [`api/identity-contracts.md`](api/identity-contracts.md) — first OD-003 machine-readable Identity OpenAPI/AsyncAPI implementation slice and runtime authorization boundary.
+- [`api/connector-worker-protocol.md`](api/connector-worker-protocol.md) — OD-004 remote connector-worker v1 session, leasing, fencing, result, observation, and compatibility contract.
 - [`engineering/dev-cd.md`](engineering/dev-cd.md) — active managed DEV deployment topology: Cloudflare Pages, Railway, and Neon.
 - [`operations/dev-managed-activation.md`](operations/dev-managed-activation.md) — managed DEV activation checklist and recovery verification.
 - [`operations/backup-recovery.md`](operations/backup-recovery.md) — managed Neon DEV and standalone PostgreSQL recovery boundaries.
@@ -54,7 +55,7 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, C
 
 ## Current status
 
-IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0013 are the current architecture checkpoint. ADR-0011 through ADR-0013 are controlled post-v0.2 amendments and must be folded into the next formal Security/SAD/Integration/RTM revision.
+IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0014 are the current architecture checkpoint. ADR-0011 through ADR-0014 are controlled post-v0.2 amendments and must be folded into the next formal Security/SAD/Integration/RTM revision.
 
 The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 and [`architecture/physical-data-model.md`](architecture/physical-data-model.md) are the current controlled amendment, and the next formal-specification revision must fold them into the Data Architecture/SAD/RTM package.
 
@@ -68,4 +69,6 @@ The curated Identity integration-event slice now has a durable transport-neutral
 
 ADR-0013 fixes the first external event transport boundary as one deployment-configured signed HTTPS webhook destination, with exact-version public-event compatibility and explicit deferral of multi-subscriber fan-out until per-destination delivery state or a broker exists. The corresponding runtime adapter and operations runbook are now implemented; environment activation still requires an operator-provided receiver URL and deployment secret.
 
-Remaining open design areas therefore include completion of OD-003 coverage beyond this Identity runtime slice, later multi-subscriber/broker evolution when justified, the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
+OD-004 is now resolved at the architecture/interface-contract level by ADR-0014 plus the checked-in remote connector-worker OpenAPI v1 contract. The first protocol uses worker-initiated HTTPS/JSON, dedicated authenticated runtime subjects, Integration-owned server-side worker registration, bounded leased work with lease-epoch fencing, schema/capability negotiation, normalized results, idempotent observation batches, and fail-closed reconciliation completeness. Runtime endpoints are intentionally not exposed until the first real Integration provisioning/reconciliation persistence slice exists.
+
+Remaining open design areas therefore include completion of OD-003 coverage beyond this Identity runtime slice, OD-004 runtime implementation with the first Integration process/persistence slice, later multi-subscriber/broker evolution when justified, operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
