@@ -60,6 +60,14 @@ iam:
   api:
     cursor:
       lifetime: ${IAM_API_CURSOR_LIFETIME:PT15M}
+  integration:
+    events:
+      enabled: ${IAM_INTEGRATION_EVENTS_ENABLED:false}
+      poll-interval: ${IAM_INTEGRATION_EVENTS_POLL_INTERVAL:PT1S}
+      claim-lease: ${IAM_INTEGRATION_EVENTS_CLAIM_LEASE:PT30S}
+      batch-size: ${IAM_INTEGRATION_EVENTS_BATCH_SIZE:50}
+      retry-base-delay: ${IAM_INTEGRATION_EVENTS_RETRY_BASE_DELAY:PT5S}
+      retry-max-delay: ${IAM_INTEGRATION_EVENTS_RETRY_MAX_DELAY:PT5M}
   bootstrap:
     initial-admin:
       enabled: ${IAM_INITIAL_ADMIN_BOOTSTRAP_ENABLED:false}
