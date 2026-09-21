@@ -48,18 +48,6 @@ public class IntegrationRuntimeConfiguration {
     }
 
     @Bean
-    IntegrationEntitlementMappingRepository integrationEntitlementMappingRepository(
-            JdbcIntegrationObservationRepository repository) {
-        return repository;
-    }
-
-    @Bean
-    IntegrationObservedAccessQuery integrationObservedAccessQuery(
-            JdbcIntegrationObservationRepository repository) {
-        return repository;
-    }
-
-    @Bean
     IntegrationAdministrationFactSink integrationAdministrationFactSink(
             JdbcOutboxRepository outboxRepository,
             IdGenerator idGenerator) {
