@@ -320,6 +320,62 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void provisioningAbsentDesiredStateSupersedesWhileUnavailableVerificationLeavesWorkUnclaimed() {
+        TenantContext tenant = tenant("freshness");
+        UUID binding = connector(tenant, "runtime.test", "1.0", true);
+        WorkerExternalSubject subject = new WorkerExternalSubject("https://issuer.example", "freshness-worker");
+        worker(tenant, subject, binding, WorkerCapability.PROVISION);
+        var registration = repository.findEnabledByExternalSubject(subject).orElseThrow();
+
+        UUID absentTask = createProvisioning(
+                tenant, binding, "DESIRED_PRINCIPAL", ids.nextId(), 4);
+        var absentService = service((t, kind, id) -> Freshness.absent());
+        var absentSession = absentService.establishSession(
+                registration, "pod-absent", List.of(1),
+                List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.PROVISION)));
+
+        assertThat(absentService.claim(registration, absentSession.id(), 1, 0)).isEmpty();
+        assertThat(taskState(absentTask)).isEqualTo("SUPERSEDED");
+
+        UUID unavailableTask = createProvisioning(
+                tenant, binding, "DESIRED_GRANT", ids.nextId(), 9);
+        var unavailableService = service((t, kind, id) -> Freshness.unavailable());
+        var unavailableSession = unavailableService.establishSession(
+                registration, "pod-unavailable", List.of(1),
+                List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.PROVISION)));
+
+        assertThat(unavailableService.claim(registration, unavailableSession.id(), 1, 0)).isEmpty();
+        assertThat(taskState(unavailableTask)).isEqualTo("READY");
+        assertThat(leaseCount(tenant, unavailableTask)).isZero();
+    }
+
+    @Test
+    void desiredGrantCurrentRevisionCanBeClaimed() {
+        TenantContext tenant = tenant("grant");
+        UUID binding = connector(tenant, "runtime.test", "1.0", true);
+        WorkerExternalSubject subject = new WorkerExternalSubject("https://issuer.example", "grant-worker");
+        worker(tenant, subject, binding, WorkerCapability.PROVISION);
+        var registration = repository.findEnabledByExternalSubject(subject).orElseThrow();
+
+        UUID desiredGrantId = ids.nextId();
+        UUID taskId = createProvisioning(
+                tenant, binding, "DESIRED_GRANT", desiredGrantId, 6);
+        var service = service((t, kind, id) -> {
+            assertThat(kind).isEqualTo(DesiredAccessStateQuery.SubjectKind.DESIRED_GRANT);
+            assertThat(id).isEqualTo(desiredGrantId);
+            return Freshness.current(6);
+        });
+        var session = service.establishSession(
+                registration, "pod-grant", List.of(1),
+                List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.PROVISION)));
+
+        var claimed = service.claim(registration, session.id(), 1, 0);
+        assertThat(claimed).hasSize(1);
+        assertThat(claimed.getFirst().workId()).isEqualTo(taskId);
+        assertThat(claimed.getFirst().desiredRevision()).isEqualTo(6);
+    }
+
+    @Test
     void secretShapedWorkerMetadataIsRejectedBeforePersistence() {
         TenantContext tenant = tenant("secret");
         UUID binding = connector(tenant, "runtime.test", "1.0", true);
@@ -441,6 +497,15 @@ class IntegrationRuntimePersistenceIntegrationTest {
 
     private UUID createProvisioning(
             TenantContext tenant, UUID bindingId, UUID subjectId, long desiredRevision) {
+        return createProvisioning(tenant, bindingId, "DESIRED_PRINCIPAL", subjectId, desiredRevision);
+    }
+
+    private UUID createProvisioning(
+            TenantContext tenant,
+            UUID bindingId,
+            String subjectKind,
+            UUID subjectId,
+            long desiredRevision) {
         UUID jobId = ids.nextId();
         UUID taskId = ids.nextId();
         UUID correlation = ids.nextId();
@@ -458,10 +523,10 @@ class IntegrationRuntimePersistenceIntegrationTest {
                     subject_kind, subject_id, desired_revision, idempotency_key,
                     contract_id, contract_version, payload, state, attempt_count,
                     revision, correlation_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'UPSERT_PRINCIPAL', 'DESIRED_PRINCIPAL', ?, ?, ?,
+                VALUES (?, ?, ?, ?, 'UPSERT_PRINCIPAL', ?, ?, ?, ?,
                         'test.principal', 1, '{}'::jsonb, 'READY', 0, 1, ?, ?, ?)
                 """,
-                taskId, tenant.tenantId(), jobId, ids.nextId(), subjectId, desiredRevision,
+                taskId, tenant.tenantId(), jobId, ids.nextId(), subjectKind, subjectId, desiredRevision,
                 "provision-" + taskId, correlation, Timestamp.from(NOW), Timestamp.from(NOW));
         return taskId;
     }
@@ -516,6 +581,14 @@ class IntegrationRuntimePersistenceIntegrationTest {
         return jdbc.queryForObject(
                 "SELECT state FROM integration.provisioning_task WHERE id = ?",
                 String.class, taskId);
+    }
+
+    private int leaseCount(TenantContext tenant, UUID taskId) {
+        Integer value = jdbc.queryForObject("""
+                SELECT count(*) FROM platform.connector_work_lease
+                WHERE tenant_id = ? AND work_kind = 'PROVISION' AND work_id = ?
+                """, Integer.class, tenant.tenantId(), taskId);
+        return value == null ? 0 : value;
     }
 
     private int attemptCount(UUID taskId) {
