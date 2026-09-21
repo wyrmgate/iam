@@ -116,4 +116,5 @@ The first runtime slice is intentionally bounded:
 - ProvisioningJob, ProvisioningTask and immutable ProvisioningAttempt persistence are implemented;
 - provisioning work revalidates through Access-owned `DesiredAccessStateQuery`; matching `CURRENT` revision is claimable, `ABSENT` or revision mismatch becomes `SUPERSEDED`, and `UNAVAILABLE` leaves work unclaimed;
 - connector/provider credentials remain external opaque secret references and never transit ordinary worker payloads;
+- an opt-in in-process SCIM executor may execute the same Integration-owned durable work using the same lease/fencing and completion persistence; this does not change worker protocol v1 or grant local execution any additional governance authority;
 - multi-region routing, broker transport, raw-secret delivery, and additional discovery object classes remain future slices.
