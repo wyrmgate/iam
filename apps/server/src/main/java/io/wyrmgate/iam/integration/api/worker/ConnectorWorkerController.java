@@ -110,15 +110,16 @@ public final class ConnectorWorkerController {
         List<ConnectorWorkRepository.ProviderObservation> observations =
                 requireList(request.observations(), "observations").stream()
                         .map(value -> {
-                            if (!"PRINCIPAL".equals(value.objectClass())) {
+                            if (!List.of("PRINCIPAL", "ENTITLEMENT", "GRANT").contains(value.objectClass())) {
                                 throw invalid(
                                         "unsupported_object_class",
-                                        "the first reconciliation runtime slice supports PRINCIPAL observations only");
+                                        "runtime supports PRINCIPAL, ENTITLEMENT and GRANT observations");
                             }
                             if (value.providerStableId() == null || value.providerStableId().isBlank()) {
                                 throw invalid("invalid_observation", "providerStableId must not be blank");
                             }
                             return new ConnectorWorkRepository.ProviderObservation(
+                                    value.objectClass(),
                                     value.providerStableId(),
                                     value.providerVersion(),
                                     value.observedState() == null ? Map.of() : value.observedState());
