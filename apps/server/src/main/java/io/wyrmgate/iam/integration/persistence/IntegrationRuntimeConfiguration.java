@@ -3,10 +3,9 @@ package io.wyrmgate.iam.integration.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolProperties;
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolService;
-import io.wyrmgate.iam.integration.application.DesiredStateRevisionQuery;
+import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -32,14 +31,14 @@ public class IntegrationRuntimeConfiguration {
     @Bean
     ConnectorWorkerProtocolService connectorWorkerProtocolService(
             JdbcIntegrationRuntimeRepository workers,
-            ObjectProvider<DesiredStateRevisionQuery> desiredStateQuery,
+            DesiredAccessStateQuery desiredStateQuery,
             TransactionExecutor transactions,
             ConnectorWorkerProtocolProperties properties,
             ObjectMapper objectMapper) {
         return new ConnectorWorkerProtocolService(
                 workers,
                 workers,
-                desiredStateQuery.getIfAvailable(DesiredStateRevisionQuery::unavailable),
+                desiredStateQuery,
                 transactions,
                 properties,
                 objectMapper);
