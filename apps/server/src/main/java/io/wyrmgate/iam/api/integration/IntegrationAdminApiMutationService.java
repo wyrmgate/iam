@@ -11,6 +11,9 @@ import io.wyrmgate.iam.integration.application.IntegrationAdministrationReposito
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository.ConnectorInstance;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository.ConnectorWorker;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository.WorkerPermissionSpec;
+import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository;
+import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository.EntitlementObservationMapping;
+import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
 import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
@@ -27,6 +30,8 @@ final class IntegrationAdminApiMutationService {
     private final AdministrativeAuthorizationService authorization;
     private final IntegrationAdministrationCommandService commands;
     private final IntegrationAdministrationRepository repository;
+    private final IntegrationEntitlementMappingService mappingCommands;
+    private final IntegrationEntitlementMappingRepository mappings;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
 
@@ -34,11 +39,15 @@ final class IntegrationAdminApiMutationService {
             AdministrativeAuthorizationService authorization,
             IntegrationAdministrationCommandService commands,
             IntegrationAdministrationRepository repository,
+            IntegrationEntitlementMappingService mappingCommands,
+            IntegrationEntitlementMappingRepository mappings,
             JdbcIdempotencyRepository idempotency,
             TransactionExecutor transactions) {
         this.authorization = authorization;
         this.commands = commands;
         this.repository = repository;
+        this.mappingCommands = mappingCommands;
+        this.mappings = mappings;
         this.idempotency = idempotency;
         this.transactions = transactions;
     }
@@ -149,6 +158,68 @@ final class IntegrationAdminApiMutationService {
         });
     }
 
+    EntitlementObservationMapping createEntitlementMapping(
+            AuthenticatedAdministrativeActor actor,
+            UUID connectorBindingId,
+            String providerStableId,
+            UUID entitlementId,
+            String key,
+            RequestFingerprint fingerprint,
+            Instant now,
+            UUID correlationId) {
+        return transactions.required(() -> {
+            require(actor, AdministrativePermissions.ENTITLEMENT_OBSERVATION_MAPPING_CREATE,
+                    AdministrativeResource.collection("entitlement-observation-mapping"),
+                    now, correlationId);
+            var r = idempotency.register(
+                    actor.tenant(),
+                    "api.entitlement-observation-mapping.create.v1",
+                    key, fingerprint, now, null);
+            if (r.kind() == RegistrationKind.REPLAY) {
+                return replayMapping(actor, r, correlationId);
+            }
+            EntitlementObservationMapping value = mappingCommands.map(
+                    actor.tenant(), connectorBindingId, providerStableId,
+                    entitlementId, now, correlationId);
+            idempotency.complete(
+                    actor.tenant(),
+                    "api.entitlement-observation-mapping.create.v1",
+                    key, fingerprint,
+                    "entitlement-observation-mapping", value.id(), now);
+            return value;
+        });
+    }
+
+    EntitlementObservationMapping unmapEntitlement(
+            AuthenticatedAdministrativeActor actor,
+            UUID mappingId,
+            long expectedRevision,
+            String key,
+            RequestFingerprint fingerprint,
+            Instant now,
+            UUID correlationId) {
+        return transactions.required(() -> {
+            require(actor, AdministrativePermissions.ENTITLEMENT_OBSERVATION_MAPPING_RETIRE,
+                    new AdministrativeResource("entitlement-observation-mapping", mappingId),
+                    now, correlationId);
+            var r = idempotency.register(
+                    actor.tenant(),
+                    "api.entitlement-observation-mapping.retire.v1",
+                    key, fingerprint, now, null);
+            if (r.kind() == RegistrationKind.REPLAY) {
+                return replayMapping(actor, r, correlationId);
+            }
+            EntitlementObservationMapping value = mappingCommands.unmap(
+                    actor.tenant(), mappingId, expectedRevision, now, correlationId);
+            idempotency.complete(
+                    actor.tenant(),
+                    "api.entitlement-observation-mapping.retire.v1",
+                    key, fingerprint,
+                    "entitlement-observation-mapping", value.id(), now);
+            return value;
+        });
+    }
+
     ConnectorWorker createWorker(
             AuthenticatedAdministrativeActor actor, WorkerExternalSubject subject,int min,int max,
             List<UUID> scope,List<WorkerPermissionSpec> permissions,
@@ -220,6 +291,16 @@ final class IntegrationAdminApiMutationService {
         requireCompleted(r,"connector-binding",correlationId);
         return repository.findBinding(actor.tenant(),r.resourceId())
                 .orElseThrow(() -> new IllegalStateException("idempotent binding result no longer exists"));
+    }
+
+    private EntitlementObservationMapping replayMapping(
+            AuthenticatedAdministrativeActor actor,
+            JdbcIdempotencyRepository.Registration r,
+            UUID correlationId) {
+        requireCompleted(r, "entitlement-observation-mapping", correlationId);
+        return mappings.find(actor.tenant(), r.resourceId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "idempotent mapping result no longer exists"));
     }
 
     private ConnectorWorker replayWorker(AuthenticatedAdministrativeActor actor,
