@@ -74,7 +74,11 @@ class IntegrationRuntimePersistenceIntegrationTest {
         jdbc.execute("""
                 TRUNCATE TABLE
                     platform.connector_work_lease,
+                    integration.observed_grant,
+                    integration.observed_entitlement,
                     integration.observed_principal,
+                    integration.reconciliation_grant_staging,
+                    integration.reconciliation_entitlement_staging,
                     integration.reconciliation_principal_staging,
                     integration.reconciliation_observation_batch,
                     integration.reconciliation_run,
@@ -393,8 +397,9 @@ class IntegrationRuntimePersistenceIntegrationTest {
                         registration, session.id(), runId,
                         lease.lease().leaseId(), lease.lease().leaseEpoch(),
                         ids.nextId(), 0,
-                        List.of(new ConnectorWorkRepository.PrincipalObservation(
-                                "p-a", null, Map.of("client_secret", "must-not-pass")))))
+                        List.of(new ConnectorWorkRepository.ProviderObservation(
+                                "PRINCIPAL", "p-a", null,
+                                Map.of("client_secret", "must-not-pass")))))
                 .isInstanceOf(WorkerProtocolException.class)
                 .hasMessageContaining("forbidden secret-shaped");
         assertThat(stagingCount(runId)).isZero();
@@ -539,9 +544,9 @@ class IntegrationRuntimePersistenceIntegrationTest {
                         "test.principal", List.of(1))));
     }
 
-    private ConnectorWorkRepository.PrincipalObservation observation(String id, String display) {
-        return new ConnectorWorkRepository.PrincipalObservation(
-                id, "v1", Map.of("displayName", display));
+    private ConnectorWorkRepository.ProviderObservation observation(String id, String display) {
+        return new ConnectorWorkRepository.ProviderObservation(
+                "PRINCIPAL", id, "v1", Map.of("displayName", display));
     }
 
     private void append(
@@ -551,7 +556,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
             UUID runId,
             UUID leaseId,
             long leaseEpoch,
-            List<ConnectorWorkRepository.PrincipalObservation> observations) {
+            List<ConnectorWorkRepository.ProviderObservation> observations) {
         service.appendObservations(
                 registration, sessionId, runId, leaseId, leaseEpoch,
                 ids.nextId(), 0, observations);
