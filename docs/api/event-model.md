@@ -58,7 +58,17 @@ The external publisher call occurs after the database statement that claims the 
 
 Only explicitly supported internal fact types are claimable by a public-event mapper. Internal event names and payload JSON are never published directly. Permanent mapping/contract defects move the technical outbox record to terminal `FAILED` state with a normalized error code rather than retrying forever; retryable external transport failures remain `PENDING` with bounded backoff.
 
-Publication is transport-neutral. A concrete broker, webhook or cloud-messaging adapter implements `IntegrationEventPublisher` and is enabled explicitly. If publication is not enabled, internal facts remain durable and unclaimed. If publication is enabled without a publisher adapter, runtime composition fails rather than pretending delivery succeeded.
+Publication remains transport-neutral at the application boundary. ADR-0013 selects the first runtime adapter as one deployment-configured signed HTTPS webhook destination. The adapter signs `<unix-seconds>.<raw-body-bytes>` with HMAC-SHA-256, does not follow redirects, and uses bounded connect/request timeouts. A 2xx response accepts the event; 408/425/429/5xx and transient I/O remain retryable; 3xx and other 4xx are terminal technical delivery failures. The current outbox stores one publication result per event, so multi-subscriber fan-out is explicitly deferred until per-destination delivery state or a broker/cloud fan-out transport exists.
+
+## Public event compatibility lifecycle
+
+A public event version is an exact schema-and-semantics contract. The versioned address/channel and `eventVersion` move together.
+
+The current v1 schemas are closed with `additionalProperties: false`. Therefore adding/removing/renaming a field, changing type/cardinality, changing enum meaning, or otherwise changing payload/envelope shape creates a new version. Documentation-only clarification with no observable semantic change may remain on the same version.
+
+A successor version does not remove an already-consumed predecessor in the same change. Coexistence/deprecation is explicit and controlled; retries remain on the version originally emitted. Transport headers are delivery metadata and do not change the semantic event version unless explicitly promoted into the contract.
+
+If publication is not enabled, internal facts remain durable and unclaimed. If publication is enabled without a configured publisher adapter, runtime composition fails rather than pretending delivery succeeded.
 
 ## Authority rule
 

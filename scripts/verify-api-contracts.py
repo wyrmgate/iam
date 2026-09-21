@@ -107,7 +107,10 @@ def verify_openapi(document: dict) -> None:
 def verify_asyncapi(document: dict) -> None:
     assert document.get("asyncapi") == "3.1.0"
     assert document.get("x-wyrmgate-publication-status") == (
-        "runtime-dispatcher-implemented-transport-adapter-required"
+        "runtime-signed-webhook-adapter-implemented-activation-required"
+    )
+    assert document.get("x-wyrmgate-transport") == (
+        "semantic contract is transport-neutral; ADR-0013 runtime adapter is one signed HTTPS webhook destination"
     )
 
     operations = document.get("operations")
@@ -145,6 +148,27 @@ def verify_asyncapi(document: dict) -> None:
         "authorityruleversionid",
     ):
         assert forbidden not in serialized, f"public event contract leaked sensitive/internal field: {forbidden}"
+
+    expected_channels = {
+        "identityCreatedV1": "iam.identity.created.v1",
+        "identityMetadataChangedV1": "iam.identity.metadata-changed.v1",
+    }
+    channels = document.get("channels", {})
+    for channel_name, address in expected_channels.items():
+        assert channels[channel_name].get("address") == address, (
+            f"{channel_name} must preserve its exact v1 public address"
+        )
+
+    for schema_name in (
+        "IdentityCreatedPayload",
+        "IdentityMetadataChangedPayload",
+        "IdentityCreatedEnvelope",
+        "IdentityMetadataChangedEnvelope",
+        "ResourceReference",
+    ):
+        assert schemas[schema_name].get("additionalProperties") is False, (
+            f"{schema_name} must remain closed under the ADR-0013 exact-version policy"
+        )
 
     changed_payload = schemas["IdentityMetadataChangedPayload"]
     changed_properties = changed_payload.get("properties", {})

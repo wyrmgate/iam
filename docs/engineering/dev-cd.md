@@ -41,11 +41,20 @@ The service must provide:
 - `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`;
 - `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5` for the validated initial DEV serverless baseline.
 
+Optional ADR-0013 public-event webhook activation additionally requires:
+
+- `IAM_INTEGRATION_EVENTS_ENABLED=true`;
+- `IAM_INTEGRATION_EVENTS_TRANSPORT=webhook`;
+- `IAM_INTEGRATION_EVENTS_WEBHOOK_ENDPOINT=https://...`;
+- `IAM_INTEGRATION_EVENTS_WEBHOOK_SECRET` supplied through Railway secrets and at least 32 UTF-8 bytes.
+
+Webhook delivery is disabled by default. Do not activate it until an intended DEV receiver exists and the receiver/signature/retry checks in [`../operations/public-event-webhook.md`](../operations/public-event-webhook.md) have been completed.
+
 Railway supplies `PORT`; Spring Boot binds to `${PORT:8080}`, preserving port 8080 locally and in standalone containers.
 
 Configure Railway's Git integration to deploy `main` and enable **Wait for CI**. Railway remains the deployment engine, but a `main` revision must not begin its provider deployment until the associated GitHub check suites have completed successfully.
 
-Railway Serverless considers outbound traffic when deciding whether a service is idle, so long-lived database connections or telemetry can keep the service awake. The initial DEV posture therefore allows Hikari to drain to zero idle connections and leaves OTLP disabled. A maximum pool size of `5` is the validated DEV compatibility baseline; an effective maximum of `2` caused Flyway startup timeout during activation. Treat `5` as an observed DEV baseline, not production sizing guidance.
+Railway Serverless considers outbound traffic when deciding whether a service is idle, so long-lived database connections, telemetry, or frequent event-webhook polling/delivery can keep the service awake. The initial DEV posture therefore allows Hikari to drain to zero idle connections and leaves OTLP disabled. Before enabling the public-event webhook in DEV, verify its effect on the intended idle/cost behavior. A maximum pool size of `5` is the validated DEV compatibility baseline; an effective maximum of `2` caused Flyway startup timeout during activation. Treat `5` as an observed DEV baseline, not production sizing guidance.
 
 Neon offers pooled endpoints for high-concurrency/serverless workloads, but migration tooling may need a direct connection. Because this application currently runs Flyway on the application datasource, the initial DEV contract uses the direct endpoint rather than introducing a second migration datasource prematurely.
 
