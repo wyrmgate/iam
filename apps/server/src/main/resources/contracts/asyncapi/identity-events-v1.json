@@ -132,6 +132,6 @@
   },
   "x-wyrmgate-delivery-semantics": "at-least-once; consumers must tolerate duplicate, replay, and out-of-order delivery",
   "x-wyrmgate-ordering": "No global ordering guarantee. resource.revision provides local change ordering/gap detection where applicable.",
-  "x-wyrmgate-publication-status": "runtime-dispatcher-implemented-transport-adapter-required",
+  "x-wyrmgate-publication-status": "runtime-signed-webhook-adapter-implemented-activation-required",
   "x-wyrmgate-transport": "semantic contract is transport-neutral; ADR-0013 runtime adapter is one signed HTTPS webhook destination"
 }
