@@ -13,7 +13,7 @@ enum WebhookHttpOutcome {
         if (statusCode == 408 || statusCode == 425 || statusCode == 429 || statusCode >= 500) {
             return RETRYABLE_FAILURE;
         }
-        if (statusCode >= 400 && statusCode < 500) {
+        if (statusCode >= 300 && statusCode < 500) {
             return TERMINAL_FAILURE;
         }
         return RETRYABLE_FAILURE;
