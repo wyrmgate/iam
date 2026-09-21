@@ -59,13 +59,13 @@ class ScimPrincipalProviderAdapterTest {
                               "displayName": "Alice",
                               "active": true,
                               "name": {"givenName": "Alice", "familyName": "Example"},
-                              "meta": {"version": "\"v1\""}
+                              "meta": {"version": "v1"}
                             },
                             {
                               "id": "u-2",
                               "userName": "bob",
                               "active": true,
-                              "meta": {"version": "\"v2\""}
+                              "meta": {"version": "v2"}
                             }
                           ]
                         }
@@ -82,7 +82,7 @@ class ScimPrincipalProviderAdapterTest {
                               "userName": "carol",
                               "active": false,
                               "externalId": "hr-3",
-                              "meta": {"version": "\"v3\""}
+                              "meta": {"version": "v3"}
                             }
                           ]
                         }
@@ -100,7 +100,7 @@ class ScimPrincipalProviderAdapterTest {
         assertThat(result.observations()).isEqualTo(3);
         assertThat(batches).hasSize(2);
         assertThat(batches.getFirst().getFirst().providerStableId()).isEqualTo("u-1");
-        assertThat(batches.getFirst().getFirst().providerVersion()).isEqualTo("\"v1\"");
+        assertThat(batches.getFirst().getFirst().providerVersion()).isEqualTo("v1");
         assertThat(batches.getFirst().getFirst().observedState())
                 .containsEntry("userName", "alice")
                 .containsEntry("displayName", "Alice")
@@ -147,7 +147,7 @@ class ScimPrincipalProviderAdapterTest {
             if (current == 1) {
                 assertThat(exchange.getRequestMethod()).isEqualTo("POST");
                 respond(exchange, 201, """
-                        {"id":"provider-123","userName":"alice","meta":{"version":"W/\"7\""}}
+                        {"id":"provider-123","userName":"alice","meta":{"version":"v7"}}
                         """, Map.of("X-Request-ID", "req-create"));
             } else {
                 throw new AssertionError("unexpected collection request");
@@ -157,14 +157,14 @@ class ScimPrincipalProviderAdapterTest {
             requests.add(record(exchange));
             int current = sequence.incrementAndGet();
             assertThat(exchange.getRequestMethod()).isEqualTo("PATCH");
-            assertThat(exchange.getRequestHeaders().getFirst("If-Match")).isEqualTo("W/\"7\"");
+            assertThat(exchange.getRequestHeaders().getFirst("If-Match")).isEqualTo("v7");
             if (current == 2) {
                 respond(exchange, 200, """
-                        {"id":"provider-123","meta":{"version":"W/\"8\""}}
+                        {"id":"provider-123","meta":{"version":"v8"}}
                         """);
             } else if (current == 3) {
                 respond(exchange, 200, """
-                        {"id":"provider-123","active":false,"meta":{"version":"W/\"9\""}}
+                        {"id":"provider-123","active":false,"meta":{"version":"v9"}}
                         """);
             } else {
                 throw new AssertionError("unexpected principal request");
@@ -183,28 +183,28 @@ class ScimPrincipalProviderAdapterTest {
                         "alice", "Alice Example", "hr-1", true),
                 "op-create");
         assertThat(created.providerStableId()).isEqualTo("provider-123");
-        assertThat(created.providerVersion()).isEqualTo("W/\"7\"");
+        assertThat(created.providerVersion()).isEqualTo("v7");
         assertThat(created.providerRequestId()).isEqualTo("req-create");
 
         var updated = adapter.updatePrincipal(
                 configuration,
                 "test-ref",
                 "provider-123",
-                "W/\"7\"",
+                "v7",
                 new ScimPrincipalProviderAdapter.PrincipalWrite(
                         "alice", "Alice Updated", "hr-1", true),
                 "op-update");
         assertThat(updated.providerStableId()).isEqualTo("provider-123");
-        assertThat(updated.providerVersion()).isEqualTo("W/\"8\"");
+        assertThat(updated.providerVersion()).isEqualTo("v8");
 
         var disabled = adapter.disablePrincipal(
                 configuration,
                 "test-ref",
                 "provider-123",
-                "W/\"7\"",
+                "v7",
                 "op-disable");
         assertThat(disabled.providerStableId()).isEqualTo("provider-123");
-        assertThat(disabled.providerVersion()).isEqualTo("W/\"9\"");
+        assertThat(disabled.providerVersion()).isEqualTo("v9");
 
         assertThat(requests).hasSize(3);
         assertThat(requests).extracting(RecordedRequest::idempotencyKey)
@@ -258,6 +258,95 @@ class ScimPrincipalProviderAdapterTest {
 
     private AtomicInteger activeStatus;
 
+
+    private ScimPrincipalProviderAdapter adapter() {
+        ConnectorSecretProvider secretProvider = reference -> {
+            assertThat(reference).isEqualTo("test-ref");
+            return "connector-secret".toCharArray();
+        };
+        return new ScimPrincipalProviderAdapter(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build(),
+                json,
+                secretProvider);
+    }
+
+    private ScimPrincipalProviderAdapter.Configuration configuration() {
+        return new ScimPrincipalProviderAdapter.Configuration(
+                baseUri, 2, 100, Duration.ofSeconds(2), null);
+    }
+
+    private RecordedRequest record(HttpExchange exchange) throws IOException {
+        return new RecordedRequest(
+                exchange.getRequestMethod(),
+                exchange.getRequestHeaders().getFirst("Authorization"),
+                exchange.getRequestHeaders().getFirst("Idempotency-Key"),
+                new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+    }
+
+    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
+        respond(exchange, status, body, Map.of());
+    }
+
+    private static void respond(
+            HttpExchange exchange,
+            int status,
+            String body,
+            Map<String,String> headers) throws IOException {
+        headers.forEach((name, value) -> exchange.getResponseHeaders().set(name, value));
+        exchange.getResponseHeaders().set("Content-Type", "application/scim+json");
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.sendResponseHeaders(status, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
+    }
+
+    private record RecordedRequest(
+            String method,
+            String authorization,
+            String idempotencyKey,
+            String body) {}
+}    @Test
+    void providerFailuresAreNormalizedWithoutLeakingSecretOrProviderDetail() {
+        activeStatus = new AtomicInteger(429);
+        AtomicReference<String> detail = new AtomicReference<>("secret detail connector-secret");
+        server.createContext("/scim/v2/Users", exchange -> {
+            requests.add(record(exchange));
+            respond(exchange, activeStatus.get(), """
+                    {
+                      "schemas":["urn:ietf:params:scim:api:messages:2.0:Error"],
+                      "status":"%d",
+                      "scimType":"provider-code",
+                      "detail":"%s"
+                    }
+                    """.formatted(activeStatus.get(), detail.get()),
+                    activeStatus.get() == 429 ? Map.of("Retry-After", "17") : Map.of());
+        });
+        server.start();
+
+        assertCategory(429, ScimProviderException.FailureCategory.RATE_LIMITED, 17);
+        assertCategory(503, ScimProviderException.FailureCategory.TRANSIENT, null);
+        assertCategory(401, ScimProviderException.FailureCategory.AUTHENTICATION, null);
+        assertCategory(403, ScimProviderException.FailureCategory.AUTHORIZATION, null);
+        assertCategory(400, ScimProviderException.FailureCategory.VALIDATION, null);
+    }
+
+    private AtomicInteger activeStatus;
+
+    private void assertCategory(
+            int httpStatus,
+            ScimProviderException.FailureCategory category,
+            Integer retryAfter) {
+        activeStatus.set(httpStatus);
+        assertThatThrownBy(() -> adapter().discoverPrincipals(
+                        configuration(), "test-ref", null, ignored -> {}))
+                .isInstanceOfSatisfying(ScimProviderException.class, error -> {
+                    assertThat(error.category()).isEqualTo(category);
+                    assertThat(error.retryAfterSeconds()).isEqualTo(retryAfter);
+                    assertThat(error.providerErrorCode()).isEqualTo("provider-code");
+                    assertThat(error.getMessage()).doesNotContain("connector-secret");
+                    assertThat(error.getMessage()).doesNotContain("secret detail");
+                });
+    }
 
     private ScimPrincipalProviderAdapter adapter() {
         ConnectorSecretProvider secretProvider = reference -> {
