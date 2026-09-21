@@ -7,7 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolProperties;
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolService;
-import io.wyrmgate.iam.integration.application.DesiredStateRevisionQuery;
+import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
+import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Freshness;
 import io.wyrmgate.iam.integration.application.WorkerProtocolException;
 import io.wyrmgate.iam.integration.domain.ReconciliationCompleteness;
 import io.wyrmgate.iam.integration.domain.WorkerCapability;
@@ -23,7 +24,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
@@ -61,7 +61,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
         json = new ObjectMapper().findAndRegisterModules();
         repository = new JdbcIntegrationRuntimeRepository(jdbc, json, ids);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("12");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("13");
     }
 
     @AfterAll
@@ -285,7 +285,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
 
         UUID staleSubject = ids.nextId();
         UUID staleTask = createProvisioning(tenant, binding, staleSubject, 2);
-        var staleService = service((t, kind, id) -> OptionalLong.of(3));
+        var staleService = service((t, kind, id) -> Freshness.current(3));
         var staleSession = staleService.establishSession(
                 registration, "pod-stale", List.of(1),
                 List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.PROVISION)));
@@ -294,7 +294,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
 
         UUID freshSubject = ids.nextId();
         UUID freshTask = createProvisioning(tenant, binding, freshSubject, 7);
-        var freshService = service((t, kind, id) -> OptionalLong.of(7));
+        var freshService = service((t, kind, id) -> Freshness.current(7));
         var freshSession = freshService.establishSession(
                 registration, "pod-fresh", List.of(1),
                 List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.PROVISION)));
@@ -344,7 +344,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
         assertThat(stagingCount(runId)).isZero();
     }
 
-    private ConnectorWorkerProtocolService service(DesiredStateRevisionQuery query) {
+    private ConnectorWorkerProtocolService service(DesiredAccessStateQuery query) {
         return new ConnectorWorkerProtocolService(
                 repository, repository, query, transactions,
                 new ConnectorWorkerProtocolProperties(
@@ -352,8 +352,8 @@ class IntegrationRuntimePersistenceIntegrationTest {
                 json);
     }
 
-    private static DesiredStateRevisionQuery revisionUnavailable() {
-        return DesiredStateRevisionQuery.unavailable();
+    private static DesiredAccessStateQuery revisionUnavailable() {
+        return (tenant, subjectKind, subjectId) -> Freshness.unavailable();
     }
 
     private TenantContext tenant(String name) {
