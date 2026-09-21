@@ -8,7 +8,16 @@ import java.util.Set;
 public final class ConnectorPayloadGuard {
 
     private static final Set<String> FORBIDDEN = Set.of(
-            "password", "privatekey", "refreshtoken", "secretvalue", "clientsecret");
+            "password",
+            "privatekey",
+            "refreshtoken",
+            "accesstoken",
+            "token",
+            "apikey",
+            "secret",
+            "secretvalue",
+            "clientsecret",
+            "credential");
 
     private ConnectorPayloadGuard() {
     }
