@@ -49,6 +49,17 @@ iam:
     enabled: ${IAM_AUTH_ENABLED:false}
     issuer-uri: ${IAM_AUTH_ISSUER_URI:}
     audience: ${IAM_AUTH_AUDIENCE:}
+  signing:
+    enabled: ${IAM_SIGNING_ENABLED:false}
+    key-id: ${IAM_SIGNING_KEY_ID:}
+    key-algorithm: ${IAM_SIGNING_KEY_ALGORITHM:RSA}
+    signing-algorithm: ${IAM_SIGNING_ALGORITHM:SHA256withRSA}
+    private-key-path: ${IAM_SIGNING_PRIVATE_KEY_PATH:}
+    public-key-path: ${IAM_SIGNING_PUBLIC_KEY_PATH:}
+    verification-keys: ${IAM_SIGNING_VERIFICATION_KEYS:}
+  api:
+    cursor:
+      lifetime: ${IAM_API_CURSOR_LIFETIME:PT15M}
   bootstrap:
     initial-admin:
       enabled: ${IAM_INITIAL_ADMIN_BOOTSTRAP_ENABLED:false}
