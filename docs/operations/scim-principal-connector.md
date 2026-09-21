@@ -1,8 +1,8 @@
-# SCIM 2.0 Principal Connector
+# SCIM 2.0 Principal and Group Connector
 
 ## Status
 
-This is the first concrete provider adapter behind the existing Integration boundary. It implements a bounded SCIM 2.0 principal slice only; it does not redefine canonical Identity, Access, Governance, or connector-worker semantics.
+This is the first concrete provider adapter behind the existing Integration boundary. It implements bounded SCIM 2.0 principal plus Group observation/membership slices; it does not redefine canonical Identity, Access, Governance, or connector-worker semantics.
 
 Runtime identity:
 
@@ -10,6 +10,7 @@ Runtime identity:
 - runtime ID: `scim-2`
 - runtime version: `1.0`
 - principal contract ID: `scim-2.principal`
+- Group contract ID: `scim-2.group`
 - contract version: `1`
 
 The adapter is a server-side provider implementation available to Integration composition. When `iam.integration.scim-local.enabled=true`, an Integration-owned local executor claims durable SCIM work from the same ProvisioningTask/ReconciliationRun and connector-work lease model used by remote execution. The existing remote connector-worker v1 protocol remains unchanged.
@@ -20,6 +21,9 @@ Implemented provider operations:
 
 - SCIM `/Users` discovery with `startIndex` / `count` paging;
 - normalized PRINCIPAL observations;
+- SCIM `/Groups` discovery as Integration-owned ENTITLEMENT observations;
+- SCIM user membership discovery as Integration-owned GRANT observations;
+- desired-grant membership add/remove with SCIM PATCH;
 - principal create with `POST /Users`;
 - principal update with SCIM PATCH;
 - principal disable/deactivate by replacing `active=false`;
@@ -30,9 +34,10 @@ Implemented provider operations:
 
 Not implemented in this slice:
 
-- Groups;
-- entitlement discovery/provisioning;
-- grant/access discovery/provisioning;
+- automatic provider-Group adoption into Catalog Entitlement authority;
+- AccessAssignment creation from observed memberships;
+- governed drift/finding workflow creation from observed mismatches;
+- SCIM Group create/delete as Catalog management;
 - credentials;
 - SCIM Bulk;
 - SCIM change log/incremental synchronization;
@@ -70,9 +75,11 @@ The token must have only the provider permissions needed for the configured slic
 
 - read/list users for reconciliation;
 - create users for provisioning create;
-- update users for profile mutation and deactivate/disable.
+- update users for profile mutation and deactivate/disable;
+- read/list groups for entitlement/grant observation;
+- update group membership for desired-grant add/remove.
 
-Do not grant group, entitlement, credential, administrative, or unrelated directory permissions unless a future governed connector capability requires them.
+Do not grant group create/delete, credential, administrative, or unrelated directory permissions unless a future governed connector capability requires them.
 
 ## Reconciliation semantics
 
