@@ -672,7 +672,7 @@ public final class JdbcIntegrationRuntimeRepository
         }
     }
 
-    private static String subjectKey(WorkerExternalSubject subject) {
+    static String subjectKey(WorkerExternalSubject subject) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] issuer = subject.issuer().getBytes(StandardCharsets.UTF_8);
