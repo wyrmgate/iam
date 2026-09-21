@@ -484,11 +484,11 @@ public final class JdbcIntegrationRuntimeRepository
         Instant expires = now.plus(duration);
         return jdbc.queryForObject("""
                 INSERT INTO platform.connector_work_lease (
-                    tenant_id, work_kind, work_id, session_id, lease_id, lease_epoch,
+                    tenant_id, work_kind, work_id, execution_owner_id, lease_id, lease_epoch,
                     claimed_at, lease_expires_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
                 ON CONFLICT (tenant_id, work_kind, work_id) DO UPDATE
-                SET session_id = EXCLUDED.session_id,
+                SET execution_owner_id = EXCLUDED.execution_owner_id,
                     lease_id = EXCLUDED.lease_id,
                     lease_epoch = platform.connector_work_lease.lease_epoch + 1,
                     claimed_at = EXCLUDED.claimed_at,
@@ -510,7 +510,7 @@ public final class JdbcIntegrationRuntimeRepository
         List<WorkerLease> rows = jdbc.query("""
                 UPDATE platform.connector_work_lease
                 SET lease_expires_at = ?, updated_at = ?
-                WHERE tenant_id = ? AND work_id = ? AND session_id = ?
+                WHERE tenant_id = ? AND work_id = ? AND execution_owner_id = ?
                   AND lease_id = ? AND lease_epoch = ? AND lease_expires_at > ?
                 RETURNING lease_id, lease_epoch, lease_expires_at
                 """,
@@ -575,7 +575,7 @@ public final class JdbcIntegrationRuntimeRepository
         List<String> kinds = jdbc.query("""
                 SELECT work_kind
                 FROM platform.connector_work_lease
-                WHERE tenant_id = ? AND work_id = ? AND session_id = ?
+                WHERE tenant_id = ? AND work_id = ? AND execution_owner_id = ?
                   AND lease_id = ? AND lease_epoch = ?
                 """, (rs,row) -> rs.getString(1),
                 session.tenant().tenantId(), workId, session.id(), leaseId, leaseEpoch);
@@ -783,7 +783,7 @@ public final class JdbcIntegrationRuntimeRepository
         List<LeaseRow> rows = jdbc.query("""
                 SELECT claimed_at, lease_expires_at
                 FROM platform.connector_work_lease
-                WHERE tenant_id = ? AND work_kind = ? AND work_id = ? AND session_id = ?
+                WHERE tenant_id = ? AND work_kind = ? AND work_id = ? AND execution_owner_id = ?
                   AND lease_id = ? AND lease_epoch = ?
                 """,
                 (rs,row) -> new LeaseRow(
