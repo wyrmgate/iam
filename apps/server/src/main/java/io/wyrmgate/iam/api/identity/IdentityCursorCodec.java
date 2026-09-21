@@ -171,7 +171,11 @@ final class IdentityCursorCodec {
 
     private static byte[] decode(String value) {
         try {
-            return Base64.getUrlDecoder().decode(value);
+            byte[] decoded = Base64.getUrlDecoder().decode(value);
+            if (!encode(decoded).equals(value)) {
+                throw invalid();
+            }
+            return decoded;
         } catch (IllegalArgumentException invalid) {
             throw invalid(invalid);
         }
