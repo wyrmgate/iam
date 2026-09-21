@@ -63,15 +63,20 @@ public final class IntegrationEventPublicationService {
         int published = 0;
         int failed = 0;
         for (ClaimedOutboxEvent item : claimed) {
+            OutboundIntegrationEvent outbound;
             try {
                 IdentityPublicIntegrationEvents.Event publicEvent = mapper.map(item);
-                OutboundIntegrationEvent outbound = encoder.encode(publicEvent);
+                outbound = encoder.encode(publicEvent);
+            } catch (IllegalArgumentException mappingFailure) {
+                outbox.markTerminalFailure(item.tenant(), item.event().eventId(), MAPPING_FAILURE);
+                failed++;
+                continue;
+            }
+
+            try {
                 publisher.publish(outbound);
                 outbox.markPublished(item.tenant(), item.event().eventId(), clock.instant());
                 published++;
-            } catch (IllegalArgumentException mappingFailure) {
-                scheduleRetry(item, MAPPING_FAILURE);
-                failed++;
             } catch (RuntimeException publicationFailure) {
                 scheduleRetry(item, PUBLICATION_FAILURE);
                 failed++;
