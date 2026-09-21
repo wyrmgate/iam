@@ -255,7 +255,7 @@ public final class JdbcIntegrationRuntimeRepository
         return jdbc.query("""
                 SELECT r.id, r.operation_id, r.tenant_id, r.connector_binding_id,
                        r.contract_id, r.contract_version, r.checkpoint_start,
-                       r.correlation_id, r.causation_id
+                       r.correlation_id, r.causation_id, r.scope_object_class
                 FROM integration.reconciliation_run r
                 JOIN integration.connector_binding b
                   ON b.tenant_id = r.tenant_id AND b.id = r.connector_binding_id
@@ -292,7 +292,8 @@ public final class JdbcIntegrationRuntimeRepository
                         rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
                         rs.getString(5), rs.getInt(6), rs.getString(7),
-                        rs.getObject(8, UUID.class), rs.getObject(9, UUID.class), Map.of()),
+                        rs.getObject(8, UUID.class), rs.getObject(9, UUID.class),
+                        Map.of("objectClass", rs.getString(10))),
                 session.workerRegistrationId(), session.id(), session.id(),
                 session.tenant().tenantId(), Timestamp.from(now), Timestamp.from(now), limit);
     }
@@ -371,7 +372,7 @@ public final class JdbcIntegrationRuntimeRepository
         return jdbc.query("""
                 SELECT r.id, r.operation_id, r.tenant_id, r.connector_binding_id,
                        r.contract_id, r.contract_version, r.checkpoint_start,
-                       r.correlation_id, r.causation_id
+                       r.correlation_id, r.causation_id, r.scope_object_class
                 FROM integration.reconciliation_run r
                 JOIN integration.connector_binding b
                   ON b.tenant_id = r.tenant_id AND b.id = r.connector_binding_id
@@ -402,7 +403,8 @@ public final class JdbcIntegrationRuntimeRepository
                         rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
                         rs.getString(5), rs.getInt(6), rs.getString(7),
-                        rs.getObject(8, UUID.class), rs.getObject(9, UUID.class), Map.of()),
+                        rs.getObject(8, UUID.class), rs.getObject(9, UUID.class),
+                        Map.of("objectClass", rs.getString(10))),
                 runtimeId, runtimeVersion, contractId, contractVersion,
                 Timestamp.from(now), Timestamp.from(now), limit);
     }
@@ -414,7 +416,10 @@ public final class JdbcIntegrationRuntimeRepository
         return jdbc.query("""
                 SELECT b.id, ci.id, ci.connector_type, ci.runtime_id, ci.runtime_version,
                        ci.configuration_version, ci.configuration_json::text, ci.secret_reference,
-                       b.contract_id, b.contract_version, b.supports_complete_principal_discovery
+                       b.contract_id, b.contract_version,
+                       b.supports_complete_principal_discovery,
+                       b.supports_complete_entitlement_discovery,
+                       b.supports_complete_grant_discovery
                 FROM integration.connector_binding b
                 JOIN integration.connector_instance ci
                   ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
@@ -425,7 +430,7 @@ public final class JdbcIntegrationRuntimeRepository
                         rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getString(3), rs.getString(4), rs.getString(5), rs.getLong(6),
                         readMap(rs.getString(7)), rs.getString(8), rs.getString(9),
-                        rs.getInt(10), rs.getBoolean(11)),
+                        rs.getInt(10), rs.getBoolean(11), rs.getBoolean(12), rs.getBoolean(13)),
                 tenant.tenantId(), connectorBindingId).stream().findFirst();
     }
 
