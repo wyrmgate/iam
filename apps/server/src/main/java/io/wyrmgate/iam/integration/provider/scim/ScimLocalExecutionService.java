@@ -75,16 +75,18 @@ public final class ScimLocalExecutionService {
 
     public int executeAvailable() {
         int remaining = properties.effectiveBatchSize();
+        int provisioningLimit = remaining;
         List<ClaimedProvisioning> provisioning = transactions.required(
-                () -> claimProvisioning(remaining));
+                () -> claimProvisioning(provisioningLimit));
         for (ClaimedProvisioning claimed : provisioning) {
             executeProvisioning(claimed);
         }
         remaining -= provisioning.size();
         if (remaining <= 0) return provisioning.size();
 
+        int reconciliationLimit = remaining;
         List<LeasedConnectorWork> reconciliation = transactions.required(
-                () -> claimReconciliation(remaining));
+                () -> claimReconciliation(reconciliationLimit));
         for (LeasedConnectorWork claimed : reconciliation) {
             executeReconciliation(claimed);
         }
