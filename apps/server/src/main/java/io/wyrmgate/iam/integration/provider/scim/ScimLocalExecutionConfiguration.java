@@ -27,10 +27,11 @@ class ScimLocalExecutionConfiguration {
             DesiredAccessStateQuery desiredState,
             TransactionExecutor transactions,
             ScimPrincipalProviderAdapter scim,
+            ScimGroupProviderAdapter groups,
             ScimLocalExecutionProperties properties,
             ObjectMapper json) {
         return new ScimLocalExecutionService(
-                execution, work, desiredState, transactions, scim, properties, json);
+                execution, work, desiredState, transactions, scim, groups, properties, json);
     }
 
     @Bean
