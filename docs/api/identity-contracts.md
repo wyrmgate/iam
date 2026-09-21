@@ -61,6 +61,10 @@ Identity and canonical-attribute collections use opaque deterministic cursor pag
 
 The first Identity contract orders by immutable `createdAt` and then `id`. Canonical attributes order by stable attribute `key` and then `definitionId`. Clients treat cursors as opaque and must not construct them.
 
+ADR-0012 strengthens the runtime cursor transport: newly issued cursors use a signed `v2` envelope, are bound to the authenticated tenant, and expire after the configured bounded cursor lifetime (15 minutes by default, maximum 24 hours). Canonical-attribute cursors are additionally bound to the Identity resource ID. Tampering, unknown/retired key IDs outside the verification set, expiry, tenant mismatch, resource mismatch, and the former unsigned `v1` format all produce the same semantic `invalid_cursor` validation result. The payload is signed but not encrypted and therefore contains only data safe for opaque API transport.
+
+When control-plane authentication is enabled, application signing must also be configured. `iam.signing` selects the active asymmetric signing key and optional retired public verification keys; private key material remains behind the platform signing adapter. `IAM_SIGNING_VERIFICATION_KEYS` uses semicolon-separated `keyId=/path/to/public.pem` entries. Retired public keys must be retained at least for the configured cursor lifetime. The pre-release v1-to-v2 transition intentionally invalidates cursors issued before the signed format is deployed rather than accepting unsigned cursors indefinitely.
+
 The contract defaults to 50 items and caps a page at 200 items. These are API implementation limits, not aggregate boundaries.
 
 ## Canonical attributes
