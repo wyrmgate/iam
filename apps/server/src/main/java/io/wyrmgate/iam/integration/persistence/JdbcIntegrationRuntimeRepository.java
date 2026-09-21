@@ -528,6 +528,22 @@ public final class JdbcIntegrationRuntimeRepository
             UUID batchId, int sequence, String requestFingerprint,
             List<ProviderObservation> observations, Instant now) {
         requireCurrentLease(session, WorkKind.RECONCILE, workId, leaseId, leaseEpoch, now, true);
+        String scope = jdbc.queryForObject("""
+                SELECT scope_object_class
+                FROM integration.reconciliation_run
+                WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
+                """, String.class, session.tenant().tenantId(), workId);
+        if (scope == null) {
+            throw new WorkerProtocolException("work_not_running", "reconciliation run is not running");
+        }
+        for (ProviderObservation observation : observations) {
+            if (!scope.equals(observation.objectClass())) {
+                throw new WorkerProtocolException(
+                        "observation_object_class_mismatch",
+                        "observation objectClass must match reconciliation scope");
+            }
+        }
+
         List<String> existing = jdbc.query("""
                 SELECT request_fingerprint
                 FROM integration.reconciliation_observation_batch
@@ -536,34 +552,84 @@ public final class JdbcIntegrationRuntimeRepository
                 session.tenant().tenantId(), workId, batchId);
         if (!existing.isEmpty()) {
             if (existing.getFirst().equals(requestFingerprint)) return ObservationBatchResult.REPLAY;
-            throw new WorkerProtocolException("observation_batch_conflict", "batchId was already used with different content");
+            throw new WorkerProtocolException(
+                    "observation_batch_conflict",
+                    "batchId was already used with different content");
         }
         try {
             jdbc.update("""
                     INSERT INTO integration.reconciliation_observation_batch (
-                        tenant_id, reconciliation_run_id, batch_id, sequence, request_fingerprint, received_at)
+                        tenant_id, reconciliation_run_id, batch_id, sequence,
+                        request_fingerprint, received_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     session.tenant().tenantId(), workId, batchId, sequence,
                     requestFingerprint, Timestamp.from(now));
         } catch (DataIntegrityViolationException conflict) {
-            throw new WorkerProtocolException("observation_sequence_conflict", "observation sequence was already used");
+            throw new WorkerProtocolException(
+                    "observation_sequence_conflict",
+                    "observation sequence was already used");
         }
+
         for (ProviderObservation observation : observations) {
-            jdbc.update("""
-                    INSERT INTO integration.reconciliation_principal_staging (
-                        id, tenant_id, reconciliation_run_id, batch_id, provider_stable_id,
-                        provider_version, observed_state, observed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?)
-                    ON CONFLICT (tenant_id, reconciliation_run_id, provider_stable_id) DO UPDATE
-                    SET batch_id = EXCLUDED.batch_id,
-                        provider_version = EXCLUDED.provider_version,
-                        observed_state = EXCLUDED.observed_state,
-                        observed_at = EXCLUDED.observed_at
-                    """,
-                    ids.nextId(), session.tenant().tenantId(), workId, batchId,
-                    observation.providerStableId(), observation.providerVersion(),
-                    writeJson(observation.observedState()), Timestamp.from(now));
+            switch (scope) {
+                case "PRINCIPAL" -> jdbc.update("""
+                        INSERT INTO integration.reconciliation_principal_staging (
+                            id, tenant_id, reconciliation_run_id, batch_id,
+                            provider_stable_id, provider_version, observed_state, observed_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?)
+                        ON CONFLICT (tenant_id, reconciliation_run_id, provider_stable_id) DO UPDATE
+                        SET batch_id = EXCLUDED.batch_id,
+                            provider_version = EXCLUDED.provider_version,
+                            observed_state = EXCLUDED.observed_state,
+                            observed_at = EXCLUDED.observed_at
+                        """,
+                        ids.nextId(), session.tenant().tenantId(), workId, batchId,
+                        observation.providerStableId(), observation.providerVersion(),
+                        writeJson(observation.observedState()), Timestamp.from(now));
+                case "ENTITLEMENT" -> jdbc.update("""
+                        INSERT INTO integration.reconciliation_entitlement_staging (
+                            id, tenant_id, reconciliation_run_id, batch_id,
+                            provider_stable_id, provider_version, observed_state, observed_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?)
+                        ON CONFLICT (tenant_id, reconciliation_run_id, provider_stable_id) DO UPDATE
+                        SET batch_id = EXCLUDED.batch_id,
+                            provider_version = EXCLUDED.provider_version,
+                            observed_state = EXCLUDED.observed_state,
+                            observed_at = EXCLUDED.observed_at
+                        """,
+                        ids.nextId(), session.tenant().tenantId(), workId, batchId,
+                        observation.providerStableId(), observation.providerVersion(),
+                        writeJson(observation.observedState()), Timestamp.from(now));
+                case "GRANT" -> {
+                    String principalProviderId =
+                            requiredObservationText(observation.observedState(), "principalProviderId");
+                    String entitlementProviderId =
+                            requiredObservationText(observation.observedState(), "entitlementProviderId");
+                    jdbc.update("""
+                            INSERT INTO integration.reconciliation_grant_staging (
+                                id, tenant_id, reconciliation_run_id, batch_id,
+                                provider_stable_id, provider_version,
+                                principal_provider_id, entitlement_provider_id,
+                                observed_state, observed_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
+                            ON CONFLICT (tenant_id, reconciliation_run_id, provider_stable_id) DO UPDATE
+                            SET batch_id = EXCLUDED.batch_id,
+                                provider_version = EXCLUDED.provider_version,
+                                principal_provider_id = EXCLUDED.principal_provider_id,
+                                entitlement_provider_id = EXCLUDED.entitlement_provider_id,
+                                observed_state = EXCLUDED.observed_state,
+                                observed_at = EXCLUDED.observed_at
+                            """,
+                            ids.nextId(), session.tenant().tenantId(), workId, batchId,
+                            observation.providerStableId(), observation.providerVersion(),
+                            principalProviderId, entitlementProviderId,
+                            writeJson(observation.observedState()), Timestamp.from(now));
+                }
+                default -> throw new WorkerProtocolException(
+                        "unsupported_object_class",
+                        "unsupported reconciliation object class");
+            }
         }
         return ObservationBatchResult.ACCEPTED;
     }
@@ -793,6 +859,16 @@ public final class JdbcIntegrationRuntimeRepository
             throw staleLease();
         }
         return rows.getFirst();
+    }
+
+    private static String requiredObservationText(Map<String,Object> state, String key) {
+        Object value = state == null ? null : state.get(key);
+        if (!(value instanceof String text) || text.isBlank()) {
+            throw new WorkerProtocolException(
+                    "invalid_observation",
+                    key + " must be present for GRANT observations");
+        }
+        return text;
     }
 
     private static WorkerProtocolException staleLease() {
