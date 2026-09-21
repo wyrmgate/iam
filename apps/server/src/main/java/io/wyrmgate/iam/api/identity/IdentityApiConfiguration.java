@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(IdentityCursorProperties.class)
+@EnableConfigurationProperties({IdentityCursorProperties.class, ControlPlaneAuthProperties.class})
 class IdentityApiConfiguration {
 
     @Bean
