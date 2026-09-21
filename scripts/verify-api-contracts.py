@@ -149,6 +149,27 @@ def verify_asyncapi(document: dict) -> None:
     ):
         assert forbidden not in serialized, f"public event contract leaked sensitive/internal field: {forbidden}"
 
+    expected_channels = {
+        "identityCreatedV1": "iam.identity.created.v1",
+        "identityMetadataChangedV1": "iam.identity.metadata-changed.v1",
+    }
+    channels = document.get("channels", {})
+    for channel_name, address in expected_channels.items():
+        assert channels[channel_name].get("address") == address, (
+            f"{channel_name} must preserve its exact v1 public address"
+        )
+
+    for schema_name in (
+        "IdentityCreatedPayload",
+        "IdentityMetadataChangedPayload",
+        "IdentityCreatedEnvelope",
+        "IdentityMetadataChangedEnvelope",
+        "ResourceReference",
+    ):
+        assert schemas[schema_name].get("additionalProperties") is False, (
+            f"{schema_name} must remain closed under the ADR-0013 exact-version policy"
+        )
+
     changed_payload = schemas["IdentityMetadataChangedPayload"]
     changed_properties = changed_payload.get("properties", {})
     assert set(changed_properties) == {"changedFields"}, (
