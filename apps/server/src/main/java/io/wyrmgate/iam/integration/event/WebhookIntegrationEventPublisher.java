@@ -16,7 +16,7 @@ public final class WebhookIntegrationEventPublisher implements IntegrationEventP
     private static final String TERMINAL_HTTP = "webhook_http_terminal";
     private static final String RETRYABLE_IO = "webhook_io_retryable";
 
-    private final HttpClient httpClient;
+    private final WebhookHttpTransport transport;
     private final URI endpoint;
     private final Duration requestTimeout;
     private final WebhookRequestSigner signer;
@@ -27,16 +27,23 @@ public final class WebhookIntegrationEventPublisher implements IntegrationEventP
             URI endpoint,
             Duration requestTimeout,
             byte[] secret) {
-        this(httpClient, endpoint, requestTimeout, secret, Clock.systemUTC());
+        this(
+                request -> httpClient
+                        .send(request, HttpResponse.BodyHandlers.discarding())
+                        .statusCode(),
+                endpoint,
+                requestTimeout,
+                secret,
+                Clock.systemUTC());
     }
 
     WebhookIntegrationEventPublisher(
-            HttpClient httpClient,
+            WebhookHttpTransport transport,
             URI endpoint,
             Duration requestTimeout,
             byte[] secret,
             Clock clock) {
-        this.httpClient = Objects.requireNonNull(httpClient, "httpClient");
+        this.transport = Objects.requireNonNull(transport, "transport");
         this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
         this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
         if (!"https".equalsIgnoreCase(endpoint.getScheme())) {
@@ -66,9 +73,7 @@ public final class WebhookIntegrationEventPublisher implements IntegrationEventP
                 .build();
 
         try {
-            HttpResponse<Void> response =
-                    httpClient.send(request, HttpResponse.BodyHandlers.discarding());
-            WebhookHttpOutcome outcome = WebhookHttpOutcome.classify(response.statusCode());
+            WebhookHttpOutcome outcome = WebhookHttpOutcome.classify(transport.send(request));
             if (outcome == WebhookHttpOutcome.SUCCESS) {
                 return;
             }
@@ -82,5 +87,10 @@ public final class WebhookIntegrationEventPublisher implements IntegrationEventP
         } catch (IOException exception) {
             throw new IntegrationEventDeliveryException(true, RETRYABLE_IO, exception);
         }
+    }
+
+    @FunctionalInterface
+    interface WebhookHttpTransport {
+        int send(HttpRequest request) throws IOException, InterruptedException;
     }
 }
