@@ -9,6 +9,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Signature;
 import java.util.Base64;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -47,6 +48,39 @@ class FileSigningKeyProviderTest {
         verifier.initVerify(material.publicKey());
         verifier.update(payload);
         assertThat(verifier.verify(signed)).isTrue();
+    }
+
+    @Test
+    void retainsAdditionalPublicVerificationKey() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair current = generator.generateKeyPair();
+        KeyPair previous = generator.generateKeyPair();
+
+        Path privateKey = tempDir.resolve("current-private.pem");
+        Path publicKey = tempDir.resolve("current-public.pem");
+        Path previousPublic = tempDir.resolve("previous-public.pem");
+        Files.writeString(privateKey, pem("PRIVATE KEY", current.getPrivate().getEncoded()));
+        Files.writeString(publicKey, pem("PUBLIC KEY", current.getPublic().getEncoded()));
+        Files.writeString(previousPublic, pem("PUBLIC KEY", previous.getPublic().getEncoded()));
+
+        SigningKeyProvider provider = new FileSigningKeyProvider(
+                "current-key",
+                "RSA",
+                "SHA256withRSA",
+                privateKey,
+                publicKey,
+                Map.of("previous-key", previousPublic));
+
+        assertThat(provider.verificationKey("current-key"))
+                .get()
+                .extracting(SigningKeyMaterial::keyId)
+                .isEqualTo("current-key");
+        assertThat(provider.verificationKey("previous-key"))
+                .get()
+                .extracting(SigningKeyMaterial::publicKey)
+                .isEqualTo(previous.getPublic());
+        assertThat(provider.verificationKey("unknown")).isEmpty();
     }
 
     private static String pem(String label, byte[] encoded) {
