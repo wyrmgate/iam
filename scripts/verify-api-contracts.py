@@ -109,6 +109,9 @@ def verify_asyncapi(document: dict) -> None:
     assert document.get("x-wyrmgate-publication-status") == (
         "runtime-dispatcher-implemented-transport-adapter-required"
     )
+    assert document.get("x-wyrmgate-transport") == (
+        "semantic contract is transport-neutral; ADR-0013 runtime adapter is one signed HTTPS webhook destination"
+    )
 
     operations = document.get("operations")
     assert isinstance(operations, dict) and operations
