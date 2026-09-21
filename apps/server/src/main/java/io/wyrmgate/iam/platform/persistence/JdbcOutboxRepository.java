@@ -182,6 +182,30 @@ public final class JdbcOutboxRepository {
                 eventId) == 1;
     }
 
+    public boolean markTerminalFailure(
+            TenantContext tenant,
+            java.util.UUID eventId,
+            String errorCode) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(eventId, "eventId");
+        if (errorCode == null || errorCode.isBlank() || errorCode.length() > 128) {
+            throw new IllegalArgumentException("errorCode must contain between 1 and 128 characters");
+        }
+        return jdbcTemplate.update(
+                """
+                UPDATE platform.outbox_event
+                SET publication_state = 'FAILED',
+                    next_attempt_at = NULL,
+                    last_error_code = ?
+                WHERE tenant_id = ?
+                  AND id = ?
+                  AND publication_state = 'PENDING'
+                """,
+                errorCode,
+                tenant.tenantId(),
+                eventId) == 1;
+    }
+
     public long countPending(TenantContext tenant) {
         Objects.requireNonNull(tenant, "tenant");
         Long count = jdbcTemplate.queryForObject(
