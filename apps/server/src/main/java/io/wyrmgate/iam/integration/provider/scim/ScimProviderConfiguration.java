@@ -23,10 +23,24 @@ public class ScimProviderConfiguration {
             ObjectMapper objectMapper,
             ConnectorSecretProvider connectorSecretProvider) {
         return new ScimPrincipalProviderAdapter(
-                HttpClient.newBuilder()
-                        .connectTimeout(Duration.ofSeconds(10))
-                        .build(),
+                providerHttpClient(),
                 objectMapper,
                 connectorSecretProvider);
+    }
+
+    @Bean
+    ScimGroupProviderAdapter scimGroupProviderAdapter(
+            ObjectMapper objectMapper,
+            ConnectorSecretProvider connectorSecretProvider) {
+        return new ScimGroupProviderAdapter(
+                providerHttpClient(),
+                objectMapper,
+                connectorSecretProvider);
+    }
+
+    private static HttpClient providerHttpClient() {
+        return HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
     }
 }
