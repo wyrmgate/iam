@@ -61,6 +61,16 @@ iam:
     cursor:
       lifetime: ${IAM_API_CURSOR_LIFETIME:PT15M}
   integration:
+    worker-auth:
+      enabled: ${IAM_CONNECTOR_WORKER_AUTH_ENABLED:false}
+      issuer-uri: ${IAM_CONNECTOR_WORKER_ISSUER_URI:}
+      audience: ${IAM_CONNECTOR_WORKER_AUDIENCE:}
+    worker-protocol:
+      session-lifetime: ${IAM_CONNECTOR_WORKER_SESSION_LIFETIME:PT15M}
+      lease-duration: ${IAM_CONNECTOR_WORKER_LEASE_DURATION:PT30S}
+      max-claim-size: ${IAM_CONNECTOR_WORKER_MAX_CLAIM_SIZE:50}
+      max-long-poll-seconds: ${IAM_CONNECTOR_WORKER_MAX_LONG_POLL_SECONDS:20}
+      max-observation-batch-size: ${IAM_CONNECTOR_WORKER_MAX_OBSERVATION_BATCH_SIZE:500}
     events:
       enabled: ${IAM_INTEGRATION_EVENTS_ENABLED:false}
       transport: ${IAM_INTEGRATION_EVENTS_TRANSPORT:}
