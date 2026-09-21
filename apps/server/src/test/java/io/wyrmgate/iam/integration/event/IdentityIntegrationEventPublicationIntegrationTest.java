@@ -236,6 +236,79 @@ class IdentityIntegrationEventPublicationIntegrationTest {
                 .isNull();
     }
 
+    @Test
+    void unrelatedInternalFactsAreNotClaimedForPublicIdentityPublication() {
+        TenantContext tenant = tenant("Unrelated Fact Tenant");
+        outbox.append(
+                tenant,
+                new io.wyrmgate.iam.platform.persistence.OutboxEvent(
+                        ids.nextId(),
+                        "administration.initial-admin-bootstrapped",
+                        1,
+                        null,
+                        null,
+                        null,
+                        BASE_TIME,
+                        ids.nextId(),
+                        null,
+                        "{}"),
+                BASE_TIME);
+
+        RecordingPublisher publisher = new RecordingPublisher(false);
+        var result = service(
+                publisher,
+                Clock.fixed(BASE_TIME.plusSeconds(1), ZoneOffset.UTC),
+                () -> 0.5)
+                .publishAvailable();
+
+        assertThat(result.claimed()).isZero();
+        assertThat(publisher.events).isEmpty();
+        assertThat(jdbc.queryForObject(
+                "SELECT publication_state FROM platform.outbox_event", String.class))
+                .isEqualTo("PENDING");
+        assertThat(jdbc.queryForObject(
+                "SELECT attempt_count FROM platform.outbox_event", Integer.class))
+                .isZero();
+    }
+
+    @Test
+    void abandonedClaimIsReclaimableOnlyAfterLeaseExpiry() {
+        TenantContext tenant = tenant("Lease Recovery Tenant");
+        commands.create(
+                tenant,
+                IdentityType.WORKLOAD,
+                new IdentityProfile.WorkloadProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Private Workload",
+                BASE_TIME,
+                ids.nextId(),
+                null);
+
+        var first = outbox.claimPending(
+                new IdentityIntegrationEventMapper().supportedInternalEventTypes(),
+                BASE_TIME.plusSeconds(1),
+                Duration.ofSeconds(30),
+                10);
+        assertThat(first).hasSize(1);
+        assertThat(first.getFirst().attemptCount()).isEqualTo(1);
+
+        var beforeExpiry = outbox.claimPending(
+                new IdentityIntegrationEventMapper().supportedInternalEventTypes(),
+                BASE_TIME.plusSeconds(20),
+                Duration.ofSeconds(30),
+                10);
+        assertThat(beforeExpiry).isEmpty();
+
+        var reclaimed = outbox.claimPending(
+                new IdentityIntegrationEventMapper().supportedInternalEventTypes(),
+                BASE_TIME.plusSeconds(32),
+                Duration.ofSeconds(30),
+                10);
+        assertThat(reclaimed).hasSize(1);
+        assertThat(reclaimed.getFirst().event().eventId()).isEqualTo(first.getFirst().event().eventId());
+        assertThat(reclaimed.getFirst().attemptCount()).isEqualTo(2);
+    }
+
     private static IntegrationEventPublicationService service(
             IntegrationEventPublisher publisher,
             Clock clock,
