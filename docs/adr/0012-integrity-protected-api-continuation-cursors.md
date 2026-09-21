@@ -1,6 +1,6 @@
 # ADR-0012: Integrity-protected API continuation cursors
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -14,7 +14,7 @@ Wyrmgate already has a platform `SigningKeyProvider` abstraction that keeps priv
 
 Adding an unrelated cursor-only HMAC secret would create a second application secret/key lifecycle without an architectural reason. Reusing the current signing port without rotation semantics would make previously issued cursors invalid whenever the signing key changes and would silently broaden an abstraction originally described for authorization/OIDC signing.
 
-## Proposed decision
+## Decision
 
 Continuation cursors that cross the public API boundary will be integrity-protected, versioned, and context-bound.
 
