@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.integration.api.security;
 
 import io.wyrmgate.iam.api.security.RequiredAudienceValidator;
+import io.wyrmgate.iam.api.security.SemanticAuthenticationEntryPoint;
 import io.wyrmgate.iam.integration.application.WorkerRegistrationRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import java.util.List;
@@ -53,12 +54,15 @@ public class ConnectorWorkerSecurityConfiguration {
             HttpSecurity http,
             @Qualifier("connectorWorkerJwtDecoder") JwtDecoder decoder,
             WorkerRegistrationRepository workers,
-            IdGenerator ids) throws Exception {
+            IdGenerator ids,
+            SemanticAuthenticationEntryPoint entryPoint) throws Exception {
         http.securityMatcher("/internal/connector-worker/v1/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint))
                 .oauth2ResourceServer(resourceServer -> resourceServer
+                        .authenticationEntryPoint(entryPoint)
                         .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(token ->
                                 new JwtAuthenticationToken(token, List.<GrantedAuthority>of(), token.getSubject()))))
                 .addFilterAfter(
@@ -74,11 +78,14 @@ public class ConnectorWorkerSecurityConfiguration {
             name = "enabled",
             havingValue = "false",
             matchIfMissing = true)
-    SecurityFilterChain closedConnectorWorkerSecurity(HttpSecurity http) throws Exception {
+    SecurityFilterChain closedConnectorWorkerSecurity(
+            HttpSecurity http,
+            SemanticAuthenticationEntryPoint entryPoint) throws Exception {
         http.securityMatcher("/internal/connector-worker/v1/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize.anyRequest().denyAll());
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().denyAll())
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint));
         return http.build();
     }
 }
