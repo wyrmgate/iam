@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class ScimLocalExecutionIntegrationTest {
@@ -153,6 +154,38 @@ class ScimLocalExecutionIntegrationTest {
         assertThat(taskState(unavailableTask)).isEqualTo("READY");
         assertThat(leaseCount(unavailableTask)).isZero();
         assertThat(providerCalls).hasValue(1);
+    }
+
+    @Test
+    void desiredStateChangingAfterClaimPreventsProviderMutation() {
+        AtomicInteger providerCalls = new AtomicInteger();
+        server.createContext("/scim/v2/Users", exchange -> {
+            providerCalls.incrementAndGet();
+            respond(exchange, 201, "{\"id\":\"must-not-happen\"}");
+        });
+        server.start();
+
+        TenantContext tenant = tenant("claim-race");
+        UUID binding = connector(tenant, true, 100);
+        UUID subject = ids.nextId();
+        UUID task = provisioning(
+                tenant,
+                binding,
+                subject,
+                7,
+                "UPSERT_PRINCIPAL",
+                Map.of("userName", "race"));
+
+        AtomicInteger reads = new AtomicInteger();
+        DesiredAccessStateQuery query = (ignoredTenant, kind, subjectId) ->
+                reads.incrementAndGet() == 1
+                        ? Freshness.current(7)
+                        : Freshness.current(8);
+
+        assertThat(service(query).executeAvailable()).isEqualTo(1);
+        assertThat(taskState(task)).isEqualTo("SUPERSEDED");
+        assertThat(providerCalls).hasValue(0);
+        assertThat(reads).hasValue(2);
     }
 
     @Test
@@ -279,12 +312,18 @@ class ScimLocalExecutionIntegrationTest {
     private ScimLocalExecutionService service() {
         DesiredAccessStateQuery query = (tenant, kind, subjectId) ->
                 freshness.getOrDefault(subjectId, Freshness.unavailable());
+        return service(query);
+    }
+
+    private ScimLocalExecutionService service(DesiredAccessStateQuery query) {
         var adapter = new ScimPrincipalProviderAdapter(
                 HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(2))
                         .build(),
                 json,
                 secretReference -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
                     assertThat(secretReference).isEqualTo("test-ref");
                     return "local-test-token".toCharArray();
                 });
