@@ -30,7 +30,7 @@ class IdentityIntegrationEventMapperTest {
         ClaimedOutboxEvent claimed = claimed(
                 IdentityIntegrationEventMapper.IDENTITY_CREATED_FACT,
                 1L,
-                "{"identityType":"SERVICE","lifecycleState":"PENDING"}");
+                "{\"identityType\":\"SERVICE\",\"lifecycleState\":\"PENDING\"}");
 
         CreatedV1 event = (CreatedV1) mapper.map(claimed);
         assertThat(event.address()).isEqualTo("iam.identity.created.v1");
@@ -43,9 +43,9 @@ class IdentityIntegrationEventMapperTest {
         assertThat(event.payload().lifecycleState().name()).isEqualTo("PENDING");
 
         String json = new String(encoder.encode(event).payload(), StandardCharsets.UTF_8);
-        assertThat(json).contains(""eventType":"iam.identity.created"");
-        assertThat(json).contains(""identityType":"SERVICE"");
-        assertThat(json).contains(""lifecycleState":"PENDING"");
+        assertThat(json).contains("\"eventType\":\"iam.identity.created\"");
+        assertThat(json).contains("\"identityType\":\"SERVICE\"");
+        assertThat(json).contains("\"lifecycleState\":\"PENDING\"");
         assertThat(json).doesNotContain("displayName");
     }
 
@@ -54,7 +54,7 @@ class IdentityIntegrationEventMapperTest {
         ClaimedOutboxEvent claimed = claimed(
                 IdentityIntegrationEventMapper.DISPLAY_NAME_CHANGED_FACT,
                 2L,
-                "{"displayNameChanged":true}");
+                "{\"displayNameChanged\":true}");
 
         MetadataChangedV1 event = (MetadataChangedV1) mapper.map(claimed);
         assertThat(event.address()).isEqualTo("iam.identity.metadata-changed.v1");
@@ -62,7 +62,7 @@ class IdentityIntegrationEventMapperTest {
                 .containsExactly(IdentityPublicIntegrationEvents.MetadataField.DISPLAY_NAME);
 
         String json = new String(encoder.encode(event).payload(), StandardCharsets.UTF_8);
-        assertThat(json).contains(""changedFields":["displayName"]");
+        assertThat(json).contains("\"changedFields\":[\"displayName\"]");
         assertThat(json).doesNotContain("displayNameChanged");
     }
 
@@ -71,7 +71,7 @@ class IdentityIntegrationEventMapperTest {
         ClaimedOutboxEvent malformed = claimed(
                 IdentityIntegrationEventMapper.IDENTITY_CREATED_FACT,
                 1L,
-                "{"identityType":"PERSON"}");
+                "{\"identityType\":\"PERSON\"}");
 
         assertThatThrownBy(() -> mapper.map(malformed))
                 .isInstanceOf(IllegalArgumentException.class);
