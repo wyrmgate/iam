@@ -53,7 +53,7 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, C
 
 ## Current status
 
-IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0012 are the current architecture checkpoint. ADR-0011 and ADR-0012 are controlled post-v0.2 amendments and must be folded into the next formal Security/SAD/Integration/RTM revision.
+IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0013 are the current architecture checkpoint. ADR-0011 through ADR-0013 are controlled post-v0.2 amendments and must be folded into the next formal Security/SAD/Integration/RTM revision.
 
 The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 and [`architecture/physical-data-model.md`](architecture/physical-data-model.md) are the current controlled amendment, and the next formal-specification revision must fold them into the Data Architecture/SAD/RTM package.
 
@@ -65,4 +65,6 @@ The first runtime Identity HTTP slice is now implemented for the checked-in cont
 
 The curated Identity integration-event slice now has a durable transport-neutral runtime dispatcher. Internal Identity facts remain distinct from public `iam.identity.created.v1` and `iam.identity.metadata-changed.v1` events; publication uses outbox leasing, curated mapping, normalized retry/terminal failure state, and an explicit external publisher port outside the authoritative transaction. A concrete broker/webhook/cloud transport is still a deployment/integration choice and is not selected by the canonical event contract.
 
-Remaining open design areas therefore include completion of OD-003 coverage beyond this Identity runtime slice, concrete external event transport activation plus broader compatibility/deprecation process, the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
+ADR-0013 now fixes the first external event transport boundary as one deployment-configured signed HTTPS webhook destination, with exact-version public-event compatibility and explicit deferral of multi-subscriber fan-out until per-destination delivery state or a broker exists.
+
+Remaining open design areas therefore include implementation/activation of that first webhook transport, completion of OD-003 coverage beyond this Identity runtime slice, later multi-subscriber/broker evolution when justified, the remote connector-worker protocol (OD-004), operations/HA/DR (OD-005), and legacy migration/cutover (OD-006). Migration entities/repositories and concrete SQL migrations should follow the persistence semantics in OD-002 as the implementation contract.
