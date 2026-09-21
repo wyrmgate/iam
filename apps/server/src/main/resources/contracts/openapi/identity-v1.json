@@ -210,7 +210,7 @@
         "name": "cursor",
         "in": "query",
         "required": false,
-        "description": "Opaque deterministic continuation cursor. Clients must not construct or interpret it.",
+        "description": "Opaque deterministic signed continuation cursor. Clients must not construct or interpret it; cursors are tenant/context-bound and time-bounded.",
         "schema": {"type": "string", "minLength": 1}
       },
       "Limit": {
