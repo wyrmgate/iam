@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/identity-v1.json"
 ASYNCAPI = ROOT / "apps/server/src/main/resources/contracts/asyncapi/identity-events-v1.json"
+CONNECTOR_WORKER_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/connector-worker-v1.json"
 
 
 def load_json(path: Path) -> dict:
@@ -181,9 +182,107 @@ def verify_asyncapi(document: dict) -> None:
     )
 
 
+
+def verify_connector_worker_openapi(document: dict) -> None:
+    version = document.get("openapi")
+    assert isinstance(version, str) and version.startswith("3.1."), (
+        "connector-worker OpenAPI must stay on the approved 3.1.x contract family"
+    )
+    assert document.get("x-wyrmgate-contract-status") == (
+        "architecture-interface-contract-runtime-not-yet-implemented"
+    )
+    assert document.get("x-wyrmgate-protocol-major") == 1
+    assert document.get("security") == [{"workerBearer": []}], (
+        "all connector-worker operations must require the dedicated worker bearer boundary"
+    )
+
+    paths = document.get("paths", {})
+    expected_paths = {
+        "/sessions",
+        "/sessions/{sessionId}/work:claim",
+        "/sessions/{sessionId}/work/{workId}/lease:renew",
+        "/sessions/{sessionId}/work/{workId}/observations",
+        "/sessions/{sessionId}/work/{workId}:complete",
+    }
+    assert expected_paths == set(paths), (
+        "OD-004 v1 must expose only the accepted session/claim/renew/observe/complete operations"
+    )
+
+    schemas = document["components"]["schemas"]
+    for schema_name in (
+        "SessionRequest",
+        "ConnectorRuntimeAdvertisement",
+        "ContractSchemaSupport",
+        "SessionResponse",
+        "ClaimWorkRequest",
+        "ClaimWorkResponse",
+        "LeasedWorkItem",
+        "LeaseToken",
+        "ObservationBatch",
+        "ConnectorObservation",
+        "WorkCompletion",
+        "NormalizedWorkResult",
+    ):
+        assert schemas[schema_name].get("additionalProperties") is False, (
+            f"{schema_name} must remain a closed OD-004 v1 core schema"
+        )
+
+    leased_required = set(schemas["LeasedWorkItem"]["required"])
+    assert {
+        "workId",
+        "operationId",
+        "lease",
+        "tenantId",
+        "connectorBindingId",
+        "workKind",
+        "contractId",
+        "contractVersion",
+        "idempotencyKey",
+        "correlationId",
+        "payload",
+    }.issubset(leased_required), "leased work must preserve causal, tenant, binding, fencing and schema context"
+
+    lease_required = set(schemas["LeaseToken"]["required"])
+    assert {"leaseId", "leaseEpoch", "leaseExpiresAt"} == lease_required, (
+        "OD-004 fencing requires leaseId + monotonically increasing epoch + expiry"
+    )
+
+    completion = schemas["WorkCompletion"]
+    assert set(completion["properties"]["outcome"]["enum"]) == {
+        "SUCCEEDED",
+        "FAILED_RETRYABLE",
+        "FAILED_FINAL",
+        "SUPERSEDED",
+        "SKIPPED",
+    }
+    assert "discoveryCoverage" in completion["properties"], (
+        "remote discovery must report coverage evidence explicitly"
+    )
+    assert document.get("x-wyrmgate-completeness-authority") == (
+        "worker-reported discovery coverage is evidence only; Integration owns effective reconciliation/import completeness"
+    )
+
+    serialized = json.dumps(document, sort_keys=True).lower()
+    for forbidden in (
+        "password",
+        "privatekey",
+        "private_key",
+        "refreshtoken",
+        "refresh_token",
+        "secretvalue",
+        "secret_value",
+        "clientsecret",
+        "client_secret",
+    ):
+        assert forbidden not in serialized, (
+            f"connector-worker ordinary wire contract leaked secret-shaped field: {forbidden}"
+        )
+
+
 def main() -> None:
     verify_openapi(load_json(OPENAPI))
     verify_asyncapi(load_json(ASYNCAPI))
+    verify_connector_worker_openapi(load_json(CONNECTOR_WORKER_OPENAPI))
     print("API contracts verified")
 
 
