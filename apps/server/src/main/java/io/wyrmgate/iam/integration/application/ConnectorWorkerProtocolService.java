@@ -2,6 +2,9 @@ package io.wyrmgate.iam.integration.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
+import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Freshness;
+import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Status;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.PrincipalObservation;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.WorkCompletion;
 import io.wyrmgate.iam.integration.application.WorkerRegistrationRepository.WorkerPermission;
@@ -20,7 +23,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 
@@ -28,7 +30,7 @@ public final class ConnectorWorkerProtocolService {
 
     private final WorkerRegistrationRepository workers;
     private final ConnectorWorkRepository work;
-    private final DesiredStateRevisionQuery desiredState;
+    private final DesiredAccessStateQuery desiredState;
     private final TransactionExecutor transactions;
     private final ConnectorWorkerProtocolProperties properties;
     private final ObjectMapper json;
@@ -37,7 +39,7 @@ public final class ConnectorWorkerProtocolService {
     public ConnectorWorkerProtocolService(
             WorkerRegistrationRepository workers,
             ConnectorWorkRepository work,
-            DesiredStateRevisionQuery desiredState,
+            DesiredAccessStateQuery desiredState,
             TransactionExecutor transactions,
             ConnectorWorkerProtocolProperties properties,
             ObjectMapper json) {
@@ -47,7 +49,7 @@ public final class ConnectorWorkerProtocolService {
     ConnectorWorkerProtocolService(
             WorkerRegistrationRepository workers,
             ConnectorWorkRepository work,
-            DesiredStateRevisionQuery desiredState,
+            DesiredAccessStateQuery desiredState,
             TransactionExecutor transactions,
             ConnectorWorkerProtocolProperties properties,
             ObjectMapper json,
@@ -114,11 +116,21 @@ public final class ConnectorWorkerProtocolService {
         List<LeasedConnectorWork> claimed = new ArrayList<>();
 
         for (var candidate : work.lockProvisioningCandidates(session, maxItems, now)) {
-            OptionalLong current = desiredState.currentRevision(
+            DesiredAccessStateQuery.SubjectKind subjectKind;
+            try {
+                subjectKind = DesiredAccessStateQuery.SubjectKind.valueOf(candidate.subjectKind());
+            } catch (IllegalArgumentException unsupportedSubjectKind) {
+                work.supersedeProvisioning(
+                        candidate.tenantId(), candidate.taskId(), candidate.desiredRevision(), now);
+                continue;
+            }
+            Freshness freshness = desiredState.current(
                     new io.wyrmgate.iam.platform.tenant.TenantContext(candidate.tenantId()),
-                    candidate.subjectKind(), candidate.subjectId());
-            if (current.isEmpty()) continue;
-            if (current.getAsLong() != candidate.desiredRevision()) {
+                    subjectKind,
+                    candidate.subjectId());
+            if (freshness.status() == Status.UNAVAILABLE) continue;
+            if (freshness.status() == Status.ABSENT
+                    || freshness.revision() != candidate.desiredRevision()) {
                 work.supersedeProvisioning(
                         candidate.tenantId(), candidate.taskId(), candidate.desiredRevision(), now);
                 continue;

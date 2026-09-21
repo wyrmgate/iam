@@ -6,7 +6,7 @@ This document is the living OD-004 interface contract for remote connector execu
 
 - `apps/server/src/main/resources/contracts/openapi/connector-worker-v1.json`
 
-The v1 wire contract is now **runtime-exposed** for the first bounded Integration slice. The server provides dedicated connector-worker bearer authentication, Integration-owned server-side worker registration/scope, session/runtime/schema negotiation, leased claim/renew fencing, PRINCIPAL reconciliation observation batches, and normalized completion. Provisioning process persistence also exists, but remote provisioning claims fail closed unless a semantic `DesiredStateRevisionQuery` can verify the current desired revision before execution.
+The v1 wire contract is now **runtime-exposed** for the first bounded Integration slice. The server provides dedicated connector-worker bearer authentication, Integration-owned server-side worker registration/scope, session/runtime/schema negotiation, leased claim/renew fencing, PRINCIPAL reconciliation observation batches, and normalized completion. Provisioning process persistence is connected to the Access-owned `DesiredAccessStateQuery`. Remote provisioning is claimable only when Access reports `CURRENT` with the same desired revision; `ABSENT` or a different revision supersedes the task, while `UNAVAILABLE` leaves it unclaimed.
 
 ## Purpose and boundary
 
@@ -114,6 +114,6 @@ The first runtime slice is intentionally bounded:
 - remote reconciliation supports `PRINCIPAL` observations only;
 - positive observations from PARTIAL/UNKNOWN runs may materialize, but unseen observations are marked absent only after Integration validates effective `COMPLETE` coverage;
 - ProvisioningJob, ProvisioningTask and immutable ProvisioningAttempt persistence are implemented;
-- provisioning work is not remotely claimable unless `DesiredStateRevisionQuery` verifies the task's desired revision; mismatch becomes `SUPERSEDED`, and verifier unavailability leaves work unclaimed;
+- provisioning work revalidates through Access-owned `DesiredAccessStateQuery`; matching `CURRENT` revision is claimable, `ABSENT` or revision mismatch becomes `SUPERSEDED`, and `UNAVAILABLE` leaves work unclaimed;
 - connector/provider credentials remain external opaque secret references and never transit ordinary worker payloads;
 - multi-region routing, broker transport, raw-secret delivery, and additional discovery object classes remain future slices.

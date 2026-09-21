@@ -15,6 +15,7 @@ class PersistenceArchitectureTest {
             .that()
             .resideInAnyPackage(
                     "..domain..",
+                    "..access.application..",
                     "..identity.application..",
                     "..administration.application..",
                     "..platform.id..",
