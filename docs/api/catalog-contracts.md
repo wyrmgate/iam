@@ -8,7 +8,7 @@ The first Catalog runtime slice implements authoritative:
 - `ApplicationTarget`;
 - `Entitlement`.
 
-It intentionally does not implement Role/RoleVersion, provider observation adoption, SCIM Groups, AccessAssignment, EffectiveAccess, or provider-side grant execution.
+It intentionally does not implement Role/RoleVersion, automatic provider observation adoption, AccessAssignment, EffectiveAccess, or provider-side grant execution. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
 
 Machine-readable contract:
 
@@ -20,7 +20,7 @@ Catalog owns the governed meaning of Application, ApplicationTarget and Entitlem
 
 Integration may later discover provider-native groups/permissions as `ObservedEntitlement` and memberships as `ObservedGrant`, but provider observations never silently create or mutate Catalog authority.
 
-An Entitlement has a stable IAM ID. A future SCIM Group/provider object ID is provider-native observation/mapping evidence, not the Entitlement primary identity.
+An Entitlement has a stable IAM ID. A SCIM Group/provider object ID is provider-native observation/mapping evidence, not the Entitlement primary identity. Catalog validates mapping references but does not own or persist provider-observation mappings.
 
 ## Structural invariants
 
