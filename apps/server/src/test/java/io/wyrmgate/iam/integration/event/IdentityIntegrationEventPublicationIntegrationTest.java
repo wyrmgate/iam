@@ -67,7 +67,7 @@ class IdentityIntegrationEventPublicationIntegrationTest {
                 ids,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("11");
     }
 
     @AfterAll
@@ -121,7 +121,7 @@ class IdentityIntegrationEventPublicationIntegrationTest {
         assertThat(result.published()).isEqualTo(2);
         assertThat(result.failed()).isZero();
         assertThat(publisher.events).hasSize(2);
-        assertThat(publisher.events.stream().map(OutboundIntegrationEvent::address))
+        assertThat(publisher.events.stream().map(OutboundIntegrationEvent::address).toList())
                 .containsExactly(
                         "iam.identity.created.v1",
                         "iam.identity.metadata-changed.v1");
@@ -129,19 +129,19 @@ class IdentityIntegrationEventPublicationIntegrationTest {
         String combined = publisher.events.stream()
                 .map(event -> new String(event.payload(), StandardCharsets.UTF_8))
                 .reduce("", (left, right) -> left + right);
-        assertThat(combined).contains(""lifecycleState":"PENDING"");
-        assertThat(combined).contains(""changedFields":["displayName"]");
+        assertThat(combined).contains("\\\"lifecycleState\\\":\\\"PENDING\\\"");
+        assertThat(combined).contains("\\\"changedFields\\\":[\\\"displayName\\\"]");
         assertThat(combined).doesNotContain("Do Not Publish This Name");
         assertThat(combined).doesNotContain("Still Private");
 
         Integer published = jdbc.queryForObject(
                 "SELECT count(*) FROM platform.outbox_event WHERE publication_state = 'PUBLISHED'",
                 Integer.class);
-        Integer attempts = jdbc.queryForObject(
+        Long attempts = jdbc.queryForObject(
                 "SELECT sum(attempt_count) FROM platform.outbox_event",
-                Integer.class);
+                Long.class);
         assertThat(published).isEqualTo(2);
-        assertThat(attempts).isEqualTo(2);
+        assertThat(attempts).isEqualTo(2L);
     }
 
     @Test
@@ -195,6 +195,45 @@ class IdentityIntegrationEventPublicationIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT attempt_count FROM platform.outbox_event", Integer.class))
                 .isEqualTo(2);
+    }
+
+    @Test
+    void malformedInternalFactMovesToTerminalFailedStateWithoutRetry() {
+        TenantContext tenant = tenant("Malformed Fact Tenant");
+        outbox.append(
+                tenant,
+                new io.wyrmgate.iam.platform.persistence.OutboxEvent(
+                        ids.nextId(),
+                        IdentityIntegrationEventMapper.IDENTITY_CREATED_FACT,
+                        1,
+                        "identity",
+                        ids.nextId(),
+                        1L,
+                        BASE_TIME,
+                        ids.nextId(),
+                        null,
+                        "{\"identityType\":\"PERSON\"}"),
+                BASE_TIME);
+
+        IntegrationEventPublicationService service = service(
+                new RecordingPublisher(false),
+                Clock.fixed(BASE_TIME.plusSeconds(1), ZoneOffset.UTC),
+                () -> 0.5);
+
+        var result = service.publishAvailable();
+
+        assertThat(result.claimed()).isEqualTo(1);
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT publication_state FROM platform.outbox_event", String.class))
+                .isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject(
+                "SELECT last_error_code FROM platform.outbox_event", String.class))
+                .isEqualTo("identity_event_mapping_failed");
+        assertThat(jdbc.queryForObject(
+                "SELECT next_attempt_at FROM platform.outbox_event",
+                (rs, rowNum) -> rs.getTimestamp(1)))
+                .isNull();
     }
 
     private static IntegrationEventPublicationService service(
