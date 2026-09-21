@@ -1,0 +1,736 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Wyrmgate IAM Remote Connector Worker Protocol",
+    "version": "1.0.0",
+    "description": "Internal Integration execution protocol for remote connector workers under ADR-0014. This is not a public IAM administration API."
+  },
+  "servers": [
+    {
+      "url": "https://{host}/internal/connector-worker/v1",
+      "variables": {
+        "host": {
+          "default": "iam.example.invalid"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "workerBearer": []
+    }
+  ],
+  "paths": {
+    "/sessions": {
+      "post": {
+        "operationId": "establishConnectorWorkerSession",
+        "summary": "Negotiate a connector-worker protocol session.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Compatible session established.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/WorkerNotAuthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/ProtocolIncompatible"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/work:claim": {
+      "post": {
+        "operationId": "claimConnectorWork",
+        "summary": "Claim a bounded batch of leased Integration work.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimWorkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Claim completed; work may be empty.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimWorkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/WorkerNotAuthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/SessionInvalid"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/work/{workId}/lease:renew": {
+      "post": {
+        "operationId": "renewConnectorWorkLease",
+        "summary": "Renew the current lease generation for one work item.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/WorkId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaseToken"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lease renewed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaseToken"
+                }
+              }
+            }
+          },
+          "409": {
+            "$ref": "#/components/responses/StaleLease"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/work/{workId}/observations": {
+      "post": {
+        "operationId": "appendConnectorObservations",
+        "summary": "Append an idempotent bounded discovery observation batch.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/WorkId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Observation batch accepted idempotently."
+          },
+          "409": {
+            "$ref": "#/components/responses/StaleLease"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/work/{workId}:complete": {
+      "post": {
+        "operationId": "completeConnectorWork",
+        "summary": "Report the normalized outcome of leased work.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          },
+          {
+            "$ref": "#/components/parameters/WorkId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkCompletion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Completion accepted idempotently."
+          },
+          "409": {
+            "$ref": "#/components/responses/StaleLease"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "workerBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Dedicated connector-worker bearer token. Token claims identify the external runtime subject only; Integration-owned server-side worker registration controls execution authority."
+      }
+    },
+    "parameters": {
+      "SessionId": {
+        "name": "sessionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "WorkId": {
+        "name": "workId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "responses": {
+      "AuthenticationRequired": {
+        "description": "Connector-worker authentication is missing or invalid."
+      },
+      "WorkerNotAuthorized": {
+        "description": "Authenticated runtime subject has no enabled Integration-owned worker registration for the requested execution scope."
+      },
+      "ProtocolIncompatible": {
+        "description": "No compatible protocol/runtime capability set can be negotiated."
+      },
+      "SessionInvalid": {
+        "description": "Session does not belong to the authenticated worker or is no longer valid."
+      },
+      "StaleLease": {
+        "description": "Lease ID/epoch is stale or expired; the result must not overwrite a newer lease generation."
+      }
+    },
+    "schemas": {
+      "SessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "supportedProtocolMajors",
+          "workerInstanceId",
+          "runtimes"
+        ],
+        "properties": {
+          "supportedProtocolMajors": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "workerInstanceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "runtimes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ConnectorRuntimeAdvertisement"
+            }
+          }
+        }
+      },
+      "ConnectorRuntimeAdvertisement": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runtimeId",
+          "runtimeVersion",
+          "capabilities",
+          "contractSchemas"
+        ],
+        "properties": {
+          "runtimeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "runtimeVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "capabilities": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "PROVISION",
+                "RECONCILE",
+                "SOURCE_DISCOVER",
+                "CREDENTIAL_PROVIDER_OPERATION"
+              ]
+            }
+          },
+          "contractSchemas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractSchemaSupport"
+            }
+          }
+        }
+      },
+      "ContractSchemaSupport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contractId",
+          "versions"
+        ],
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "versions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "selectedProtocolMajor",
+          "maxClaimSize",
+          "maxLongPollSeconds",
+          "maxObservationBatchSize",
+          "leaseDurationSeconds"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selectedProtocolMajor": {
+            "const": 1
+          },
+          "maxClaimSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "maxLongPollSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60
+          },
+          "maxObservationBatchSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "leaseDurationSeconds": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 600
+          }
+        }
+      },
+      "ClaimWorkRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "maxItems",
+          "waitSeconds"
+        ],
+        "properties": {
+          "maxItems": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "waitSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60
+          }
+        }
+      },
+      "ClaimWorkResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LeasedWorkItem"
+            }
+          }
+        }
+      },
+      "LeasedWorkItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workId",
+          "operationId",
+          "lease",
+          "tenantId",
+          "connectorBindingId",
+          "workKind",
+          "contractId",
+          "contractVersion",
+          "idempotencyKey",
+          "correlationId",
+          "payload"
+        ],
+        "properties": {
+          "workId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lease": {
+            "$ref": "#/components/schemas/LeaseToken"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorBindingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workKind": {
+            "type": "string",
+            "enum": [
+              "PROVISION",
+              "RECONCILE",
+              "SOURCE_DISCOVER",
+              "CREDENTIAL_PROVIDER_OPERATION"
+            ]
+          },
+          "contractId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "contractVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "desiredRevision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "checkpoint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "causationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "payload": {
+            "type": "object",
+            "description": "Connector-edge payload governed by contractId/contractVersion. It is not canonical IAM semantics and must not contain raw secret/private credential material."
+          }
+        }
+      },
+      "LeaseToken": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leaseId",
+          "leaseEpoch",
+          "leaseExpiresAt"
+        ],
+        "properties": {
+          "leaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "leaseEpoch": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "leaseExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ObservationBatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leaseId",
+          "leaseEpoch",
+          "batchId",
+          "sequence",
+          "observations"
+        ],
+        "properties": {
+          "leaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "leaseEpoch": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "batchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "observations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/ConnectorObservation"
+            }
+          }
+        }
+      },
+      "ConnectorObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "objectClass",
+          "providerStableId",
+          "observedState"
+        ],
+        "properties": {
+          "objectClass": {
+            "type": "string",
+            "enum": [
+              "PRINCIPAL",
+              "ENTITLEMENT",
+              "GRANT",
+              "CREDENTIAL_METADATA",
+              "SOURCE_RECORD"
+            ]
+          },
+          "providerStableId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "providerVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 512
+          },
+          "observedState": {
+            "type": "object",
+            "description": "Normalized connector-edge observation under the negotiated contract schema. Raw secret/private material is forbidden."
+          }
+        }
+      },
+      "WorkCompletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leaseId",
+          "leaseEpoch",
+          "outcome",
+          "result"
+        ],
+        "properties": {
+          "leaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "leaseEpoch": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "SUCCEEDED",
+              "FAILED_RETRYABLE",
+              "FAILED_FINAL",
+              "SUPERSEDED",
+              "SKIPPED"
+            ]
+          },
+          "result": {
+            "$ref": "#/components/schemas/NormalizedWorkResult"
+          },
+          "discoveryCoverage": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "COMPLETE",
+              "PARTIAL",
+              "UNKNOWN",
+              null
+            ],
+            "description": "Worker-reported evidence only. Integration remains authoritative for effective reconciliation/import completeness."
+          },
+          "nextCheckpoint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          }
+        }
+      },
+      "NormalizedWorkResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "failureCategory": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "TRANSIENT",
+              "RATE_LIMITED",
+              "AUTHENTICATION",
+              "AUTHORIZATION",
+              "VALIDATION",
+              "UNSUPPORTED",
+              "PROVIDER",
+              null
+            ]
+          },
+          "providerErrorCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "providerRequestId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          },
+          "retryAfterSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "providerObjectId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 512
+          },
+          "providerVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 512
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Bounded non-secret connector-edge result metadata. Raw provider response bodies, stack traces and private credential material are forbidden."
+          }
+        }
+      }
+    }
+  },
+  "x-wyrmgate-contract-status": "architecture-interface-contract-runtime-not-yet-implemented",
+  "x-wyrmgate-protocol-major": 1,
+  "x-wyrmgate-delivery-semantics": "at-least-once leased work with leaseId+leaseEpoch fencing; duplicate/replay/out-of-order completion must be tolerated",
+  "x-wyrmgate-secret-boundary": "ordinary work/result/observation payloads must not contain raw secret/private credential material",
+  "x-wyrmgate-completeness-authority": "worker-reported discovery coverage is evidence only; Integration owns effective reconciliation/import completeness"
+}
