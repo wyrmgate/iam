@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.integration.event;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
