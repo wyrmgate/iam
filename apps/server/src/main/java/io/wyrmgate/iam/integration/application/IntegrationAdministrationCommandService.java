@@ -36,7 +36,7 @@ public final class IntegrationAdministrationCommandService {
             TenantContext tenant, String connectorType, String runtimeId, String runtimeVersion,
             long configurationVersion, Map<String,Object> configuration, String secretReference,
             Instant now, UUID correlationId) {
-        ConnectorPayloadGuard.requireSecretFree(configuration);
+        validateConfiguration(configuration);
         validateConnector(connectorType, runtimeId, runtimeVersion, configurationVersion);
         return transactions.required(() -> {
             ConnectorInstance created = repository.createConnector(
@@ -53,7 +53,7 @@ public final class IntegrationAdministrationCommandService {
             TenantContext tenant, UUID id, String runtimeId, String runtimeVersion,
             long configurationVersion, Map<String,Object> configuration, String secretReference,
             long expectedRevision, Instant now, UUID correlationId) {
-        ConnectorPayloadGuard.requireSecretFree(configuration);
+        validateConfiguration(configuration);
         validateConnector("placeholder", runtimeId, runtimeVersion, configurationVersion);
         return transactions.required(() -> {
             ConnectorInstance updated = repository.updateConnector(
@@ -165,6 +165,16 @@ public final class IntegrationAdministrationCommandService {
                     now, correlationId);
             return disabled;
         });
+    }
+
+    private static void validateConfiguration(Map<String,Object> configuration) {
+        try {
+            ConnectorPayloadGuard.requireSecretFree(configuration);
+        } catch (WorkerProtocolException forbidden) {
+            throw new IntegrationAdministrationException(
+                    "secret_material_forbidden",
+                    "Connector configuration contains a forbidden secret-shaped field.");
+        }
     }
 
     private static void validateConnector(
