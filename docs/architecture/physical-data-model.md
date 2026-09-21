@@ -141,6 +141,8 @@ The following is the initial physical table-family contract. Additional subordin
 | `integration` | connector instance/binding, provisioning job/task, reconciliation run | Integration | Authoritative/process |
 | `integration` | provisioning attempt | Integration | Evidence |
 | `integration` | observed principal/entitlement/grant/credential, reconciliation staging/checkpoint | Integration | Observation |
+| `integration` | provider-observation mappings to canonical stable IDs | Integration | Authoritative technical interpretation/provenance |
+| `governance` | observation-derived drift findings | Governance | Authoritative/process |
 | `administration` | administrative permission/role/grant/delegation/elevation | Administration | Authoritative/process |
 | `audit` | audit record, evidence snapshot | Audit | Evidence |
 | `platform` | tenant, outbox, inbox/dedup, idempotency, scheduled delivery/work claim, projection checkpoint | Platform | Technical infrastructure |
