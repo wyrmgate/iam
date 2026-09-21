@@ -6,7 +6,7 @@ This document is the living OD-004 interface contract for remote connector execu
 
 - `apps/server/src/main/resources/contracts/openapi/connector-worker-v1.json`
 
-The v1 wire contract is now **runtime-exposed** for the first bounded Integration slice. The server provides dedicated connector-worker bearer authentication, Integration-owned server-side worker registration/scope, session/runtime/schema negotiation, leased claim/renew fencing, PRINCIPAL reconciliation observation batches, and normalized completion. Provisioning process persistence is connected to the Access-owned `DesiredAccessStateQuery`. Remote provisioning is claimable only when Access reports `CURRENT` with the same desired revision; `ABSENT` or a different revision supersedes the task, while `UNAVAILABLE` leaves it unclaimed.
+The v1 wire contract is now **runtime-exposed** for the first bounded Integration slice. The server provides dedicated connector-worker bearer authentication, Integration-owned server-side worker registration/scope, session/runtime/schema negotiation, leased claim/renew fencing, PRINCIPAL/ENTITLEMENT/GRANT reconciliation observation batches, and normalized completion. Provisioning process persistence is connected to the Access-owned `DesiredAccessStateQuery`. Remote provisioning is claimable only when Access reports `CURRENT` with the same desired revision; `ABSENT` or a different revision supersedes the task, while `UNAVAILABLE` leaves it unclaimed.
 
 ## Purpose and boundary
 
@@ -111,10 +111,10 @@ A causal work attempt is not silently upgraded to a different wire/schema versio
 The first runtime slice is intentionally bounded:
 
 - worker registrations are Integration-owned server-side state; no worker registration management API is exposed yet;
-- remote reconciliation supports `PRINCIPAL` observations only;
+- remote reconciliation supports negotiated `PRINCIPAL`, `ENTITLEMENT`, and `GRANT` observations under protocol v1; each observation batch must match the run's object-class scope;
 - positive observations from PARTIAL/UNKNOWN runs may materialize, but unseen observations are marked absent only after Integration validates effective `COMPLETE` coverage;
 - ProvisioningJob, ProvisioningTask and immutable ProvisioningAttempt persistence are implemented;
 - provisioning work revalidates through Access-owned `DesiredAccessStateQuery`; matching `CURRENT` revision is claimable, `ABSENT` or revision mismatch becomes `SUPERSEDED`, and `UNAVAILABLE` leaves work unclaimed;
 - connector/provider credentials remain external opaque secret references and never transit ordinary worker payloads;
 - an opt-in in-process SCIM executor may execute the same Integration-owned durable work using the same lease/fencing and completion persistence; this does not change worker protocol v1 or grant local execution any additional governance authority;
-- multi-region routing, broker transport, raw-secret delivery, and additional discovery object classes remain future slices.
+- multi-region routing, broker transport, raw-secret delivery, credential/source-record observation runtime support, and additional provider contracts remain future slices.
