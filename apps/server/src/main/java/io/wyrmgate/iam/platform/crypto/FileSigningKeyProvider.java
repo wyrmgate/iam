@@ -11,7 +11,10 @@ import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * File-backed signing key adapter intended for local, DEV, and DEMO topologies.
@@ -24,6 +27,7 @@ public final class FileSigningKeyProvider implements SigningKeyProvider {
 
     private final PrivateKey privateKey;
     private final SigningKeyMaterial keyMaterial;
+    private final Map<String, SigningKeyMaterial> verificationKeys;
 
     public FileSigningKeyProvider(
             String keyId,
@@ -31,16 +35,54 @@ public final class FileSigningKeyProvider implements SigningKeyProvider {
             String signingAlgorithm,
             Path privateKeyPath,
             Path publicKeyPath) {
+        this(keyId, keyAlgorithm, signingAlgorithm, privateKeyPath, publicKeyPath, Map.of());
+    }
+
+    public FileSigningKeyProvider(
+            String keyId,
+            String keyAlgorithm,
+            String signingAlgorithm,
+            Path privateKeyPath,
+            Path publicKeyPath,
+            Map<String, Path> additionalVerificationPublicKeyPaths) {
         Objects.requireNonNull(privateKeyPath, "privateKeyPath");
         Objects.requireNonNull(publicKeyPath, "publicKeyPath");
+        Objects.requireNonNull(additionalVerificationPublicKeyPaths, "additionalVerificationPublicKeyPaths");
+
         LoadedKeys loaded = load(keyAlgorithm, privateKeyPath, publicKeyPath);
         this.privateKey = loaded.privateKey();
         this.keyMaterial = new SigningKeyMaterial(keyId, signingAlgorithm, loaded.publicKey());
+
+        Map<String, SigningKeyMaterial> keys = new LinkedHashMap<>();
+        keys.put(keyId, keyMaterial);
+        additionalVerificationPublicKeyPaths.forEach((verificationKeyId, path) -> {
+            if (verificationKeyId == null || verificationKeyId.isBlank()) {
+                throw new IllegalArgumentException("verification key ID must not be blank");
+            }
+            if (keys.containsKey(verificationKeyId)) {
+                throw new IllegalArgumentException("duplicate verification key ID " + verificationKeyId);
+            }
+            keys.put(
+                    verificationKeyId,
+                    new SigningKeyMaterial(
+                            verificationKeyId,
+                            signingAlgorithm,
+                            loadPublicKey(keyAlgorithm, path)));
+        });
+        this.verificationKeys = Map.copyOf(keys);
     }
 
     @Override
     public SigningKeyMaterial currentSigningKey() {
         return keyMaterial;
+    }
+
+    @Override
+    public Optional<SigningKeyMaterial> verificationKey(String keyId) {
+        if (keyId == null || keyId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(verificationKeys.get(keyId));
     }
 
     @Override
@@ -72,6 +114,19 @@ public final class FileSigningKeyProvider implements SigningKeyProvider {
             return new LoadedKeys(privateKey, publicKey);
         } catch (IOException | GeneralSecurityException ex) {
             throw new IllegalStateException("Unable to load signing key material", ex);
+        }
+    }
+
+    private static PublicKey loadPublicKey(String keyAlgorithm, Path publicKeyPath) {
+        Objects.requireNonNull(publicKeyPath, "publicKeyPath");
+        if (keyAlgorithm == null || keyAlgorithm.isBlank()) {
+            throw new IllegalArgumentException("keyAlgorithm must not be blank");
+        }
+        try {
+            return KeyFactory.getInstance(keyAlgorithm)
+                    .generatePublic(new X509EncodedKeySpec(readPem(publicKeyPath, "PUBLIC KEY")));
+        } catch (IOException | GeneralSecurityException ex) {
+            throw new IllegalStateException("Unable to load verification key material", ex);
         }
     }
 
