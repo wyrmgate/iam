@@ -189,9 +189,13 @@ def verify_connector_worker_openapi(document: dict) -> None:
         "connector-worker OpenAPI must stay on the approved 3.1.x contract family"
     )
     assert document.get("x-wyrmgate-contract-status") == (
-        "architecture-interface-contract-runtime-not-yet-implemented"
+        "runtime-exposed-dedicated-bearer-server-authorized"
     )
     assert document.get("x-wyrmgate-protocol-major") == 1
+    session_response = document["components"]["schemas"]["SessionResponse"]
+    assert "acceptedRuntimes" in set(session_response.get("required", [])), (
+        "session negotiation must return the server-accepted runtime/schema compatibility set"
+    )
     assert document.get("security") == [{"workerBearer": []}], (
         "all connector-worker operations must require the dedicated worker bearer boundary"
     )
