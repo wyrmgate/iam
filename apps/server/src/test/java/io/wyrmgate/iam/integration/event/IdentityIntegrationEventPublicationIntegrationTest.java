@@ -309,6 +309,42 @@ class IdentityIntegrationEventPublicationIntegrationTest {
         assertThat(reclaimed.getFirst().attemptCount()).isEqualTo(2);
     }
 
+    @Test
+    void terminalAdapterFailureMovesFactToFailedWithoutRetry() {
+        TenantContext tenant = tenant("Terminal Webhook Tenant");
+        commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Private Terminal Name",
+                BASE_TIME,
+                ids.nextId(),
+                null);
+
+        IntegrationEventPublisher terminalPublisher = event -> {
+            throw new IntegrationEventDeliveryException(false, "webhook_http_terminal");
+        };
+        var result = service(
+                terminalPublisher,
+                Clock.fixed(BASE_TIME.plusSeconds(1), ZoneOffset.UTC),
+                () -> 0.5)
+                .publishAvailable();
+
+        assertThat(result.claimed()).isEqualTo(1);
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT publication_state FROM platform.outbox_event", String.class))
+                .isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject(
+                "SELECT last_error_code FROM platform.outbox_event", String.class))
+                .isEqualTo("webhook_http_terminal");
+        java.sql.Timestamp nextAttemptAt = jdbc.queryForObject(
+                "SELECT next_attempt_at FROM platform.outbox_event",
+                (rs, rowNum) -> rs.getTimestamp(1));
+        assertThat(nextAttemptAt).isNull();
+    }
+
     private static IntegrationEventPublicationService service(
             IntegrationEventPublisher publisher,
             Clock clock,
