@@ -20,5 +20,6 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0010 Physical data model and persistence boundaries](0010-physical-data-model-and-persistence-boundaries.md)
 - [ADR-0011 Control-plane authentication and initial administrator bootstrap](0011-control-plane-authentication-and-initial-admin-bootstrap.md)
 - [ADR-0012 Integrity-protected API continuation cursors](0012-integrity-protected-api-continuation-cursors.md)
+- [ADR-0013 Initial public integration-event transport and compatibility lifecycle](0013-initial-public-event-webhook-transport.md)
 
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. An accepted ADR may amend a formal specification between document revisions; the next formal revision must fold the ADR into the specification.
