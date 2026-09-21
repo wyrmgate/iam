@@ -312,28 +312,35 @@ public final class JdbcIntegrationAdministrationRepository
             }
         }
         for (WorkerPermissionSpec permission : permissions) {
-            Integer count = jdbc.queryForObject("""
-                    SELECT count(*)
-                    FROM integration.connector_binding b
-                    JOIN integration.connector_instance ci
-                      ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
-                    WHERE b.tenant_id = ?
-                      AND b.id = ANY (?::uuid[])
-                      AND b.lifecycle_state = 'ACTIVE'
-                      AND ci.lifecycle_state = 'ACTIVE'
-                      AND ci.runtime_id = ?
-                      AND ci.runtime_version = ?
-                      AND b.contract_id = ?
-                      AND b.contract_version = ?
-                    """,
-                    Integer.class,
-                    tenant.tenantId(),
-                    bindingScope.toArray(UUID[]::new),
-                    permission.runtimeId(),
-                    permission.runtimeVersion(),
-                    permission.contractId(),
-                    permission.contractVersion());
-            if (count == null || count == 0) {
+            boolean compatible = false;
+            for (UUID bindingId : bindingScope.stream().distinct().toList()) {
+                Integer count = jdbc.queryForObject("""
+                        SELECT count(*)
+                        FROM integration.connector_binding b
+                        JOIN integration.connector_instance ci
+                          ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
+                        WHERE b.tenant_id = ?
+                          AND b.id = ?
+                          AND b.lifecycle_state = 'ACTIVE'
+                          AND ci.lifecycle_state = 'ACTIVE'
+                          AND ci.runtime_id = ?
+                          AND ci.runtime_version = ?
+                          AND b.contract_id = ?
+                          AND b.contract_version = ?
+                        """,
+                        Integer.class,
+                        tenant.tenantId(),
+                        bindingId,
+                        permission.runtimeId(),
+                        permission.runtimeVersion(),
+                        permission.contractId(),
+                        permission.contractVersion());
+                if (count != null && count > 0) {
+                    compatible = true;
+                    break;
+                }
+            }
+            if (!compatible) {
                 throw new IntegrationAdministrationException(
                         "worker_permission_outside_scope",
                         "Worker runtime permission is not compatible with any scoped connector binding.");
