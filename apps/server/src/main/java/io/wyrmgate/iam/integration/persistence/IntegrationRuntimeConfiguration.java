@@ -7,6 +7,7 @@ import io.wyrmgate.iam.integration.application.DesiredStateRevisionQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +16,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Configuration
 @EnableConfigurationProperties(ConnectorWorkerProtocolProperties.class)
 public class IntegrationRuntimeConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean(ObjectMapper.class)
+    ObjectMapper integrationObjectMapper() {
+        return new ObjectMapper().findAndRegisterModules();
+    }
 
     @Bean
     JdbcIntegrationRuntimeRepository jdbcIntegrationRuntimeRepository(
