@@ -243,6 +243,7 @@ public final class JdbcIntegrationAdministrationRepository
                 protocolMajorMin, protocolMajorMax, Timestamp.from(now),
                 tenant.tenantId(), id, expectedRevision);
         requireUpdated(affected, "connector-worker", tenant, id, expectedRevision);
+        invalidateWorkerSessions(tenant, id);
         replaceWorkerChildren(tenant, id, bindingScope, permissions, now);
         return findWorker(tenant, id).orElseThrow();
     }
@@ -256,7 +257,29 @@ public final class JdbcIntegrationAdministrationRepository
                 WHERE tenant_id = ? AND id = ? AND revision = ? AND state = 'ENABLED'
                 """, Timestamp.from(now), tenant.tenantId(), id, expectedRevision);
         requireUpdated(affected, "connector-worker", tenant, id, expectedRevision);
+        invalidateWorkerSessions(tenant, id);
         return findWorker(tenant, id).orElseThrow();
+    }
+
+    private void invalidateWorkerSessions(TenantContext tenant, UUID workerId) {
+        jdbc.update("""
+                DELETE FROM integration.connector_worker_session_contract
+                WHERE tenant_id = ? AND session_id IN (
+                    SELECT id FROM integration.connector_worker_session
+                    WHERE tenant_id = ? AND worker_registration_id = ?
+                )
+                """, tenant.tenantId(), tenant.tenantId(), workerId);
+        jdbc.update("""
+                DELETE FROM integration.connector_worker_session_capability
+                WHERE tenant_id = ? AND session_id IN (
+                    SELECT id FROM integration.connector_worker_session
+                    WHERE tenant_id = ? AND worker_registration_id = ?
+                )
+                """, tenant.tenantId(), tenant.tenantId(), workerId);
+        jdbc.update("""
+                DELETE FROM integration.connector_worker_session
+                WHERE tenant_id = ? AND worker_registration_id = ?
+                """, tenant.tenantId(), workerId);
     }
 
     private void replaceWorkerChildren(
