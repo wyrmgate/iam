@@ -42,12 +42,16 @@ final class IntegrationAdminApiModels {
             UUID targetId,
             String contractId,
             int contractVersion,
-            boolean supportsCompletePrincipalDiscovery) {}
+            boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery) {}
 
     record BindingUpdateRequest(
             String contractId,
             int contractVersion,
-            boolean supportsCompletePrincipalDiscovery) {}
+            boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery) {}
 
     record BindingResource(
             UUID id,
@@ -57,6 +61,8 @@ final class IntegrationAdminApiModels {
             String contractId,
             int contractVersion,
             boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery,
             String lifecycleState,
             long revision,
             Instant createdAt,
