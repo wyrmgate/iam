@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.PrincipalObservation;
 import io.wyrmgate.iam.integration.domain.ReconciliationCompleteness;
 import io.wyrmgate.iam.integration.provider.ConnectorSecretProvider;
 import java.io.IOException;
@@ -26,12 +27,14 @@ import org.junit.jupiter.api.Test;
 class ScimPrincipalProviderAdapterTest {
 
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
+    private final List<RecordedRequest> requests = new ArrayList<>();
     private HttpServer server;
     private URI baseUri;
-    private final List<RecordedRequest> requests = new ArrayList<>();
+    private AtomicInteger activeStatus;
 
     @BeforeEach
     void startServer() throws IOException {
+        requests.clear();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         baseUri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/scim/v2/");
     }
@@ -91,7 +94,7 @@ class ScimPrincipalProviderAdapterTest {
         });
         server.start();
 
-        var batches = new ArrayList<List<io.wyrmgate.iam.integration.application.ConnectorWorkRepository.PrincipalObservation>>();
+        var batches = new ArrayList<List<PrincipalObservation>>();
         var result = adapter().discoverPrincipals(
                 configuration(), "test-ref", null, batches::add);
 
@@ -209,106 +212,16 @@ class ScimPrincipalProviderAdapterTest {
         assertThat(requests).hasSize(3);
         assertThat(requests).extracting(RecordedRequest::idempotencyKey)
                 .containsExactly("op-create", "op-update", "op-disable");
-        assertThat(requests.get(2).body()).contains("\"path\":\"active\"").contains("false");
+        assertThat(requests.get(2).body())
+                .contains("\"path\":\"active\"")
+                .contains("false");
     }
 
     @Test
     void providerFailuresAreNormalizedWithoutLeakingSecretOrProviderDetail() {
-        AtomicInteger status = new AtomicInteger(429);
-        AtomicReference<String> detail = new AtomicReference<>("secret detail connector-secret");
-        server.createContext("/scim/v2/Users", exchange -> {
-            requests.add(record(exchange));
-            respond(exchange, activeStatus.get(), """
-                    {
-                      "schemas":["urn:ietf:params:scim:api:messages:2.0:Error"],
-                      "status":"%d",
-                      "scimType":"provider-code",
-                      "detail":"%s"
-                    }
-                    """.formatted(status.get(), detail.get()),
-                    status.get() == 429 ? Map.of("Retry-After", "17") : Map.of());
-        });
-        server.start();
-
-        assertCategory(429, ScimProviderException.FailureCategory.RATE_LIMITED, 17);
-        assertCategory(503, ScimProviderException.FailureCategory.TRANSIENT, null);
-        assertCategory(401, ScimProviderException.FailureCategory.AUTHENTICATION, null);
-        assertCategory(403, ScimProviderException.FailureCategory.AUTHORIZATION, null);
-        assertCategory(400, ScimProviderException.FailureCategory.VALIDATION, null);
-
-        voidStatus(status, 429);
-    }
-
-    private void assertCategory(
-            int httpStatus,
-            ScimProviderException.FailureCategory category,
-            Integer retryAfter) {
-        AtomicInteger statusHolder = findStatusHolder();
-        statusHolder.set(httpStatus);
-        assertThatThrownBy(() -> adapter().discoverPrincipals(
-                        configuration(), "test-ref", null, ignored -> {}))
-                .isInstanceOfSatisfying(ScimProviderException.class, error -> {
-                    assertThat(error.category()).isEqualTo(category);
-                    assertThat(error.retryAfterSeconds()).isEqualTo(retryAfter);
-                    assertThat(error.providerErrorCode()).isEqualTo("provider-code");
-                    assertThat(error.getMessage()).doesNotContain("connector-secret");
-                    assertThat(error.getMessage()).doesNotContain("secret detail");
-                });
-    }
-
-    private AtomicInteger activeStatus;
-
-
-    private ScimPrincipalProviderAdapter adapter() {
-        ConnectorSecretProvider secretProvider = reference -> {
-            assertThat(reference).isEqualTo("test-ref");
-            return "connector-secret".toCharArray();
-        };
-        return new ScimPrincipalProviderAdapter(
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build(),
-                json,
-                secretProvider);
-    }
-
-    private ScimPrincipalProviderAdapter.Configuration configuration() {
-        return new ScimPrincipalProviderAdapter.Configuration(
-                baseUri, 2, 100, Duration.ofSeconds(2), null);
-    }
-
-    private RecordedRequest record(HttpExchange exchange) throws IOException {
-        return new RecordedRequest(
-                exchange.getRequestMethod(),
-                exchange.getRequestHeaders().getFirst("Authorization"),
-                exchange.getRequestHeaders().getFirst("Idempotency-Key"),
-                new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-    }
-
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        respond(exchange, status, body, Map.of());
-    }
-
-    private static void respond(
-            HttpExchange exchange,
-            int status,
-            String body,
-            Map<String,String> headers) throws IOException {
-        headers.forEach((name, value) -> exchange.getResponseHeaders().set(name, value));
-        exchange.getResponseHeaders().set("Content-Type", "application/scim+json");
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(status, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.close();
-    }
-
-    private record RecordedRequest(
-            String method,
-            String authorization,
-            String idempotencyKey,
-            String body) {}
-}    @Test
-    void providerFailuresAreNormalizedWithoutLeakingSecretOrProviderDetail() {
         activeStatus = new AtomicInteger(429);
-        AtomicReference<String> detail = new AtomicReference<>("secret detail connector-secret");
+        AtomicReference<String> detail =
+                new AtomicReference<>("secret detail connector-secret");
         server.createContext("/scim/v2/Users", exchange -> {
             requests.add(record(exchange));
             respond(exchange, activeStatus.get(), """
@@ -319,7 +232,9 @@ class ScimPrincipalProviderAdapterTest {
                       "detail":"%s"
                     }
                     """.formatted(activeStatus.get(), detail.get()),
-                    activeStatus.get() == 429 ? Map.of("Retry-After", "17") : Map.of());
+                    activeStatus.get() == 429
+                            ? Map.of("Retry-After", "17")
+                            : Map.of());
         });
         server.start();
 
@@ -329,8 +244,6 @@ class ScimPrincipalProviderAdapterTest {
         assertCategory(403, ScimProviderException.FailureCategory.AUTHORIZATION, null);
         assertCategory(400, ScimProviderException.FailureCategory.VALIDATION, null);
     }
-
-    private AtomicInteger activeStatus;
 
     private void assertCategory(
             int httpStatus,
@@ -354,7 +267,9 @@ class ScimPrincipalProviderAdapterTest {
             return "connector-secret".toCharArray();
         };
         return new ScimPrincipalProviderAdapter(
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build(),
+                HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(2))
+                        .build(),
                 json,
                 secretProvider);
     }
@@ -372,7 +287,10 @@ class ScimPrincipalProviderAdapterTest {
                 new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
     }
 
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
+    private static void respond(
+            HttpExchange exchange,
+            int status,
+            String body) throws IOException {
         respond(exchange, status, body, Map.of());
     }
 
@@ -381,8 +299,10 @@ class ScimPrincipalProviderAdapterTest {
             int status,
             String body,
             Map<String,String> headers) throws IOException {
-        headers.forEach((name, value) -> exchange.getResponseHeaders().set(name, value));
-        exchange.getResponseHeaders().set("Content-Type", "application/scim+json");
+        headers.forEach((name, value) ->
+                exchange.getResponseHeaders().set(name, value));
+        exchange.getResponseHeaders().set(
+                "Content-Type", "application/scim+json");
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(status, bytes.length);
         exchange.getResponseBody().write(bytes);
