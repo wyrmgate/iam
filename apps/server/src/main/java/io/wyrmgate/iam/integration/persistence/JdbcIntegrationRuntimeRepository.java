@@ -618,11 +618,13 @@ public final class JdbcIntegrationRuntimeRepository
                                 principal_provider_id, entitlement_provider_id,
                                 observed_state, observed_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
-                            ON CONFLICT (tenant_id, reconciliation_run_id, provider_stable_id) DO UPDATE
+                            ON CONFLICT (
+                                tenant_id, reconciliation_run_id,
+                                principal_provider_id, entitlement_provider_id
+                            ) DO UPDATE
                             SET batch_id = EXCLUDED.batch_id,
+                                provider_stable_id = EXCLUDED.provider_stable_id,
                                 provider_version = EXCLUDED.provider_version,
-                                principal_provider_id = EXCLUDED.principal_provider_id,
-                                entitlement_provider_id = EXCLUDED.entitlement_provider_id,
                                 observed_state = EXCLUDED.observed_state,
                                 observed_at = EXCLUDED.observed_at
                             """,
@@ -964,10 +966,12 @@ public final class JdbcIntegrationRuntimeRepository
                         principal_provider_id, entitlement_provider_id,
                         observed_state, present, last_observed_run_id, observed_at, absent_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, true, ?, ?, NULL)
-                    ON CONFLICT (tenant_id, connector_binding_id, provider_stable_id) DO UPDATE
-                    SET provider_version = EXCLUDED.provider_version,
-                        principal_provider_id = EXCLUDED.principal_provider_id,
-                        entitlement_provider_id = EXCLUDED.entitlement_provider_id,
+                    ON CONFLICT (
+                        tenant_id, connector_binding_id,
+                        principal_provider_id, entitlement_provider_id
+                    ) DO UPDATE
+                    SET provider_stable_id = EXCLUDED.provider_stable_id,
+                        provider_version = EXCLUDED.provider_version,
                         observed_state = EXCLUDED.observed_state,
                         present = true,
                         last_observed_run_id = EXCLUDED.last_observed_run_id,
