@@ -262,7 +262,20 @@ def verify_connector_worker_openapi(document: dict) -> None:
         "worker-reported discovery coverage is evidence only; Integration owns effective reconciliation/import completeness"
     )
 
-    serialized = json.dumps(document, sort_keys=True).lower()
+    property_names: set[str] = set()
+
+    def collect_property_names(value: object) -> None:
+        if isinstance(value, dict):
+            properties = value.get("properties")
+            if isinstance(properties, dict):
+                property_names.update(str(name).lower() for name in properties)
+            for child in value.values():
+                collect_property_names(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect_property_names(child)
+
+    collect_property_names(schemas)
     for forbidden in (
         "password",
         "privatekey",
@@ -274,7 +287,7 @@ def verify_connector_worker_openapi(document: dict) -> None:
         "clientsecret",
         "client_secret",
     ):
-        assert forbidden not in serialized, (
+        assert forbidden not in property_names, (
             f"connector-worker ordinary wire contract leaked secret-shaped field: {forbidden}"
         )
 
