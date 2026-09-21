@@ -1,0 +1,408 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Wyrmgate IAM Integration Administration API",
+    "version": "1.0.0"
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/v1/connectors": {
+      "post": {
+        "operationId": "createConnector",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/connectors/{id}": {
+      "get": {
+        "operationId": "getConnector",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateConnector",
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      }
+    },
+    "/api/v1/connectors/{id}:disable": {
+      "post": {
+        "operationId": "disableConnector",
+        "responses": {
+          "200": {
+            "description": "Disabled"
+          }
+        }
+      }
+    },
+    "/api/v1/connector-bindings": {
+      "post": {
+        "operationId": "createConnectorBinding",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/connector-bindings/{id}": {
+      "get": {
+        "operationId": "getConnectorBinding",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateConnectorBinding",
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      }
+    },
+    "/api/v1/connector-bindings/{id}:disable": {
+      "post": {
+        "operationId": "disableConnectorBinding",
+        "responses": {
+          "200": {
+            "description": "Disabled"
+          }
+        }
+      }
+    },
+    "/api/v1/connector-workers": {
+      "post": {
+        "operationId": "createConnectorWorker",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/connector-workers/{id}": {
+      "get": {
+        "operationId": "getConnectorWorker",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateConnectorWorker",
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      }
+    },
+    "/api/v1/connector-workers/{id}:disable": {
+      "post": {
+        "operationId": "disableConnectorWorker",
+        "responses": {
+          "200": {
+            "description": "Disabled"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ConnectorResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "connectorType",
+          "runtimeId",
+          "runtimeVersion",
+          "configurationVersion",
+          "configuration",
+          "secretConfigured",
+          "lifecycleState",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorType": {
+            "type": "string"
+          },
+          "runtimeId": {
+            "type": "string"
+          },
+          "runtimeVersion": {
+            "type": "string"
+          },
+          "configurationVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "configuration": {
+            "type": "object"
+          },
+          "secretConfigured": {
+            "type": "boolean"
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "DISABLED",
+              "RETIRED"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConnectorCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "connectorType",
+          "runtimeId",
+          "runtimeVersion",
+          "configurationVersion",
+          "configuration"
+        ],
+        "properties": {
+          "connectorType": {
+            "type": "string"
+          },
+          "runtimeId": {
+            "type": "string"
+          },
+          "runtimeVersion": {
+            "type": "string"
+          },
+          "configurationVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "configuration": {
+            "type": "object"
+          },
+          "secretReference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          }
+        }
+      },
+      "ConnectorBindingResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "connectorInstanceId",
+          "targetKind",
+          "targetId",
+          "contractId",
+          "contractVersion",
+          "supportsCompletePrincipalDiscovery",
+          "lifecycleState",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorInstanceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetKind": {
+            "type": "string",
+            "enum": [
+              "APPLICATION_TARGET",
+              "SOURCE_SYSTEM"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "contractVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "supportsCompletePrincipalDiscovery": {
+            "type": "boolean"
+          },
+          "lifecycleState": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConnectorWorkerResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "issuer",
+          "subject",
+          "state",
+          "protocolMajorMin",
+          "protocolMajorMax",
+          "bindingScope",
+          "permissions",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ENABLED",
+              "DISABLED"
+            ]
+          },
+          "protocolMajorMin": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "protocolMajorMax": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "bindingScope": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerPermission"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WorkerPermission": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runtimeId",
+          "runtimeVersion",
+          "capability",
+          "contractId",
+          "contractVersion"
+        ],
+        "properties": {
+          "runtimeId": {
+            "type": "string"
+          },
+          "runtimeVersion": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "PROVISION",
+              "RECONCILE",
+              "SOURCE_DISCOVER",
+              "CREDENTIAL_PROVIDER_OPERATION"
+            ]
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "contractVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "x-wyrmgate-idempotency": "all mutations require Idempotency-Key",
+  "x-wyrmgate-concurrency": "updates and disable operations require strong revision If-Match",
+  "x-wyrmgate-secret-boundary": "secretReference is write-only; responses expose only secretConfigured; secret-shaped configuration fields are rejected",
+  "x-wyrmgate-authorization": "Administration default-deny semantic permissions govern every operation"
+}
