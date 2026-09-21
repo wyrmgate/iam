@@ -24,7 +24,7 @@ public interface ConnectorWorkRepository {
     WorkerLease renewLease(
             WorkerSession session, UUID workId, UUID leaseId, long leaseEpoch,
             Instant now, Duration duration);
-    ObservationBatchResult appendPrincipalObservations(
+    ObservationBatchResult appendProviderObservations(
             WorkerSession session,
             UUID workId,
             UUID leaseId,
