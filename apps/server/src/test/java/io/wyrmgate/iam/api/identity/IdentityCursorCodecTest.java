@@ -15,6 +15,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -60,6 +62,19 @@ class IdentityCursorCodecTest {
 
         assertThat(codec.decodeCanonical(cursor, tenant, identityId)).isEqualTo(position);
         assertThatThrownBy(() -> codec.decodeCanonical(cursor, tenant, UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("invalid cursor");
+    }
+
+    @Test
+    void unsignedV1CursorIsRejected() throws Exception {
+        TestProvider provider = TestProvider.single("key-a");
+        TenantContext tenant = tenant();
+        String oldCursor = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(("v1\u00001791234000\u00000\u0000" + UUID.randomUUID())
+                        .getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> codec(provider, NOW).decodeIdentity(oldCursor, tenant))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("invalid cursor");
     }
