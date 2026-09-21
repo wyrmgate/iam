@@ -523,10 +523,10 @@ public final class JdbcIntegrationRuntimeRepository
     }
 
     @Override
-    public ObservationBatchResult appendPrincipalObservations(
+    public ObservationBatchResult appendProviderObservations(
             WorkerSession session, UUID workId, UUID leaseId, long leaseEpoch,
             UUID batchId, int sequence, String requestFingerprint,
-            List<PrincipalObservation> observations, Instant now) {
+            List<ProviderObservation> observations, Instant now) {
         requireCurrentLease(session, WorkKind.RECONCILE, workId, leaseId, leaseEpoch, now, true);
         List<String> existing = jdbc.query("""
                 SELECT request_fingerprint
@@ -549,7 +549,7 @@ public final class JdbcIntegrationRuntimeRepository
         } catch (DataIntegrityViolationException conflict) {
             throw new WorkerProtocolException("observation_sequence_conflict", "observation sequence was already used");
         }
-        for (PrincipalObservation observation : observations) {
+        for (ProviderObservation observation : observations) {
             jdbc.update("""
                     INSERT INTO integration.reconciliation_principal_staging (
                         id, tenant_id, reconciliation_run_id, batch_id, provider_stable_id,
