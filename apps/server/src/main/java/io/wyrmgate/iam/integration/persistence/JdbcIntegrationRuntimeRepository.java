@@ -3,6 +3,7 @@ package io.wyrmgate.iam.integration.persistence;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
 import io.wyrmgate.iam.integration.application.WorkerProtocolException;
 import io.wyrmgate.iam.integration.application.WorkerRegistrationRepository;
@@ -35,7 +36,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 public final class JdbcIntegrationRuntimeRepository
-        implements WorkerRegistrationRepository, ConnectorWorkRepository {
+        implements WorkerRegistrationRepository, ConnectorWorkRepository, ConnectorExecutionRepository {
 
     private static final TypeReference<Map<String,Object>> MAP_TYPE = new TypeReference<>() {};
     private final JdbcTemplate jdbc;
@@ -294,6 +295,148 @@ public final class JdbcIntegrationRuntimeRepository
                         rs.getObject(8, UUID.class), rs.getObject(9, UUID.class), Map.of()),
                 session.workerRegistrationId(), session.id(), session.id(),
                 session.tenant().tenantId(), Timestamp.from(now), Timestamp.from(now), limit);
+    }
+
+    @Override
+    public List<ProvisioningCandidate> lockLocalProvisioningCandidates(
+            String runtimeId,
+            String runtimeVersion,
+            String contractId,
+            int contractVersion,
+            int limit,
+            Instant now) {
+        return jdbc.query("""
+                SELECT t.id, t.operation_id, t.tenant_id, j.connector_binding_id,
+                       t.operation_type, t.subject_kind, t.subject_id, t.desired_revision,
+                       t.contract_id, t.contract_version, t.idempotency_key,
+                       t.correlation_id, t.causation_id, t.payload::text
+                FROM integration.provisioning_task t
+                JOIN integration.provisioning_job j
+                  ON j.tenant_id = t.tenant_id AND j.id = t.provisioning_job_id
+                JOIN integration.connector_binding b
+                  ON b.tenant_id = j.tenant_id AND b.id = j.connector_binding_id
+                JOIN integration.connector_instance ci
+                  ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
+                WHERE ci.runtime_id = ?
+                  AND ci.runtime_version = ?
+                  AND t.contract_id = ?
+                  AND t.contract_version = ?
+                  AND b.contract_id = t.contract_id
+                  AND b.contract_version = t.contract_version
+                  AND b.lifecycle_state = 'ACTIVE'
+                  AND ci.lifecycle_state = 'ACTIVE'
+                  AND t.state IN ('READY','FAILED_RETRYABLE')
+                  AND (t.next_attempt_at IS NULL OR t.next_attempt_at <= ?)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM integration.provisioning_task_dependency d
+                      JOIN integration.provisioning_task parent
+                        ON parent.tenant_id = d.tenant_id
+                       AND parent.provisioning_job_id = d.provisioning_job_id
+                       AND parent.id = d.depends_on_task_id
+                      WHERE d.tenant_id = t.tenant_id
+                        AND d.provisioning_job_id = t.provisioning_job_id
+                        AND d.task_id = t.id
+                        AND parent.state NOT IN ('SUCCEEDED','SKIPPED')
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM platform.connector_work_lease l
+                      WHERE l.tenant_id = t.tenant_id
+                        AND l.work_kind = 'PROVISION'
+                        AND l.work_id = t.id
+                        AND l.lease_expires_at > ?
+                  )
+                ORDER BY COALESCE(t.next_attempt_at, t.created_at), t.created_at, t.id
+                FOR UPDATE OF t SKIP LOCKED
+                LIMIT ?
+                """,
+                (rs,row) -> new ProvisioningCandidate(
+                        rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
+                        rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
+                        rs.getString(5), rs.getString(6), rs.getObject(7, UUID.class), rs.getLong(8),
+                        rs.getString(9), rs.getInt(10), rs.getString(11),
+                        rs.getObject(12, UUID.class), rs.getObject(13, UUID.class),
+                        readMap(rs.getString(14))),
+                runtimeId, runtimeVersion, contractId, contractVersion,
+                Timestamp.from(now), Timestamp.from(now), limit);
+    }
+
+    @Override
+    public List<ReconciliationCandidate> lockLocalReconciliationCandidates(
+            String runtimeId,
+            String runtimeVersion,
+            String contractId,
+            int contractVersion,
+            int limit,
+            Instant now) {
+        return jdbc.query("""
+                SELECT r.id, r.operation_id, r.tenant_id, r.connector_binding_id,
+                       r.contract_id, r.contract_version, r.checkpoint_start,
+                       r.correlation_id, r.causation_id
+                FROM integration.reconciliation_run r
+                JOIN integration.connector_binding b
+                  ON b.tenant_id = r.tenant_id AND b.id = r.connector_binding_id
+                JOIN integration.connector_instance ci
+                  ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
+                WHERE ci.runtime_id = ?
+                  AND ci.runtime_version = ?
+                  AND r.contract_id = ?
+                  AND r.contract_version = ?
+                  AND b.contract_id = r.contract_id
+                  AND b.contract_version = r.contract_version
+                  AND r.state = 'RUNNING'
+                  AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= ?)
+                  AND b.lifecycle_state = 'ACTIVE'
+                  AND ci.lifecycle_state = 'ACTIVE'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM platform.connector_work_lease l
+                      WHERE l.tenant_id = r.tenant_id
+                        AND l.work_kind = 'RECONCILE'
+                        AND l.work_id = r.id
+                        AND l.lease_expires_at > ?
+                  )
+                ORDER BY COALESCE(r.next_attempt_at, r.started_at), r.started_at, r.id
+                FOR UPDATE OF r SKIP LOCKED
+                LIMIT ?
+                """,
+                (rs,row) -> new ReconciliationCandidate(
+                        rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
+                        rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
+                        rs.getString(5), rs.getInt(6), rs.getString(7),
+                        rs.getObject(8, UUID.class), rs.getObject(9, UUID.class), Map.of()),
+                runtimeId, runtimeVersion, contractId, contractVersion,
+                Timestamp.from(now), Timestamp.from(now), limit);
+    }
+
+    @Override
+    public Optional<ExecutionConfiguration> findExecutionConfiguration(
+            TenantContext tenant,
+            UUID connectorBindingId) {
+        return jdbc.query("""
+                SELECT b.id, ci.id, ci.connector_type, ci.runtime_id, ci.runtime_version,
+                       ci.configuration_version, ci.configuration_json::text, ci.secret_reference,
+                       b.contract_id, b.contract_version, b.supports_complete_principal_discovery
+                FROM integration.connector_binding b
+                JOIN integration.connector_instance ci
+                  ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
+                WHERE b.tenant_id = ? AND b.id = ?
+                  AND b.lifecycle_state = 'ACTIVE' AND ci.lifecycle_state = 'ACTIVE'
+                """,
+                (rs,row) -> new ExecutionConfiguration(
+                        rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
+                        rs.getString(3), rs.getString(4), rs.getString(5), rs.getLong(6),
+                        readMap(rs.getString(7)), rs.getString(8), rs.getString(9),
+                        rs.getInt(10), rs.getBoolean(11)),
+                tenant.tenantId(), connectorBindingId).stream().findFirst();
+    }
+
+    @Override
+    public int nextObservationSequence(TenantContext tenant, UUID reconciliationRunId) {
+        Integer value = jdbc.queryForObject("""
+                SELECT COALESCE(MAX(sequence), -1) + 1
+                FROM integration.reconciliation_observation_batch
+                WHERE tenant_id = ? AND reconciliation_run_id = ?
+                """, Integer.class, tenant.tenantId(), reconciliationRunId);
+        return value == null ? 0 : value;
     }
 
     @Override
