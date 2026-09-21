@@ -31,10 +31,26 @@ Set deployment variables:
 - `IAM_OTEL_ENABLED=false`
 - `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`
 - `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`
+- `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5`
 
 Enable Railway Serverless for the DEV service. Do not set `PORT`; Railway supplies it. Verify the service starts, Flyway completes successfully, and `/actuator/health` is healthy over the Railway HTTPS service domain.
 
+The maximum pool size of `5` is part of the validated initial DEV posture. During activation an effective pool size of `2` caused Flyway startup timeout. Keep `5` unless measured DEV behavior justifies a deliberate change. This is not production sizing guidance.
+
 If the service does not sleep during idle periods, inspect outbound traffic first. Database connections and telemetry can keep Railway Serverless awake; do not weaken application correctness merely to force sleeping.
+
+### Flyway startup verification
+
+For the current Spring Boot 4.1.1 server, the validated Flyway auto-configuration contract is `spring-boot-starter-flyway` plus the PostgreSQL Flyway database module.
+
+The repository contains an application-startup regression test that boots the real application against an empty PostgreSQL database and verifies `flyway_schema_history`, the expected migration version, and the capability schemas. Keep that test green whenever Spring Boot or Flyway dependencies change.
+
+For a new or reset managed DEV database, verify both:
+
+1. Railway `/actuator/health` is `UP`;
+2. the latest successful version in `public.flyway_schema_history` matches the repository's current migration set.
+
+A green HTTP health check by itself is not migration evidence.
 
 ## 4. Configure Cloudflare Pages
 
@@ -80,10 +96,23 @@ Keep `IAM_OTEL_ENABLED=false` initially. Evaluate Grafana Cloud free-tier behavi
 
 Use Cloudflare Pages and Railway deployment history to roll application revisions back to a previously green `main` SHA. Do not automatically down-migrate Neon. Database migrations must remain backward-compatible under expand/contract practices.
 
-Before treating DEV as durable enough for meaningful testing, verify Neon backup/restore/recovery capabilities appropriate to the selected plan and document any plan-specific retention limits.
+The active managed DEV database uses provider-native Neon recovery rather than the standalone-host backup timer. The exact recovery window and controls depend on the actual provider plan/configuration and can change independently of this repository.
+
+Before declaring a newly created or materially changed DEV project recoverable:
+
+1. record the active provider plan and configured recovery window in the operator environment inventory, not application secrets;
+2. confirm the provider recovery controls are available for the project;
+3. create harmless test state and verify a recovery can be created/restored to an isolation-safe target without overwriting the active environment unexpectedly;
+4. verify the recovered schema/data state;
+5. remove disposable recovery objects after verification;
+6. repeat a recovery drill after material provider-plan changes or before destructive migration testing.
+
+For additional logical portability or longer retention than the provider plan offers, use an independent `pg_dump`/`pg_restore` process to protected external storage. Do not assume provider-native recovery is a substitute for every future production backup requirement.
+
+See [`backup-recovery.md`](backup-recovery.md) for the managed-DEV versus standalone-host recovery boundary.
 
 ## 9. Completion criteria
 
-DEV activation is complete only when the console loads from Pages, `/api/system/info` succeeds through the same-origin Function, Railway health is green, Neon connectivity is TLS-protected, Railway `Wait for CI` is enabled, Cloudflare preview branch deployments are disabled, no real secret exists in Git, and the selected revision is traceable to green `main` CI.
+DEV activation is complete only when the console loads from Pages, `/api/system/info` succeeds through the same-origin Function, Railway health is green, Neon connectivity is TLS-protected, Railway **Wait for CI** is enabled, Cloudflare preview branch deployments are disabled, no real secret exists in Git, the selected revision is traceable to green `main` CI, Flyway startup is proven against the target database, and the active provider recovery window/control has been verified.
 
 This topology is DEV/demo only and is not a production HA/DR decision.
