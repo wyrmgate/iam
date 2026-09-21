@@ -28,9 +28,7 @@ public final class WebhookIntegrationEventPublisher implements IntegrationEventP
             Duration requestTimeout,
             byte[] secret) {
         this(
-                request -> httpClient
-                        .send(request, HttpResponse.BodyHandlers.discarding())
-                        .statusCode(),
+                httpTransport(httpClient),
                 endpoint,
                 requestTimeout,
                 secret,
@@ -54,6 +52,13 @@ public final class WebhookIntegrationEventPublisher implements IntegrationEventP
         }
         this.signer = new WebhookRequestSigner(secret);
         this.clock = Objects.requireNonNull(clock, "clock");
+    }
+
+    private static WebhookHttpTransport httpTransport(HttpClient httpClient) {
+        Objects.requireNonNull(httpClient, "httpClient");
+        return request -> httpClient
+                .send(request, HttpResponse.BodyHandlers.discarding())
+                .statusCode();
     }
 
     @Override
