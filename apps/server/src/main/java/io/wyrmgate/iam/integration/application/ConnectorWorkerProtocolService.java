@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Freshness;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Status;
-import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.PrincipalObservation;
+import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.ProviderObservation;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.WorkCompletion;
 import io.wyrmgate.iam.integration.application.WorkerRegistrationRepository.WorkerPermission;
 import io.wyrmgate.iam.integration.domain.LeasedConnectorWork;
@@ -167,11 +167,11 @@ public final class ConnectorWorkerProtocolService {
             long leaseEpoch,
             UUID batchId,
             int sequence,
-            List<PrincipalObservation> observations) {
+            List<ProviderObservation> observations) {
         if (observations.isEmpty() || observations.size() > properties.effectiveMaxObservationBatchSize()) {
             throw new WorkerProtocolException("invalid_observation_batch", "observation batch size is outside server limits");
         }
-        for (PrincipalObservation observation : observations) {
+        for (ProviderObservation observation : observations) {
             ConnectorPayloadGuard.requireSecretFree(observation.observedState());
         }
         String fingerprint = fingerprint(Map.of(
@@ -181,7 +181,7 @@ public final class ConnectorWorkerProtocolService {
                 "sequence", sequence,
                 "observations", observations));
         Instant now = clock.instant();
-        return transactions.required(() -> work.appendPrincipalObservations(
+        return transactions.required(() -> work.appendProviderObservations(
                 requireSession(worker, sessionId), workId, leaseId, leaseEpoch,
                 batchId, sequence, fingerprint, observations, now));
     }
