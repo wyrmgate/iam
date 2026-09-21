@@ -107,7 +107,7 @@ public final class ConnectorWorkerController {
         if (request.leaseId() == null || request.leaseEpoch() < 1 || request.batchId() == null || request.sequence() < 0) {
             throw invalid("invalid_observation_batch", "observation batch fencing/idempotency fields are invalid");
         }
-        List<ConnectorWorkRepository.PrincipalObservation> observations =
+        List<ConnectorWorkRepository.ProviderObservation> observations =
                 requireList(request.observations(), "observations").stream()
                         .map(value -> {
                             if (!"PRINCIPAL".equals(value.objectClass())) {
@@ -118,7 +118,7 @@ public final class ConnectorWorkerController {
                             if (value.providerStableId() == null || value.providerStableId().isBlank()) {
                                 throw invalid("invalid_observation", "providerStableId must not be blank");
                             }
-                            return new ConnectorWorkRepository.PrincipalObservation(
+                            return new ConnectorWorkRepository.ProviderObservation(
                                     value.providerStableId(),
                                     value.providerVersion(),
                                     value.observedState() == null ? Map.of() : value.observedState());
