@@ -1022,6 +1022,28 @@ public final class JdbcIntegrationRuntimeRepository
         return text;
     }
 
+    private LeaseRow requireCurrentLease(
+            WorkerSession session, WorkKind kind, UUID workId, UUID leaseId,
+            long leaseEpoch, Instant now, boolean requireUnexpired) {
+        List<LeaseRow> rows = jdbc.query("""
+                SELECT claimed_at, lease_expires_at
+                FROM platform.connector_work_lease
+                WHERE tenant_id = ? AND work_kind = ? AND work_id = ?
+                  AND execution_owner_id = ?
+                  AND lease_id = ? AND lease_epoch = ?
+                """,
+                (rs,row) -> new LeaseRow(
+                        rs.getTimestamp(1).toInstant(),
+                        rs.getTimestamp(2).toInstant()),
+                session.tenant().tenantId(), kind.name(), workId, session.id(),
+                leaseId, leaseEpoch);
+        if (rows.isEmpty()
+                || (requireUnexpired && !rows.getFirst().expiresAt().isAfter(now))) {
+            throw staleLease();
+        }
+        return rows.getFirst();
+    }
+
     private static WorkerProtocolException staleLease() {
         return new WorkerProtocolException("stale_lease", "lease is stale or expired");
     }
