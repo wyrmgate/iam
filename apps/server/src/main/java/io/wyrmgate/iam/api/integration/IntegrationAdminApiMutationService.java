@@ -97,7 +97,8 @@ final class IntegrationAdminApiMutationService {
 
     ConnectorBinding createBinding(
             AuthenticatedAdministrativeActor actor, UUID connectorId,String targetKind,UUID targetId,
-            String contractId,int contractVersion,boolean complete,
+            String contractId,int contractVersion,
+            boolean completePrincipal,boolean completeEntitlement,boolean completeGrant,
             String key,RequestFingerprint fingerprint,Instant now,UUID correlationId) {
         return transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_BINDING_CREATE,
@@ -105,7 +106,9 @@ final class IntegrationAdminApiMutationService {
             var r=idempotency.register(actor.tenant(),"api.connector-binding.create.v1",key,fingerprint,now,null);
             if(r.kind()==RegistrationKind.REPLAY) return replayBinding(actor,r,correlationId);
             ConnectorBinding value=commands.createBinding(actor.tenant(),connectorId,targetKind,targetId,
-                    contractId,contractVersion,complete,now,correlationId);
+                    contractId,contractVersion,
+                    completePrincipal,completeEntitlement,completeGrant,
+                    now,correlationId);
             idempotency.complete(actor.tenant(),"api.connector-binding.create.v1",key,fingerprint,
                     "connector-binding",value.id(),now);
             return value;
@@ -114,7 +117,8 @@ final class IntegrationAdminApiMutationService {
 
     ConnectorBinding updateBinding(
             AuthenticatedAdministrativeActor actor,UUID id,String contractId,int contractVersion,
-            boolean complete,long expectedRevision,String key,RequestFingerprint fingerprint,
+            boolean completePrincipal,boolean completeEntitlement,boolean completeGrant,
+            long expectedRevision,String key,RequestFingerprint fingerprint,
             Instant now,UUID correlationId) {
         return transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_BINDING_UPDATE,
@@ -122,7 +126,8 @@ final class IntegrationAdminApiMutationService {
             var r=idempotency.register(actor.tenant(),"api.connector-binding.update.v1",key,fingerprint,now,null);
             if(r.kind()==RegistrationKind.REPLAY) return replayBinding(actor,r,correlationId);
             ConnectorBinding value=commands.updateBinding(actor.tenant(),id,contractId,contractVersion,
-                    complete,expectedRevision,now,correlationId);
+                    completePrincipal,completeEntitlement,completeGrant,
+                    expectedRevision,now,correlationId);
             idempotency.complete(actor.tenant(),"api.connector-binding.update.v1",key,fingerprint,
                     "connector-binding",value.id(),now);
             return value;

@@ -327,12 +327,24 @@ class ScimLocalExecutionIntegrationTest {
                     assertThat(secretReference).isEqualTo("test-ref");
                     return "local-test-token".toCharArray();
                 });
+        var groupAdapter = new ScimGroupProviderAdapter(
+                HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(2))
+                        .build(),
+                json,
+                secretReference -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
+                    assertThat(secretReference).isEqualTo("test-ref");
+                    return "local-test-token".toCharArray();
+                });
         return new ScimLocalExecutionService(
                 repository,
                 repository,
                 query,
                 transactions,
                 adapter,
+                groupAdapter,
                 new ScimLocalExecutionProperties(
                         true, Duration.ofSeconds(1), Duration.ofSeconds(30), 10),
                 json);
@@ -501,7 +513,11 @@ class ScimLocalExecutionIntegrationTest {
         jdbc.execute("""
                 TRUNCATE TABLE
                     platform.connector_work_lease,
+                    integration.observed_grant,
+                    integration.observed_entitlement,
                     integration.observed_principal,
+                    integration.reconciliation_grant_staging,
+                    integration.reconciliation_entitlement_staging,
                     integration.reconciliation_principal_staging,
                     integration.reconciliation_observation_batch,
                     integration.reconciliation_run,

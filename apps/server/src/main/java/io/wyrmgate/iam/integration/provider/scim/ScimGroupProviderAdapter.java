@@ -13,9 +13,13 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -23,11 +27,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-public final class ScimPrincipalProviderAdapter {
+/**
+ * SCIM 2.0 provider-edge adapter for Group observations and user membership mutation.
+ *
+ * <p>SCIM Groups remain provider observations. This adapter never creates Catalog Entitlement
+ * authority or AccessAssignment intent.
+ */
+public final class ScimGroupProviderAdapter {
 
     public static final String RUNTIME_ID = "scim-2";
     public static final String RUNTIME_VERSION = "1.0";
-    public static final String CONTRACT_ID = "scim-2.principal";
+    public static final String CONTRACT_ID = "scim-2.group";
     public static final int CONTRACT_VERSION = 1;
 
     private static final TypeReference<Map<String,Object>> MAP_TYPE = new TypeReference<>() {};
@@ -36,7 +46,7 @@ public final class ScimPrincipalProviderAdapter {
     private final ObjectMapper json;
     private final ConnectorSecretProvider secrets;
 
-    public ScimPrincipalProviderAdapter(
+    public ScimGroupProviderAdapter(
             HttpClient http,
             ObjectMapper json,
             ConnectorSecretProvider secrets) {
@@ -45,11 +55,84 @@ public final class ScimPrincipalProviderAdapter {
         this.secrets = Objects.requireNonNull(secrets, "secrets");
     }
 
-    public DiscoveryResult discoverPrincipals(
+    public DiscoveryResult discoverEntitlements(
             Configuration configuration,
             String secretReference,
             String checkpoint,
             Consumer<List<ProviderObservation>> batchConsumer) {
+        return discoverGroups(
+                configuration,
+                secretReference,
+                checkpoint,
+                batchConsumer,
+                DiscoveryMode.ENTITLEMENT);
+    }
+
+    public DiscoveryResult discoverGrants(
+            Configuration configuration,
+            String secretReference,
+            String checkpoint,
+            Consumer<List<ProviderObservation>> batchConsumer) {
+        return discoverGroups(
+                configuration,
+                secretReference,
+                checkpoint,
+                batchConsumer,
+                DiscoveryMode.GRANT);
+    }
+
+    public ProvisioningResult addGrant(
+            Configuration configuration,
+            String secretReference,
+            String providerGroupId,
+            String providerGroupVersion,
+            String providerPrincipalId,
+            String idempotencyKey) {
+        Map<String,Object> body = Map.of(
+                "schemas", List.of("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
+                "Operations", List.of(Map.of(
+                        "op", "Add",
+                        "path", "members",
+                        "value", List.of(Map.of(
+                                "value", required(providerPrincipalId, "providerPrincipalId"))))));
+        return mutateGroup(
+                configuration,
+                secretReference,
+                providerGroupId,
+                providerGroupVersion,
+                body,
+                idempotencyKey);
+    }
+
+    public ProvisioningResult removeGrant(
+            Configuration configuration,
+            String secretReference,
+            String providerGroupId,
+            String providerGroupVersion,
+            String providerPrincipalId,
+            String idempotencyKey) {
+        String member = required(providerPrincipalId, "providerPrincipalId");
+        String path = "members[value eq \"" + escapeFilterString(member) + "\"]";
+        Map<String,Object> body = Map.of(
+                "schemas", List.of("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
+                "Operations", List.of(Map.of(
+                        "op", "Remove",
+                        "path", path)));
+        return mutateGroup(
+                configuration,
+                secretReference,
+                providerGroupId,
+                providerGroupVersion,
+                body,
+                idempotencyKey);
+    }
+
+    private DiscoveryResult discoverGroups(
+            Configuration configuration,
+            String secretReference,
+            String checkpoint,
+            Consumer<List<ProviderObservation>> batchConsumer,
+            DiscoveryMode mode) {
         Objects.requireNonNull(configuration, "configuration");
         Objects.requireNonNull(batchConsumer, "batchConsumer");
 
@@ -60,15 +143,20 @@ public final class ScimPrincipalProviderAdapter {
         char[] secret = secrets.resolve(secretReference);
         try {
             while (pages < configuration.maxPagesPerExecution()) {
-                URI uri = usersUri(configuration.baseUri(), startIndex, configuration.pageSize());
-                HttpResponse<String> response = send(
-                        request(configuration, secret, uri).GET().build());
-                Map<String,Object> document = successDocument(response, "SCIM principal discovery failed");
-
+                URI uri = groupsUri(
+                        configuration.baseUri(), startIndex, configuration.pageSize());
+                HttpResponse<String> response =
+                        send(request(configuration, secret, uri).GET().build());
+                Map<String,Object> document =
+                        successDocument(response, "SCIM Group discovery failed");
                 List<Map<String,Object>> resources = resourceList(document.get("Resources"));
-                List<ProviderObservation> observations = new ArrayList<>(resources.size());
-                for (Map<String,Object> resource : resources) {
-                    observations.add(toObservation(resource));
+                List<ProviderObservation> observations = new ArrayList<>();
+                for (Map<String,Object> group : resources) {
+                    if (mode == DiscoveryMode.ENTITLEMENT) {
+                        observations.add(entitlementObservation(group));
+                    } else {
+                        observations.addAll(grantObservations(group));
+                    }
                 }
                 if (!observations.isEmpty()) {
                     batchConsumer.accept(List.copyOf(observations));
@@ -88,7 +176,6 @@ public final class ScimPrincipalProviderAdapter {
                                     : ReconciliationCompleteness.PARTIAL,
                             null);
                 }
-
                 int next = pageStart + Math.max(itemsPerPage, resources.size());
                 if (totalResults >= 0 && next > totalResults) {
                     return new DiscoveryResult(
@@ -109,76 +196,23 @@ public final class ScimPrincipalProviderAdapter {
         }
     }
 
-    public ProvisioningResult createPrincipal(
+    private ProvisioningResult mutateGroup(
             Configuration configuration,
             String secretReference,
-            PrincipalWrite write,
-            String idempotencyKey) {
-        Objects.requireNonNull(write, "write");
-        Map<String,Object> body = new LinkedHashMap<>();
-        body.put("schemas", List.of("urn:ietf:params:scim:schemas:core:2.0:User"));
-        body.put("userName", required(write.userName(), "userName"));
-        putIfPresent(body, "displayName", write.displayName());
-        putIfPresent(body, "externalId", write.externalId());
-        if (write.active() != null) body.put("active", write.active());
-        return mutate(configuration, secretReference, usersUri(configuration.baseUri()), "POST",
-                null, body, idempotencyKey);
-    }
-
-    public ProvisioningResult updatePrincipal(
-            Configuration configuration,
-            String secretReference,
-            String providerStableId,
-            String providerVersion,
-            PrincipalWrite write,
-            String idempotencyKey) {
-        Objects.requireNonNull(write, "write");
-        List<Map<String,Object>> operations = new ArrayList<>();
-        addReplace(operations, "userName", write.userName());
-        addReplace(operations, "displayName", write.displayName());
-        addReplace(operations, "externalId", write.externalId());
-        if (write.active() != null) addReplace(operations, "active", write.active());
-
-        Map<String,Object> body = Map.of(
-                "schemas", List.of("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
-                "Operations", operations);
-        return mutate(configuration, secretReference,
-                userUri(configuration.baseUri(), providerStableId), "PATCH",
-                providerVersion, body, idempotencyKey);
-    }
-
-    public ProvisioningResult disablePrincipal(
-            Configuration configuration,
-            String secretReference,
-            String providerStableId,
-            String providerVersion,
-            String idempotencyKey) {
-        Map<String,Object> body = Map.of(
-                "schemas", List.of("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
-                "Operations", List.of(Map.of(
-                        "op", "Replace",
-                        "path", "active",
-                        "value", false)));
-        return mutate(configuration, secretReference,
-                userUri(configuration.baseUri(), providerStableId), "PATCH",
-                providerVersion, body, idempotencyKey);
-    }
-
-    private ProvisioningResult mutate(
-            Configuration configuration,
-            String secretReference,
-            URI uri,
-            String method,
-            String providerVersion,
+            String providerGroupId,
+            String providerGroupVersion,
             Map<String,Object> body,
             String idempotencyKey) {
         ConnectorPayloadGuard.requireSecretFree(body);
         char[] secret = secrets.resolve(secretReference);
         try {
-            HttpRequest.Builder builder = request(configuration, secret, uri)
+            HttpRequest.Builder builder = request(
+                    configuration,
+                    secret,
+                    groupUri(configuration.baseUri(), providerGroupId))
                     .header("Content-Type", "application/scim+json");
-            if (providerVersion != null && !providerVersion.isBlank()) {
-                builder.header("If-Match", providerVersion);
+            if (providerGroupVersion != null && !providerGroupVersion.isBlank()) {
+                builder.header("If-Match", providerGroupVersion);
             }
             if (configuration.idempotencyHeader() != null
                     && !configuration.idempotencyHeader().isBlank()
@@ -190,15 +224,17 @@ public final class ScimPrincipalProviderAdapter {
             try {
                 encoded = json.writeValueAsString(body);
             } catch (JsonProcessingException invalid) {
-                throw new IllegalArgumentException("SCIM request payload is not JSON serializable", invalid);
+                throw new IllegalArgumentException(
+                        "SCIM Group PATCH payload is not JSON serializable", invalid);
             }
-            HttpResponse<String> response = send(builder.method(
-                    method, HttpRequest.BodyPublishers.ofString(encoded)).build());
-            Map<String,Object> document = successDocument(response, "SCIM principal provisioning failed");
-
+            HttpResponse<String> response = send(builder
+                    .method("PATCH", HttpRequest.BodyPublishers.ofString(encoded))
+                    .build());
+            Map<String,Object> document =
+                    successDocument(response, "SCIM Group membership provisioning failed");
             String providerObjectId = string(document.get("id"));
             if (providerObjectId == null || providerObjectId.isBlank()) {
-                providerObjectId = stableIdFromLocation(response);
+                providerObjectId = providerGroupId;
             }
             String version = nestedString(document, "meta", "version");
             if (version == null) {
@@ -207,25 +243,73 @@ public final class ScimPrincipalProviderAdapter {
             return new ProvisioningResult(
                     providerObjectId,
                     version,
-                    response.headers().firstValue("X-Request-ID")
-                            .or(() -> response.headers().firstValue("Request-ID"))
-                            .orElse(null));
+                    requestId(response));
         } finally {
             ConnectorSecretProvider.destroy(secret);
         }
     }
 
-    private HttpRequest.Builder request(Configuration configuration, char[] secret, URI uri) {
-        String bearer = new String(secret);
+    private static ProviderObservation entitlementObservation(Map<String,Object> group) {
+        String groupId = required(string(group.get("id")), "provider group id");
+        Map<String,Object> state = new LinkedHashMap<>();
+        copyIfPresent(group, state, "displayName");
+        copyIfPresent(group, state, "externalId");
+        ConnectorPayloadGuard.requireSecretFree(state);
+        return new ProviderObservation(
+                "ENTITLEMENT",
+                groupId,
+                nestedString(group, "meta", "version"),
+                state);
+    }
+
+    private static List<ProviderObservation> grantObservations(Map<String,Object> group) {
+        String groupId = required(string(group.get("id")), "provider group id");
+        String groupVersion = nestedString(group, "meta", "version");
+        Object rawMembers = group.get("members");
+        if (rawMembers == null) return List.of();
+        if (!(rawMembers instanceof List<?> members)) {
+            throw invalidResponse("SCIM Group members must be a collection");
+        }
+
+        List<ProviderObservation> observations = new ArrayList<>();
+        for (Object raw : members) {
+            if (!(raw instanceof Map<?,?> member)) {
+                throw invalidResponse("SCIM Group member must be an object");
+            }
+            String type = string(member.get("type"));
+            if (type != null && !"User".equalsIgnoreCase(type)) {
+                continue;
+            }
+            String principalId = required(
+                    string(member.get("value")), "provider group member id");
+            Map<String,Object> state = new LinkedHashMap<>();
+            state.put("principalProviderId", principalId);
+            state.put("entitlementProviderId", groupId);
+            if (type != null) state.put("memberType", type);
+            Object display = member.get("display");
+            if (display != null) state.put("memberDisplay", display);
+            ConnectorPayloadGuard.requireSecretFree(state);
+            observations.add(new ProviderObservation(
+                    "GRANT",
+                    grantStableId(groupId, principalId),
+                    groupVersion,
+                    state));
+        }
+        return observations;
+    }
+
+    private HttpRequest.Builder request(
+            Configuration configuration, char[] secret, URI uri) {
         return HttpRequest.newBuilder(uri)
                 .timeout(configuration.requestTimeout())
                 .header("Accept", "application/scim+json, application/json")
-                .header("Authorization", "Bearer " + bearer);
+                .header("Authorization", "Bearer " + new String(secret));
     }
 
     private HttpResponse<String> send(HttpRequest request) {
         try {
-            return http.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return http.send(
+                    request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw transientFailure("SCIM provider call interrupted");
@@ -234,7 +318,8 @@ public final class ScimPrincipalProviderAdapter {
         }
     }
 
-    private Map<String,Object> successDocument(HttpResponse<String> response, String message) {
+    private Map<String,Object> successDocument(
+            HttpResponse<String> response, String message) {
         int status = response.statusCode();
         if (status < 200 || status >= 300) {
             throw providerFailure(response, message);
@@ -253,7 +338,8 @@ public final class ScimPrincipalProviderAdapter {
         }
     }
 
-    private ScimProviderException providerFailure(HttpResponse<String> response, String message) {
+    private ScimProviderException providerFailure(
+            HttpResponse<String> response, String message) {
         int status = response.statusCode();
         Map<String,Object> error = Map.of();
         if (response.body() != null && !response.body().isBlank()) {
@@ -264,7 +350,8 @@ public final class ScimPrincipalProviderAdapter {
             }
         }
         String scimType = string(error.get("scimType"));
-        String providerCode = scimType != null ? scimType : string(error.get("status"));
+        String providerCode =
+                scimType != null ? scimType : string(error.get("status"));
         if (providerCode == null) providerCode = "http_" + status;
 
         ScimProviderException.FailureCategory category = switch (status) {
@@ -297,60 +384,56 @@ public final class ScimPrincipalProviderAdapter {
                 message);
     }
 
-    private static ProviderObservation toObservation(Map<String,Object> resource) {
-        String id = required(string(resource.get("id")), "provider principal id");
-        Map<String,Object> state = new LinkedHashMap<>();
-        copyIfPresent(resource, state, "userName");
-        copyIfPresent(resource, state, "displayName");
-        copyIfPresent(resource, state, "externalId");
-        copyIfPresent(resource, state, "active");
-        copyIfPresent(resource, state, "name");
-        copyIfPresent(resource, state, "emails");
-        ConnectorPayloadGuard.requireSecretFree(state);
-        return new ProviderObservation(
-                "PRINCIPAL", id, nestedString(resource, "meta", "version"), state);
+    private static ScimProviderException invalidResponse(String message) {
+        return new ScimProviderException(
+                ScimProviderException.FailureCategory.PROVIDER,
+                "invalid_response",
+                null,
+                null,
+                200,
+                message);
     }
 
     private static List<Map<String,Object>> resourceList(Object value) {
         if (value == null) return List.of();
         if (!(value instanceof List<?> list)) {
-            throw new ScimProviderException(
-                    ScimProviderException.FailureCategory.PROVIDER,
-                    "invalid_response",
-                    null,
-                    null,
-                    200,
-                    "SCIM provider returned an invalid Resources collection");
+            throw invalidResponse("SCIM provider returned an invalid Resources collection");
         }
         List<Map<String,Object>> result = new ArrayList<>();
         for (Object item : list) {
             if (!(item instanceof Map<?,?> raw)) {
-                throw new ScimProviderException(
-                        ScimProviderException.FailureCategory.PROVIDER,
-                        "invalid_response",
-                        null,
-                        null,
-                        200,
-                        "SCIM provider returned an invalid resource");
+                throw invalidResponse("SCIM provider returned an invalid Group resource");
             }
             Map<String,Object> mapped = new LinkedHashMap<>();
-            raw.forEach((key, itemValue) -> mapped.put(String.valueOf(key), itemValue));
+            raw.forEach((key, itemValue) ->
+                    mapped.put(String.valueOf(key), itemValue));
             result.add(mapped);
         }
         return result;
     }
 
-    private static void copyIfPresent(Map<String,Object> source, Map<String,Object> target, String key) {
+    private static String grantStableId(String groupId, String principalId) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] group = groupId.getBytes(StandardCharsets.UTF_8);
+            byte[] principal = principalId.getBytes(StandardCharsets.UTF_8);
+            digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(group.length).array());
+            digest.update(group);
+            digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(principal.length).array());
+            digest.update(principal);
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    private static String escapeFilterString(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static void copyIfPresent(
+            Map<String,Object> source, Map<String,Object> target, String key) {
         Object value = source.get(key);
-        if (value != null) target.put(key, value);
-    }
-
-    private static void addReplace(List<Map<String,Object>> operations, String path, Object value) {
-        if (value == null) return;
-        operations.add(Map.of("op", "Replace", "path", path, "value", value));
-    }
-
-    private static void putIfPresent(Map<String,Object> target, String key, Object value) {
         if (value != null) target.put(key, value);
     }
 
@@ -361,7 +444,8 @@ public final class ScimPrincipalProviderAdapter {
             if (value < 1) throw new NumberFormatException();
             return value;
         } catch (NumberFormatException invalid) {
-            throw new IllegalArgumentException("SCIM checkpoint must be a positive startIndex");
+            throw new IllegalArgumentException(
+                    "SCIM checkpoint must be a positive startIndex");
         }
     }
 
@@ -377,7 +461,8 @@ public final class ScimPrincipalProviderAdapter {
         return defaultValue;
     }
 
-    private static String nestedString(Map<String,Object> source, String outer, String inner) {
+    private static String nestedString(
+            Map<String,Object> source, String outer, String inner) {
         Object nested = source.get(outer);
         if (!(nested instanceof Map<?,?> map)) return null;
         return string(map.get(inner));
@@ -394,42 +479,25 @@ public final class ScimPrincipalProviderAdapter {
         return value;
     }
 
-    private static URI usersUri(URI baseUri) {
-        return ensureTrailingSlash(baseUri).resolve("Users");
+    private static URI groupsUri(URI baseUri) {
+        return ensureTrailingSlash(baseUri).resolve("Groups");
     }
 
-    private static URI usersUri(URI baseUri, int startIndex, int count) {
-        URI users = usersUri(baseUri);
-        return URI.create(users + "?startIndex=" + startIndex + "&count=" + count);
+    private static URI groupsUri(URI baseUri, int startIndex, int count) {
+        URI groups = groupsUri(baseUri);
+        return URI.create(groups + "?startIndex=" + startIndex + "&count=" + count);
     }
 
-    private static URI userUri(URI baseUri, String providerStableId) {
+    private static URI groupUri(URI baseUri, String providerGroupId) {
         String encoded = URLEncoder.encode(
-                required(providerStableId, "providerStableId"), StandardCharsets.UTF_8)
+                required(providerGroupId, "providerGroupId"), StandardCharsets.UTF_8)
                 .replace("+", "%20");
-        return ensureTrailingSlash(baseUri).resolve("Users/" + encoded);
+        return ensureTrailingSlash(baseUri).resolve("Groups/" + encoded);
     }
 
     private static URI ensureTrailingSlash(URI uri) {
         String value = uri.toString();
         return URI.create(value.endsWith("/") ? value : value + "/");
-    }
-
-    private static String stableIdFromLocation(HttpResponse<String> response) {
-        return response.headers().firstValue("Location")
-                .map(ScimPrincipalProviderAdapter::lastPathSegment)
-                .orElse(null);
-    }
-
-    private static String lastPathSegment(String location) {
-        try {
-            String path = URI.create(location).getPath();
-            if (path == null || path.isBlank()) return null;
-            int slash = path.lastIndexOf('/');
-            return slash >= 0 ? path.substring(slash + 1) : path;
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
     }
 
     private static String requestId(HttpResponse<?> response) {
@@ -450,44 +518,44 @@ public final class ScimPrincipalProviderAdapter {
                 .orElse(null);
     }
 
+    private enum DiscoveryMode {
+        ENTITLEMENT,
+        GRANT
+    }
+
     public record Configuration(
             URI baseUri,
             int pageSize,
             int maxPagesPerExecution,
             Duration requestTimeout,
             String idempotencyHeader) {
-
         public Configuration {
             Objects.requireNonNull(baseUri, "baseUri");
-            if (!List.of("http", "https").contains(baseUri.getScheme().toLowerCase(Locale.ROOT))) {
+            if (!List.of("http", "https").contains(
+                    baseUri.getScheme().toLowerCase(Locale.ROOT))) {
                 throw new IllegalArgumentException("SCIM baseUri must use HTTP(S)");
             }
             if (pageSize < 1 || pageSize > 1000) {
-                throw new IllegalArgumentException("SCIM pageSize must be between 1 and 1000");
+                throw new IllegalArgumentException(
+                        "SCIM pageSize must be between 1 and 1000");
             }
             if (maxPagesPerExecution < 1 || maxPagesPerExecution > 10_000) {
-                throw new IllegalArgumentException("SCIM maxPagesPerExecution is outside limits");
+                throw new IllegalArgumentException(
+                        "SCIM maxPagesPerExecution is outside limits");
             }
             Objects.requireNonNull(requestTimeout, "requestTimeout");
             if (requestTimeout.isZero() || requestTimeout.isNegative()) {
-                throw new IllegalArgumentException("SCIM requestTimeout must be positive");
+                throw new IllegalArgumentException(
+                        "SCIM requestTimeout must be positive");
             }
-            if (idempotencyHeader != null && !idempotencyHeader.isBlank()
+            if (idempotencyHeader != null
+                    && !idempotencyHeader.isBlank()
                     && !idempotencyHeader.matches("[A-Za-z0-9-]+")) {
-                throw new IllegalArgumentException("SCIM idempotencyHeader is invalid");
+                throw new IllegalArgumentException(
+                        "SCIM idempotencyHeader is invalid");
             }
-        }
-
-        public static Configuration defaults(URI baseUri) {
-            return new Configuration(baseUri, 100, 1000, Duration.ofSeconds(30), null);
         }
     }
-
-    public record PrincipalWrite(
-            String userName,
-            String displayName,
-            String externalId,
-            Boolean active) {}
 
     public record DiscoveryResult(
             int observations,

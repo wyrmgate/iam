@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.PrincipalObservation;
+import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.ProviderObservation;
 import io.wyrmgate.iam.integration.domain.ReconciliationCompleteness;
 import io.wyrmgate.iam.integration.provider.ConnectorSecretProvider;
 import java.io.IOException;
@@ -45,7 +45,7 @@ class ScimPrincipalProviderAdapterTest {
     }
 
     @Test
-    void discoveryPaginatesAndProducesCompleteNormalizedPrincipalObservations() {
+    void discoveryPaginatesAndProducesCompleteNormalizedProviderObservations() {
         server.createContext("/scim/v2/Users", exchange -> {
             requests.add(record(exchange));
             String query = exchange.getRequestURI().getQuery();
@@ -94,7 +94,7 @@ class ScimPrincipalProviderAdapterTest {
         });
         server.start();
 
-        var batches = new ArrayList<List<PrincipalObservation>>();
+        var batches = new ArrayList<List<ProviderObservation>>();
         var result = adapter().discoverPrincipals(
                 configuration(), "test-ref", null, batches::add);
 

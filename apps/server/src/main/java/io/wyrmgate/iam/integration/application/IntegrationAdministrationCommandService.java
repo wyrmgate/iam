@@ -80,13 +80,20 @@ public final class IntegrationAdministrationCommandService {
 
     public ConnectorBinding createBinding(
             TenantContext tenant, UUID connectorInstanceId, String targetKind, UUID targetId,
-            String contractId, int contractVersion, boolean supportsCompletePrincipalDiscovery,
+            String contractId, int contractVersion,
+            boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery,
             Instant now, UUID correlationId) {
         validateBinding(targetKind, contractId, contractVersion);
         return transactions.required(() -> {
             ConnectorBinding created = repository.createBinding(
                     tenant, ids.nextId(), connectorInstanceId, targetKind, targetId,
-                    contractId, contractVersion, supportsCompletePrincipalDiscovery, now);
+                    contractId, contractVersion,
+                    supportsCompletePrincipalDiscovery,
+                    supportsCompleteEntitlementDiscovery,
+                    supportsCompleteGrantDiscovery,
+                    now);
             facts.bindingChanged(
                     tenant, "integration.connector-binding-created", created.id(), created.revision(),
                     now, correlationId);
@@ -96,13 +103,19 @@ public final class IntegrationAdministrationCommandService {
 
     public ConnectorBinding updateBinding(
             TenantContext tenant, UUID id, String contractId, int contractVersion,
-            boolean supportsCompletePrincipalDiscovery, long expectedRevision,
+            boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery,
+            long expectedRevision,
             Instant now, UUID correlationId) {
         validateBinding("APPLICATION_TARGET", contractId, contractVersion);
         return transactions.required(() -> {
             ConnectorBinding updated = repository.updateBinding(
                     tenant, id, contractId, contractVersion,
-                    supportsCompletePrincipalDiscovery, expectedRevision, now);
+                    supportsCompletePrincipalDiscovery,
+                    supportsCompleteEntitlementDiscovery,
+                    supportsCompleteGrantDiscovery,
+                    expectedRevision, now);
             facts.bindingChanged(
                     tenant, "integration.connector-binding-updated", updated.id(), updated.revision(),
                     now, correlationId);

@@ -50,6 +50,8 @@ public interface IntegrationAdministrationRepository {
             String contractId,
             int contractVersion,
             boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery,
             Instant now);
 
     Optional<ConnectorBinding> findBinding(TenantContext tenant, UUID id);
@@ -60,6 +62,8 @@ public interface IntegrationAdministrationRepository {
             String contractId,
             int contractVersion,
             boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery,
             long expectedRevision,
             Instant now);
 
@@ -118,6 +122,8 @@ public interface IntegrationAdministrationRepository {
             String contractId,
             int contractVersion,
             boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery,
             String lifecycleState,
             long revision,
             Instant createdAt,

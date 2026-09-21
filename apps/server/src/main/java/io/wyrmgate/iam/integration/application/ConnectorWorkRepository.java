@@ -24,7 +24,7 @@ public interface ConnectorWorkRepository {
     WorkerLease renewLease(
             WorkerSession session, UUID workId, UUID leaseId, long leaseEpoch,
             Instant now, Duration duration);
-    ObservationBatchResult appendPrincipalObservations(
+    ObservationBatchResult appendProviderObservations(
             WorkerSession session,
             UUID workId,
             UUID leaseId,
@@ -32,7 +32,7 @@ public interface ConnectorWorkRepository {
             UUID batchId,
             int sequence,
             String requestFingerprint,
-            List<PrincipalObservation> observations,
+            List<ProviderObservation> observations,
             Instant now);
     CompletionResult complete(
             WorkerSession session,
@@ -71,7 +71,8 @@ public interface ConnectorWorkRepository {
             UUID causationId,
             Map<String,Object> payload) {}
 
-    record PrincipalObservation(
+    record ProviderObservation(
+            String objectClass,
             String providerStableId,
             String providerVersion,
             Map<String,Object> observedState) {}

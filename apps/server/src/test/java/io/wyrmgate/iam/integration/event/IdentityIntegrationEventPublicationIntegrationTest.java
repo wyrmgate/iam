@@ -67,7 +67,7 @@ class IdentityIntegrationEventPublicationIntegrationTest {
                 ids,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("15");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
     }
 
     @AfterAll

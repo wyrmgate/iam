@@ -44,5 +44,7 @@ public interface ConnectorExecutionRepository {
             String secretReference,
             String contractId,
             int contractVersion,
-            boolean supportsCompletePrincipalDiscovery) {}
+            boolean supportsCompletePrincipalDiscovery,
+            boolean supportsCompleteEntitlementDiscovery,
+            boolean supportsCompleteGrantDiscovery) {}
 }

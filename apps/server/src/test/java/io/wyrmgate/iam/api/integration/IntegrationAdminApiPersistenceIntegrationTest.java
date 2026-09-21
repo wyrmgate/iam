@@ -94,7 +94,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 integration, new JdbcIntegrationAdministrationFactSink(outbox, ids), ids, transactions);
         mutations = new IntegrationAdminApiMutationService(
                 authorization, commands, integration, idempotency, transactions);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("15");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
     }
 
     @AfterAll
@@ -220,7 +220,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
 
         assertThatThrownBy(() -> mutations.createBinding(
                 actor, otherConnector, "APPLICATION_TARGET", ids.nextId(),
-                "scim.principal", 1, true,
+                "scim.principal", 1, true, false, false,
                 "binding-create-001", fp("binding-cross"), now.plusSeconds(3), ids.nextId()))
                 .isInstanceOf(IntegrationAdministrationException.class)
                 .hasMessageContaining("not found");
@@ -245,7 +245,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 "connector-create-004", fp("create4"), now, ids.nextId());
         var binding = mutations.createBinding(
                 actor, connector.id(), "APPLICATION_TARGET", ids.nextId(),
-                "scim.principal", 1, true,
+                "scim.principal", 1, true, false, false,
                 "binding-create-002", fp("binding2"), now.plusSeconds(1), ids.nextId());
 
         WorkerExternalSubject subject = new WorkerExternalSubject(
