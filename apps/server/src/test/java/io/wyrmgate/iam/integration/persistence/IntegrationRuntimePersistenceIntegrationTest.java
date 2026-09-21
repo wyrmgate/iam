@@ -380,6 +380,98 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void entitlementAndGrantCoverageAreIndependentAndPartialNeverInfersAbsence() {
+        TenantContext tenant = tenant("group-observations");
+        UUID binding = groupConnector(tenant, true, false);
+        WorkerExternalSubject subject =
+                new WorkerExternalSubject("https://issuer.example", "group-worker");
+        groupWorker(tenant, subject, binding, WorkerCapability.RECONCILE);
+
+        var service = service(revisionUnavailable());
+        var registration = repository.findEnabledByExternalSubject(subject).orElseThrow();
+        var session = service.establishSession(
+                registration,
+                "pod-groups",
+                List.of(1),
+                List.of(groupRuntimeAdvertisement(WorkerCapability.RECONCILE)));
+
+        UUID firstEntitlementRun = createGroupReconciliation(
+                tenant, binding, "ENTITLEMENT");
+        var firstLease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), firstEntitlementRun,
+                firstLease.lease().leaseId(), firstLease.lease().leaseEpoch(),
+                List.of(
+                        new ConnectorWorkRepository.ProviderObservation(
+                                "ENTITLEMENT", "g-a", "v1", Map.of("displayName", "A")),
+                        new ConnectorWorkRepository.ProviderObservation(
+                                "ENTITLEMENT", "g-b", "v1", Map.of("displayName", "B"))));
+        service.complete(
+                registration, session.id(), firstEntitlementRun,
+                firstLease.lease().leaseId(), firstLease.lease().leaseEpoch(),
+                success(ReconciliationCompleteness.COMPLETE));
+
+        assertThat(observationPresent(
+                "observed_entitlement", tenant, binding, "g-a")).isTrue();
+        assertThat(observationPresent(
+                "observed_entitlement", tenant, binding, "g-b")).isTrue();
+        assertThat(effectiveCompleteness(firstEntitlementRun)).isEqualTo("COMPLETE");
+
+        UUID partialEntitlementRun = createGroupReconciliation(
+                tenant, binding, "ENTITLEMENT");
+        var partialLease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), partialEntitlementRun,
+                partialLease.lease().leaseId(), partialLease.lease().leaseEpoch(),
+                List.of(new ConnectorWorkRepository.ProviderObservation(
+                        "ENTITLEMENT", "g-a", "v2", Map.of("displayName", "A2"))));
+        service.complete(
+                registration, session.id(), partialEntitlementRun,
+                partialLease.lease().leaseId(), partialLease.lease().leaseEpoch(),
+                success(ReconciliationCompleteness.PARTIAL));
+        assertThat(observationPresent(
+                "observed_entitlement", tenant, binding, "g-b")).isTrue();
+
+        UUID completeEntitlementRun = createGroupReconciliation(
+                tenant, binding, "ENTITLEMENT");
+        var completeLease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), completeEntitlementRun,
+                completeLease.lease().leaseId(), completeLease.lease().leaseEpoch(),
+                List.of(new ConnectorWorkRepository.ProviderObservation(
+                        "ENTITLEMENT", "g-a", "v3", Map.of("displayName", "A3"))));
+        service.complete(
+                registration, session.id(), completeEntitlementRun,
+                completeLease.lease().leaseId(), completeLease.lease().leaseEpoch(),
+                success(ReconciliationCompleteness.COMPLETE));
+        assertThat(observationPresent(
+                "observed_entitlement", tenant, binding, "g-b")).isFalse();
+
+        UUID grantRun = createGroupReconciliation(tenant, binding, "GRANT");
+        var grantLease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), grantRun,
+                grantLease.lease().leaseId(), grantLease.lease().leaseEpoch(),
+                List.of(new ConnectorWorkRepository.ProviderObservation(
+                        "GRANT",
+                        "grant-a",
+                        "v3",
+                        Map.of(
+                                "principalProviderId", "u-a",
+                                "entitlementProviderId", "g-a"))));
+        service.complete(
+                registration, session.id(), grantRun,
+                grantLease.lease().leaseId(), grantLease.lease().leaseEpoch(),
+                success(ReconciliationCompleteness.COMPLETE));
+
+        assertThat(observationPresent(
+                "observed_grant", tenant, binding, "grant-a")).isTrue();
+        assertThat(effectiveCompleteness(grantRun)).isEqualTo("UNKNOWN");
+        assertThat(jdbc.queryForObject("""
+                SELECT principal_provider_id
+                FROM integration.observed_grant
+                WHERE tenant_id = ? AND connector_binding_id = ?
+                  AND provider_stable_id = 'grant-a'
+                """, String.class, tenant.tenantId(), binding)).isEqualTo("u-a");
+    }
+
+    @Test
     void secretShapedWorkerMetadataIsRejectedBeforePersistence() {
         TenantContext tenant = tenant("secret");
         UUID binding = connector(tenant, "runtime.test", "1.0", true);
@@ -403,6 +495,127 @@ class IntegrationRuntimePersistenceIntegrationTest {
                 .isInstanceOf(WorkerProtocolException.class)
                 .hasMessageContaining("forbidden secret-shaped");
         assertThat(stagingCount(runId)).isZero();
+    }
+
+    private UUID groupConnector(
+            TenantContext tenant,
+            boolean completeEntitlements,
+            boolean completeGrants) {
+        UUID instanceId = ids.nextId();
+        UUID bindingId = ids.nextId();
+        jdbc.update("""
+                INSERT INTO integration.connector_instance (
+                    id, tenant_id, connector_type, runtime_id, runtime_version,
+                    configuration_version, configuration_json, lifecycle_state,
+                    revision, created_at, updated_at)
+                VALUES (?, ?, 'TEST', 'runtime.test', '1.0',
+                        1, '{}'::jsonb, 'ACTIVE', 1, ?, ?)
+                """,
+                instanceId, tenant.tenantId(),
+                Timestamp.from(NOW), Timestamp.from(NOW));
+        jdbc.update("""
+                INSERT INTO integration.connector_binding (
+                    id, tenant_id, connector_instance_id, target_kind, target_id,
+                    contract_id, contract_version,
+                    supports_complete_principal_discovery,
+                    supports_complete_entitlement_discovery,
+                    supports_complete_grant_discovery,
+                    lifecycle_state, revision, created_at, updated_at)
+                VALUES (?, ?, ?, 'APPLICATION_TARGET', ?,
+                        'test.group', 1, false, ?, ?,
+                        'ACTIVE', 1, ?, ?)
+                """,
+                bindingId, tenant.tenantId(), instanceId, ids.nextId(),
+                completeEntitlements, completeGrants,
+                Timestamp.from(NOW), Timestamp.from(NOW));
+        return bindingId;
+    }
+
+    private UUID groupWorker(
+            TenantContext tenant,
+            WorkerExternalSubject subject,
+            UUID bindingId,
+            WorkerCapability capability) {
+        UUID workerId = ids.nextId();
+        jdbc.update("""
+                INSERT INTO integration.connector_worker_registration (
+                    id, tenant_id, external_subject_key, issuer, subject, state,
+                    protocol_major_min, protocol_major_max,
+                    revision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'ENABLED', 1, 1, 1, ?, ?)
+                """,
+                workerId, tenant.tenantId(),
+                JdbcIntegrationRuntimeRepository.subjectKey(subject),
+                subject.issuer(), subject.subject(),
+                Timestamp.from(NOW), Timestamp.from(NOW));
+        jdbc.update("""
+                INSERT INTO integration.connector_worker_binding_scope (
+                    tenant_id, worker_registration_id,
+                    connector_binding_id, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                tenant.tenantId(), workerId, bindingId, Timestamp.from(NOW));
+        jdbc.update("""
+                INSERT INTO integration.connector_worker_runtime_permission (
+                    tenant_id, worker_registration_id,
+                    runtime_id, runtime_version,
+                    capability, contract_id, contract_version, created_at)
+                VALUES (?, ?, 'runtime.test', '1.0', ?, 'test.group', 1, ?)
+                """,
+                tenant.tenantId(), workerId, capability.name(), Timestamp.from(NOW));
+        return workerId;
+    }
+
+    private ConnectorWorkerProtocolService.RuntimeAdvertisement groupRuntimeAdvertisement(
+            WorkerCapability capability) {
+        return new ConnectorWorkerProtocolService.RuntimeAdvertisement(
+                "runtime.test",
+                "1.0",
+                List.of(capability),
+                List.of(new ConnectorWorkerProtocolService.ContractAdvertisement(
+                        "test.group", List.of(1))));
+    }
+
+    private UUID createGroupReconciliation(
+            TenantContext tenant,
+            UUID bindingId,
+            String objectClass) {
+        UUID id = ids.nextId();
+        jdbc.update("""
+                INSERT INTO integration.reconciliation_run (
+                    id, tenant_id, connector_binding_id, operation_id,
+                    scope_object_class, state, reported_coverage,
+                    effective_completeness, configuration_version,
+                    runtime_id, runtime_version, contract_id, contract_version,
+                    correlation_id, revision, started_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'RUNNING', 'UNKNOWN', 'UNKNOWN', 1,
+                        'runtime.test', '1.0', 'test.group', 1,
+                        ?, 1, ?, ?, ?)
+                """,
+                id, tenant.tenantId(), bindingId, ids.nextId(), objectClass,
+                ids.nextId(),
+                Timestamp.from(NOW), Timestamp.from(NOW), Timestamp.from(NOW));
+        return id;
+    }
+
+    private boolean observationPresent(
+            String table,
+            TenantContext tenant,
+            UUID binding,
+            String providerStableId) {
+        if (!List.of("observed_entitlement", "observed_grant").contains(table)) {
+            throw new IllegalArgumentException("unsupported observation table");
+        }
+        Boolean value = jdbc.queryForObject(
+                ("SELECT present FROM integration." + table
+                        + " WHERE tenant_id = ?"
+                        + " AND connector_binding_id = ?"
+                        + " AND provider_stable_id = ?"),
+                Boolean.class,
+                tenant.tenantId(),
+                binding,
+                providerStableId);
+        return Boolean.TRUE.equals(value);
     }
 
     private ConnectorWorkerProtocolService service(DesiredAccessStateQuery query) {
