@@ -307,7 +307,8 @@ public final class ScimPrincipalProviderAdapter {
         copyIfPresent(resource, state, "name");
         copyIfPresent(resource, state, "emails");
         ConnectorPayloadGuard.requireSecretFree(state);
-        return new ProviderObservation(id, nestedString(resource, "meta", "version"), state);
+        return new ProviderObservation(
+                "PRINCIPAL", id, nestedString(resource, "meta", "version"), state);
     }
 
     private static List<Map<String,Object>> resourceList(Object value) {
