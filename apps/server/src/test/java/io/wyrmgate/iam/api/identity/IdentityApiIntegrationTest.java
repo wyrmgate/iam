@@ -27,6 +27,8 @@ import io.wyrmgate.iam.identity.persistence.JdbcCanonicalAttributeRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityQueryRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
+import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
+import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
@@ -35,8 +37,14 @@ import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.Signature;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
@@ -275,10 +283,46 @@ class IdentityApiIntegrationTest {
     private MockMvc mockMvc(AdministrativeAuthorizationService authorization) {
         IdentityApiMutationService mutations = new IdentityApiMutationService(
                 authorization, commands, identities, idempotency, transactions);
-        IdentityController controller = new IdentityController(queries, mutations, authorization, ids);
+        IdentityController controller = new IdentityController(queries, mutations, authorization, ids, testCursorCodec());
         return MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new IdentityApiErrorHandler(ids))
                 .build();
+    }
+
+    private IdentityCursorCodec testCursorCodec() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            KeyPair keyPair = generator.generateKeyPair();
+            SigningKeyMaterial material =
+                    new SigningKeyMaterial("api-test", "SHA256withRSA", keyPair.getPublic());
+            SigningKeyProvider provider = new SigningKeyProvider() {
+                @Override
+                public SigningKeyMaterial currentSigningKey() {
+                    return material;
+                }
+
+                @Override
+                public Optional<SigningKeyMaterial> verificationKey(String keyId) {
+                    return material.keyId().equals(keyId) ? Optional.of(material) : Optional.empty();
+                }
+
+                @Override
+                public byte[] sign(byte[] payload) {
+                    try {
+                        Signature signature = Signature.getInstance(material.signingAlgorithm());
+                        signature.initSign(keyPair.getPrivate());
+                        signature.update(payload);
+                        return signature.sign();
+                    } catch (Exception exception) {
+                        throw new IllegalStateException(exception);
+                    }
+                }
+            };
+            return new IdentityCursorCodec(provider, Duration.ofMinutes(15), Clock.systemUTC());
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private AdministrativeAuthorizationService authorization(boolean allow) {
