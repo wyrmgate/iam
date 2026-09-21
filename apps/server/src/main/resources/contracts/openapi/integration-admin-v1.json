@@ -2,7 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Wyrmgate IAM Integration Administration API",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "description": " Connector bindings expose object-class-specific completeness capabilities for principal, entitlement and grant reconciliation."
   },
   "security": [
     {
@@ -243,6 +244,8 @@
           "contractId",
           "contractVersion",
           "supportsCompletePrincipalDiscovery",
+          "supportsCompleteEntitlementDiscovery",
+          "supportsCompleteGrantDiscovery",
           "lifecycleState",
           "revision",
           "createdAt",
@@ -292,6 +295,12 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "supportsCompleteEntitlementDiscovery": {
+            "type": "boolean"
+          },
+          "supportsCompleteGrantDiscovery": {
+            "type": "boolean"
           }
         }
       },
