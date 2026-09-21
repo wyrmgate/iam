@@ -156,9 +156,14 @@ class IntegrationRuntimePersistenceIntegrationTest {
 
         jdbc.update("""
                 UPDATE platform.connector_work_lease
-                SET lease_expires_at = ?
+                SET claimed_at = ?, lease_expires_at = ?, updated_at = ?
                 WHERE tenant_id = ? AND work_id = ?
-                """, Timestamp.from(Instant.now().minusSeconds(1)), tenant.tenantId(), runId);
+                """,
+                Timestamp.from(NOW),
+                Timestamp.from(NOW.plusSeconds(1)),
+                Timestamp.from(NOW.plusSeconds(1)),
+                tenant.tenantId(),
+                runId);
 
         var second = service.claim(registration, session.id(), 1, 0).getFirst();
         assertThat(second.lease().leaseEpoch()).isEqualTo(2);
@@ -310,7 +315,8 @@ class IntegrationRuntimePersistenceIntegrationTest {
                         SET provider_request_id = 'mutated'
                         WHERE tenant_id = ? AND task_id = ?
                         """, tenant.tenantId(), freshTask))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isInstanceOf(org.springframework.jdbc.UncategorizedSQLException.class)
+                .hasMessageContaining("provisioning_attempt is immutable");
     }
 
     @Test
