@@ -56,6 +56,13 @@ public record WebhookIntegrationEventProperties(
                 "request-timeout");
     }
 
+    @Override
+    public String toString() {
+        return "WebhookIntegrationEventProperties[endpoint=" + endpoint
+                + ", secret=<redacted>, connectTimeout=" + connectTimeout
+                + ", requestTimeout=" + requestTimeout + "]";
+    }
+
     private static Duration positive(Duration value, String name) {
         if (value.isZero() || value.isNegative()) {
             throw new IllegalStateException(
