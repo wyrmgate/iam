@@ -77,6 +77,14 @@ public final class IntegrationEventPublicationService {
                 publisher.publish(outbound);
                 outbox.markPublished(item.tenant(), item.event().eventId(), clock.instant());
                 published++;
+            } catch (IntegrationEventDeliveryException deliveryFailure) {
+                if (deliveryFailure.retryable()) {
+                    scheduleRetry(item, deliveryFailure.errorCode());
+                } else {
+                    outbox.markTerminalFailure(
+                            item.tenant(), item.event().eventId(), deliveryFailure.errorCode());
+                }
+                failed++;
             } catch (RuntimeException publicationFailure) {
                 scheduleRetry(item, PUBLICATION_FAILURE);
                 failed++;
