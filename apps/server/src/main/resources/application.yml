@@ -71,6 +71,11 @@ iam:
       max-claim-size: ${IAM_CONNECTOR_WORKER_MAX_CLAIM_SIZE:50}
       max-long-poll-seconds: ${IAM_CONNECTOR_WORKER_MAX_LONG_POLL_SECONDS:20}
       max-observation-batch-size: ${IAM_CONNECTOR_WORKER_MAX_OBSERVATION_BATCH_SIZE:500}
+    scim-local:
+      enabled: ${IAM_SCIM_LOCAL_EXECUTION_ENABLED:false}
+      poll-interval: ${IAM_SCIM_LOCAL_EXECUTION_POLL_INTERVAL:PT1S}
+      lease-duration: ${IAM_SCIM_LOCAL_EXECUTION_LEASE_DURATION:PT30S}
+      batch-size: ${IAM_SCIM_LOCAL_EXECUTION_BATCH_SIZE:10}
     events:
       enabled: ${IAM_INTEGRATION_EVENTS_ENABLED:false}
       transport: ${IAM_INTEGRATION_EVENTS_TRANSPORT:}
