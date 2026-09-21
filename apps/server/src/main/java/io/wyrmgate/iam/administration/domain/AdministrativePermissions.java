@@ -14,6 +14,30 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission IDENTITY_UPDATE =
             new AdministrativePermission("identity", "update");
 
+
+    public static final AdministrativePermission APPLICATION_READ =
+            new AdministrativePermission("application", "read");
+    public static final AdministrativePermission APPLICATION_CREATE =
+            new AdministrativePermission("application", "create");
+    public static final AdministrativePermission APPLICATION_UPDATE =
+            new AdministrativePermission("application", "update");
+    public static final AdministrativePermission APPLICATION_RETIRE =
+            new AdministrativePermission("application", "retire");
+
+    public static final AdministrativePermission APPLICATION_TARGET_READ =
+            new AdministrativePermission("application-target", "read");
+    public static final AdministrativePermission APPLICATION_TARGET_CREATE =
+            new AdministrativePermission("application-target", "create");
+    public static final AdministrativePermission APPLICATION_TARGET_RETIRE =
+            new AdministrativePermission("application-target", "retire");
+
+    public static final AdministrativePermission ENTITLEMENT_READ =
+            new AdministrativePermission("entitlement", "read");
+    public static final AdministrativePermission ENTITLEMENT_CREATE =
+            new AdministrativePermission("entitlement", "create");
+    public static final AdministrativePermission ENTITLEMENT_RETIRE =
+            new AdministrativePermission("entitlement", "retire");
+
     public static final AdministrativePermission CONNECTOR_READ =
             new AdministrativePermission("connector", "read");
     public static final AdministrativePermission CONNECTOR_CREATE =

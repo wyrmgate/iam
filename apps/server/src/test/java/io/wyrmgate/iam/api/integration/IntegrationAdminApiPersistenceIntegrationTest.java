@@ -94,7 +94,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 integration, new JdbcIntegrationAdministrationFactSink(outbox, ids), ids, transactions);
         mutations = new IntegrationAdminApiMutationService(
                 authorization, commands, integration, idempotency, transactions);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("14");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("15");
     }
 
     @AfterAll

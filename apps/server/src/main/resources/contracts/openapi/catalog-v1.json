@@ -1,0 +1,392 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "Wyrmgate IAM Catalog API",
+    "version": "0.1.0",
+    "description": "Authoritative Catalog runtime slice for Application, ApplicationTarget and Entitlement. Provider observations remain Integration-owned and never silently mutate Catalog."
+  },
+  "servers": [{"url": "/api/v1"}],
+  "security": [{"controlPlaneBearer": []}],
+  "paths": {
+    "/applications": {
+      "get": {
+        "operationId": "listApplications",
+        "summary": "List applications",
+        "parameters": [
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Application page",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationPage"}}}
+          },
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        },
+        "x-wyrmgate-authority": "Catalog authoritative state",
+        "x-wyrmgate-administrative-permission": "application:read"
+      },
+      "post": {
+        "operationId": "createApplication",
+        "summary": "Create application",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateApplicationRequest"}}}
+        },
+        "responses": {
+          "201": {
+            "description": "Application created",
+            "headers": {
+              "ETag": {"$ref": "#/components/headers/RevisionEtag"},
+              "Location": {"schema": {"type": "string"}}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationResource"}}}
+          },
+          "400": {"$ref": "#/components/responses/ValidationError"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"}
+        },
+        "x-wyrmgate-administrative-permission": "application:create",
+        "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/applications/{applicationId}": {
+      "get": {
+        "operationId": "getApplication",
+        "summary": "Get application",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Application",
+            "headers": {"ETag": {"$ref": "#/components/headers/RevisionEtag"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationResource"}}}
+          },
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        },
+        "x-wyrmgate-administrative-permission": "application:read"
+      },
+      "patch": {
+        "operationId": "renameApplication",
+        "summary": "Rename application",
+        "description": "The first Catalog slice permits application-name maintenance only. Code and lifecycle are not arbitrary PATCH fields.",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RenameApplicationRequest"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Application renamed",
+            "headers": {"ETag": {"$ref": "#/components/headers/RevisionEtag"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationResource"}}}
+          },
+          "400": {"$ref": "#/components/responses/ValidationError"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/StaleRevision"}
+        },
+        "x-wyrmgate-administrative-permission": "application:update"
+      }
+    },
+    "/applications/{applicationId}/retire": {
+      "post": {
+        "operationId": "retireApplication",
+        "summary": "Retire application",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Application retired",
+            "headers": {"ETag": {"$ref": "#/components/headers/RevisionEtag"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationResource"}}}
+          },
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "412": {"$ref": "#/components/responses/StaleRevision"}
+        },
+        "x-wyrmgate-administrative-permission": "application:retire"
+      }
+    },
+    "/applications/{applicationId}/targets": {
+      "get": {
+        "operationId": "listApplicationTargets",
+        "summary": "List application targets",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Application target page",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationTargetPage"}}}
+          }
+        },
+        "x-wyrmgate-administrative-permission": "application-target:read"
+      },
+      "post": {
+        "operationId": "createApplicationTarget",
+        "summary": "Create application target",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateTargetRequest"}}}
+        },
+        "responses": {
+          "201": {
+            "description": "Application target created",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationTargetResource"}}}
+          }
+        },
+        "x-wyrmgate-administrative-permission": "application-target:create"
+      }
+    },
+    "/application-targets/{targetId}": {
+      "get": {
+        "operationId": "getApplicationTarget",
+        "summary": "Get application target",
+        "parameters": [{"$ref": "#/components/parameters/TargetId"}],
+        "responses": {
+          "200": {
+            "description": "Application target",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationTargetResource"}}}
+          }
+        },
+        "x-wyrmgate-administrative-permission": "application-target:read"
+      }
+    },
+    "/application-targets/{targetId}/retire": {
+      "post": {
+        "operationId": "retireApplicationTarget",
+        "summary": "Retire application target",
+        "parameters": [
+          {"$ref": "#/components/parameters/TargetId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Application target retired",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApplicationTargetResource"}}}
+          }
+        },
+        "x-wyrmgate-administrative-permission": "application-target:retire"
+      }
+    },
+    "/applications/{applicationId}/entitlements": {
+      "get": {
+        "operationId": "listEntitlements",
+        "summary": "List entitlements",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Entitlement page",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/EntitlementPage"}}}
+          }
+        },
+        "x-wyrmgate-administrative-permission": "entitlement:read"
+      },
+      "post": {
+        "operationId": "createEntitlement",
+        "summary": "Create entitlement",
+        "description": "Creates governed Catalog authority. Provider discovery never calls this operation implicitly.",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateEntitlementRequest"}}}
+        },
+        "responses": {
+          "201": {
+            "description": "Entitlement created",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/EntitlementResource"}}}
+          }
+        },
+        "x-wyrmgate-administrative-permission": "entitlement:create"
+      }
+    },
+    "/entitlements/{entitlementId}": {
+      "get": {
+        "operationId": "getEntitlement",
+        "summary": "Get entitlement",
+        "parameters": [{"$ref": "#/components/parameters/EntitlementId"}],
+        "responses": {
+          "200": {
+            "description": "Entitlement",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/EntitlementResource"}}}
+          }
+        },
+        "x-wyrmgate-administrative-permission": "entitlement:read"
+      }
+    },
+    "/entitlements/{entitlementId}/retire": {
+      "post": {
+        "operationId": "retireEntitlement",
+        "summary": "Retire entitlement",
+        "parameters": [
+          {"$ref": "#/components/parameters/EntitlementId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Entitlement retired",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/EntitlementResource"}}}
+          }
+        },
+        "x-wyrmgate-administrative-permission": "entitlement:retire"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "controlPlaneBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Authentication is transport-level only; Administrative Authorization remains separately default-deny."
+      }
+    },
+    "parameters": {
+      "ApplicationId": {"name": "applicationId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "TargetId": {"name": "targetId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "EntitlementId": {"name": "entitlementId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque signed tenant/context-bound time-bounded continuation cursor.",
+        "schema": {"type": "string"}
+      },
+      "Limit": {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+      "IfMatch": {"name": "If-Match", "in": "header", "required": true, "schema": {"type": "string", "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"}},
+      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 200}},
+      "CorrelationId": {"name": "X-Correlation-Id", "in": "header", "required": false, "schema": {"type": "string", "format": "uuid"}}
+    },
+    "headers": {
+      "RevisionEtag": {"description": "Strong authoritative revision ETag.", "schema": {"type": "string"}}
+    },
+    "responses": {
+      "ValidationError": {"description": "Validation failed", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Forbidden": {"description": "Administrative authorization denied", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "NotFound": {"description": "Resource not found in tenant", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Conflict": {"description": "Semantic/idempotency conflict", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "StaleRevision": {"description": "Stale If-Match revision", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+    },
+    "schemas": {
+      "Lifecycle": {"type": "string", "enum": ["ACTIVE", "RETIRED"]},
+      "CreateApplicationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "name"],
+        "properties": {
+          "code": {"type": "string", "minLength": 1, "maxLength": 128},
+          "name": {"type": "string", "minLength": 1, "maxLength": 512}
+        }
+      },
+      "RenameApplicationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 512}}
+      },
+      "CreateTargetRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code"],
+        "properties": {"code": {"type": "string", "minLength": 1, "maxLength": 128}}
+      },
+      "CreateEntitlementRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "entitlementType"],
+        "properties": {
+          "applicationTargetId": {"type": ["string", "null"], "format": "uuid"},
+          "code": {"type": "string", "minLength": 1, "maxLength": 256},
+          "nativeKey": {"type": ["string", "null"], "minLength": 1, "maxLength": 1024},
+          "entitlementType": {"type": "string", "minLength": 1, "maxLength": 64}
+        }
+      },
+      "ApplicationResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","code","name","lifecycleState","revision","createdAt","updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "code": {"type": "string"},
+          "name": {"type": "string"},
+          "lifecycleState": {"$ref": "#/components/schemas/Lifecycle"},
+          "revision": {"type": "integer", "format": "int64", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ApplicationTargetResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","applicationId","code","lifecycleState","revision","createdAt","updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "applicationId": {"type": "string", "format": "uuid"},
+          "code": {"type": "string"},
+          "lifecycleState": {"$ref": "#/components/schemas/Lifecycle"},
+          "revision": {"type": "integer", "format": "int64", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "EntitlementResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","applicationId","code","entitlementType","lifecycleState","revision","createdAt","updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "applicationId": {"type": "string", "format": "uuid"},
+          "applicationTargetId": {"type": ["string", "null"], "format": "uuid"},
+          "code": {"type": "string"},
+          "nativeKey": {"type": ["string", "null"]},
+          "entitlementType": {"type": "string"},
+          "lifecycleState": {"$ref": "#/components/schemas/Lifecycle"},
+          "revision": {"type": "integer", "format": "int64", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ApplicationPage": {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/ApplicationResource"}}, "nextCursor": {"type": ["string", "null"]}}},
+      "ApplicationTargetPage": {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/ApplicationTargetResource"}}, "nextCursor": {"type": ["string", "null"]}}},
+      "EntitlementPage": {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/EntitlementResource"}}, "nextCursor": {"type": ["string", "null"]}}},
+      "FieldError": {"type": "object", "required": ["field","code","message"], "properties": {"field": {"type": "string"}, "code": {"type": "string"}, "message": {"type": "string"}}},
+      "ErrorResponse": {"type": "object", "required": ["code","message","correlationId"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "correlationId": {"type": "string", "format": "uuid"}, "fieldErrors": {"type": "array", "items": {"$ref": "#/components/schemas/FieldError"}}}}
+    }
+  },
+  "x-wyrmgate-contract-status": "runtime-exposed-authenticated-authorized",
+  "x-wyrmgate-tenant-resolution": "Tenant comes from trusted authenticated control-plane context and is never writable in request bodies.",
+  "x-wyrmgate-provider-observation-boundary": "Provider discovery/reconciliation creates Integration observations only; it never silently creates or mutates authoritative Catalog resources."
+}
