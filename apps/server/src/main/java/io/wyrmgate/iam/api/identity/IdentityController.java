@@ -50,16 +50,19 @@ public class IdentityController {
     private final IdentityApiMutationService mutations;
     private final AdministrativeAuthorizationService authorization;
     private final IdGenerator ids;
+    private final IdentityCursorCodec cursors;
 
     public IdentityController(
             IdentityQueryService queries,
             IdentityApiMutationService mutations,
             AdministrativeAuthorizationService authorization,
-            IdGenerator ids) {
+            IdGenerator ids,
+            IdentityCursorCodec cursors) {
         this.queries = queries;
         this.mutations = mutations;
         this.authorization = authorization;
         this.ids = ids;
+        this.cursors = cursors;
     }
 
     @GetMapping
@@ -72,13 +75,13 @@ public class IdentityController {
         Instant now = Instant.now();
         requireRead(actor, AdministrativeResource.collection("identity"), now, correlationId);
         int effectiveLimit = validateLimit(limit, correlationId);
-        IdentityPagePosition position = decodeIdentityCursor(cursor, correlationId);
+        IdentityPagePosition position = decodeIdentityCursor(cursor, actor, correlationId);
         var page = queries.listIdentities(actor.tenant(), position, effectiveLimit);
         return ResponseEntity.ok()
                 .header("X-Correlation-Id", correlationId.toString())
                 .body(new IdentityPage(
                         page.items().stream().map(IdentityController::resource).toList(),
-                        IdentityCursorCodec.encodeIdentity(page.nextPosition())));
+                        cursors.encodeIdentity(actor.tenant(), page.nextPosition())));
     }
 
     @PostMapping
@@ -169,7 +172,7 @@ public class IdentityController {
             throw IdentityApiException.notFound(correlationId);
         }
         int effectiveLimit = validateLimit(limit, correlationId);
-        CanonicalAttributePagePosition position = decodeCanonicalCursor(cursor, correlationId);
+        CanonicalAttributePagePosition position = decodeCanonicalCursor(cursor, actor, identityId, correlationId);
         var page = queries.listCanonicalAttributes(actor.tenant(), identityId, position, effectiveLimit, now);
         return ResponseEntity.ok()
                 .header("X-Correlation-Id", correlationId.toString())
@@ -187,7 +190,7 @@ public class IdentityController {
                                         "REDACTED",
                                         item.hasTrustedValue()))
                                 .toList(),
-                        IdentityCursorCodec.encodeCanonical(page.nextPosition())));
+                        cursors.encodeCanonical(actor.tenant(), identityId, page.nextPosition())));
     }
 
     private void requireRead(
@@ -259,20 +262,27 @@ public class IdentityController {
         }
     }
 
-    private static IdentityPagePosition decodeIdentityCursor(String cursor, UUID correlationId) {
+    private IdentityPagePosition decodeIdentityCursor(
+            String cursor,
+            AuthenticatedAdministrativeActor actor,
+            UUID correlationId) {
         if (cursor == null) return null;
         try {
-            return IdentityCursorCodec.decodeIdentity(cursor);
+            return cursors.decodeIdentity(cursor, actor.tenant());
         } catch (IllegalArgumentException invalid) {
             throw IdentityApiException.validation(
                     correlationId, "cursor", "invalid_cursor", "cursor is invalid or malformed.");
         }
     }
 
-    private static CanonicalAttributePagePosition decodeCanonicalCursor(String cursor, UUID correlationId) {
+    private CanonicalAttributePagePosition decodeCanonicalCursor(
+            String cursor,
+            AuthenticatedAdministrativeActor actor,
+            UUID identityId,
+            UUID correlationId) {
         if (cursor == null) return null;
         try {
-            return IdentityCursorCodec.decodeCanonical(cursor);
+            return cursors.decodeCanonical(cursor, actor.tenant(), identityId);
         } catch (IllegalArgumentException invalid) {
             throw IdentityApiException.validation(
                     correlationId, "cursor", "invalid_cursor", "cursor is invalid or malformed.");
