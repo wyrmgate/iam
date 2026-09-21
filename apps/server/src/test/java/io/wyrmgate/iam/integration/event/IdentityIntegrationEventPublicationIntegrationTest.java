@@ -230,10 +230,10 @@ class IdentityIntegrationEventPublicationIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "SELECT last_error_code FROM platform.outbox_event", String.class))
                 .isEqualTo("identity_event_mapping_failed");
-        assertThat(jdbc.queryForObject(
+        java.sql.Timestamp nextAttemptAt = jdbc.queryForObject(
                 "SELECT next_attempt_at FROM platform.outbox_event",
-                (rs, rowNum) -> rs.getTimestamp(1)))
-                .isNull();
+                (rs, rowNum) -> rs.getTimestamp(1));
+        assertThat(nextAttemptAt).isNull();
     }
 
     @Test
