@@ -31,6 +31,18 @@ class WebhookIntegrationEventPropertiesTest {
     }
 
     @Test
+    void doesNotExposeSigningSecretFromPropertiesString() {
+        String secret = "super-secret-value-123456789012345";
+        WebhookIntegrationEventProperties properties = new WebhookIntegrationEventProperties(
+                URI.create("https://example.test/events"),
+                secret,
+                null,
+                null);
+
+        assertThat(properties.toString()).doesNotContain(secret).contains("secret=<redacted>");
+    }
+
+    @Test
     void appliesBoundedDefaultTimeouts() {
         WebhookIntegrationEventProperties properties = new WebhookIntegrationEventProperties(
                 URI.create("https://example.test/events"),
