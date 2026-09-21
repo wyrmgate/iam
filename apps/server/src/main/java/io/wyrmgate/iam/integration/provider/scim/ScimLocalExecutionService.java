@@ -11,7 +11,7 @@ import io.wyrmgate.iam.integration.application.ConnectorPayloadGuard;
 import io.wyrmgate.iam.integration.application.WorkerProtocolException;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository.ExecutionConfiguration;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
-import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.PrincipalObservation;
+import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.ProviderObservation;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.ProvisioningCandidate;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.ReconciliationCandidate;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.WorkCompletion;
@@ -288,7 +288,7 @@ public final class ScimLocalExecutionService {
             WorkerSession owner,
             LeasedConnectorWork leased,
             int sequence,
-            List<PrincipalObservation> observations) {
+            List<ProviderObservation> observations) {
         UUID batchId = UUID.nameUUIDFromBytes(
                 (leased.workId() + ":" + sequence).getBytes(StandardCharsets.UTF_8));
         String requestFingerprint = fingerprint(Map.of(
@@ -297,7 +297,7 @@ public final class ScimLocalExecutionService {
                 "batchId", batchId.toString(),
                 "sequence", sequence,
                 "observations", observations));
-        transactions.required(() -> work.appendPrincipalObservations(
+        transactions.required(() -> work.appendProviderObservations(
                 owner,
                 leased.workId(),
                 leased.lease().leaseId(),
