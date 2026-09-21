@@ -189,7 +189,7 @@ public final class JdbcIntegrationRuntimeRepository
             WorkerSession session, int limit, Instant now) {
         return jdbc.query("""
                 SELECT t.id, t.operation_id, t.tenant_id, j.connector_binding_id,
-                       t.subject_kind, t.subject_id, t.desired_revision,
+                       t.operation_type, t.subject_kind, t.subject_id, t.desired_revision,
                        t.contract_id, t.contract_version, t.idempotency_key,
                        t.correlation_id, t.causation_id, t.payload::text
                 FROM integration.provisioning_task t
@@ -240,10 +240,10 @@ public final class JdbcIntegrationRuntimeRepository
                 (rs,row) -> new ProvisioningCandidate(
                         rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getObject(3, UUID.class), rs.getObject(4, UUID.class),
-                        rs.getString(5), rs.getObject(6, UUID.class), rs.getLong(7),
-                        rs.getString(8), rs.getInt(9), rs.getString(10),
-                        rs.getObject(11, UUID.class), rs.getObject(12, UUID.class),
-                        readMap(rs.getString(13))),
+                        rs.getString(5), rs.getString(6), rs.getObject(7, UUID.class), rs.getLong(8),
+                        rs.getString(9), rs.getInt(10), rs.getString(11),
+                        rs.getObject(12, UUID.class), rs.getObject(13, UUID.class),
+                        readMap(rs.getString(14))),
                 session.workerRegistrationId(), session.id(), session.id(),
                 session.tenant().tenantId(), Timestamp.from(now), Timestamp.from(now), limit);
     }
