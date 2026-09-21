@@ -135,7 +135,13 @@ The event envelope preserves:
 
 Delivery semantics are at-least-once. Consumers tolerate duplicate, replay, and out-of-order delivery. There is no total global ordering guarantee; Identity revision provides local ordering/gap context where applicable.
 
-No broker, webhook product, or connector transport is selected by this contract. External publication wiring remains future implementation work.
+The runtime now includes a transport-neutral publication dispatcher for these two curated event types. Identity mutations still commit only their internal semantic facts atomically with authoritative state. A short-lived outbox lease then selects supported Identity facts, maps them into the independent AsyncAPI v1 envelopes, and invokes an injected `IntegrationEventPublisher` outside the authoritative transaction.
+
+Successful delivery marks the internal outbox row `PUBLISHED`. Retryable external-delivery failures leave it `PENDING` with bounded exponential backoff and a normalized error code. A permanent internal mapping/contract defect moves the technical publication record to terminal `FAILED` rather than retrying forever. Crash/restart after claiming is recovered by lease expiry and therefore remains at-least-once.
+
+The created internal fact captures Identity type and lifecycle state at mutation time so the public `identity.created` event does not reconstruct historical event data from later current state. Display names and other richer values remain excluded.
+
+No broker, webhook product, cloud-messaging product, or connector transport is selected by this contract. Publication is disabled by default and requires an explicit `IntegrationEventPublisher` transport adapter. Enabling publication without such an adapter fails runtime composition rather than dropping or pretending to publish events.
 
 ## Verification
 
@@ -155,6 +161,6 @@ The lightweight verifier does not pretend to be a complete OpenAPI/AsyncAPI stan
 
 ## OD-003 completion boundary
 
-This first slice materially advances OD-003 but does not close it globally. OD-003 remains open until the repository has concrete machine-readable contracts for the implemented public capability surfaces and a controlled runtime publication/compatibility process.
+This first slice materially advances OD-003 but does not close it globally. The Identity surface now has concrete OpenAPI/AsyncAPI contracts plus a controlled transport-neutral runtime publication pipeline. OD-003 remains open for broader implemented public capability coverage, explicit external transport activation/operations, and repository-wide compatibility/deprecation process as additional public surfaces are introduced.
 
 A later formal-specification checkpoint should fold the accepted ADR amendments and completed OD-003 slices into the Integration/SAD/RTM package rather than updating v0.2 for every incremental contract commit.
