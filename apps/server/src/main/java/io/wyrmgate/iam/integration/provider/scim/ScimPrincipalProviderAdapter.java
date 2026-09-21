@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.ConnectorPayloadGuard;
-import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.PrincipalObservation;
+import io.wyrmgate.iam.integration.application.ConnectorWorkRepository.ProviderObservation;
 import io.wyrmgate.iam.integration.domain.ReconciliationCompleteness;
 import io.wyrmgate.iam.integration.provider.ConnectorSecretProvider;
 import java.io.IOException;
@@ -49,7 +49,7 @@ public final class ScimPrincipalProviderAdapter {
             Configuration configuration,
             String secretReference,
             String checkpoint,
-            Consumer<List<PrincipalObservation>> batchConsumer) {
+            Consumer<List<ProviderObservation>> batchConsumer) {
         Objects.requireNonNull(configuration, "configuration");
         Objects.requireNonNull(batchConsumer, "batchConsumer");
 
@@ -66,7 +66,7 @@ public final class ScimPrincipalProviderAdapter {
                 Map<String,Object> document = successDocument(response, "SCIM principal discovery failed");
 
                 List<Map<String,Object>> resources = resourceList(document.get("Resources"));
-                List<PrincipalObservation> observations = new ArrayList<>(resources.size());
+                List<ProviderObservation> observations = new ArrayList<>(resources.size());
                 for (Map<String,Object> resource : resources) {
                     observations.add(toObservation(resource));
                 }
@@ -297,7 +297,7 @@ public final class ScimPrincipalProviderAdapter {
                 message);
     }
 
-    private static PrincipalObservation toObservation(Map<String,Object> resource) {
+    private static ProviderObservation toObservation(Map<String,Object> resource) {
         String id = required(string(resource.get("id")), "provider principal id");
         Map<String,Object> state = new LinkedHashMap<>();
         copyIfPresent(resource, state, "userName");
@@ -307,7 +307,7 @@ public final class ScimPrincipalProviderAdapter {
         copyIfPresent(resource, state, "name");
         copyIfPresent(resource, state, "emails");
         ConnectorPayloadGuard.requireSecretFree(state);
-        return new PrincipalObservation(id, nestedString(resource, "meta", "version"), state);
+        return new ProviderObservation(id, nestedString(resource, "meta", "version"), state);
     }
 
     private static List<Map<String,Object>> resourceList(Object value) {
