@@ -36,7 +36,7 @@ Not implemented in this slice:
 
 - automatic provider-Group adoption into Catalog Entitlement authority;
 - AccessAssignment creation from observed memberships;
-- governed drift/finding workflow creation from observed mismatches;
+- automatic adoption or revocation decisions from governed drift findings;
 - SCIM Group create/delete as Catalog management;
 - credentials;
 - SCIM Bulk;
