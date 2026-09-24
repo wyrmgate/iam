@@ -12,8 +12,6 @@ public interface IntegrationObservedAccessFactSink {
 
     String OBSERVED_ACCESS_INPUT_CHANGED = "integration.observed-access-input-changed";
 
-    IntegrationObservedAccessFactSink NOOP =
-            (tenant, connectorBindingId, sourceKind, sourceId, sourceRevision, occurredAt, correlationId) -> { };
 
     void inputChanged(
             TenantContext tenant,
