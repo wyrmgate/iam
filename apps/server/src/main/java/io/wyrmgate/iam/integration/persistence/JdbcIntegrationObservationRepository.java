@@ -82,7 +82,7 @@ public final class JdbcIntegrationObservationRepository
         } catch (DataIntegrityViolationException duplicate) {
             throw new IntegrationAdministrationException(
                     "mapping_conflict",
-                    "The provider entitlement or Catalog Entitlement is already actively mapped for this binding.");
+                    "The provider entitlement is already actively mapped for this binding.");
         }
         return find(tenant, id).orElseThrow();
     }
