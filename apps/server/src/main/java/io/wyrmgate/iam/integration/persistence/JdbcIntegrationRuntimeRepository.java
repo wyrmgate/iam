@@ -45,10 +45,6 @@ public final class JdbcIntegrationRuntimeRepository
     private final IdGenerator ids;
     private final IntegrationObservedAccessFactSink observedAccessFacts;
 
-    public JdbcIntegrationRuntimeRepository(JdbcTemplate jdbc, ObjectMapper json, IdGenerator ids) {
-        this(jdbc, json, ids, IntegrationObservedAccessFactSink.NOOP);
-    }
-
     public JdbcIntegrationRuntimeRepository(
             JdbcTemplate jdbc,
             ObjectMapper json,
