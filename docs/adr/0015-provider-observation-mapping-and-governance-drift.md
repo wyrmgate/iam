@@ -74,7 +74,9 @@ Until canonical Principal runtime/correlation exists, observed grants must not b
 
 Provider observation materialization and Governance finding mutation occur in separate capability-owned transactions.
 
-At-least-once reporting is expected. Reporting and finding updates must be idempotent and revision-aware. A failure to create/update a finding does not rewrite valid Integration observation state.
+The first implementation commits a data-minimized internal `integration.observed-access-input-changed` outbox fact in the same Integration transaction that completes ENTITLEMENT/GRANT observation materialization or changes an entitlement-observation mapping. The fact carries the ConnectorBinding scope and source aggregate reference only; it carries no provider payload, credentials, secret reference, or Access authority. Governance leases that internal fact later, re-queries current normalized Integration state through the semantic observed-access query, and mutates findings in a Governance-owned transaction. The internal fact is not a public integration event.
+
+At-least-once reporting is expected. Reporting and finding updates must be idempotent and revision-aware. Delayed or out-of-order trigger facts cause reevaluation of current Integration state rather than replay of historical provider state. A failure to create/update a finding does not rewrite valid Integration observation state.
 
 Partial reconciliation may produce positive observations and corresponding findings, but partial coverage never implies destructive absence or resolution of unseen observation-derived findings. Resolution based on provider absence requires trustworthy COMPLETE coverage for the relevant object class.
 
