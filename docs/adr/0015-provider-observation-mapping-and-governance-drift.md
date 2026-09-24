@@ -21,6 +21,7 @@ A provider entitlement mapping:
 - is scoped to one tenant and one ConnectorBinding/ApplicationTarget;
 - identifies one provider-native observed entitlement by stable provider identifier;
 - references one canonical Catalog Entitlement by stable ID;
+- is unique by provider-native stable identifier within its ConnectorBinding; the canonical Entitlement reference is not a reverse-unique identity key, so separately observed provider identifiers may explicitly resolve to the same canonical Entitlement when semantically appropriate;
 - carries its own revision and provenance;
 - is technical interpretation of provider observation, not Catalog authority.
 
