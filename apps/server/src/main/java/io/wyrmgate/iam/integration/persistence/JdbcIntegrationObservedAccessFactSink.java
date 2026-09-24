@@ -25,11 +25,15 @@ public final class JdbcIntegrationObservedAccessFactSink
     @Override
     public void inputChanged(
             TenantContext tenant,
+            UUID connectorBindingId,
             SourceKind sourceKind,
             UUID sourceId,
             long sourceRevision,
             Instant occurredAt,
             UUID correlationId) {
+        String payload = "{\"connectorBindingId\":\""
+                + connectorBindingId
+                + "\"}";
         outbox.append(
                 tenant,
                 new OutboxEvent(
@@ -42,7 +46,7 @@ public final class JdbcIntegrationObservedAccessFactSink
                         occurredAt,
                         correlationId,
                         null,
-                        "{}"),
+                        payload),
                 occurredAt);
     }
 }
