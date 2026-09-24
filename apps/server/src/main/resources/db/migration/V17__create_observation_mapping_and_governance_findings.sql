@@ -34,11 +34,6 @@ CREATE UNIQUE INDEX integration_entitlement_mapping_active_provider_uq
         (tenant_id, connector_binding_id, provider_stable_id)
     WHERE lifecycle_state = 'ACTIVE';
 
-CREATE UNIQUE INDEX integration_entitlement_mapping_active_entitlement_uq
-    ON integration.entitlement_observation_mapping
-        (tenant_id, connector_binding_id, entitlement_id)
-    WHERE lifecycle_state = 'ACTIVE';
-
 CREATE INDEX integration_entitlement_mapping_entitlement_idx
     ON integration.entitlement_observation_mapping
         (tenant_id, entitlement_id, lifecycle_state);
