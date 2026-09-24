@@ -17,6 +17,7 @@ public final class IntegrationEntitlementMappingService {
     private final IntegrationEntitlementMappingRepository mappings;
     private final CatalogEntitlementReferenceQuery catalog;
     private final IntegrationAdministrationFactSink facts;
+    private final IntegrationObservedAccessFactSink observedAccessFacts;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
@@ -27,10 +28,25 @@ public final class IntegrationEntitlementMappingService {
             IntegrationAdministrationFactSink facts,
             IdGenerator ids,
             TransactionExecutor transactions) {
+        this(
+                administration, mappings, catalog, facts,
+                IntegrationObservedAccessFactSink.NOOP, ids, transactions);
+    }
+
+    public IntegrationEntitlementMappingService(
+            IntegrationAdministrationRepository administration,
+            IntegrationEntitlementMappingRepository mappings,
+            CatalogEntitlementReferenceQuery catalog,
+            IntegrationAdministrationFactSink facts,
+            IntegrationObservedAccessFactSink observedAccessFacts,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
         this.administration = Objects.requireNonNull(administration, "administration");
         this.mappings = Objects.requireNonNull(mappings, "mappings");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.facts = Objects.requireNonNull(facts, "facts");
+        this.observedAccessFacts = Objects.requireNonNull(
+                observedAccessFacts, "observedAccessFacts");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -72,6 +88,14 @@ public final class IntegrationEntitlementMappingService {
             facts.mappingChanged(
                     tenant, "integration.entitlement-observation-mapped",
                     created.id(), created.revision(), now, correlationId);
+            observedAccessFacts.inputChanged(
+                    tenant,
+                    created.connectorBindingId(),
+                    IntegrationObservedAccessFactSink.SourceKind.ENTITLEMENT_OBSERVATION_MAPPING,
+                    created.id(),
+                    created.revision(),
+                    now,
+                    correlationId);
             return created;
         });
     }
@@ -88,6 +112,14 @@ public final class IntegrationEntitlementMappingService {
             facts.mappingChanged(
                     tenant, "integration.entitlement-observation-unmapped",
                     retired.id(), retired.revision(), now, correlationId);
+            observedAccessFacts.inputChanged(
+                    tenant,
+                    retired.connectorBindingId(),
+                    IntegrationObservedAccessFactSink.SourceKind.ENTITLEMENT_OBSERVATION_MAPPING,
+                    retired.id(),
+                    retired.revision(),
+                    now,
+                    correlationId);
             return retired;
         });
     }
