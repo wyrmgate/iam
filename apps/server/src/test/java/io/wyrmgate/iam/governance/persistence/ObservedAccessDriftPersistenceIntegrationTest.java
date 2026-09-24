@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.persistence.JdbcCatalogRepository;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
+import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingService;
 import io.wyrmgate.iam.governance.application.GovernanceObservationReportingService;
 import io.wyrmgate.iam.governance.application.ObservedAccessDriftEvaluationService;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationException;
@@ -14,8 +15,10 @@ import io.wyrmgate.iam.integration.application.IntegrationAdministrationFactSink
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationAdministrationRepository;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservationRepository;
+import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
+import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -47,6 +50,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
     private static JdbcIntegrationObservationRepository observations;
     private static GovernanceFindingRepository findings;
     private static ObservedAccessDriftEvaluationService drift;
+    private static GovernanceObservationProcessingService processor;
 
     @BeforeAll
     static void start() {
@@ -63,11 +67,14 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         tenants = new JdbcTenantRepository(jdbc, ids);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
 
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         var catalog = new CatalogQueryService(catalogRepository);
         var administration = new JdbcIntegrationAdministrationRepository(
-                jdbc, new ObjectMapper().findAndRegisterModules());
+                jdbc, objectMapper);
         observations = new JdbcIntegrationObservationRepository(jdbc);
+        var outbox = new JdbcOutboxRepository(jdbc);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
         IntegrationAdministrationFactSink noFacts = new IntegrationAdministrationFactSink() {
             @Override
             public void connectorChanged(
@@ -87,11 +94,13 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                     Instant occurredAt, UUID correlationId) {}
         };
         mappingService = new IntegrationEntitlementMappingService(
-                administration, observations, catalog, noFacts, ids, transactions);
+                administration, observations, catalog, noFacts,
+                observedAccessFacts, ids, transactions);
 
         findings = new JdbcGovernanceFindingRepository(jdbc);
         var reporter = new GovernanceObservationReportingService(findings, ids, transactions);
         drift = new ObservedAccessDriftEvaluationService(observations, reporter);
+        processor = new GovernanceObservationProcessingService(outbox, drift, objectMapper);
     }
 
     @AfterAll
@@ -216,6 +225,61 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         assertThat(countOpenFindings(
                 tenant, binding, "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL", "grant-1"))
                 .isZero();
+    }
+
+    @Test
+    void mappingChangesDriveGovernanceThroughDurableObservedAccessFacts() {
+        TenantContext tenant = tenant("durable-drift");
+        UUID applicationId = application(tenant, "app");
+        UUID target = target(tenant, applicationId, "prod");
+        UUID entitlement = entitlement(tenant, applicationId, target, "finance");
+        UUID binding = binding(tenant, target);
+        UUID run = reconciliation(tenant, binding, "ENTITLEMENT");
+        observedEntitlement(tenant, binding, run, "g-1");
+
+        var mapped = mappingService.map(
+                tenant, binding, "g-1", entitlement, NOW, ids.nextId());
+
+        String payload = jdbc.queryForObject("""
+                SELECT payload::text
+                FROM platform.outbox_event
+                WHERE tenant_id = ?
+                  AND event_type = 'integration.observed-access-input-changed'
+                  AND aggregate_id = ?
+                """, String.class, tenant.tenantId(), mapped.id());
+        assertThat(payload)
+                .contains(binding.toString())
+                .doesNotContain("g-1")
+                .doesNotContain(entitlement.toString());
+
+        var mappedBatch = processor.processAvailable();
+        assertThat(mappedBatch.claimed()).isEqualTo(1);
+        assertThat(mappedBatch.processed()).isEqualTo(1);
+        assertThat(countOpenFindings(
+                tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-1"))
+                .isZero();
+
+        var retired = mappingService.unmap(
+                tenant, mapped.id(), mapped.revision(), NOW.plusSeconds(1), ids.nextId());
+        var unmappedBatch = processor.processAvailable();
+        assertThat(unmappedBatch.claimed()).isEqualTo(1);
+        assertThat(unmappedBatch.processed()).isEqualTo(1);
+        assertThat(countOpenFindings(
+                tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-1"))
+                .isEqualTo(1);
+
+        mappingService.map(
+                tenant, binding, "g-1", entitlement, NOW.plusSeconds(2), ids.nextId());
+        var remappedBatch = processor.processAvailable();
+        assertThat(remappedBatch.claimed()).isEqualTo(1);
+        assertThat(remappedBatch.processed()).isEqualTo(1);
+        assertThat(countOpenFindings(
+                tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-1"))
+                .isZero();
+        assertThat(countFindings(
+                tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-1"))
+                .isEqualTo(1);
+        assertThat(retired.lifecycleState()).isEqualTo("RETIRED");
     }
 
     private TenantContext tenant(String name) {
