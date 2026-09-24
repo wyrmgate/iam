@@ -93,7 +93,8 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
         integration = new JdbcIntegrationAdministrationRepository(jdbc, JSON);
-        runtime = new JdbcIntegrationRuntimeRepository(jdbc, JSON, ids);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
+        runtime = new JdbcIntegrationRuntimeRepository(jdbc, JSON, ids, observedAccessFacts);
         var factSink = new JdbcIntegrationAdministrationFactSink(outbox, ids);
         var commands = new IntegrationAdministrationCommandService(
                 integration, factSink, ids, transactions);
@@ -103,6 +104,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 observationMappings,
                 new CatalogQueryService(new JdbcCatalogRepository(jdbc)),
                 factSink,
+                observedAccessFacts,
                 ids,
                 transactions);
         mutations = new IntegrationAdminApiMutationService(
