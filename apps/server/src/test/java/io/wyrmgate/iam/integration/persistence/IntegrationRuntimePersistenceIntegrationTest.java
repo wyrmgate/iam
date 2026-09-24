@@ -15,6 +15,7 @@ import io.wyrmgate.iam.integration.domain.WorkerCapability;
 import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
+import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -59,7 +60,10 @@ class IntegrationRuntimePersistenceIntegrationTest {
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         json = new ObjectMapper().findAndRegisterModules();
-        repository = new JdbcIntegrationRuntimeRepository(jdbc, json, ids);
+        var outbox = new JdbcOutboxRepository(jdbc);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
+        repository = new JdbcIntegrationRuntimeRepository(
+                jdbc, json, ids, observedAccessFacts);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
     }
@@ -410,6 +414,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
                 firstLease.lease().leaseId(), firstLease.lease().leaseEpoch(),
                 success(ReconciliationCompleteness.COMPLETE));
 
+        assertThat(observedAccessTriggerCount(tenant, firstEntitlementRun)).isEqualTo(1);
         assertThat(observationPresent(
                 "observed_entitlement", tenant, binding, "g-a")).isTrue();
         assertThat(observationPresent(
@@ -460,6 +465,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
                 grantLease.lease().leaseId(), grantLease.lease().leaseEpoch(),
                 success(ReconciliationCompleteness.COMPLETE));
 
+        assertThat(observedAccessTriggerCount(tenant, grantRun)).isEqualTo(1);
         assertThat(observationPresent(
                 "observed_grant", tenant, binding, "grant-a")).isTrue();
         assertThat(effectiveCompleteness(grantRun)).isEqualTo("UNKNOWN");
@@ -787,6 +793,19 @@ class IntegrationRuntimePersistenceIntegrationTest {
                 WHERE tenant_id = ? AND connector_binding_id = ? AND provider_stable_id = ?
                 """, Boolean.class, tenant.tenantId(), binding, providerStableId);
         return Boolean.TRUE.equals(value);
+    }
+
+    private int observedAccessTriggerCount(
+            TenantContext tenant, UUID sourceId) {
+        Integer count = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM platform.outbox_event
+                WHERE tenant_id = ?
+                  AND event_type = 'integration.observed-access-input-changed'
+                  AND aggregate_type = 'reconciliation-run'
+                  AND aggregate_id = ?
+                """, Integer.class, tenant.tenantId(), sourceId);
+        return count == null ? 0 : count;
     }
 
     private String effectiveCompleteness(UUID runId) {
