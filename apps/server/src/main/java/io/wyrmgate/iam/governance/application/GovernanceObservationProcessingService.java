@@ -65,9 +65,10 @@ public final class GovernanceObservationProcessingService {
         for (ClaimedOutboxEvent item : claimed) {
             try {
                 UUID bindingId = bindingId(item);
-                drift.evaluate(item.tenant(), bindingId, item.event().occurredAt());
+                Instant evaluatedAt = clock.instant();
+                drift.evaluate(item.tenant(), bindingId, evaluatedAt);
                 outbox.markPublished(
-                        item.tenant(), item.event().eventId(), clock.instant());
+                        item.tenant(), item.event().eventId(), evaluatedAt);
                 processed++;
             } catch (IllegalArgumentException invalid) {
                 outbox.markTerminalFailure(
