@@ -14,6 +14,7 @@ public interface IntegrationObservedAccessFactSink {
 
     void inputChanged(
             TenantContext tenant,
+            UUID connectorBindingId,
             SourceKind sourceKind,
             UUID sourceId,
             long sourceRevision,
