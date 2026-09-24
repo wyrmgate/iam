@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
+import io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.integration.application.WorkerProtocolException;
 import io.wyrmgate.iam.integration.application.WorkerRegistrationRepository;
 import io.wyrmgate.iam.integration.domain.LeasedConnectorWork;
@@ -42,11 +43,22 @@ public final class JdbcIntegrationRuntimeRepository
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
     private final IdGenerator ids;
+    private final IntegrationObservedAccessFactSink observedAccessFacts;
 
     public JdbcIntegrationRuntimeRepository(JdbcTemplate jdbc, ObjectMapper json, IdGenerator ids) {
+        this(jdbc, json, ids, IntegrationObservedAccessFactSink.NOOP);
+    }
+
+    public JdbcIntegrationRuntimeRepository(
+            JdbcTemplate jdbc,
+            ObjectMapper json,
+            IdGenerator ids,
+            IntegrationObservedAccessFactSink observedAccessFacts) {
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
         this.json = Objects.requireNonNull(json, "json");
         this.ids = Objects.requireNonNull(ids, "ids");
+        this.observedAccessFacts = Objects.requireNonNull(
+                observedAccessFacts, "observedAccessFacts");
     }
 
     @Override
@@ -753,16 +765,20 @@ public final class JdbcIntegrationRuntimeRepository
                 String runtimeId,
                 String runtimeVersion,
                 String contractId,
-                int contractVersion) {}
+                int contractVersion,
+                long revision,
+                UUID correlationId) {}
         Run run = jdbc.queryForObject("""
                 SELECT connector_binding_id, scope_object_class, configuration_version,
-                       runtime_id, runtime_version, contract_id, contract_version
+                       runtime_id, runtime_version, contract_id, contract_version,
+                       revision, correlation_id
                 FROM integration.reconciliation_run
                 WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
                 """,
                 (rs,row) -> new Run(
                         rs.getObject(1, UUID.class), rs.getString(2), rs.getLong(3),
-                        rs.getString(4), rs.getString(5), rs.getString(6), rs.getInt(7)),
+                        rs.getString(4), rs.getString(5), rs.getString(6), rs.getInt(7),
+                        rs.getLong(8), rs.getObject(9, UUID.class)),
                 session.tenant().tenantId(), runId);
         if (run == null) {
             throw new WorkerProtocolException("work_not_running", "reconciliation run is not running");
@@ -845,6 +861,16 @@ public final class JdbcIntegrationRuntimeRepository
                 completion.providerErrorCode(), leaseEpoch, fingerprint,
                 Timestamp.from(now), Timestamp.from(now),
                 session.tenant().tenantId(), runId);
+        if ("ENTITLEMENT".equals(run.objectClass()) || "GRANT".equals(run.objectClass())) {
+            observedAccessFacts.inputChanged(
+                    session.tenant(),
+                    run.bindingId(),
+                    IntegrationObservedAccessFactSink.SourceKind.RECONCILIATION_RUN,
+                    runId,
+                    run.revision() + 1,
+                    now,
+                    run.correlationId());
+        }
         return CompletionResult.ACCEPTED;
     }
 
