@@ -26,18 +26,6 @@ public final class IntegrationEntitlementMappingService {
             IntegrationEntitlementMappingRepository mappings,
             CatalogEntitlementReferenceQuery catalog,
             IntegrationAdministrationFactSink facts,
-            IdGenerator ids,
-            TransactionExecutor transactions) {
-        this(
-                administration, mappings, catalog, facts,
-                IntegrationObservedAccessFactSink.NOOP, ids, transactions);
-    }
-
-    public IntegrationEntitlementMappingService(
-            IntegrationAdministrationRepository administration,
-            IntegrationEntitlementMappingRepository mappings,
-            CatalogEntitlementReferenceQuery catalog,
-            IntegrationAdministrationFactSink facts,
             IntegrationObservedAccessFactSink observedAccessFacts,
             IdGenerator ids,
             TransactionExecutor transactions) {
