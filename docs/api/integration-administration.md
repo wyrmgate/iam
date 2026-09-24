@@ -117,3 +117,5 @@ Semantic default-deny permissions:
 - `entitlement-observation-mapping:retire`
 
 The mapping target is validated through a Catalog-owned semantic query. Integration does not read or mutate Catalog persistence directly.
+
+Successful map/unmap commits also append a data-minimized internal `integration.observed-access-input-changed` outbox fact containing the ConnectorBinding scope and mapping aggregate reference. Successful ENTITLEMENT/GRANT reconciliation completion emits the same internal trigger after materializing current observation state. Governance leases these facts asynchronously and re-queries current normalized observed access before updating findings. This trigger is internal only and is not a public integration event.
