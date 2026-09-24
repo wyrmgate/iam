@@ -7,9 +7,11 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Freshness;
+import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationRuntimeRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
+import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -68,7 +70,10 @@ class ScimLocalExecutionIntegrationTest {
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         json = new ObjectMapper().findAndRegisterModules();
-        repository = new JdbcIntegrationRuntimeRepository(jdbc, json, ids);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(
+                new JdbcOutboxRepository(jdbc), ids);
+        repository = new JdbcIntegrationRuntimeRepository(
+                jdbc, json, ids, observedAccessFacts);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
     }
