@@ -240,6 +240,40 @@ public final class JdbcDesiredStateProjectionRepository
     }
 
     @Override
+    public java.util.Optional<DesiredPrincipalState> findPrincipalTuple(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId) {
+        return jdbc.query("""
+                SELECT id, identity_id, application_target_id, desired_state,
+                       desired_revision, source_generation, computed_at
+                FROM access.desired_principal_state
+                WHERE tenant_id = ?
+                  AND identity_id = ?
+                  AND application_target_id = ?
+                """,
+                (rs,row) -> principal(rs),
+                tenant.tenantId(), identityId, applicationTargetId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public java.util.Optional<DesiredPrincipalState> findPrincipalById(
+            TenantContext tenant, UUID desiredPrincipalId) {
+        return jdbc.query("""
+                SELECT id, identity_id, application_target_id, desired_state,
+                       desired_revision, source_generation, computed_at
+                FROM access.desired_principal_state
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs,row) -> principal(rs),
+                tenant.tenantId(), desiredPrincipalId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public DesiredAccessStateQuery.Freshness principalFreshness(
             TenantContext tenant, UUID id) {
         return freshness("access.desired_principal_state", tenant, id);
