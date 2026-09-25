@@ -271,7 +271,7 @@ class GrantProvisioningPlanningIntegrationTest {
                 UPDATE integration.provisioning_task
                 SET state = 'SUCCEEDED', revision = revision + 1, updated_at = ?
                 WHERE tenant_id = ? AND operation_type = 'ADD_GRANT'
-                """, Timestamp.from(NOW.plusSeconds(1)), tenant.tenantId());
+                """, Timestamp.from(NOW.plusSeconds(11)), tenant.tenantId());
 
         DesiredGrantState absent = desired.reconcileGrant(
                 tenant,
