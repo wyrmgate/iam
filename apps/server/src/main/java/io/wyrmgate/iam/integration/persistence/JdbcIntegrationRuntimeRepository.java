@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalProvisioningFactSink;
 import io.wyrmgate.iam.integration.application.WorkerProtocolException;
 import io.wyrmgate.iam.integration.application.WorkerRegistrationRepository;
 import io.wyrmgate.iam.integration.domain.LeasedConnectorWork;
@@ -44,17 +45,36 @@ public final class JdbcIntegrationRuntimeRepository
     private final ObjectMapper json;
     private final IdGenerator ids;
     private final IntegrationObservedAccessFactSink observedAccessFacts;
+    private final IntegrationPrincipalProvisioningFactSink principalProvisioningFacts;
 
     public JdbcIntegrationRuntimeRepository(
             JdbcTemplate jdbc,
             ObjectMapper json,
             IdGenerator ids,
             IntegrationObservedAccessFactSink observedAccessFacts) {
+        this(
+                jdbc,
+                json,
+                ids,
+                observedAccessFacts,
+                (tenant, desiredPrincipalId, desiredRevision, identityId,
+                        applicationTargetId, operationType, providerPrincipalId,
+                        occurredAt, correlationId, causationId) -> { });
+    }
+
+    public JdbcIntegrationRuntimeRepository(
+            JdbcTemplate jdbc,
+            ObjectMapper json,
+            IdGenerator ids,
+            IntegrationObservedAccessFactSink observedAccessFacts,
+            IntegrationPrincipalProvisioningFactSink principalProvisioningFacts) {
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
         this.json = Objects.requireNonNull(json, "json");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.observedAccessFacts = Objects.requireNonNull(
                 observedAccessFacts, "observedAccessFacts");
+        this.principalProvisioningFacts = Objects.requireNonNull(
+                principalProvisioningFacts, "principalProvisioningFacts");
     }
 
     @Override
@@ -682,13 +702,31 @@ public final class JdbcIntegrationRuntimeRepository
         }
         LeaseRow lease = requireCurrentLease(
                 session, WorkKind.PROVISION, taskId, leaseId, leaseEpoch, now, true);
-        record Task(int attempt, UUID correlation, UUID causation) {}
+        record Task(
+                int attempt,
+                UUID correlation,
+                UUID causation,
+                String operationType,
+                String subjectKind,
+                UUID subjectId,
+                long desiredRevision,
+                Map<String,Object> payload) {}
         List<Task> tasks = jdbc.query("""
-                SELECT attempt_count, correlation_id, causation_id
+                SELECT attempt_count, correlation_id, causation_id,
+                       operation_type, subject_kind, subject_id,
+                       desired_revision, payload::text
                 FROM integration.provisioning_task
                 WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
                 """,
-                (rs,row) -> new Task(rs.getInt(1), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class)),
+                (rs,row) -> new Task(
+                        rs.getInt(1),
+                        rs.getObject(2, UUID.class),
+                        rs.getObject(3, UUID.class),
+                        rs.getString(4),
+                        rs.getString(5),
+                        rs.getObject(6, UUID.class),
+                        rs.getLong(7),
+                        readMap(rs.getString(8))),
                 session.tenant().tenantId(), taskId);
         if (tasks.isEmpty()) throw new WorkerProtocolException("work_not_running", "provisioning task is not running");
         Task task = tasks.getFirst();
@@ -726,6 +764,36 @@ public final class JdbcIntegrationRuntimeRepository
                 state, next == null ? null : Timestamp.from(next),
                 completion.providerErrorCode(), Timestamp.from(now),
                 session.tenant().tenantId(), taskId);
+
+        if ("SUCCEEDED".equals(state)
+                && "DESIRED_PRINCIPAL".equals(task.subjectKind())
+                && ("UPSERT_PRINCIPAL".equals(task.operationType())
+                        || "DISABLE_PRINCIPAL".equals(task.operationType())
+                        || "DEACTIVATE_PRINCIPAL".equals(task.operationType()))) {
+            String identityText = String.valueOf(task.payload().get("identityId"));
+            String targetText = String.valueOf(task.payload().get("applicationTargetId"));
+            String providerPrincipalId = completion.providerObjectId();
+            if (providerPrincipalId == null || providerPrincipalId.isBlank()) {
+                Object persisted = task.payload().get("providerStableId");
+                providerPrincipalId = persisted == null ? null : String.valueOf(persisted);
+            }
+            if (providerPrincipalId == null || providerPrincipalId.isBlank()) {
+                throw new WorkerProtocolException(
+                        "principal_provider_id_missing",
+                        "successful principal provisioning did not return a provider object id");
+            }
+            principalProvisioningFacts.succeeded(
+                    session.tenant(),
+                    task.subjectId(),
+                    task.desiredRevision(),
+                    UUID.fromString(identityText),
+                    UUID.fromString(targetText),
+                    task.operationType(),
+                    providerPrincipalId,
+                    now,
+                    task.correlation(),
+                    task.causation());
+        }
         return CompletionResult.ACCEPTED;
     }
 
