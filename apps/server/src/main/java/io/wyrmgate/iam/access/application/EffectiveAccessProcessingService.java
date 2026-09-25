@@ -30,14 +30,16 @@ public final class EffectiveAccessProcessingService {
     private final JdbcScheduledWorkRepository scheduledWork;
     private final AccessAssignmentRepository assignments;
     private final EffectiveAccessRepository effectiveAccess;
+    private final DesiredStateDerivationService desiredState;
     private final Clock clock;
 
     public EffectiveAccessProcessingService(
             JdbcOutboxRepository outbox,
             JdbcScheduledWorkRepository scheduledWork,
             AccessAssignmentRepository assignments,
-            EffectiveAccessRepository effectiveAccess) {
-        this(outbox, scheduledWork, assignments, effectiveAccess, Clock.systemUTC());
+            EffectiveAccessRepository effectiveAccess,
+            DesiredStateDerivationService desiredState) {
+        this(outbox, scheduledWork, assignments, effectiveAccess, desiredState, Clock.systemUTC());
     }
 
     EffectiveAccessProcessingService(
@@ -45,11 +47,13 @@ public final class EffectiveAccessProcessingService {
             JdbcScheduledWorkRepository scheduledWork,
             AccessAssignmentRepository assignments,
             EffectiveAccessRepository effectiveAccess,
+            DesiredStateDerivationService desiredState,
             Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.scheduledWork = Objects.requireNonNull(scheduledWork, "scheduledWork");
         this.assignments = Objects.requireNonNull(assignments, "assignments");
         this.effectiveAccess = Objects.requireNonNull(effectiveAccess, "effectiveAccess");
+        this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -134,19 +138,29 @@ public final class EffectiveAccessProcessingService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "AccessAssignment projection input does not exist"));
 
-        if (assignment.targetKind() != AccessAssignment.TargetKind.ENTITLEMENT
-                || !assignment.isSemanticallyEffectiveAt(at)) {
-            effectiveAccess.removeAssignmentSupport(
-                    tenant, assignmentId, at);
+        if (assignment.targetKind() != AccessAssignment.TargetKind.ENTITLEMENT) {
+            effectiveAccess.removeAssignmentSupport(tenant, assignmentId, at);
             return;
         }
 
         String constraintKey = principalConstraintKey(assignment);
-        effectiveAccess.applyDirectAssignment(
+        if (!assignment.isSemanticallyEffectiveAt(at)) {
+            effectiveAccess.removeAssignmentSupport(
+                    tenant, assignmentId, at);
+        } else {
+            effectiveAccess.applyDirectAssignment(
+                    tenant,
+                    assignment,
+                    constraintKey,
+                    directPathHash(assignment, constraintKey),
+                    at);
+        }
+
+        desiredState.reconcileGrant(
                 tenant,
-                assignment,
+                assignment.identityId(),
+                assignment.entitlementId(),
                 constraintKey,
-                directPathHash(assignment, constraintKey),
                 at);
     }
 
