@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.governance.application;
 
 import io.wyrmgate.iam.governance.application.GovernanceObservationReporter.ObservationCondition;
+import io.wyrmgate.iam.identity.application.PrincipalResolutionQuery;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
@@ -13,12 +14,16 @@ import java.util.UUID;
 public final class ObservedAccessDriftEvaluationService {
 
     private final IntegrationObservedAccessQuery observedAccess;
+    private final PrincipalResolutionQuery principalResolution;
     private final GovernanceObservationReporter reporter;
 
     public ObservedAccessDriftEvaluationService(
             IntegrationObservedAccessQuery observedAccess,
+            PrincipalResolutionQuery principalResolution,
             GovernanceObservationReporter reporter) {
         this.observedAccess = Objects.requireNonNull(observedAccess, "observedAccess");
+        this.principalResolution = Objects.requireNonNull(
+                principalResolution, "principalResolution");
         this.reporter = Objects.requireNonNull(reporter, "reporter");
     }
 
@@ -45,11 +50,18 @@ public final class ObservedAccessDriftEvaluationService {
                         grant.providerGrantId(),
                         grant.providerEntitlementId()));
             } else {
-                conditions.add(new ObservationCondition(
-                        "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL",
-                        "OBSERVED_GRANT",
-                        grant.providerGrantId(),
-                        grant.providerPrincipalId()));
+                var resolution = principalResolution.resolve(
+                        tenant,
+                        grant.applicationTargetId(),
+                        grant.providerPrincipalId());
+                if (resolution.status()
+                        != PrincipalResolutionQuery.Status.RESOLVED) {
+                    conditions.add(new ObservationCondition(
+                            "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL",
+                            "OBSERVED_GRANT",
+                            grant.providerGrantId(),
+                            grant.providerPrincipalId()));
+                }
             }
         }
 
