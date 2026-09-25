@@ -64,7 +64,7 @@ class IdentityPersistenceIntegrationTest {
                 idGenerator,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
     }
 
     @AfterAll
