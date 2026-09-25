@@ -67,6 +67,9 @@ public final class AccessAssignmentCommandService {
             case UNTARGETED -> throw new AccessAssignmentCommandException(
                     "entitlement_untargeted",
                     "The first AccessAssignment slice requires a target-scoped Entitlement.");
+            case TARGET_RETIRED -> throw new AccessAssignmentCommandException(
+                    "application_target_retired",
+                    "The Entitlement belongs to a retired ApplicationTarget.");
             case VALID -> { }
         }
 
