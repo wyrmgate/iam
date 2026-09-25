@@ -59,6 +59,13 @@ public final class CatalogQueryService implements CatalogEntitlementReferenceQue
         if (entitlement.applicationTargetId() == null) {
             return CatalogAccessReferenceQuery.EntitlementReference.untargeted();
         }
+        Optional<ApplicationTarget> target =
+                repository.findTarget(tenant, entitlement.applicationTargetId());
+        if (target.isEmpty()
+                || target.get().lifecycleState()
+                        != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
+            return CatalogAccessReferenceQuery.EntitlementReference.targetRetired();
+        }
         return CatalogAccessReferenceQuery.EntitlementReference.valid(
                 entitlement.applicationTargetId());
     }
