@@ -133,8 +133,19 @@ class GrantProvisioningPlanningIntegrationTest {
                 tenant, targetId, entitlementId, "provider-user-1"))
                 .hasSize(1);
 
-        var processor = processor(activePrincipal(
-                principalId, identityId, targetId, "provider-user-1"));
+        var principalQuery = activePrincipal(
+                principalId, identityId, targetId, "provider-user-1");
+        var directPlanner = planner(principalQuery);
+        assertThat(directPlanner.plan(
+                tenant,
+                grant.id(),
+                grant.desiredRevision(),
+                ids.nextId(),
+                null,
+                NOW.plusSeconds(5)))
+                .isEqualTo(GrantProvisioningPlannerService.PlanResult.PLANNED);
+
+        var processor = processor(principalQuery);
         int processed = processor.processAvailable();
         assertThat(processed)
                 .withFailMessage(
@@ -258,8 +269,19 @@ class GrantProvisioningPlanningIntegrationTest {
                 DesiredPresence.PRESENT,
                 NOW);
         facts.changed(tenant, present);
-        var processor = processor(activePrincipal(
-                principalId, identityId, targetId, "provider-user-1"));
+        var principalQuery = activePrincipal(
+                principalId, identityId, targetId, "provider-user-1");
+        var directPlanner = planner(principalQuery);
+        assertThat(directPlanner.plan(
+                tenant,
+                present.id(),
+                present.desiredRevision(),
+                ids.nextId(),
+                null,
+                NOW.plusSeconds(5)))
+                .isEqualTo(GrantProvisioningPlannerService.PlanResult.PLANNED);
+
+        var processor = processor(principalQuery);
         int initialProcessed = processor.processAvailable();
         assertThat(initialProcessed)
                 .withFailMessage(
@@ -313,15 +335,19 @@ class GrantProvisioningPlanningIntegrationTest {
                 .isEqualTo(2);
     }
 
-    private GrantProvisioningPlanningProcessor processor(
+    private GrantProvisioningPlannerService planner(
             PrincipalTechnicalReferenceQuery principals) {
-        var planner = new GrantProvisioningPlannerService(
+        return new GrantProvisioningPlannerService(
                 new DesiredProvisioningStateQueryService(desired),
                 principals,
                 provisioning);
+    }
+
+    private GrantProvisioningPlanningProcessor processor(
+            PrincipalTechnicalReferenceQuery principals) {
         return new GrantProvisioningPlanningProcessor(
                 outbox,
-                planner,
+                planner(principals),
                 transactions,
                 Clock.fixed(NOW.plusSeconds(10), ZoneOffset.UTC));
     }
