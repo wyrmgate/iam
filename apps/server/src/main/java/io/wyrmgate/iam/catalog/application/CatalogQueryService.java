@@ -45,18 +45,18 @@ public final class CatalogQueryService implements CatalogEntitlementReferenceQue
     }
 
     @Override
-    public Validation validateActiveTargetEntitlement(
+    public CatalogEntitlementReferenceQuery.Validation validateActiveTargetEntitlement(
             TenantContext tenant, UUID entitlementId, UUID applicationTargetId) {
         Optional<Entitlement> value = repository.findEntitlement(tenant, entitlementId);
-        if (value.isEmpty()) return Validation.NOT_FOUND;
+        if (value.isEmpty()) return CatalogEntitlementReferenceQuery.Validation.NOT_FOUND;
         Entitlement entitlement = value.get();
         if (entitlement.lifecycleState()
                 != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
-            return Validation.RETIRED;
+            return CatalogEntitlementReferenceQuery.Validation.RETIRED;
         }
         return applicationTargetId.equals(entitlement.applicationTargetId())
-                ? Validation.VALID
-                : Validation.TARGET_MISMATCH;
+                ? CatalogEntitlementReferenceQuery.Validation.VALID
+                : CatalogEntitlementReferenceQuery.Validation.TARGET_MISMATCH;
     }
 
     public ApplicationPage listApplications(TenantContext tenant, PagePosition after, int limit) {
