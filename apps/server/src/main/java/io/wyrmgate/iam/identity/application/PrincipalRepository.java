@@ -20,6 +20,16 @@ public interface PrincipalRepository {
     List<Principal> findActiveByIdentityAndTarget(
             TenantContext tenant, UUID identityId, UUID applicationTargetId);
 
+    List<Principal> findByIdentityAndTarget(
+            TenantContext tenant, UUID identityId, UUID applicationTargetId);
+
+    Principal updateLifecycle(
+            TenantContext tenant,
+            UUID principalId,
+            io.wyrmgate.iam.identity.domain.PrincipalLifecycleState lifecycleState,
+            long expectedRevision,
+            Instant now);
+
     Principal correlate(
             TenantContext tenant,
             UUID principalId,
