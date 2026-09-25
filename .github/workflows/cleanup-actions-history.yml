@@ -1,0 +1,71 @@
+name: TEMP - Purge Actions History
+
+on:
+  public:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  purge:
+    name: purge-completed-runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Delete completed workflow runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          deleted=0
+          failed=0
+
+          delete_run() {
+            local run_id="$1"
+            local delay
+            for delay in 0 1 2 4 8; do
+              if [ "$delay" -gt 0 ]; then
+                sleep "$delay"
+              fi
+              if gh api                 --method DELETE                 -H "X-GitHub-Api-Version: 2026-03-10"                 "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}"                 --silent; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          while true; do
+            mapfile -t run_ids < <(
+              gh api                 --method GET                 -H "X-GitHub-Api-Version: 2026-03-10"                 "repos/${GITHUB_REPOSITORY}/actions/runs?status=completed&per_page=100"                 --jq '.workflow_runs[].id'
+            )
+
+            if [ "${#run_ids[@]}" -eq 0 ]; then
+              break
+            fi
+
+            echo "Deleting batch of ${#run_ids[@]} completed workflow runs..."
+
+            for run_id in "${run_ids[@]}"; do
+              if delete_run "$run_id"; then
+                deleted=$((deleted + 1))
+              else
+                echo "Failed to delete workflow run ${run_id}" >&2
+                failed=$((failed + 1))
+              fi
+              sleep 0.1
+            done
+
+            if [ "$failed" -gt 0 ]; then
+              break
+            fi
+          done
+
+          echo "Deleted ${deleted} completed workflow runs."
+          if [ "$failed" -gt 0 ]; then
+            echo "${failed} deletions failed; re-run this workflow after the repository is public." >&2
+            exit 1
+          fi
