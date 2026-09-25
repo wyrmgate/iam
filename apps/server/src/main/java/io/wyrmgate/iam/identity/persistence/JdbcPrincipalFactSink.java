@@ -21,20 +21,6 @@ public final class JdbcPrincipalFactSink implements PrincipalFactSink {
     }
 
     @Override
-    public void principalCreated(
-            TenantContext tenant,
-            Principal principal,
-            UUID correlationId,
-            UUID causationId) {
-        append(
-                tenant,
-                "identity.principal-created",
-                principal,
-                correlationId,
-                causationId);
-    }
-
-    @Override
     public void principalCorrelated(
             TenantContext tenant,
             Principal principal,
