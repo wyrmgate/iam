@@ -44,7 +44,7 @@ class AccessDesiredStatePersistenceIntegrationTest {
         tenants = new JdbcTenantRepository(jdbc, ids);
         repository = new JdbcDesiredStateProjectionRepository(jdbc, ids);
         query = new AccessDesiredStateQueryService(repository);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("21");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("22");
     }
 
     @AfterAll
@@ -196,6 +196,12 @@ class AccessDesiredStatePersistenceIntegrationTest {
             public java.util.Optional<DesiredGrantState> findGrantTuple(
                     TenantContext tenant, UUID identityId, UUID entitlementId,
                     String principalConstraintKey) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public java.util.Optional<DesiredGrantState> findGrantById(
+                    TenantContext tenant, UUID desiredGrantId) {
                 throw new UnsupportedOperationException();
             }
 
