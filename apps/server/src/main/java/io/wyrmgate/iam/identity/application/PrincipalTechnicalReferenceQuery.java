@@ -13,8 +13,12 @@ public interface PrincipalTechnicalReferenceQuery {
     List<Result> activeForIdentityTarget(
             TenantContext tenant, UUID identityId, UUID applicationTargetId);
 
+    List<Result> forIdentityTarget(
+            TenantContext tenant, UUID identityId, UUID applicationTargetId);
+
     enum Status {
         ACTIVE,
+        DISABLED,
         UNAVAILABLE
     }
 
@@ -26,7 +30,7 @@ public interface PrincipalTechnicalReferenceQuery {
             String nativePrincipalKey) {
         public Result {
             Objects.requireNonNull(status, "status");
-            if (status == Status.ACTIVE) {
+            if (status == Status.ACTIVE || status == Status.DISABLED) {
                 Objects.requireNonNull(principalId, "principalId");
                 Objects.requireNonNull(identityId, "identityId");
                 Objects.requireNonNull(applicationTargetId, "applicationTargetId");
@@ -48,6 +52,19 @@ public interface PrincipalTechnicalReferenceQuery {
                 String nativePrincipalKey) {
             return new Result(
                     Status.ACTIVE,
+                    principalId,
+                    identityId,
+                    applicationTargetId,
+                    nativePrincipalKey);
+        }
+
+        public static Result disabled(
+                UUID principalId,
+                UUID identityId,
+                UUID applicationTargetId,
+                String nativePrincipalKey) {
+            return new Result(
+                    Status.DISABLED,
                     principalId,
                     identityId,
                     applicationTargetId,
