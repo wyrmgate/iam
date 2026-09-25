@@ -73,7 +73,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("19");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
