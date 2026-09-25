@@ -11,6 +11,7 @@ import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredGrantFactSink;
+import io.wyrmgate.iam.access.application.DesiredPrincipalFactSink;
 import io.wyrmgate.iam.access.application.DesiredProvisioningStateQuery;
 import io.wyrmgate.iam.access.application.DesiredProvisioningStateQueryService;
 import io.wyrmgate.iam.access.application.DesiredStateDerivationService;
@@ -107,6 +108,13 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
+    DesiredPrincipalFactSink desiredPrincipalFactSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator idGenerator) {
+        return new JdbcDesiredPrincipalFactSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
     DesiredGrantFactSink desiredGrantFactSink(
             JdbcOutboxRepository outboxRepository,
             IdGenerator idGenerator) {
@@ -126,6 +134,7 @@ public class AccessPersistenceConfiguration {
             CatalogAccessReferenceQuery catalogReferences,
             IdentityAccessReferenceQuery identityReferences,
             DesiredGrantFactSink desiredGrantFactSink,
+            DesiredPrincipalFactSink desiredPrincipalFactSink,
             TransactionExecutor transactionExecutor) {
         return new DesiredStateDerivationService(
                 effectiveAccessQuery,
@@ -133,6 +142,7 @@ public class AccessPersistenceConfiguration {
                 catalogReferences,
                 identityReferences,
                 desiredGrantFactSink,
+                desiredPrincipalFactSink,
                 transactionExecutor);
     }
 
