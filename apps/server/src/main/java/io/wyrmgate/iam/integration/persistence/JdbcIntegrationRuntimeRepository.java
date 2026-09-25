@@ -765,13 +765,17 @@ public final class JdbcIntegrationRuntimeRepository
                 completion.providerErrorCode(), Timestamp.from(now),
                 session.tenant().tenantId(), taskId);
 
+        Object identityValue = task.payload().get("identityId");
+        Object targetValue = task.payload().get("applicationTargetId");
         if ("SUCCEEDED".equals(state)
                 && "DESIRED_PRINCIPAL".equals(task.subjectKind())
+                && identityValue != null
+                && targetValue != null
                 && ("UPSERT_PRINCIPAL".equals(task.operationType())
                         || "DISABLE_PRINCIPAL".equals(task.operationType())
                         || "DEACTIVATE_PRINCIPAL".equals(task.operationType()))) {
-            String identityText = String.valueOf(task.payload().get("identityId"));
-            String targetText = String.valueOf(task.payload().get("applicationTargetId"));
+            String identityText = String.valueOf(identityValue);
+            String targetText = String.valueOf(targetValue);
             String providerPrincipalId = completion.providerObjectId();
             if (providerPrincipalId == null || providerPrincipalId.isBlank()) {
                 Object persisted = task.payload().get("providerStableId");
