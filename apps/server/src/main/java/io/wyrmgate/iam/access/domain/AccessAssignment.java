@@ -54,6 +54,11 @@ public record AccessAssignment(
             throw new IllegalArgumentException("MANUAL provenance must not carry provenanceRefId");
         }
 
+        if (lifecycleState == LifecycleState.SCHEDULED && validFrom == null) {
+            throw new IllegalArgumentException(
+                    "SCHEDULED assignment requires validFrom");
+        }
+
         if (validFrom != null && validUntil != null && !validUntil.isAfter(validFrom)) {
             throw new IllegalArgumentException("validUntil must be after validFrom");
         }
