@@ -249,15 +249,27 @@ public final class ScimLocalExecutionService {
                             case "ADD_GRANT" -> groups.addGrant(
                                     groupConfiguration,
                                     configuration.secretReference(),
-                                    requiredText(payload, "providerGroupId"),
-                                    text(payload, "providerGroupVersion"),
+                                    requiredAnyText(
+                                            payload,
+                                            "providerEntitlementId",
+                                            "providerGroupId"),
+                                    firstText(
+                                            payload,
+                                            "providerEntitlementVersion",
+                                            "providerGroupVersion"),
                                     requiredText(payload, "providerPrincipalId"),
                                     candidate.idempotencyKey());
                             case "REMOVE_GRANT" -> groups.removeGrant(
                                     groupConfiguration,
                                     configuration.secretReference(),
-                                    requiredText(payload, "providerGroupId"),
-                                    text(payload, "providerGroupVersion"),
+                                    requiredAnyText(
+                                            payload,
+                                            "providerEntitlementId",
+                                            "providerGroupId"),
+                                    firstText(
+                                            payload,
+                                            "providerEntitlementVersion",
+                                            "providerGroupVersion"),
                                     requiredText(payload, "providerPrincipalId"),
                                     candidate.idempotencyKey());
                             default -> throw new UnsupportedOperationException(
@@ -524,6 +536,26 @@ public final class ScimLocalExecutionService {
         } catch (JsonProcessingException invalid) {
             throw new IllegalArgumentException("connector work cannot be normalized", invalid);
         }
+    }
+
+    private static String requiredAnyText(
+            Map<String,Object> map,
+            String primaryKey,
+            String fallbackKey) {
+        String value = firstText(map, primaryKey, fallbackKey);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    primaryKey + " must not be blank");
+        }
+        return value;
+    }
+
+    private static String firstText(
+            Map<String,Object> map,
+            String primaryKey,
+            String fallbackKey) {
+        String primary = text(map, primaryKey);
+        return primary != null ? primary : text(map, fallbackKey);
     }
 
     private static String requiredText(Map<String,Object> map, String key) {
