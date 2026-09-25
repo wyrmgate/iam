@@ -65,7 +65,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
         repository = new JdbcIntegrationRuntimeRepository(
                 jdbc, json, ids, observedAccessFacts);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("19");
     }
 
     @AfterAll

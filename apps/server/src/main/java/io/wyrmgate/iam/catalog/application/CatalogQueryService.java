@@ -13,7 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-public final class CatalogQueryService implements CatalogEntitlementReferenceQuery, CatalogTargetReferenceQuery {
+public final class CatalogQueryService implements CatalogEntitlementReferenceQuery, CatalogTargetReferenceQuery, CatalogAccessReferenceQuery {
 
     private final CatalogRepository repository;
 
@@ -42,6 +42,32 @@ public final class CatalogQueryService implements CatalogEntitlementReferenceQue
                 == io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE
                 ? CatalogTargetReferenceQuery.Validation.VALID
                 : CatalogTargetReferenceQuery.Validation.RETIRED;
+    }
+
+    @Override
+    public CatalogAccessReferenceQuery.EntitlementReference resolveActiveEntitlement(
+            TenantContext tenant, UUID entitlementId) {
+        Optional<Entitlement> value = repository.findEntitlement(tenant, entitlementId);
+        if (value.isEmpty()) {
+            return CatalogAccessReferenceQuery.EntitlementReference.notFound();
+        }
+        Entitlement entitlement = value.get();
+        if (entitlement.lifecycleState()
+                != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
+            return CatalogAccessReferenceQuery.EntitlementReference.retired();
+        }
+        if (entitlement.applicationTargetId() == null) {
+            return CatalogAccessReferenceQuery.EntitlementReference.untargeted();
+        }
+        Optional<ApplicationTarget> target =
+                repository.findTarget(tenant, entitlement.applicationTargetId());
+        if (target.isEmpty()
+                || target.get().lifecycleState()
+                        != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
+            return CatalogAccessReferenceQuery.EntitlementReference.targetRetired();
+        }
+        return CatalogAccessReferenceQuery.EntitlementReference.valid(
+                entitlement.applicationTargetId());
     }
 
     @Override
