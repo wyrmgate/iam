@@ -51,7 +51,8 @@ Ordinary ConnectorInstance configuration may contain non-secret execution settin
 - `pageSize` — discovery page size, 1–1000;
 - `maxPagesPerExecution` — a safety bound for one discovery execution;
 - `requestTimeout` — provider HTTP request timeout;
-- `idempotencyHeader` — optional provider-supported idempotency header name.
+- `idempotencyHeader` — optional provider-supported idempotency header name;
+- `principalUserNameTemplate` — bounded technical account naming template for IAM-created accounts. The first automatic planner requires the literal `{identityId}` token and substitutes only the canonical Identity ID; this is connector configuration, not a canonical Identity username or a generic mapping language.
 
 Provider tokens are not configuration fields.
 
@@ -174,12 +175,14 @@ It does not bypass durable Integration state. Provisioning and reconciliation ar
 
 For `UPSERT_PRINCIPAL`, the connector-edge task payload may contain:
 
-- `providerStableId` — omit to create; include to update;
+- `providerStableId` — omit to create; include to update/reactivate;
 - `providerVersion` — optional provider version/ETag for conditional update;
 - `userName`;
 - `displayName`;
 - `externalId`;
 - `active`.
+
+Automatic DesiredPrincipalState planning uses the active `scim-2.principal` binding for the ApplicationTarget. First-time create fails closed unless exactly one eligible route exists and its `principalUserNameTemplate` is valid. Existing account reactivation/disable resolves the technical route from current provider observation and/or prior successful IAM-created provisioning evidence. Provider success is recorded in Integration first and then handed to Identity through an internal fact so Identity remains the sole owner of authoritative Principal state.
 
 For `DISABLE_PRINCIPAL` or `DEACTIVATE_PRINCIPAL`:
 
