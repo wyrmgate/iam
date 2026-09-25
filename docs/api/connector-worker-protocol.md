@@ -76,6 +76,8 @@ Worker completion reports normalized execution facts. They may identify retryabi
 
 Integration owns the resulting ProvisioningTask/ReconciliationRun transition. A worker cannot revive stale desired state, change governance intent, or decide that a privilege should remain authorized.
 
+For a successful IAM-initiated `UPSERT_PRINCIPAL` that creates a new provider account, completion must identify the resulting provider object ID. Updates/reactivation/disable may rely on the already-known provider stable ID carried by the task when the provider does not echo it. This is a connector-operation semantic requirement within the negotiated principal contract; it does not change the protocol-v1 core envelope.
+
 Duplicate identical completion is idempotent. Conflicting completion for the same lease generation is rejected rather than resolved last-writer-wins.
 
 ## Reconciliation and observation batching
