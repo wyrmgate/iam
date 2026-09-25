@@ -26,6 +26,7 @@ import io.wyrmgate.iam.integration.domain.WorkerCapability;
 import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationAdministrationFactSink;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationAdministrationRepository;
+import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationRuntimeRepository;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservationRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
