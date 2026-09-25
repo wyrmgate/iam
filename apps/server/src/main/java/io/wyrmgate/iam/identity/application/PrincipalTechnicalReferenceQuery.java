@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.identity.application;
 
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -8,6 +9,9 @@ import java.util.UUID;
 public interface PrincipalTechnicalReferenceQuery {
 
     Result resolve(TenantContext tenant, UUID principalId);
+
+    List<Result> activeForIdentityTarget(
+            TenantContext tenant, UUID identityId, UUID applicationTargetId);
 
     enum Status {
         ACTIVE,
