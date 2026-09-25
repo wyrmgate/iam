@@ -89,6 +89,8 @@ DesiredPrincipalState and DesiredGrantState are rebuildable technical-intent pro
 
 A DesiredGrantState revision may trigger Integration provisioning planning, but the planning fact is only a notification to re-read current desired state. ADD_GRANT planning requires one resolved active Principal and exactly one safe provider entitlement target; missing or ambiguous technical resolution fails closed and is retried. REMOVE_GRANT planning may fan out to all safely known current or previously successful technical grant targets. Integration task state, provider failure and retry never rewrite AccessAssignment or desired governance intent. Duplicate/replayed planning facts are absorbed by deterministic Integration plan/task idempotency identities.
 
+A DesiredPrincipalState revision may likewise trigger provider-neutral UPSERT_PRINCIPAL or DISABLE_PRINCIPAL planning. A first-time privilege increase requires exactly one active principal-capable route plus a bounded Identity-owned provisioning profile; the provider account name remains connector-owned technical configuration rather than a new canonical Identity username. Successful provider mutation does not let Integration create or mutate Identity.Principal directly: Integration emits a data-minimized internal completion fact and Identity idempotently materializes or changes Principal lifecycle. Principal lifecycle changes cause Access to re-evaluate ANY-principal realization and explicitly retrigger principal planning against the same current desired revision when needed, so a late stale provider completion converges back to current intent without inventing a false desired revision.
+
 ## Request and approval
 
 RequestItem is the governable unit:

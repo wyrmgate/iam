@@ -47,6 +47,16 @@ public interface DesiredStateProjectionRepository {
     java.util.Optional<DesiredGrantState> findGrantById(
             TenantContext tenant, UUID desiredGrantId);
 
+    default java.util.Optional<DesiredPrincipalState> findPrincipalTuple(
+            TenantContext tenant, UUID identityId, UUID applicationTargetId) {
+        return java.util.Optional.empty();
+    }
+
+    default java.util.Optional<DesiredPrincipalState> findPrincipalById(
+            TenantContext tenant, UUID desiredPrincipalId) {
+        return java.util.Optional.empty();
+    }
+
     DesiredAccessStateQuery.Freshness principalFreshness(TenantContext tenant, UUID id);
 
     DesiredAccessStateQuery.Freshness grantFreshness(TenantContext tenant, UUID id);

@@ -80,6 +80,74 @@ public final class PrincipalCommandService {
         });
     }
 
+    public Principal applyProvisioningState(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId,
+            String nativePrincipalKey,
+            PrincipalLifecycleState desiredState,
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
+        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
+        Objects.requireNonNull(desiredState, "desiredState");
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(correlationId, "correlationId");
+        requireActiveTarget(tenant, applicationTargetId);
+        if (identities.findById(tenant, identityId).isEmpty()) {
+            throw new PrincipalCommandException(
+                    "identity_not_found",
+                    "The requested Identity was not found in the tenant.");
+        }
+
+        return transactions.required(() -> {
+            Principal existing = principals.findByTargetAndNativeKey(
+                    tenant, applicationTargetId, nativePrincipalKey).orElse(null);
+            if (existing == null) {
+                if (desiredState != PrincipalLifecycleState.ACTIVE) {
+                    throw new PrincipalCommandException(
+                            "principal_not_found",
+                            "A disable result cannot create a new Principal.");
+                }
+                Principal created = new Principal(
+                        ids.nextId(),
+                        identityId,
+                        applicationTargetId,
+                        PrincipalKind.ACCOUNT,
+                        nativePrincipalKey,
+                        PrincipalLifecycleState.ACTIVE,
+                        1,
+                        now,
+                        now);
+                principals.insert(tenant, created);
+                Principal persisted = principals.findById(tenant, created.id())
+                        .orElseThrow();
+                facts.principalCorrelated(
+                        tenant, persisted, correlationId, causationId);
+                return persisted;
+            }
+            if (!Objects.equals(existing.identityId(), identityId)) {
+                throw new PrincipalCommandException(
+                        "principal_identity_conflict",
+                        "The provider Principal is not correlated to the expected Identity.");
+            }
+            if (existing.lifecycleState() == desiredState) {
+                return existing;
+            }
+            Principal updated = principals.updateLifecycle(
+                    tenant,
+                    existing.id(),
+                    desiredState,
+                    existing.revision(),
+                    now);
+            facts.principalAccessProjectionChanged(
+                    tenant, updated, correlationId, causationId);
+            return updated;
+        });
+    }
+
     public Principal correlate(
             TenantContext tenant,
             UUID principalId,

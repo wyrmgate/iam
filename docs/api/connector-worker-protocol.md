@@ -76,6 +76,8 @@ Worker completion reports normalized execution facts. They may identify retryabi
 
 Integration owns the resulting ProvisioningTask/ReconciliationRun transition. A worker cannot revive stale desired state, change governance intent, or decide that a privilege should remain authorized.
 
+For a successful IAM-initiated `UPSERT_PRINCIPAL` that creates a new provider account, completion must identify the resulting provider object ID. Updates/reactivation/disable may rely on the already-known provider stable ID carried by the task when the provider does not echo it. This is a connector-operation semantic requirement within the negotiated principal contract; it does not change the protocol-v1 core envelope.
+
 Duplicate identical completion is idempotent. Conflicting completion for the same lease generation is rejected rather than resolved last-writer-wins.
 
 ## Reconciliation and observation batching
@@ -115,6 +117,7 @@ The first runtime slice is intentionally bounded:
 - positive observations from PARTIAL/UNKNOWN runs may materialize, but unseen observations are marked absent only after Integration validates effective `COMPLETE` coverage;
 - ProvisioningJob, ProvisioningTask and immutable ProvisioningAttempt persistence are implemented;
 - current DesiredGrantState revisions now automatically plan provider-neutral ADD_GRANT/REMOVE_GRANT work after Integration resolves a safe technical ConnectorBinding/entitlement/Principal target; unresolved or ambiguous privilege increases create no claimable task;
+- current DesiredPrincipalState revisions now automatically plan provider-neutral UPSERT_PRINCIPAL/DISABLE_PRINCIPAL work for the first supported SCIM principal contract; first-time creation requires exactly one safe route and connector-owned technical account naming, while successful provider effects are handed back to Identity through an internal completion fact rather than direct cross-capability persistence mutation;
 - provisioning work revalidates through Access-owned `DesiredAccessStateQuery`; matching `CURRENT` revision is claimable, `ABSENT` or revision mismatch becomes `SUPERSEDED`, and `UNAVAILABLE` leaves work unclaimed;
 - connector/provider credentials remain external opaque secret references and never transit ordinary worker payloads;
 - an opt-in in-process SCIM executor may execute the same Integration-owned durable work using the same lease/fencing and completion persistence; this does not change worker protocol v1 or grant local execution any additional governance authority;

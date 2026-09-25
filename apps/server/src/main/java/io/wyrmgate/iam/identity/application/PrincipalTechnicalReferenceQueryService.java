@@ -36,6 +36,31 @@ public final class PrincipalTechnicalReferenceQueryService
     }
 
     @Override
+    public List<Result> forIdentityTarget(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
+        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
+        return principals.findByIdentityAndTarget(
+                        tenant, identityId, applicationTargetId)
+                .stream()
+                .map(value -> value.lifecycleState() == PrincipalLifecycleState.ACTIVE
+                        ? Result.active(
+                                value.id(),
+                                value.identityId(),
+                                value.applicationTargetId(),
+                                value.nativePrincipalKey())
+                        : Result.disabled(
+                                value.id(),
+                                value.identityId(),
+                                value.applicationTargetId(),
+                                value.nativePrincipalKey()))
+                .toList();
+    }
+
+    @Override
     public Result resolve(TenantContext tenant, UUID principalId) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(principalId, "principalId");

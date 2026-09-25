@@ -14,6 +14,7 @@ import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
 import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.domain.PrincipalLifecycleState;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
@@ -201,6 +202,72 @@ class PrincipalPersistenceIntegrationTest {
         assertThat(principalQuery.resolve(other, target, "native-1").status())
                 .isEqualTo(PrincipalResolutionQuery.Status.NOT_FOUND);
         assertThat(correlated.identityId()).isEqualTo(ownerIdentity.id());
+    }
+
+    @Test
+    void appliesProvisioningStateIdempotentlyAcrossCreateDisableAndReenable() {
+        TenantContext tenant = tenant("provisioned");
+        UUID target = target(tenant, "app", "prod");
+        Identity identity = identity(tenant, "Ada");
+
+        var created = principals.applyProvisioningState(
+                tenant,
+                identity.id(),
+                target,
+                "provider-user-9",
+                PrincipalLifecycleState.ACTIVE,
+                NOW,
+                ids.nextId(),
+                null);
+        assertThat(created.identityId()).isEqualTo(identity.id());
+        assertThat(created.lifecycleState()).isEqualTo(
+                PrincipalLifecycleState.ACTIVE);
+
+        var replay = principals.applyProvisioningState(
+                tenant,
+                identity.id(),
+                target,
+                "provider-user-9",
+                PrincipalLifecycleState.ACTIVE,
+                NOW.plusSeconds(1),
+                ids.nextId(),
+                null);
+        assertThat(replay.id()).isEqualTo(created.id());
+        assertThat(replay.revision()).isEqualTo(created.revision());
+
+        var disabled = principals.applyProvisioningState(
+                tenant,
+                identity.id(),
+                target,
+                "provider-user-9",
+                PrincipalLifecycleState.DISABLED,
+                NOW.plusSeconds(2),
+                ids.nextId(),
+                null);
+        assertThat(disabled.lifecycleState()).isEqualTo(
+                PrincipalLifecycleState.DISABLED);
+        assertThat(disabled.revision()).isEqualTo(created.revision() + 1);
+
+        var reenabled = principals.applyProvisioningState(
+                tenant,
+                identity.id(),
+                target,
+                "provider-user-9",
+                PrincipalLifecycleState.ACTIVE,
+                NOW.plusSeconds(3),
+                ids.nextId(),
+                null);
+        assertThat(reenabled.lifecycleState()).isEqualTo(
+                PrincipalLifecycleState.ACTIVE);
+        assertThat(reenabled.revision()).isEqualTo(disabled.revision() + 1);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM identity.principal
+                WHERE tenant_id = ? AND application_target_id = ?
+                  AND native_principal_key = ?
+                """, Integer.class,
+                tenant.tenantId(), target, "provider-user-9"))
+                .isEqualTo(1);
     }
 
     private TenantContext tenant(String name) {

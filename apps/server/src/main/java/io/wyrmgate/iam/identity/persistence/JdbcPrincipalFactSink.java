@@ -40,6 +40,20 @@ public final class JdbcPrincipalFactSink implements PrincipalFactSink {
                 causationId);
     }
 
+    @Override
+    public void principalAccessProjectionChanged(
+            TenantContext tenant,
+            Principal principal,
+            UUID correlationId,
+            UUID causationId) {
+        append(
+                tenant,
+                ACCESS_PROJECTION_INPUT_CHANGED,
+                principal,
+                correlationId,
+                causationId);
+    }
+
     private void append(
             TenantContext tenant,
             String eventType,
