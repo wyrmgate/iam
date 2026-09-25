@@ -398,7 +398,6 @@ class AccessAssignmentPersistenceIntegrationTest {
                 active.entitlement().id(),
                 AccessAssignment.PrincipalConstraintKind.ANY,
                 null,
-                null,
                 NOW,
                 NOW,
                 NOW))
