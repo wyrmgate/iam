@@ -63,7 +63,7 @@ class AccessAssignmentPersistenceIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("19");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -114,6 +114,8 @@ class AccessAssignmentPersistenceIntegrationTest {
                 new IdentityAccessReferenceQueryService(
                         identityRepository, principalRepository),
                 catalogQuery,
+                (tenant, assignment) -> { },
+                (tenant, assignment, now) -> { },
                 ids,
                 transactions);
     }
@@ -127,6 +129,8 @@ class AccessAssignmentPersistenceIntegrationTest {
     void clear() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    access.effective_access_support,
+                    access.effective_access,
                     access.access_assignment,
                     access.desired_grant_state,
                     access.desired_principal_state,

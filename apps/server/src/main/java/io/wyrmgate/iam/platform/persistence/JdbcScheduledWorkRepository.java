@@ -119,6 +119,71 @@ public final class JdbcScheduledWorkRepository {
                 tenant.tenantId());
     }
 
+    public List<ClaimedTenantWork> claimDueByHandler(
+            String handlerType,
+            String leaseOwner,
+            Instant now,
+            Duration leaseDuration,
+            int limit) {
+        requireText(handlerType, "handlerType");
+        requireText(leaseOwner, "leaseOwner");
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(leaseDuration, "leaseDuration");
+        if (leaseDuration.isZero() || leaseDuration.isNegative()) {
+            throw new IllegalArgumentException("leaseDuration must be positive");
+        }
+        if (limit < 1 || limit > 1000) {
+            throw new IllegalArgumentException("limit must be between 1 and 1000");
+        }
+
+        Instant leaseUntil = now.plus(leaseDuration);
+        return jdbcTemplate.query(
+                """
+                WITH due AS (
+                    SELECT id
+                    FROM platform.scheduled_work
+                    WHERE handler_type = ?
+                      AND delivery_state = 'READY'
+                      AND available_at <= ?
+                      AND (lease_until IS NULL OR lease_until <= ?)
+                    ORDER BY available_at, id
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT ?
+                )
+                UPDATE platform.scheduled_work AS work
+                SET lease_owner = ?,
+                    lease_until = ?,
+                    attempt_count = attempt_count + 1,
+                    updated_at = ?
+                FROM due
+                WHERE work.id = due.id
+                RETURNING work.id, work.tenant_id, work.handler_type, work.work_key,
+                          work.subject_type, work.subject_id, work.subject_revision,
+                          work.attempt_count, work.lease_until
+                """,
+                (rs, rowNum) -> new ClaimedTenantWork(
+                        new TenantContext(rs.getObject("tenant_id", UUID.class)),
+                        new ClaimedWork(
+                                rs.getObject("id", UUID.class),
+                                rs.getString("handler_type"),
+                                rs.getString("work_key"),
+                                rs.getString("subject_type") == null
+                                        ? null
+                                        : new SubjectReference(
+                                                rs.getString("subject_type"),
+                                                rs.getObject("subject_id", UUID.class),
+                                                rs.getLong("subject_revision")),
+                                rs.getInt("attempt_count"),
+                                rs.getTimestamp("lease_until").toInstant())),
+                handlerType,
+                JdbcValues.timestamp(now),
+                JdbcValues.timestamp(now),
+                limit,
+                leaseOwner,
+                JdbcValues.timestamp(leaseUntil),
+                JdbcValues.timestamp(now));
+    }
+
     public void markCompleted(
             TenantContext tenant,
             UUID workId,
@@ -169,5 +234,14 @@ public final class JdbcScheduledWorkRepository {
             SubjectReference subject,
             int attemptCount,
             Instant leaseUntil) {
+    }
+
+    public record ClaimedTenantWork(
+            TenantContext tenant,
+            ClaimedWork work) {
+        public ClaimedTenantWork {
+            Objects.requireNonNull(tenant, "tenant");
+            Objects.requireNonNull(work, "work");
+        }
     }
 }

@@ -535,6 +535,8 @@ access.effective_access_support
 
 Support/path rows preserve explainability without putting an unbounded opaque array on `effective_access`. `support_count` is a denormalized projection count of current support rows and is updated atomically with the support-set change. The effective row disappears only when the last support disappears.
 
+The first runtime implementation is migration V20 and currently projects direct Entitlement assignments only. The stable `principal_constraint_key` encoding is `ANY` or `SPECIFIC:<principal UUID>`. A direct support row has `role_version_id = NULL`, `path_depth = 0`, and a deterministic lowercase SHA-256 path hash over `DIRECT|<assignmentId>|<identityId>|<entitlementId>|<principalConstraintKey>`. Adding or removing a support advances `projection_generation`; replay of an already-present support is a no-op and does not advance generation. Assignment mutation facts and technical valid-from/valid-until work both re-read current authoritative assignment state before projection mutation. Semantic reads additionally filter support by current lifecycle and validity-window clock comparison, so scheduler delay cannot extend or prematurely start effective access.
+
 ### Desired state
 
 `access.desired_principal_state` is keyed by tenant + target + identity/principal-resolution context and records desired existence/enabled state, desired revision/generation and a reference to normalized mapped attribute state.
