@@ -36,12 +36,17 @@ public interface CatalogAccessReferenceQuery {
         public static EntitlementReference untargeted() {
             return new EntitlementReference(Status.UNTARGETED, null);
         }
+
+        public static EntitlementReference targetRetired() {
+            return new EntitlementReference(Status.TARGET_RETIRED, null);
+        }
     }
 
     enum Status {
         VALID,
         NOT_FOUND,
         RETIRED,
-        UNTARGETED
+        UNTARGETED,
+        TARGET_RETIRED
     }
 }
