@@ -112,8 +112,9 @@ public final class JdbcGrantProvisioningRepository
                  AND e.provider_stable_id = g.entitlement_provider_id
                 WHERE g.tenant_id = ?
                   AND g.present
-                  AND g.principal_provider_id IN (""" + placeholders + ")
-                ORDER BY b.id, g.entitlement_provider_id, g.principal_provider_id";
+                  AND g.principal_provider_id IN (%s)
+                ORDER BY b.id, g.entitlement_provider_id, g.principal_provider_id
+                """.formatted(placeholders);
 
         List<Object> args = new ArrayList<>();
         args.add(applicationTargetId);
