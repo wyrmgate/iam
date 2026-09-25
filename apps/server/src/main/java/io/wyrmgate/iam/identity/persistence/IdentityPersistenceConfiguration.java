@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.identity.persistence;
 
 import io.wyrmgate.iam.administration.application.GovernedActorStatusQuery;
+import io.wyrmgate.iam.catalog.application.CatalogTargetReferenceQuery;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeConfigurationService;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeFactSink;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeReadRepository;
@@ -12,6 +13,10 @@ import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.IdentityQueryRepository;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
+import io.wyrmgate.iam.identity.application.PrincipalCommandService;
+import io.wyrmgate.iam.identity.application.PrincipalFactSink;
+import io.wyrmgate.iam.identity.application.PrincipalQueryService;
+import io.wyrmgate.iam.identity.application.PrincipalRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationFactSink;
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationService;
@@ -78,6 +83,39 @@ public class IdentityPersistenceConfiguration {
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
         return new IdentityCommandService(identityRepository, identityFactSink, idGenerator, transactionExecutor);
+    }
+
+    @Bean
+    PrincipalRepository principalRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcPrincipalRepository(jdbcTemplate);
+    }
+
+    @Bean
+    PrincipalFactSink principalFactSink(
+            JdbcOutboxRepository outboxRepository, IdGenerator idGenerator) {
+        return new JdbcPrincipalFactSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
+    PrincipalQueryService principalQueryService(PrincipalRepository principalRepository) {
+        return new PrincipalQueryService(principalRepository);
+    }
+
+    @Bean
+    PrincipalCommandService principalCommandService(
+            PrincipalRepository principalRepository,
+            IdentityRepository identityRepository,
+            CatalogTargetReferenceQuery targetReferenceQuery,
+            PrincipalFactSink principalFactSink,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new PrincipalCommandService(
+                principalRepository,
+                identityRepository,
+                targetReferenceQuery,
+                principalFactSink,
+                idGenerator,
+                transactionExecutor);
     }
 
     @Bean

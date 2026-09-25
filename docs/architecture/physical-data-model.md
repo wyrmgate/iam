@@ -189,6 +189,8 @@ identity.principal
 
 `application_target_id` is normally not a database FK because it crosses capability ownership. Identity validates the relevant Catalog fact through a semantic contract when changing authoritative Principal state.
 
+The first runtime implementation of this contract is migration V18. New Principals are created only through Identity-owned commands after semantic validation that the ApplicationTarget is active. A Principal may be created with `identity_id = NULL` and later correlated once to an existing same-tenant Identity using optimistic revision semantics; ordinary correlation does not silently reassign an already correlated Principal. Provider `ObservedPrincipal` rows remain Integration observation and do not automatically insert `identity.principal`. Foreign capabilities resolve current Principal ownership through the semantic `PrincipalResolutionQuery`, not by reading this table.
+
 ### Catalog
 
 ```text

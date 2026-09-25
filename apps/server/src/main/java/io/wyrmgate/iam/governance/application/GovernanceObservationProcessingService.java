@@ -3,7 +3,9 @@ package io.wyrmgate.iam.governance.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink;
+import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import java.time.Clock;
@@ -31,23 +33,27 @@ public final class GovernanceObservationProcessingService {
 
     private final JdbcOutboxRepository outbox;
     private final ObservedAccessDriftEvaluationService drift;
+    private final IntegrationObservedAccessQuery observedAccess;
     private final ObjectMapper json;
     private final Clock clock;
 
     public GovernanceObservationProcessingService(
             JdbcOutboxRepository outbox,
             ObservedAccessDriftEvaluationService drift,
+            IntegrationObservedAccessQuery observedAccess,
             ObjectMapper json) {
-        this(outbox, drift, json, Clock.systemUTC());
+        this(outbox, drift, observedAccess, json, Clock.systemUTC());
     }
 
     GovernanceObservationProcessingService(
             JdbcOutboxRepository outbox,
             ObservedAccessDriftEvaluationService drift,
+            IntegrationObservedAccessQuery observedAccess,
             ObjectMapper json,
             Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.drift = Objects.requireNonNull(drift, "drift");
+        this.observedAccess = Objects.requireNonNull(observedAccess, "observedAccess");
         this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
@@ -55,7 +61,9 @@ public final class GovernanceObservationProcessingService {
     public ProcessingBatchResult processAvailable() {
         Instant now = clock.instant();
         List<ClaimedOutboxEvent> claimed = outbox.claimPending(
-                Set.of(IntegrationObservedAccessFactSink.OBSERVED_ACCESS_INPUT_CHANGED),
+                Set.of(
+                        IntegrationObservedAccessFactSink.OBSERVED_ACCESS_INPUT_CHANGED,
+                        PrincipalFactSink.PRINCIPAL_CORRELATED),
                 now,
                 CLAIM_LEASE,
                 BATCH_SIZE);
@@ -64,9 +72,19 @@ public final class GovernanceObservationProcessingService {
         int failed = 0;
         for (ClaimedOutboxEvent item : claimed) {
             try {
-                UUID bindingId = bindingId(item);
                 Instant evaluatedAt = clock.instant();
-                drift.evaluate(item.tenant(), bindingId, evaluatedAt);
+                if (PrincipalFactSink.PRINCIPAL_CORRELATED.equals(
+                        item.event().eventType())) {
+                    UUID targetId = applicationTargetId(item);
+                    for (UUID bindingId :
+                            observedAccess.activeApplicationTargetBindings(
+                                    item.tenant(), targetId)) {
+                        drift.evaluate(item.tenant(), bindingId, evaluatedAt);
+                    }
+                } else {
+                    UUID bindingId = bindingId(item);
+                    drift.evaluate(item.tenant(), bindingId, evaluatedAt);
+                }
                 outbox.markPublished(
                         item.tenant(), item.event().eventId(), evaluatedAt);
                 processed++;
@@ -86,6 +104,17 @@ public final class GovernanceObservationProcessingService {
         return new ProcessingBatchResult(claimed.size(), processed, failed);
     }
 
+    private UUID applicationTargetId(ClaimedOutboxEvent item) {
+        var event = item.event();
+        if (event.eventVersion() != 1
+                || !"principal".equals(event.aggregateType())) {
+            throw new IllegalArgumentException(
+                    "unsupported principal correlation fact");
+        }
+        return uuidPayloadField(
+                item, "applicationTargetId", "principal correlation fact");
+    }
+
     private UUID bindingId(ClaimedOutboxEvent item) {
         var event = item.event();
         if (event.eventVersion() != 1) {
@@ -95,17 +124,23 @@ public final class GovernanceObservationProcessingService {
                 .contains(event.aggregateType())) {
             throw new IllegalArgumentException("unsupported observed-access fact aggregate");
         }
+        return uuidPayloadField(
+                item, "connectorBindingId", "observed-access fact");
+    }
+
+    private UUID uuidPayloadField(
+            ClaimedOutboxEvent item, String field, String factName) {
         try {
-            JsonNode root = json.readTree(event.payloadJson());
-            JsonNode value = root.get("connectorBindingId");
+            JsonNode root = json.readTree(item.event().payloadJson());
+            JsonNode value = root.get(field);
             if (value == null || !value.isTextual()) {
                 throw new IllegalArgumentException(
-                        "observed-access fact requires connectorBindingId");
+                        factName + " requires " + field);
             }
             return UUID.fromString(value.textValue());
         } catch (JsonProcessingException invalidJson) {
             throw new IllegalArgumentException(
-                    "observed-access fact payload is invalid JSON", invalidJson);
+                    factName + " payload is invalid JSON", invalidJson);
         }
     }
 

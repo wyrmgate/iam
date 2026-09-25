@@ -10,6 +10,17 @@ import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingService;
 import io.wyrmgate.iam.governance.application.GovernanceObservationReportingService;
 import io.wyrmgate.iam.governance.application.ObservedAccessDriftEvaluationService;
+import io.wyrmgate.iam.identity.application.IdentityCommandService;
+import io.wyrmgate.iam.identity.application.PrincipalCommandService;
+import io.wyrmgate.iam.identity.application.PrincipalQueryService;
+import io.wyrmgate.iam.identity.domain.Identity;
+import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
+import io.wyrmgate.iam.identity.domain.IdentityProfile;
+import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
+import io.wyrmgate.iam.identity.persistence.JdbcPrincipalFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcPrincipalRepository;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationException;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationFactSink;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
@@ -51,6 +62,8 @@ class ObservedAccessDriftPersistenceIntegrationTest {
     private static GovernanceFindingRepository findings;
     private static ObservedAccessDriftEvaluationService drift;
     private static GovernanceObservationProcessingService processor;
+    private static IdentityCommandService identityCommands;
+    private static PrincipalCommandService principalCommands;
 
     @BeforeAll
     static void start() {
@@ -60,7 +73,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -97,10 +110,28 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 administration, observations, catalog, noFacts,
                 observedAccessFacts, ids, transactions);
 
+        var identityRepository = new JdbcIdentityRepository(jdbc);
+        identityCommands = new IdentityCommandService(
+                identityRepository,
+                new JdbcIdentityFactSink(outbox, ids),
+                ids,
+                transactions);
+        var principalRepository = new JdbcPrincipalRepository(jdbc);
+        var principalQuery = new PrincipalQueryService(principalRepository);
+        principalCommands = new PrincipalCommandService(
+                principalRepository,
+                identityRepository,
+                catalog,
+                new JdbcPrincipalFactSink(outbox, ids),
+                ids,
+                transactions);
+
         findings = new JdbcGovernanceFindingRepository(jdbc);
         var reporter = new GovernanceObservationReportingService(findings, ids, transactions);
-        drift = new ObservedAccessDriftEvaluationService(observations, reporter);
-        processor = new GovernanceObservationProcessingService(outbox, drift, objectMapper);
+        drift = new ObservedAccessDriftEvaluationService(
+                observations, principalQuery, reporter);
+        processor = new GovernanceObservationProcessingService(
+                outbox, drift, observations, objectMapper);
     }
 
     @AfterAll
@@ -113,6 +144,11 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         jdbc.execute("""
                 TRUNCATE TABLE
                     governance.finding,
+                    identity.principal,
+                    identity.person_profile,
+                    identity.service_profile,
+                    identity.workload_profile,
+                    identity.identity,
                     integration.entitlement_observation_mapping,
                     integration.observed_grant,
                     integration.observed_entitlement,
@@ -280,6 +316,73 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-1"))
                 .isEqualTo(1);
         assertThat(retired.lifecycleState()).isEqualTo("RETIRED");
+    }
+
+    @Test
+    void explicitPrincipalCorrelationResolvesUnresolvedGrantThroughDurableFact() {
+        TenantContext tenant = tenant("principal-drift");
+        UUID applicationId = application(tenant, "app");
+        UUID target = target(tenant, applicationId, "prod");
+        UUID entitlement = entitlement(tenant, applicationId, target, "finance");
+        UUID binding = binding(tenant, target);
+        UUID entitlementRun = reconciliation(tenant, binding, "ENTITLEMENT");
+        UUID grantRun = reconciliation(tenant, binding, "GRANT");
+
+        observedEntitlement(tenant, binding, entitlementRun, "g-1");
+        observedGrant(tenant, binding, grantRun, "grant-1", "user-1", "g-1");
+        mappingService.map(
+                tenant, binding, "g-1", entitlement, NOW, ids.nextId());
+
+        var initial = processor.processAvailable();
+        assertThat(initial.claimed()).isEqualTo(1);
+        assertThat(countOpenFindings(
+                tenant, binding, "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL", "grant-1"))
+                .isEqualTo(1);
+
+        Identity identity = identityCommands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Resolved User",
+                NOW.plusSeconds(1),
+                ids.nextId(),
+                null);
+        var principal = principalCommands.create(
+                tenant,
+                target,
+                "user-1",
+                null,
+                NOW.plusSeconds(2),
+                ids.nextId(),
+                null);
+
+        assertThat(processor.processAvailable().claimed()).isZero();
+
+        principalCommands.correlate(
+                tenant,
+                principal.id(),
+                identity.id(),
+                principal.revision(),
+                NOW.plusSeconds(3),
+                ids.nextId(),
+                null);
+
+        var correlated = processor.processAvailable();
+        assertThat(correlated.claimed()).isEqualTo(1);
+        assertThat(correlated.processed()).isEqualTo(1);
+        assertThat(countOpenFindings(
+                tenant, binding, "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL", "grant-1"))
+                .isZero();
+        assertThat(countFindings(
+                tenant, binding, "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL", "grant-1"))
+                .isEqualTo(1);
+
+        Integer assignments = jdbc.queryForObject(
+                "SELECT count(*) FROM access.desired_grant_state WHERE tenant_id = ?",
+                Integer.class,
+                tenant.tenantId());
+        assertThat(assignments).isZero();
     }
 
     private TenantContext tenant(String name) {

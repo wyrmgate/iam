@@ -13,7 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-public final class CatalogQueryService implements CatalogEntitlementReferenceQuery {
+public final class CatalogQueryService implements CatalogEntitlementReferenceQuery, CatalogTargetReferenceQuery {
 
     private final CatalogRepository repository;
 
@@ -34,18 +34,29 @@ public final class CatalogQueryService implements CatalogEntitlementReferenceQue
     }
 
     @Override
-    public Validation validateActiveTargetEntitlement(
+    public CatalogTargetReferenceQuery.Validation validateActiveTarget(
+            TenantContext tenant, UUID applicationTargetId) {
+        Optional<ApplicationTarget> value = repository.findTarget(tenant, applicationTargetId);
+        if (value.isEmpty()) return CatalogTargetReferenceQuery.Validation.NOT_FOUND;
+        return value.get().lifecycleState()
+                == io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE
+                ? CatalogTargetReferenceQuery.Validation.VALID
+                : CatalogTargetReferenceQuery.Validation.RETIRED;
+    }
+
+    @Override
+    public CatalogEntitlementReferenceQuery.Validation validateActiveTargetEntitlement(
             TenantContext tenant, UUID entitlementId, UUID applicationTargetId) {
         Optional<Entitlement> value = repository.findEntitlement(tenant, entitlementId);
-        if (value.isEmpty()) return Validation.NOT_FOUND;
+        if (value.isEmpty()) return CatalogEntitlementReferenceQuery.Validation.NOT_FOUND;
         Entitlement entitlement = value.get();
         if (entitlement.lifecycleState()
                 != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
-            return Validation.RETIRED;
+            return CatalogEntitlementReferenceQuery.Validation.RETIRED;
         }
         return applicationTargetId.equals(entitlement.applicationTargetId())
-                ? Validation.VALID
-                : Validation.TARGET_MISMATCH;
+                ? CatalogEntitlementReferenceQuery.Validation.VALID
+                : CatalogEntitlementReferenceQuery.Validation.TARGET_MISMATCH;
     }
 
     public ApplicationPage listApplications(TenantContext tenant, PagePosition after, int limit) {

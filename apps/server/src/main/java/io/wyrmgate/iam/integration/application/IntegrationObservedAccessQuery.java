@@ -14,6 +14,9 @@ public interface IntegrationObservedAccessQuery {
     List<ObservedGrantFact> currentGrants(
             TenantContext tenant, UUID connectorBindingId);
 
+    List<UUID> activeApplicationTargetBindings(
+            TenantContext tenant, UUID applicationTargetId);
+
     record ObservedEntitlementFact(
             UUID connectorBindingId,
             String providerEntitlementId,
@@ -22,6 +25,7 @@ public interface IntegrationObservedAccessQuery {
 
     record ObservedGrantFact(
             UUID connectorBindingId,
+            UUID applicationTargetId,
             String providerGrantId,
             String providerPrincipalId,
             String providerEntitlementId,
