@@ -43,7 +43,9 @@ public final class PrincipalProvisioningPlanningProcessor {
     public int processAvailable() {
         Instant now = clock.instant();
         List<ClaimedOutboxEvent> claimed = outbox.claimPending(
-                Set.of(DesiredPrincipalFactSink.DESIRED_PRINCIPAL_CHANGED),
+                Set.of(
+                        DesiredPrincipalFactSink.DESIRED_PRINCIPAL_CHANGED,
+                        DesiredPrincipalFactSink.DESIRED_PRINCIPAL_REVALIDATE),
                 now,
                 CLAIM_LEASE,
                 BATCH_SIZE);
