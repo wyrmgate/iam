@@ -11,6 +11,33 @@ public interface DesiredStateProjectionRepository {
 
     void replaceGrant(TenantContext tenant, DesiredGrantState state);
 
+    DesiredGrantState reconcileGrant(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            String principalConstraintKey,
+            UUID principalId,
+            DesiredPresence desiredState,
+            Instant computedAt);
+
+    DesiredPrincipalState reconcilePrincipal(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId,
+            DesiredPresence desiredState,
+            Instant computedAt);
+
+    boolean hasPresentGrant(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId);
+
+    java.util.List<DesiredGrantState> findPresentAnyGrants(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId);
+
     DesiredAccessStateQuery.Freshness principalFreshness(TenantContext tenant, UUID id);
 
     DesiredAccessStateQuery.Freshness grantFreshness(TenantContext tenant, UUID id);
@@ -40,6 +67,7 @@ public interface DesiredStateProjectionRepository {
             UUID identityId,
             UUID applicationTargetId,
             UUID entitlementId,
+            String principalConstraintKey,
             UUID principalId,
             DesiredPresence desiredState,
             long desiredRevision,
@@ -50,6 +78,9 @@ public interface DesiredStateProjectionRepository {
             Objects.requireNonNull(identityId, "identityId");
             Objects.requireNonNull(applicationTargetId, "applicationTargetId");
             Objects.requireNonNull(entitlementId, "entitlementId");
+            if (principalConstraintKey == null || principalConstraintKey.isBlank()) {
+                throw new IllegalArgumentException("principalConstraintKey must not be blank");
+            }
             Objects.requireNonNull(desiredState, "desiredState");
             Objects.requireNonNull(computedAt, "computedAt");
             if (desiredRevision < 1 || sourceGeneration < 1) {
