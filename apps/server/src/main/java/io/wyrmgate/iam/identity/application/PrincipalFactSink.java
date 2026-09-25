@@ -9,12 +9,6 @@ public interface PrincipalFactSink {
 
     String PRINCIPAL_CORRELATED = "identity.principal-correlated";
 
-    void principalCreated(
-            TenantContext tenant,
-            Principal principal,
-            UUID correlationId,
-            UUID causationId);
-
     void principalCorrelated(
             TenantContext tenant,
             Principal principal,
