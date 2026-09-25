@@ -76,7 +76,7 @@ class SourceCorrelationPersistenceIntegrationTest {
                 ids,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("21");
     }
 
     @AfterAll
