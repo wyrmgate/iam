@@ -1,0 +1,52 @@
+name: Standalone DEMO Reference
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/demo.yml'
+      - 'deploy/compose/demo.yml'
+      - 'deploy/compose/edge.yml'
+      - 'deploy/config/demo.env.example'
+      - 'deploy/config/edge.env.example'
+      - 'deploy/config/otel-collector.runtime.yaml'
+      - 'deploy/scripts/deploy-demo.sh'
+      - 'deploy/scripts/reset-demo.sh'
+      - 'docs/engineering/public-demo.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: standalone-demo-reference
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Prepare reference configuration
+        shell: bash
+        run: |
+          cp deploy/config/demo.env.example deploy/config/demo.env
+          cp deploy/config/edge.env.example deploy/config/edge.env
+          sed -i 's#sha-replace-me#sha-0000000000000000000000000000000000000000#g' deploy/config/demo.env
+          sed -i 's#iam-demo.example.com#iam.example.com#g' deploy/config/demo.env
+          printf '%s\n' 'IAM_EDGE_NETWORK=wyrmgate-demo-edge' >> deploy/config/edge.env
+          printf '%s\n' 'IAM_CADDY_DATA_VOLUME=wyrmgate-demo-caddy-data' >> deploy/config/edge.env
+          printf '%s\n' 'IAM_CADDY_CONFIG_VOLUME=wyrmgate-demo-caddy-config' >> deploy/config/edge.env
+          sed -i 's#iam-server:8080#server:8080#g' deploy/config/edge.env
+          sed -i 's#iam-console:8080#console:8080#g' deploy/config/edge.env
+
+      - name: Validate standalone DEMO Compose
+        run: docker compose --env-file deploy/config/demo.env -f deploy/compose/demo.yml config --quiet
+
+      - name: Validate standalone edge Compose
+        run: docker compose --env-file deploy/config/edge.env -f deploy/compose/edge.yml config --quiet
+
+      - name: Validate reference scripts
+        run: |
+          bash -n deploy/scripts/deploy-demo.sh
+          bash -n deploy/scripts/reset-demo.sh
