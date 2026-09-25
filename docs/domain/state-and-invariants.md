@@ -83,6 +83,8 @@ This is visible drift, not an ambiguous still-pending governance state.
 
 The first runtime AccessAssignment slice implements Entitlement targets with explicit `MANUAL` provenance and `ANY`/`SPECIFIC` principal constraints. Creation validates foreign references through semantic Identity/Catalog queries and never reads their repositories directly. A future `SCHEDULED` assignment is not effective before `validFrom`, but if materialized state still says `SCHEDULED` after that instant, semantic evaluation treats the reached validity window as effective. Conversely, `validUntil` ends authority immediately even before an `EXPIRED` state is materialized. Explicit termination uses optimistic revision and chooses `CANCELLED` before a scheduled start, `EXPIRED` after the validity window, and otherwise `REVOKED`.
 
+EffectiveAccess is a rebuildable projection, never assignment authority. Direct Entitlement assignments contribute one normalized support path while semantically effective. Multiple assignments may support the same Identity + Entitlement + principal-constraint tuple; removing one support leaves the effective row while another support remains, and removing the final support removes the effective row. Projection-input replay is idempotent. Valid-from/valid-until timers repair materialized state around time boundaries, while semantic EffectiveAccess reads still evaluate current AccessAssignment validity directly so timer delay cannot change authorization meaning.
+
 ## Request and approval
 
 RequestItem is the governable unit:
