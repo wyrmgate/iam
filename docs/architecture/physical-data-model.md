@@ -250,7 +250,7 @@ catalog.role_version
 - UNIQUE (tenant_id, role_id, version_number)
 ```
 
-Activated/superseded RoleVersion content is immutable. `catalog.role_version_member` normalizes composition and uses a typed `member_kind` plus mutually exclusive `member_role_id` / `member_entitlement_id`, with CHECK constraints matching the permitted BUSINESS/APPLICATION role graph. Cycle and graph-type validation remains a Catalog domain invariant; it is not delegated to ad-hoc ORM cascades.
+Activated/superseded RoleVersion content is immutable. Migration V23 implements `catalog.role`, `catalog.role_version` and `catalog.role_version_member`, including a partial unique index that permits at most one ACTIVE version per Role and database triggers that reject activated/superseded content mutation. `catalog.role_version_member` normalizes composition and uses a typed `member_kind` plus mutually exclusive `member_role_id` / `member_entitlement_id`. The first runtime graph is intentionally shallow: BUSINESS -> APPLICATION Role / Entitlement and APPLICATION Role -> Entitlement. Graph/type/current-member validation remains a Catalog domain invariant rather than an ORM cascade.
 
 ### Access
 
@@ -536,6 +536,8 @@ access.effective_access_support
 ```
 
 Support/path rows preserve explainability without putting an unbounded opaque array on `effective_access`. `support_count` is a denormalized projection count of current support rows and is updated atomically with the support-set change. The effective row disappears only when the last support disappears.
+
+Migration V24 adds `access.effective_access_support_role_version`, an ordered normalized path table for role-derived supports. A direct assignment has no RoleVersion path. An APPLICATION Role -> Entitlement support records one RoleVersion; BUSINESS -> Entitlement also records one; BUSINESS -> APPLICATION Role -> Entitlement records the BUSINESS and child APPLICATION RoleVersion IDs in order. These are cross-capability stable IDs and intentionally do not create Access-owned foreign keys into Catalog.
 
 The first runtime implementation is migration V20 and currently projects direct Entitlement assignments only. The stable `principal_constraint_key` encoding is `ANY` or `SPECIFIC:<principal UUID>`. A direct support row has `role_version_id = NULL`, `path_depth = 0`, and a deterministic lowercase SHA-256 path hash over `DIRECT|<assignmentId>|<identityId>|<entitlementId>|<principalConstraintKey>`. Adding or removing a support advances `projection_generation`; replay of an already-present support is a no-op and does not advance generation. Assignment mutation facts and technical valid-from/valid-until work both re-read current authoritative assignment state before projection mutation. Semantic reads additionally filter support by current lifecycle and validity-window clock comparison, so scheduler delay cannot extend or prematurely start effective access.
 
