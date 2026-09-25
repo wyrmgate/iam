@@ -9,6 +9,7 @@ import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -77,6 +78,26 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
                 """, (rs,row) -> principal(rs),
                 tenant.tenantId(), applicationTargetId, nativePrincipalKey)
                 .stream().findFirst();
+    }
+
+    @Override
+    public List<Principal> findActiveByIdentityAndTarget(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId) {
+        return jdbc.query("""
+                SELECT id, identity_id, application_target_id, principal_kind,
+                       native_principal_key, lifecycle_state, revision,
+                       created_at, updated_at
+                FROM identity.principal
+                WHERE tenant_id = ?
+                  AND identity_id = ?
+                  AND application_target_id = ?
+                  AND lifecycle_state = 'ACTIVE'
+                ORDER BY id
+                """,
+                (rs,row) -> principal(rs),
+                tenant.tenantId(), identityId, applicationTargetId);
     }
 
     @Override
