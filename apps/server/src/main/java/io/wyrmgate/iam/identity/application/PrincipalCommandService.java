@@ -72,8 +72,6 @@ public final class PrincipalCommandService {
             Principal persisted = principals.findById(tenant, principal.id())
                     .orElseThrow(() -> new IllegalStateException(
                             "created principal could not be reloaded"));
-            facts.principalCreated(
-                    tenant, persisted, correlationId, causationId);
             if (persisted.identityId() != null) {
                 facts.principalCorrelated(
                         tenant, persisted, correlationId, causationId);
