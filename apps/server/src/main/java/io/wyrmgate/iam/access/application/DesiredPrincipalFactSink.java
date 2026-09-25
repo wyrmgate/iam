@@ -10,5 +10,6 @@ public interface DesiredPrincipalFactSink {
 
     void changed(TenantContext tenant, DesiredPrincipalState state);
 
-    void revalidate(TenantContext tenant, DesiredPrincipalState state);
+    default void revalidate(TenantContext tenant, DesiredPrincipalState state) {
+    }
 }
