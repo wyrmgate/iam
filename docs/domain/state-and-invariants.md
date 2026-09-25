@@ -81,6 +81,8 @@ ObservedGrant = PRESENT
 
 This is visible drift, not an ambiguous still-pending governance state.
 
+The first runtime AccessAssignment slice implements Entitlement targets with explicit `MANUAL` provenance and `ANY`/`SPECIFIC` principal constraints. Creation validates foreign references through semantic Identity/Catalog queries and never reads their repositories directly. A future `SCHEDULED` assignment is not effective before `validFrom`, but if materialized state still says `SCHEDULED` after that instant, semantic evaluation treats the reached validity window as effective. Conversely, `validUntil` ends authority immediately even before an `EXPIRED` state is materialized. Explicit termination uses optimistic revision and chooses `CANCELLED` before a scheduled start, `EXPIRED` after the validity window, and otherwise `REVOKED`.
+
 ## Request and approval
 
 RequestItem is the governable unit:
