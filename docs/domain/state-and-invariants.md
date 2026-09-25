@@ -87,6 +87,8 @@ EffectiveAccess is a rebuildable projection, never assignment authority. Direct 
 
 DesiredPrincipalState and DesiredGrantState are rebuildable technical-intent projections over EffectiveAccess, not governance authority. A desired grant keeps a stable tuple identity across PRESENT/ABSENT transitions. `desiredRevision` changes only when desired presence or resolved Principal changes; replay/recompute may advance source generation without changing desired revision. `ANY` principal realization is deterministic: one active correlated Principal for the Identity + ApplicationTarget resolves, while zero or multiple active Principals leave the grant unresolved. `SPECIFIC` preserves the explicitly governed Principal. An unresolved desired grant does not authorize guessing a provider account.
 
+A DesiredGrantState revision may trigger Integration provisioning planning, but the planning fact is only a notification to re-read current desired state. ADD_GRANT planning requires one resolved active Principal and exactly one safe provider entitlement target; missing or ambiguous technical resolution fails closed and is retried. REMOVE_GRANT planning may fan out to all safely known current or previously successful technical grant targets. Integration task state, provider failure and retry never rewrite AccessAssignment or desired governance intent. Duplicate/replayed planning facts are absorbed by deterministic Integration plan/task idempotency identities.
+
 ## Request and approval
 
 RequestItem is the governable unit:

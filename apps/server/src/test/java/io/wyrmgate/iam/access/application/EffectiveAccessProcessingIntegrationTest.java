@@ -75,7 +75,7 @@ class EffectiveAccessProcessingIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("21");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("22");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -134,7 +134,12 @@ class EffectiveAccessProcessingIntegrationTest {
                 transactions);
         effectiveQuery = new EffectiveAccessQueryService(effectiveRepository);
         desiredDerivation = new DesiredStateDerivationService(
-                effectiveQuery, desiredRepository, catalogQuery, identityReferences);
+                effectiveQuery,
+                desiredRepository,
+                catalogQuery,
+                identityReferences,
+                (tenant, state) -> { },
+                transactions);
     }
 
     @AfterAll

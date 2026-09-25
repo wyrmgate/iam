@@ -10,6 +10,9 @@ import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
+import io.wyrmgate.iam.access.application.DesiredGrantFactSink;
+import io.wyrmgate.iam.access.application.DesiredProvisioningStateQuery;
+import io.wyrmgate.iam.access.application.DesiredProvisioningStateQueryService;
 import io.wyrmgate.iam.access.application.DesiredStateDerivationService;
 import io.wyrmgate.iam.access.application.DesiredStateProcessingService;
 import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository;
@@ -104,16 +107,33 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
+    DesiredGrantFactSink desiredGrantFactSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator idGenerator) {
+        return new JdbcDesiredGrantFactSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
+    DesiredProvisioningStateQuery desiredProvisioningStateQuery(
+            DesiredStateProjectionRepository repository) {
+        return new DesiredProvisioningStateQueryService(repository);
+    }
+
+    @Bean
     DesiredStateDerivationService desiredStateDerivationService(
             EffectiveAccessQuery effectiveAccessQuery,
             DesiredStateProjectionRepository desiredStateRepository,
             CatalogAccessReferenceQuery catalogReferences,
-            IdentityAccessReferenceQuery identityReferences) {
+            IdentityAccessReferenceQuery identityReferences,
+            DesiredGrantFactSink desiredGrantFactSink,
+            TransactionExecutor transactionExecutor) {
         return new DesiredStateDerivationService(
                 effectiveAccessQuery,
                 desiredStateRepository,
                 catalogReferences,
-                identityReferences);
+                identityReferences,
+                desiredGrantFactSink,
+                transactionExecutor);
     }
 
     @Bean

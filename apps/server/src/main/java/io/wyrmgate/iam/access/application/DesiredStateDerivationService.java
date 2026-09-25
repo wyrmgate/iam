@@ -2,6 +2,7 @@ package io.wyrmgate.iam.access.application;
 
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
+import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.Objects;
@@ -14,19 +15,38 @@ public final class DesiredStateDerivationService {
     private final DesiredStateProjectionRepository desired;
     private final CatalogAccessReferenceQuery catalog;
     private final IdentityAccessReferenceQuery identities;
+    private final DesiredGrantFactSink grantFacts;
+    private final TransactionExecutor transactions;
 
     public DesiredStateDerivationService(
             EffectiveAccessQuery effectiveAccess,
             DesiredStateProjectionRepository desired,
             CatalogAccessReferenceQuery catalog,
-            IdentityAccessReferenceQuery identities) {
+            IdentityAccessReferenceQuery identities,
+            DesiredGrantFactSink grantFacts,
+            TransactionExecutor transactions) {
         this.effectiveAccess = Objects.requireNonNull(effectiveAccess, "effectiveAccess");
         this.desired = Objects.requireNonNull(desired, "desired");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.identities = Objects.requireNonNull(identities, "identities");
+        this.grantFacts = Objects.requireNonNull(grantFacts, "grantFacts");
+        this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
 
     public void reconcileGrant(
+            TenantContext tenant,
+            UUID identityId,
+            UUID entitlementId,
+            String principalConstraintKey,
+            Instant at) {
+        transactions.required(() -> {
+            reconcileGrantInternal(
+                    tenant, identityId, entitlementId, principalConstraintKey, at);
+            return null;
+        });
+    }
+
+    private void reconcileGrantInternal(
             TenantContext tenant,
             UUID identityId,
             UUID entitlementId,
@@ -45,7 +65,7 @@ public final class DesiredStateDerivationService {
             desired.findGrantTuple(
                             tenant, identityId, entitlementId, principalConstraintKey)
                     .ifPresent(existing -> {
-                        desired.reconcileGrant(
+                        var updated = desired.reconcileGrant(
                                 tenant,
                                 identityId,
                                 existing.applicationTargetId(),
@@ -54,6 +74,9 @@ public final class DesiredStateDerivationService {
                                 null,
                                 DesiredStateProjectionRepository.DesiredPresence.ABSENT,
                                 at);
+                        if (updated.desiredRevision() != existing.desiredRevision()) {
+                            grantFacts.changed(tenant, updated);
+                        }
                         desired.reconcilePrincipal(
                                 tenant,
                                 identityId,
@@ -90,7 +113,9 @@ public final class DesiredStateDerivationService {
             }
         }
 
-        desired.reconcileGrant(
+        var previous = desired.findGrantTuple(
+                tenant, identityId, entitlementId, principalConstraintKey);
+        var updatedGrant = desired.reconcileGrant(
                 tenant,
                 identityId,
                 entitlement.applicationTargetId(),
@@ -101,6 +126,11 @@ public final class DesiredStateDerivationService {
                         ? DesiredStateProjectionRepository.DesiredPresence.PRESENT
                         : DesiredStateProjectionRepository.DesiredPresence.ABSENT,
                 at);
+        if (previous.isEmpty()
+                || previous.get().desiredRevision()
+                        != updatedGrant.desiredRevision()) {
+            grantFacts.changed(tenant, updatedGrant);
+        }
 
         desired.reconcilePrincipal(
                 tenant,

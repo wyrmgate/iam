@@ -224,6 +224,22 @@ public final class JdbcDesiredStateProjectionRepository
     }
 
     @Override
+    public java.util.Optional<DesiredGrantState> findGrantById(
+            TenantContext tenant, UUID desiredGrantId) {
+        return jdbc.query("""
+                SELECT id, identity_id, application_target_id, entitlement_id,
+                       principal_constraint_key, principal_id, desired_state,
+                       desired_revision, source_generation, computed_at
+                FROM access.desired_grant_state
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs,row) -> grant(rs),
+                tenant.tenantId(), desiredGrantId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public DesiredAccessStateQuery.Freshness principalFreshness(
             TenantContext tenant, UUID id) {
         return freshness("access.desired_principal_state", tenant, id);

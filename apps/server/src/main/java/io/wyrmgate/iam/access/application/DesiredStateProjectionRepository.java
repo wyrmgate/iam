@@ -44,6 +44,9 @@ public interface DesiredStateProjectionRepository {
             UUID entitlementId,
             String principalConstraintKey);
 
+    java.util.Optional<DesiredGrantState> findGrantById(
+            TenantContext tenant, UUID desiredGrantId);
+
     DesiredAccessStateQuery.Freshness principalFreshness(TenantContext tenant, UUID id);
 
     DesiredAccessStateQuery.Freshness grantFreshness(TenantContext tenant, UUID id);
