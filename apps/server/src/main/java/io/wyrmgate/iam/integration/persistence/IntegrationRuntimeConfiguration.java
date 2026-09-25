@@ -10,8 +10,13 @@ import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepo
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
+import io.wyrmgate.iam.integration.application.GrantProvisioningPlannerService;
+import io.wyrmgate.iam.integration.application.GrantProvisioningPlanningProcessor;
+import io.wyrmgate.iam.integration.application.GrantProvisioningRepository;
 import io.wyrmgate.iam.catalog.application.CatalogEntitlementReferenceQuery;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
+import io.wyrmgate.iam.access.application.DesiredProvisioningStateQuery;
+import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -88,6 +93,41 @@ public class IntegrationRuntimeConfiguration {
             TransactionExecutor transactions) {
         return new IntegrationEntitlementMappingService(
                 administration, mappings, catalog, facts, observedAccessFacts, ids, transactions);
+    }
+
+    @Bean
+    GrantProvisioningRepository grantProvisioningRepository(
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
+            IdGenerator idGenerator) {
+        return new JdbcGrantProvisioningRepository(
+                jdbcTemplate, objectMapper, idGenerator);
+    }
+
+    @Bean
+    GrantProvisioningPlannerService grantProvisioningPlannerService(
+            DesiredProvisioningStateQuery desiredProvisioningStateQuery,
+            PrincipalTechnicalReferenceQuery principalTechnicalReferenceQuery,
+            GrantProvisioningRepository grantProvisioningRepository) {
+        return new GrantProvisioningPlannerService(
+                desiredProvisioningStateQuery,
+                principalTechnicalReferenceQuery,
+                grantProvisioningRepository);
+    }
+
+    @Bean
+    GrantProvisioningPlanningProcessor grantProvisioningPlanningProcessor(
+            JdbcOutboxRepository outboxRepository,
+            GrantProvisioningPlannerService planner,
+            TransactionExecutor transactions) {
+        return new GrantProvisioningPlanningProcessor(
+                outboxRepository, planner, transactions);
+    }
+
+    @Bean
+    GrantProvisioningPlanningScheduler grantProvisioningPlanningScheduler(
+            GrantProvisioningPlanningProcessor processor) {
+        return new GrantProvisioningPlanningScheduler(processor);
     }
 
     @Bean
