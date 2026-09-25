@@ -5,7 +5,6 @@ import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
-import io.wyrmgate.iam.access.application.EffectiveAccessProcessingScheduler;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
