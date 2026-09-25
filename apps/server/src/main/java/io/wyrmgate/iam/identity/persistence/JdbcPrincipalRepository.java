@@ -101,6 +101,53 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
     }
 
     @Override
+    public List<Principal> findByIdentityAndTarget(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId) {
+        return jdbc.query("""
+                SELECT id, identity_id, application_target_id, principal_kind,
+                       native_principal_key, lifecycle_state, revision,
+                       created_at, updated_at
+                FROM identity.principal
+                WHERE tenant_id = ?
+                  AND identity_id = ?
+                  AND application_target_id = ?
+                ORDER BY id
+                """,
+                (rs,row) -> principal(rs),
+                tenant.tenantId(), identityId, applicationTargetId);
+    }
+
+    @Override
+    public Principal updateLifecycle(
+            TenantContext tenant,
+            UUID principalId,
+            PrincipalLifecycleState lifecycleState,
+            long expectedRevision,
+            Instant now) {
+        int affected = jdbc.update("""
+                UPDATE identity.principal
+                SET lifecycle_state = ?, revision = revision + 1, updated_at = ?
+                WHERE tenant_id = ? AND id = ? AND revision = ?
+                """,
+                lifecycleState.name(), Timestamp.from(now),
+                tenant.tenantId(), principalId, expectedRevision);
+        if (affected != 1) {
+            Principal existing = findById(tenant, principalId)
+                    .orElseThrow(() -> new PrincipalCommandException(
+                            "principal_not_found",
+                            "The requested Principal was not found."));
+            if (existing.revision() != expectedRevision) {
+                throw new StaleWriteException(
+                        "principal", principalId, expectedRevision);
+            }
+            throw new IllegalStateException("principal lifecycle did not update");
+        }
+        return findById(tenant, principalId).orElseThrow();
+    }
+
+    @Override
     public Principal correlate(
             TenantContext tenant,
             UUID principalId,
