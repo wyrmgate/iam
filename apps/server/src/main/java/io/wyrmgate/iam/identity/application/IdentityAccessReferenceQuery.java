@@ -11,6 +11,42 @@ public interface IdentityAccessReferenceQuery {
 
     PrincipalReference principal(TenantContext tenant, UUID principalId);
 
+    PrincipalSelection selectUniqueActivePrincipal(
+            TenantContext tenant, UUID identityId, UUID applicationTargetId);
+
+    record PrincipalSelection(
+            PrincipalSelectionStatus status,
+            UUID principalId) {
+        public PrincipalSelection {
+            Objects.requireNonNull(status, "status");
+            if (status == PrincipalSelectionStatus.RESOLVED) {
+                Objects.requireNonNull(principalId, "principalId");
+            } else if (principalId != null) {
+                throw new IllegalArgumentException(
+                        status + " principal selection must not carry principalId");
+            }
+        }
+
+        public static PrincipalSelection none() {
+            return new PrincipalSelection(PrincipalSelectionStatus.NONE, null);
+        }
+
+        public static PrincipalSelection ambiguous() {
+            return new PrincipalSelection(PrincipalSelectionStatus.AMBIGUOUS, null);
+        }
+
+        public static PrincipalSelection resolved(UUID principalId) {
+            return new PrincipalSelection(
+                    PrincipalSelectionStatus.RESOLVED, principalId);
+        }
+    }
+
+    enum PrincipalSelectionStatus {
+        NONE,
+        AMBIGUOUS,
+        RESOLVED
+    }
+
     record PrincipalReference(
             Status status,
             UUID identityId,
