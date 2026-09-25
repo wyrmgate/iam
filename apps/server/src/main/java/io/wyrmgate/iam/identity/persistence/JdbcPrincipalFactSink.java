@@ -32,6 +32,12 @@ public final class JdbcPrincipalFactSink implements PrincipalFactSink {
                 principal,
                 correlationId,
                 causationId);
+        append(
+                tenant,
+                ACCESS_PROJECTION_INPUT_CHANGED,
+                principal,
+                correlationId,
+                causationId);
     }
 
     private void append(
