@@ -25,6 +25,8 @@ The OpenAPI contract defines:
 
 The first slice intentionally does **not** define generic lifecycle/status PATCH. Lifecycle changes remain explicit business operations and will be added when their application commands and transition invariants are implemented. Identity merge/split remains a later durable operation under FR-IDM-004.
 
+The Principal foundation is implemented as an internal Identity capability contract but is not added to the public Identity HTTP v1 surface in this slice. Principal authority is created explicitly against an active Catalog ApplicationTarget, may be temporarily uncorrelated, and supports one-way correlation to a canonical Identity. Cross-capability consumers use `PrincipalResolutionQuery` by ApplicationTarget + native principal key; provider observations do not become Principal authority automatically. A later public Principal administration API requires its own governed operations and authorization contract rather than exposing persistence rows.
+
 The contract does not expose persistence entities such as canonical candidate rows, mapping tables, authority tables, outbox rows, or provider-native source payloads.
 
 ## Identity representation
