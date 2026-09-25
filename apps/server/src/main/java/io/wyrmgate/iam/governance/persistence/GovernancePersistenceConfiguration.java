@@ -7,6 +7,7 @@ import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingSer
 import io.wyrmgate.iam.governance.application.GovernanceObservationReporter;
 import io.wyrmgate.iam.governance.application.GovernanceObservationReportingService;
 import io.wyrmgate.iam.governance.application.ObservedAccessDriftEvaluationService;
+import io.wyrmgate.iam.identity.application.PrincipalResolutionQuery;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
@@ -37,17 +38,20 @@ public class GovernancePersistenceConfiguration {
     @Bean
     ObservedAccessDriftEvaluationService observedAccessDriftEvaluationService(
             IntegrationObservedAccessQuery observedAccess,
+            PrincipalResolutionQuery principalResolution,
             GovernanceObservationReporter reporter) {
         return new ObservedAccessDriftEvaluationService(
-                observedAccess, reporter);
+                observedAccess, principalResolution, reporter);
     }
 
     @Bean
     GovernanceObservationProcessingService governanceObservationProcessingService(
             JdbcOutboxRepository outbox,
             ObservedAccessDriftEvaluationService drift,
+            IntegrationObservedAccessQuery observedAccess,
             ObjectMapper objectMapper) {
-        return new GovernanceObservationProcessingService(outbox, drift, objectMapper);
+        return new GovernanceObservationProcessingService(
+                outbox, drift, observedAccess, objectMapper);
     }
 
     @Bean
