@@ -153,8 +153,8 @@ public final class JdbcGrantProvisioningRepository
                   AND t.subject_id = ?
                   AND t.operation_type = 'ADD_GRANT'
                   AND t.state = 'SUCCEEDED'
-                  AND t.payload ? 'providerEntitlementId'
-                  AND t.payload ? 'providerPrincipalId'
+                  AND jsonb_exists(t.payload, 'providerEntitlementId')
+                  AND jsonb_exists(t.payload, 'providerPrincipalId')
                 ORDER BY t.created_at, t.id
                 """,
                 (rs,row) -> new TechnicalGrantTarget(
