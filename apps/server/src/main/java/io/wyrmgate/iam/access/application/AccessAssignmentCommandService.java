@@ -16,6 +16,8 @@ public final class AccessAssignmentCommandService {
     private final AccessAssignmentRepository assignments;
     private final IdentityAccessReferenceQuery identityReferences;
     private final CatalogAccessReferenceQuery catalogReferences;
+    private final AccessAssignmentFactSink facts;
+    private final AccessAssignmentBoundaryScheduler boundaries;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
@@ -23,6 +25,8 @@ public final class AccessAssignmentCommandService {
             AccessAssignmentRepository assignments,
             IdentityAccessReferenceQuery identityReferences,
             CatalogAccessReferenceQuery catalogReferences,
+            AccessAssignmentFactSink facts,
+            AccessAssignmentBoundaryScheduler boundaries,
             IdGenerator ids,
             TransactionExecutor transactions) {
         this.assignments = Objects.requireNonNull(assignments, "assignments");
@@ -30,6 +34,8 @@ public final class AccessAssignmentCommandService {
                 identityReferences, "identityReferences");
         this.catalogReferences = Objects.requireNonNull(
                 catalogReferences, "catalogReferences");
+        this.facts = Objects.requireNonNull(facts, "facts");
+        this.boundaries = Objects.requireNonNull(boundaries, "boundaries");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -147,6 +153,8 @@ public final class AccessAssignmentCommandService {
 
         return transactions.required(() -> {
             assignments.insert(tenant, assignment);
+            facts.projectionInputChanged(tenant, assignment);
+            boundaries.scheduleBoundaries(tenant, assignment, now);
             return assignments.findById(tenant, assignment.id())
                     .orElseThrow(() -> new IllegalStateException(
                             "created AccessAssignment could not be reloaded"));
@@ -202,12 +210,14 @@ public final class AccessAssignmentCommandService {
                 terminalState = AccessAssignment.LifecycleState.REVOKED;
             }
 
-            return assignments.terminate(
+            AccessAssignment updated = assignments.terminate(
                     tenant,
                     assignmentId,
                     terminalState,
                     expectedRevision,
                     now);
+            facts.projectionInputChanged(tenant, updated);
+            return updated;
         });
     }
 }
