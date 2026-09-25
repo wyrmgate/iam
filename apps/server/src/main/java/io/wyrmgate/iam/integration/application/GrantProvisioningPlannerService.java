@@ -109,7 +109,10 @@ public final class GrantProvisioningPlannerService {
                         grant,
                         old,
                         "REMOVE_GRANT",
-                        add.taskKey()));
+                        old.connectorBindingId().equals(
+                                addTarget.connectorBindingId())
+                                ? add.taskKey()
+                                : null));
             }
         }
         return List.copyOf(result);
