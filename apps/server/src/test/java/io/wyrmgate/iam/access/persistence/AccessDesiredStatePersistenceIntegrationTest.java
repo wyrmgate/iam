@@ -42,9 +42,9 @@ class AccessDesiredStatePersistenceIntegrationTest {
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
-        repository = new JdbcDesiredStateProjectionRepository(jdbc);
+        repository = new JdbcDesiredStateProjectionRepository(jdbc, ids);
         query = new AccessDesiredStateQueryService(repository);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("21");
     }
 
     @AfterAll
@@ -85,6 +85,7 @@ class AccessDesiredStatePersistenceIntegrationTest {
                 ids.nextId(),
                 ids.nextId(),
                 ids.nextId(),
+                "ANY",
                 null,
                 DesiredPresence.PRESENT,
                 12,
@@ -126,6 +127,31 @@ class AccessDesiredStatePersistenceIntegrationTest {
     }
 
     @Test
+    void reconcileKeepsStableIdAndRevisionOnReplayButAdvancesGeneration() {
+        TenantContext tenant = tenant("reconcile");
+        Instant now = Instant.parse("2026-09-21T08:00:00Z");
+        UUID identityId = ids.nextId();
+        UUID targetId = ids.nextId();
+        UUID entitlementId = ids.nextId();
+
+        DesiredGrantState first = repository.reconcileGrant(
+                tenant, identityId, targetId, entitlementId, "ANY", null,
+                DesiredPresence.PRESENT, now);
+        DesiredGrantState replay = repository.reconcileGrant(
+                tenant, identityId, targetId, entitlementId, "ANY", null,
+                DesiredPresence.PRESENT, now.plusSeconds(1));
+
+        assertThat(replay.id()).isEqualTo(first.id());
+        assertThat(replay.desiredRevision()).isEqualTo(first.desiredRevision());
+        assertThat(replay.sourceGeneration()).isEqualTo(first.sourceGeneration() + 1);
+
+        DesiredGrantState resolved = repository.reconcileGrant(
+                tenant, identityId, targetId, entitlementId, "ANY", ids.nextId(),
+                DesiredPresence.PRESENT, now.plusSeconds(2));
+        assertThat(resolved.desiredRevision()).isEqualTo(first.desiredRevision() + 1);
+    }
+
+    @Test
     void queryServiceReturnsUnavailableWhenProjectionStoreCannotBeRead() {
         TenantContext tenant = new TenantContext(ids.nextId());
         var unavailable = new AccessDesiredStateQueryService(new io.wyrmgate.iam.access.application.DesiredStateProjectionRepository() {
@@ -136,6 +162,40 @@ class AccessDesiredStatePersistenceIntegrationTest {
 
             @Override
             public void replaceGrant(TenantContext tenant, DesiredGrantState state) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public DesiredGrantState reconcileGrant(
+                    TenantContext tenant, UUID identityId, UUID applicationTargetId,
+                    UUID entitlementId, String principalConstraintKey, UUID principalId,
+                    DesiredPresence desiredState, Instant computedAt) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public DesiredPrincipalState reconcilePrincipal(
+                    TenantContext tenant, UUID identityId, UUID applicationTargetId,
+                    DesiredPresence desiredState, Instant computedAt) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public boolean hasPresentGrant(
+                    TenantContext tenant, UUID identityId, UUID applicationTargetId) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public java.util.List<DesiredGrantState> findPresentAnyGrants(
+                    TenantContext tenant, UUID identityId, UUID applicationTargetId) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public java.util.Optional<DesiredGrantState> findGrantTuple(
+                    TenantContext tenant, UUID identityId, UUID entitlementId,
+                    String principalConstraintKey) {
                 throw new UnsupportedOperationException();
             }
 

@@ -85,6 +85,8 @@ The first runtime AccessAssignment slice implements Entitlement targets with exp
 
 EffectiveAccess is a rebuildable projection, never assignment authority. Direct Entitlement assignments contribute one normalized support path while semantically effective. Multiple assignments may support the same Identity + Entitlement + principal-constraint tuple; removing one support leaves the effective row while another support remains, and removing the final support removes the effective row. Projection-input replay is idempotent. Valid-from/valid-until timers repair materialized state around time boundaries, while semantic EffectiveAccess reads still evaluate current AccessAssignment validity directly so timer delay cannot change authorization meaning.
 
+DesiredPrincipalState and DesiredGrantState are rebuildable technical-intent projections over EffectiveAccess, not governance authority. A desired grant keeps a stable tuple identity across PRESENT/ABSENT transitions. `desiredRevision` changes only when desired presence or resolved Principal changes; replay/recompute may advance source generation without changing desired revision. `ANY` principal realization is deterministic: one active correlated Principal for the Identity + ApplicationTarget resolves, while zero or multiple active Principals leave the grant unresolved. `SPECIFIC` preserves the explicitly governed Principal. An unresolved desired grant does not authorize guessing a provider account.
+
 ## Request and approval
 
 RequestItem is the governable unit:

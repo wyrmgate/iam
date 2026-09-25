@@ -7,6 +7,7 @@ import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentBoundaryScheduler;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentFactSink;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentRepository;
 import io.wyrmgate.iam.access.persistence.JdbcEffectiveAccessRepository;
+import io.wyrmgate.iam.access.persistence.JdbcDesiredStateProjectionRepository;
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.persistence.JdbcCatalogRepository;
@@ -58,6 +59,9 @@ class EffectiveAccessProcessingIntegrationTest {
     private static CatalogQueryService catalogQuery;
     private static JdbcAccessAssignmentRepository assignmentRepository;
     private static JdbcEffectiveAccessRepository effectiveRepository;
+    private static JdbcDesiredStateProjectionRepository desiredRepository;
+    private static DesiredStateDerivationService desiredDerivation;
+    private static IdentityAccessReferenceQueryService identityReferences;
     private static JdbcOutboxRepository outbox;
     private static JdbcScheduledWorkRepository scheduledWork;
     private static AccessAssignmentCommandService assignments;
@@ -71,7 +75,7 @@ class EffectiveAccessProcessingIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("21");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -116,17 +120,21 @@ class EffectiveAccessProcessingIntegrationTest {
         scheduledWork = new JdbcScheduledWorkRepository(jdbc, ids);
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
         effectiveRepository = new JdbcEffectiveAccessRepository(jdbc, ids);
+        desiredRepository = new JdbcDesiredStateProjectionRepository(jdbc, ids);
+        identityReferences = new IdentityAccessReferenceQueryService(
+                identityRepository, principalRepository);
 
         assignments = new AccessAssignmentCommandService(
                 assignmentRepository,
-                new IdentityAccessReferenceQueryService(
-                        identityRepository, principalRepository),
+                identityReferences,
                 catalogQuery,
                 new JdbcAccessAssignmentFactSink(outbox, ids),
                 new JdbcAccessAssignmentBoundaryScheduler(scheduledWork),
                 ids,
                 transactions);
         effectiveQuery = new EffectiveAccessQueryService(effectiveRepository);
+        desiredDerivation = new DesiredStateDerivationService(
+                effectiveQuery, desiredRepository, catalogQuery, identityReferences);
     }
 
     @AfterAll
@@ -213,6 +221,77 @@ class EffectiveAccessProcessingIntegrationTest {
     }
 
     @Test
+    void desiredGrantTracksEffectiveAccessAndUniquePrincipalResolution() {
+        TenantContext tenant = tenant("desired");
+        Identity identity = identity(tenant, "Desired User");
+        var catalog = catalog(tenant, "desired-app");
+
+        AccessAssignment assignment = assignments.createEntitlementAssignment(
+                tenant, identity.id(), catalog.entitlement().id(),
+                AccessAssignment.PrincipalConstraintKind.ANY,
+                null, null, null, NOW);
+        processor(NOW).processAvailable();
+
+        var first = desiredRepository.findGrantTuple(
+                tenant, identity.id(), catalog.entitlement().id(), "ANY")
+                .orElseThrow();
+        assertThat(first.desiredState())
+                .isEqualTo(DesiredStateProjectionRepository.DesiredPresence.PRESENT);
+        assertThat(first.principalId()).isNull();
+
+        var principal = principals.create(
+                tenant,
+                catalog.target().id(),
+                "desired-user",
+                identity.id(),
+                NOW.plusSeconds(1),
+                ids.nextId(),
+                null);
+        desiredDerivation.reconcileAnyForPrincipalChange(
+                tenant, identity.id(), catalog.target().id(), NOW.plusSeconds(1));
+
+        var resolved = desiredRepository.findGrantTuple(
+                tenant, identity.id(), catalog.entitlement().id(), "ANY")
+                .orElseThrow();
+        assertThat(resolved.principalId()).isEqualTo(principal.id());
+        assertThat(resolved.desiredRevision()).isEqualTo(first.desiredRevision() + 1);
+
+        principals.create(
+                tenant,
+                catalog.target().id(),
+                "desired-user-2",
+                identity.id(),
+                NOW.plusSeconds(2),
+                ids.nextId(),
+                null);
+        desiredDerivation.reconcileAnyForPrincipalChange(
+                tenant, identity.id(), catalog.target().id(), NOW.plusSeconds(2));
+
+        var ambiguous = desiredRepository.findGrantTuple(
+                tenant, identity.id(), catalog.entitlement().id(), "ANY")
+                .orElseThrow();
+        assertThat(ambiguous.principalId()).isNull();
+        assertThat(ambiguous.desiredRevision()).isEqualTo(resolved.desiredRevision() + 1);
+
+        assignments.terminate(
+                tenant, assignment.id(), assignment.revision(), NOW.plusSeconds(3));
+        processor(NOW.plusSeconds(3)).processAvailable();
+
+        var absent = desiredRepository.findGrantTuple(
+                tenant, identity.id(), catalog.entitlement().id(), "ANY")
+                .orElseThrow();
+        assertThat(absent.desiredState())
+                .isEqualTo(DesiredStateProjectionRepository.DesiredPresence.ABSENT);
+
+        String principalPresence = jdbc.queryForObject("""
+                SELECT desired_state
+                FROM access.desired_principal_state
+                WHERE tenant_id = ? AND identity_id = ? AND application_target_id = ?
+                """, String.class, tenant.tenantId(), identity.id(), catalog.target().id());
+        assertThat(principalPresence).isEqualTo("ABSENT");
+    }
+
+    @Test
     void validityBoundariesActivateAndExpireWithoutAssignmentStateRewrite() {
         TenantContext tenant = tenant("time");
         Identity identity = identity(tenant, "Time User");
@@ -293,6 +372,7 @@ class EffectiveAccessProcessingIntegrationTest {
                 scheduledWork,
                 assignmentRepository,
                 effectiveRepository,
+                desiredDerivation,
                 Clock.fixed(at, ZoneOffset.UTC));
     }
 

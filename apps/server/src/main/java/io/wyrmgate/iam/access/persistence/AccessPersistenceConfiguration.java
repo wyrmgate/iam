@@ -10,6 +10,8 @@ import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
+import io.wyrmgate.iam.access.application.DesiredStateDerivationService;
+import io.wyrmgate.iam.access.application.DesiredStateProcessingService;
 import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
@@ -78,12 +80,14 @@ public class AccessPersistenceConfiguration {
             JdbcOutboxRepository outboxRepository,
             JdbcScheduledWorkRepository scheduledWorkRepository,
             AccessAssignmentRepository assignmentRepository,
-            EffectiveAccessRepository effectiveAccessRepository) {
+            EffectiveAccessRepository effectiveAccessRepository,
+            DesiredStateDerivationService desiredStateDerivationService) {
         return new EffectiveAccessProcessingService(
                 outboxRepository,
                 scheduledWorkRepository,
                 assignmentRepository,
-                effectiveAccessRepository);
+                effectiveAccessRepository,
+                desiredStateDerivationService);
     }
 
     @Bean
@@ -93,8 +97,38 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
-    DesiredStateProjectionRepository desiredStateProjectionRepository(JdbcTemplate jdbcTemplate) {
-        return new JdbcDesiredStateProjectionRepository(jdbcTemplate);
+    DesiredStateProjectionRepository desiredStateProjectionRepository(
+            JdbcTemplate jdbcTemplate,
+            IdGenerator idGenerator) {
+        return new JdbcDesiredStateProjectionRepository(jdbcTemplate, idGenerator);
+    }
+
+    @Bean
+    DesiredStateDerivationService desiredStateDerivationService(
+            EffectiveAccessQuery effectiveAccessQuery,
+            DesiredStateProjectionRepository desiredStateRepository,
+            CatalogAccessReferenceQuery catalogReferences,
+            IdentityAccessReferenceQuery identityReferences) {
+        return new DesiredStateDerivationService(
+                effectiveAccessQuery,
+                desiredStateRepository,
+                catalogReferences,
+                identityReferences);
+    }
+
+    @Bean
+    DesiredStateProcessingService desiredStateProcessingService(
+            JdbcOutboxRepository outboxRepository,
+            IdentityAccessReferenceQuery identityReferences,
+            DesiredStateDerivationService derivationService) {
+        return new DesiredStateProcessingService(
+                outboxRepository, identityReferences, derivationService);
+    }
+
+    @Bean
+    DesiredStateProcessingScheduler desiredStateProcessingScheduler(
+            DesiredStateProcessingService service) {
+        return new DesiredStateProcessingScheduler(service);
     }
 
     @Bean

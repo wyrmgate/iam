@@ -3,6 +3,7 @@ package io.wyrmgate.iam.identity.application;
 import io.wyrmgate.iam.identity.domain.Principal;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +16,9 @@ public interface PrincipalRepository {
 
     Optional<Principal> findByTargetAndNativeKey(
             TenantContext tenant, UUID applicationTargetId, String nativePrincipalKey);
+
+    List<Principal> findActiveByIdentityAndTarget(
+            TenantContext tenant, UUID identityId, UUID applicationTargetId);
 
     Principal correlate(
             TenantContext tenant,

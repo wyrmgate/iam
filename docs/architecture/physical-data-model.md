@@ -286,6 +286,8 @@ The first Access desired-state implementation materializes `access.desired_princ
 
 `desired_revision` is the freshness identity carried into Integration provisioning tasks. `source_generation` and `computed_at` describe projection provenance/rebuild generation rather than authoritative aggregate revision. Integration never reads these tables directly: it consumes framework-neutral `DesiredAccessStateQuery`, which returns `CURRENT(revision)`, `ABSENT`, or `UNAVAILABLE`. Missing or mismatched desired state supersedes stale provisioning; query unavailability leaves work unclaimed so provider-side privilege changes fail closed.
 
+Migration V21 makes the desired tuples explicit. `desired_principal_state` is unique by tenant + Identity + ApplicationTarget. `desired_grant_state` is unique by tenant + Identity + ApplicationTarget + Entitlement + `principal_constraint_key`, where the current stable key is `ANY` or `SPECIFIC:<principal UUID>`. Desired rows are retained as PRESENT/ABSENT projection state rather than deleted so their stable IDs and revisions remain usable for Integration stale-work revalidation. Recomputing the same externally meaningful desired outcome advances `source_generation` but not `desired_revision`; changing presence or resolved Principal advances `desired_revision`. For `ANY`, Access requests a unique active correlated Principal from Identity. Exactly one Principal resolves to its ID; none or multiple keep `principal_id = NULL`. No arbitrary account selection is permitted.
+
 ### Governance
 
 Initial table families include:
