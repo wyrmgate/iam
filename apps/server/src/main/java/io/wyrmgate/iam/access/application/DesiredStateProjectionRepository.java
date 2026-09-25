@@ -38,6 +38,12 @@ public interface DesiredStateProjectionRepository {
             UUID identityId,
             UUID applicationTargetId);
 
+    java.util.Optional<DesiredGrantState> findGrantTuple(
+            TenantContext tenant,
+            UUID identityId,
+            UUID entitlementId,
+            String principalConstraintKey);
+
     DesiredAccessStateQuery.Freshness principalFreshness(TenantContext tenant, UUID id);
 
     DesiredAccessStateQuery.Freshness grantFreshness(TenantContext tenant, UUID id);
