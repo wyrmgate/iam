@@ -17,9 +17,10 @@ public interface PrincipalFactSink {
             UUID correlationId,
             UUID causationId);
 
-    void principalAccessProjectionChanged(
+    default void principalAccessProjectionChanged(
             TenantContext tenant,
             Principal principal,
             UUID correlationId,
-            UUID causationId);
+            UUID causationId) {
+    }
 }
