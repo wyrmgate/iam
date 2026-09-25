@@ -4,10 +4,9 @@ import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.domain.EffectiveAccess;
 import io.wyrmgate.iam.platform.id.IdGenerator;
-import io.wyrmgate.iam.platform.persistence.JdbcValues;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,7 +55,7 @@ public final class JdbcEffectiveAccessRepository
                     assignment.identityId(),
                     assignment.entitlementId(),
                     principalConstraintKey,
-                    JdbcValues.timestamp(computedAt));
+                    Timestamp.from(computedAt));
             created = inserted == 1;
             effectiveId = created
                     ? candidateId
@@ -99,7 +98,7 @@ public final class JdbcEffectiveAccessRepository
                     """,
                     tenant.tenantId(),
                     effectiveId,
-                    JdbcValues.timestamp(computedAt),
+                    Timestamp.from(computedAt),
                     tenant.tenantId(),
                     effectiveId);
         }
@@ -112,10 +111,9 @@ public final class JdbcEffectiveAccessRepository
             Instant computedAt) {
         List<UUID> effectiveIds = jdbc.query(
                 """
-                SELECT DISTINCT effective_access_id
+                SELECT effective_access_id
                 FROM access.effective_access_support
                 WHERE tenant_id = ? AND access_assignment_id = ?
-                FOR UPDATE
                 """,
                 (rs, row) -> rs.getObject("effective_access_id", UUID.class),
                 tenant.tenantId(),
@@ -156,7 +154,7 @@ public final class JdbcEffectiveAccessRepository
                         WHERE tenant_id = ? AND id = ?
                         """,
                         count,
-                        JdbcValues.timestamp(computedAt),
+                        Timestamp.from(computedAt),
                         tenant.tenantId(),
                         effectiveId);
             }
@@ -205,8 +203,8 @@ public final class JdbcEffectiveAccessRepository
                 identityId,
                 entitlementId,
                 principalConstraintKey,
-                JdbcValues.timestamp(at),
-                JdbcValues.timestamp(at))
+                Timestamp.from(at),
+                Timestamp.from(at))
                 .stream()
                 .findFirst();
     }
@@ -233,8 +231,8 @@ public final class JdbcEffectiveAccessRepository
                 (rs,row) -> rs.getObject("access_assignment_id", UUID.class),
                 tenant.tenantId(),
                 effectiveAccessId,
-                JdbcValues.timestamp(at),
-                JdbcValues.timestamp(at));
+                Timestamp.from(at),
+                Timestamp.from(at));
     }
 
     private Optional<UUID> findTupleId(
