@@ -8,6 +8,8 @@ import java.util.UUID;
 public interface PrincipalFactSink {
 
     String PRINCIPAL_CORRELATED = "identity.principal-correlated";
+    String ACCESS_PROJECTION_INPUT_CHANGED =
+            "identity.principal-access-projection-input-changed";
 
     void principalCorrelated(
             TenantContext tenant,
