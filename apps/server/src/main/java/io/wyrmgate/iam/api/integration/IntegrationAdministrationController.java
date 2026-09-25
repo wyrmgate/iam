@@ -8,6 +8,8 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository.WorkerPermissionSpec;
+import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository;
+import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository.EntitlementObservationMapping;
 import io.wyrmgate.iam.integration.domain.WorkerCapability;
 import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -35,16 +37,19 @@ import org.springframework.web.bind.annotation.RestController;
 public final class IntegrationAdministrationController {
 
     private final IntegrationAdministrationRepository repository;
+    private final IntegrationEntitlementMappingRepository mappings;
     private final IntegrationAdminApiMutationService mutations;
     private final IdGenerator ids;
     private final ObjectMapper json;
 
     public IntegrationAdministrationController(
             IntegrationAdministrationRepository repository,
+            IntegrationEntitlementMappingRepository mappings,
             IntegrationAdminApiMutationService mutations,
             IdGenerator ids,
             ObjectMapper json) {
         this.repository = repository;
+        this.mappings = mappings;
         this.mutations = mutations;
         this.ids = ids;
         this.json = json;
@@ -172,6 +177,58 @@ public final class IntegrationAdministrationController {
         return ok(binding(value),value.revision(),correlationId);
     }
 
+    @PostMapping("/connector-bindings/{bindingId}/entitlement-mappings")
+    ResponseEntity<IntegrationAdminApiModels.EntitlementMappingResource> createEntitlementMapping(
+            @PathVariable UUID bindingId,
+            @RequestHeader("Idempotency-Key") String idem,
+            @RequestBody IntegrationAdminApiModels.EntitlementMappingCreateRequest body,
+            HttpServletRequest request) {
+        UUID correlationId=IntegrationAdminApiRequestContext.resolve(request,ids);
+        AuthenticatedAdministrativeActor actor=ControlPlaneActorRequestContext.require(request);
+        var value=mutations.createEntitlementMapping(
+                actor,bindingId,body.providerStableId(),body.entitlementId(),
+                key(idem,correlationId),
+                fingerprint(List.of(bindingId,body)),
+                Instant.now(),correlationId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .header(HttpHeaders.ETAG,etag(value.revision()))
+                .header(HttpHeaders.LOCATION,
+                        "/api/v1/entitlement-observation-mappings/"+value.id())
+                .header("X-Correlation-Id",correlationId.toString())
+                .body(mapping(value));
+    }
+
+    @GetMapping("/entitlement-observation-mappings/{id}")
+    ResponseEntity<IntegrationAdminApiModels.EntitlementMappingResource> getEntitlementMapping(
+            @PathVariable UUID id,HttpServletRequest request) {
+        UUID correlationId=IntegrationAdminApiRequestContext.resolve(request,ids);
+        AuthenticatedAdministrativeActor actor=ControlPlaneActorRequestContext.require(request);
+        mutations.requireRead(
+                actor,
+                AdministrativePermissions.ENTITLEMENT_OBSERVATION_MAPPING_READ,
+                new AdministrativeResource("entitlement-observation-mapping",id),
+                Instant.now(),correlationId);
+        var value=mappings.find(actor.tenant(),id)
+                .orElseThrow(() -> IntegrationAdminApiException.notFound(correlationId));
+        return ok(mapping(value),value.revision(),correlationId);
+    }
+
+    @PostMapping("/entitlement-observation-mappings/{id}:unmap")
+    ResponseEntity<IntegrationAdminApiModels.EntitlementMappingResource> unmapEntitlement(
+            @PathVariable UUID id,
+            @RequestHeader("If-Match") String ifMatch,
+            @RequestHeader("Idempotency-Key") String idem,
+            HttpServletRequest request) {
+        UUID correlationId=IntegrationAdminApiRequestContext.resolve(request,ids);
+        AuthenticatedAdministrativeActor actor=ControlPlaneActorRequestContext.require(request);
+        long expectedRevision=revision(ifMatch,correlationId);
+        var value=mutations.unmapEntitlement(
+                actor,id,expectedRevision,key(idem,correlationId),
+                fingerprint(List.of(id,expectedRevision,"unmap")),
+                Instant.now(),correlationId);
+        return ok(mapping(value),value.revision(),correlationId);
+    }
+
     @PostMapping("/connector-workers")
     ResponseEntity<IntegrationAdminApiModels.WorkerResource> createWorker(
             @RequestHeader("Idempotency-Key") String idem,
@@ -284,6 +341,13 @@ public final class IntegrationAdministrationController {
                 v.supportsCompleteGrantDiscovery(),
                 v.lifecycleState(),
                 v.revision(),v.createdAt(),v.updatedAt());
+    }
+
+    private static IntegrationAdminApiModels.EntitlementMappingResource mapping(
+            EntitlementObservationMapping v) {
+        return new IntegrationAdminApiModels.EntitlementMappingResource(
+                v.id(),v.connectorBindingId(),v.providerStableId(),v.entitlementId(),
+                v.lifecycleState(),v.revision(),v.createdAt(),v.updatedAt(),v.retiredAt());
     }
 
     private static IntegrationAdminApiModels.WorkerResource worker(

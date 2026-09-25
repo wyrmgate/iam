@@ -13,7 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-public final class CatalogQueryService {
+public final class CatalogQueryService implements CatalogEntitlementReferenceQuery {
 
     private final CatalogRepository repository;
 
@@ -31,6 +31,21 @@ public final class CatalogQueryService {
 
     public Optional<Entitlement> findEntitlement(TenantContext tenant, UUID id) {
         return repository.findEntitlement(tenant, id);
+    }
+
+    @Override
+    public Validation validateActiveTargetEntitlement(
+            TenantContext tenant, UUID entitlementId, UUID applicationTargetId) {
+        Optional<Entitlement> value = repository.findEntitlement(tenant, entitlementId);
+        if (value.isEmpty()) return Validation.NOT_FOUND;
+        Entitlement entitlement = value.get();
+        if (entitlement.lifecycleState()
+                != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
+            return Validation.RETIRED;
+        }
+        return applicationTargetId.equals(entitlement.applicationTargetId())
+                ? Validation.VALID
+                : Validation.TARGET_MISMATCH;
     }
 
     public ApplicationPage listApplications(TenantContext tenant, PagePosition after, int limit) {

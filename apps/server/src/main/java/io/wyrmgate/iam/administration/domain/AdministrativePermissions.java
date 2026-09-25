@@ -65,6 +65,13 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission CONNECTOR_WORKER_DISABLE =
             new AdministrativePermission("connector-worker", "disable");
 
+    public static final AdministrativePermission ENTITLEMENT_OBSERVATION_MAPPING_READ =
+            new AdministrativePermission("entitlement-observation-mapping", "read");
+    public static final AdministrativePermission ENTITLEMENT_OBSERVATION_MAPPING_CREATE =
+            new AdministrativePermission("entitlement-observation-mapping", "create");
+    public static final AdministrativePermission ENTITLEMENT_OBSERVATION_MAPPING_RETIRE =
+            new AdministrativePermission("entitlement-observation-mapping", "retire");
+
     public static final Set<AdministrativePermission> INITIAL_TENANT_ADMIN = Set.of(
             MANAGE_AUTHORIZATION,
             IDENTITY_READ,

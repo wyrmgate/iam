@@ -67,7 +67,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
     }
 
     @AfterAll

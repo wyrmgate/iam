@@ -87,3 +87,37 @@ Facts do not include:
 - worker scope/permission details.
 
 These internal facts are not automatically public integration events.
+
+
+## Entitlement observation mappings
+
+ADR-0015 adds an explicit Integration-owned resolution resource for provider entitlement observations.
+
+A mapping binds one present provider entitlement observation on an active `APPLICATION_TARGET` ConnectorBinding to one existing active Catalog Entitlement for exactly the same ApplicationTarget.
+
+Within one ConnectorBinding, an active provider stable identifier has at most one active mapping. The Catalog Entitlement reference is not reverse-unique: distinct provider-native identifiers may be explicitly mapped to the same canonical Entitlement when they represent the same governable access meaning.
+
+Mapping is not Catalog maintenance and is not access adoption:
+
+- provider discovery never creates or updates Catalog Entitlement authority;
+- creating a mapping never creates an AccessAssignment;
+- provider IDs remain observation/mapping provenance;
+- unmapping is explicit terminal retirement of that mapping record; remapping creates a new record.
+
+Control-plane operations:
+
+- `POST /api/v1/connector-bindings/{bindingId}/entitlement-mappings`
+- `GET /api/v1/entitlement-observation-mappings/{id}`
+- `POST /api/v1/entitlement-observation-mappings/{id}:unmap`
+
+Create/unmap require causal `Idempotency-Key`. Unmap also requires strong revision `If-Match`.
+
+Semantic default-deny permissions:
+
+- `entitlement-observation-mapping:read`
+- `entitlement-observation-mapping:create`
+- `entitlement-observation-mapping:retire`
+
+The mapping target is validated through a Catalog-owned semantic query. Integration does not read or mutate Catalog persistence directly.
+
+Successful map/unmap commits also append a data-minimized internal `integration.observed-access-input-changed` outbox fact containing the ConnectorBinding scope and mapping aggregate reference. ENTITLEMENT/GRANT reconciliation completion emits the same internal trigger whenever completion materializes current observation state, including positive observations retained from non-COMPLETE runs. Governance leases these facts asynchronously and re-queries current normalized observed access before updating findings. This trigger is internal only and is not a public integration event.

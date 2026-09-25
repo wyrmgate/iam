@@ -9,7 +9,7 @@ RUN mvn -f /workspace/apps/server/pom.xml dependency:go-offline
 COPY apps/server /workspace/apps/server
 RUN mvn -f /workspace/apps/server/pom.xml clean package -DskipTests
 
-FROM eclipse-temurin:25-jre-alpine-3.23
+FROM eclipse-temurin:25-jre-alpine-3.24
 WORKDIR /app
 
 RUN apk upgrade --no-cache \

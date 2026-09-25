@@ -307,6 +307,9 @@ def verify_integration_admin_openapi(document: dict) -> None:
         "/api/v1/connector-bindings",
         "/api/v1/connector-bindings/{id}",
         "/api/v1/connector-bindings/{id}:disable",
+        "/api/v1/connector-bindings/{bindingId}/entitlement-mappings",
+        "/api/v1/entitlement-observation-mappings/{id}",
+        "/api/v1/entitlement-observation-mappings/{id}:unmap",
         "/api/v1/connector-workers",
         "/api/v1/connector-workers/{id}",
         "/api/v1/connector-workers/{id}:disable",
@@ -322,7 +325,9 @@ def verify_integration_admin_openapi(document: dict) -> None:
     secret_reference = schemas["ConnectorCreateRequest"]["properties"]["secretReference"]
     assert secret_reference.get("writeOnly") is True
     for name in ("ConnectorResource", "ConnectorCreateRequest",
-                 "ConnectorBindingResource", "ConnectorWorkerResource", "WorkerPermission"):
+                 "ConnectorBindingResource", "EntitlementMappingCreateRequest",
+                 "EntitlementMappingResource",
+                 "ConnectorWorkerResource", "WorkerPermission"):
         assert schemas[name].get("additionalProperties") is False
 
 def main() -> None:

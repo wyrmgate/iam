@@ -9,6 +9,8 @@ import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeAct
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.persistence.JdbcAdministrativeAuthorizationRepository;
+import io.wyrmgate.iam.catalog.application.CatalogQueryService;
+import io.wyrmgate.iam.catalog.persistence.JdbcCatalogRepository;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
@@ -19,11 +21,14 @@ import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationCommandService;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationException;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository;
+import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
 import io.wyrmgate.iam.integration.domain.WorkerCapability;
 import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationAdministrationFactSink;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationAdministrationRepository;
+import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationRuntimeRepository;
+import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservationRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.IdempotencyConflictException;
@@ -89,12 +94,25 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
         integration = new JdbcIntegrationAdministrationRepository(jdbc, JSON);
-        runtime = new JdbcIntegrationRuntimeRepository(jdbc, JSON, ids);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
+        runtime = new JdbcIntegrationRuntimeRepository(jdbc, JSON, ids, observedAccessFacts);
+        var factSink = new JdbcIntegrationAdministrationFactSink(outbox, ids);
         var commands = new IntegrationAdministrationCommandService(
-                integration, new JdbcIntegrationAdministrationFactSink(outbox, ids), ids, transactions);
+                integration, factSink, ids, transactions);
+        var observationMappings = new JdbcIntegrationObservationRepository(jdbc);
+        var mappingCommands = new IntegrationEntitlementMappingService(
+                integration,
+                observationMappings,
+                new CatalogQueryService(new JdbcCatalogRepository(jdbc)),
+                factSink,
+                observedAccessFacts,
+                ids,
+                transactions);
         mutations = new IntegrationAdminApiMutationService(
-                authorization, commands, integration, idempotency, transactions);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
+                authorization, commands, integration,
+                mappingCommands, observationMappings,
+                idempotency, transactions);
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
     }
 
     @AfterAll

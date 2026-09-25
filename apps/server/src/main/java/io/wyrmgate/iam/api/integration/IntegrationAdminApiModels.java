@@ -68,6 +68,21 @@ final class IntegrationAdminApiModels {
             Instant createdAt,
             Instant updatedAt) {}
 
+    record EntitlementMappingCreateRequest(
+            String providerStableId,
+            UUID entitlementId) {}
+
+    record EntitlementMappingResource(
+            UUID id,
+            UUID connectorBindingId,
+            String providerStableId,
+            UUID entitlementId,
+            String lifecycleState,
+            long revision,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant retiredAt) {}
+
     record WorkerCreateRequest(
             String issuer,
             String subject,
