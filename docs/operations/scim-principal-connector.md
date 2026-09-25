@@ -186,6 +186,14 @@ For `DISABLE_PRINCIPAL` or `DEACTIVATE_PRINCIPAL`:
 - `providerStableId` is required;
 - `providerVersion` is optional.
 
+For `ADD_GRANT` / `REMOVE_GRANT`, planner-created payloads use:
+
+- `providerEntitlementId` — provider-native Group/entitlement stable ID;
+- `providerEntitlementVersion` — optional provider version/ETag;
+- `providerPrincipalId` — provider-native Principal stable ID.
+
+The local SCIM executor still accepts the earlier `providerGroupId` / `providerGroupVersion` aliases for backward compatibility, but new Integration planning uses the provider-neutral entitlement field names.
+
 These fields are provider-edge execution data and do not redefine canonical Principal or Identity semantics.
 
 Before claim, and again immediately before provider mutation, the executor checks Access-owned `DesiredAccessStateQuery`. A missing or changed desired revision is superseded without a provider mutation. If Access is unavailable before claim, the work remains unclaimed. If availability is lost after claim but before the provider call, the attempt is normalized as retryable without making the provider call.
