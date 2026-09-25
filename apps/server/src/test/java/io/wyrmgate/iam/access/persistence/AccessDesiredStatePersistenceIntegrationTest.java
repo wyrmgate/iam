@@ -44,7 +44,7 @@ class AccessDesiredStatePersistenceIntegrationTest {
         tenants = new JdbcTenantRepository(jdbc, ids);
         repository = new JdbcDesiredStateProjectionRepository(jdbc);
         query = new AccessDesiredStateQueryService(repository);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
     }
 
     @AfterAll
