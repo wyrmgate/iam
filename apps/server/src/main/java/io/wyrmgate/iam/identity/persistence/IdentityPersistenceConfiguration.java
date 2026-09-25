@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.identity.persistence;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.administration.application.GovernedActorStatusQuery;
 import io.wyrmgate.iam.catalog.application.CatalogTargetReferenceQuery;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeConfigurationService;
@@ -18,6 +19,9 @@ import io.wyrmgate.iam.identity.application.IdentityRepository;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.identity.application.PrincipalQueryService;
+import io.wyrmgate.iam.identity.application.PrincipalProvisioningProfileQuery;
+import io.wyrmgate.iam.identity.application.PrincipalProvisioningProfileQueryService;
+import io.wyrmgate.iam.identity.application.PrincipalProvisioningResultProcessor;
 import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery;
 import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQueryService;
 import io.wyrmgate.iam.identity.application.PrincipalRepository;
@@ -112,6 +116,27 @@ public class IdentityPersistenceConfiguration {
     PrincipalTechnicalReferenceQuery principalTechnicalReferenceQuery(
             PrincipalRepository principalRepository) {
         return new PrincipalTechnicalReferenceQueryService(principalRepository);
+    }
+
+    @Bean
+    PrincipalProvisioningProfileQuery principalProvisioningProfileQuery(
+            IdentityRepository identityRepository) {
+        return new PrincipalProvisioningProfileQueryService(identityRepository);
+    }
+
+    @Bean
+    PrincipalProvisioningResultProcessor principalProvisioningResultProcessor(
+            JdbcOutboxRepository outboxRepository,
+            PrincipalCommandService principalCommandService,
+            ObjectMapper objectMapper) {
+        return new PrincipalProvisioningResultProcessor(
+                outboxRepository, principalCommandService, objectMapper);
+    }
+
+    @Bean
+    PrincipalProvisioningResultScheduler principalProvisioningResultScheduler(
+            PrincipalProvisioningResultProcessor processor) {
+        return new PrincipalProvisioningResultScheduler(processor);
     }
 
     @Bean
