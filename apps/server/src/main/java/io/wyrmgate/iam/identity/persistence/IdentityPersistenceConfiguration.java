@@ -17,7 +17,6 @@ import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.identity.application.PrincipalQueryService;
 import io.wyrmgate.iam.identity.application.PrincipalRepository;
-import io.wyrmgate.iam.identity.application.PrincipalResolutionQuery;
 import io.wyrmgate.iam.identity.application.SourceCorrelationFactSink;
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationService;
@@ -100,11 +99,6 @@ public class IdentityPersistenceConfiguration {
     @Bean
     PrincipalQueryService principalQueryService(PrincipalRepository principalRepository) {
         return new PrincipalQueryService(principalRepository);
-    }
-
-    @Bean
-    PrincipalResolutionQuery principalResolutionQuery(PrincipalQueryService service) {
-        return service;
     }
 
     @Bean
