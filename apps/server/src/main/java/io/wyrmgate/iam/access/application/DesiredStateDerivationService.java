@@ -171,6 +171,8 @@ public final class DesiredStateDerivationService {
                     grant.principalConstraintKey(),
                     at);
         }
+        desired.findPrincipalTuple(tenant, identityId, applicationTargetId)
+                .ifPresent(state -> principalFacts.revalidate(tenant, state));
     }
 
     private static UUID parseSpecificPrincipal(String key) {
