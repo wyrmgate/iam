@@ -18,6 +18,8 @@ import io.wyrmgate.iam.identity.application.IdentityRepository;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.identity.application.PrincipalQueryService;
+import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery;
+import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQueryService;
 import io.wyrmgate.iam.identity.application.PrincipalRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationFactSink;
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
@@ -104,6 +106,12 @@ public class IdentityPersistenceConfiguration {
     PrincipalFactSink principalFactSink(
             JdbcOutboxRepository outboxRepository, IdGenerator idGenerator) {
         return new JdbcPrincipalFactSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
+    PrincipalTechnicalReferenceQuery principalTechnicalReferenceQuery(
+            PrincipalRepository principalRepository) {
+        return new PrincipalTechnicalReferenceQueryService(principalRepository);
     }
 
     @Bean
