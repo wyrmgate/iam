@@ -25,6 +25,23 @@ public final class DesiredStateDerivationService {
             CatalogAccessReferenceQuery catalog,
             IdentityAccessReferenceQuery identities,
             DesiredGrantFactSink grantFacts,
+            TransactionExecutor transactions) {
+        this(
+                effectiveAccess,
+                desired,
+                catalog,
+                identities,
+                grantFacts,
+                (tenant, state) -> { },
+                transactions);
+    }
+
+    public DesiredStateDerivationService(
+            EffectiveAccessQuery effectiveAccess,
+            DesiredStateProjectionRepository desired,
+            CatalogAccessReferenceQuery catalog,
+            IdentityAccessReferenceQuery identities,
+            DesiredGrantFactSink grantFacts,
             DesiredPrincipalFactSink principalFacts,
             TransactionExecutor transactions) {
         this.effectiveAccess = Objects.requireNonNull(effectiveAccess, "effectiveAccess");
