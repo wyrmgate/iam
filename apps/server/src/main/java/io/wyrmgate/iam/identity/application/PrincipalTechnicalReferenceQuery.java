@@ -13,8 +13,10 @@ public interface PrincipalTechnicalReferenceQuery {
     List<Result> activeForIdentityTarget(
             TenantContext tenant, UUID identityId, UUID applicationTargetId);
 
-    List<Result> forIdentityTarget(
-            TenantContext tenant, UUID identityId, UUID applicationTargetId);
+    default List<Result> forIdentityTarget(
+            TenantContext tenant, UUID identityId, UUID applicationTargetId) {
+        return activeForIdentityTarget(tenant, identityId, applicationTargetId);
+    }
 
     enum Status {
         ACTIVE,
