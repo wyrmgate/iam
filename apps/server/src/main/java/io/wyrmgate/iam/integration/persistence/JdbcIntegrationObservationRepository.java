@@ -136,10 +136,14 @@ public final class JdbcIntegrationObservationRepository
     public List<ObservedGrantFact> currentGrants(
             TenantContext tenant, UUID connectorBindingId) {
         return jdbc.query("""
-                SELECT g.connector_binding_id, g.provider_stable_id,
+                SELECT g.connector_binding_id, b.target_id, g.provider_stable_id,
                        g.principal_provider_id, g.entitlement_provider_id,
                        m.entitlement_id, g.observed_at
                 FROM integration.observed_grant g
+                JOIN integration.connector_binding b
+                  ON b.tenant_id = g.tenant_id
+                 AND b.id = g.connector_binding_id
+                 AND b.target_kind = 'APPLICATION_TARGET'
                 LEFT JOIN integration.entitlement_observation_mapping m
                   ON m.tenant_id = g.tenant_id
                  AND m.connector_binding_id = g.connector_binding_id
@@ -149,10 +153,26 @@ public final class JdbcIntegrationObservationRepository
                 ORDER BY g.provider_stable_id
                 """,
                 (rs,row) -> new ObservedGrantFact(
-                        rs.getObject(1, UUID.class), rs.getString(2),
-                        rs.getString(3), rs.getString(4),
-                        rs.getObject(5, UUID.class), rs.getTimestamp(6).toInstant()),
+                        rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
+                        rs.getString(3), rs.getString(4), rs.getString(5),
+                        rs.getObject(6, UUID.class), rs.getTimestamp(7).toInstant()),
                 tenant.tenantId(), connectorBindingId);
+    }
+
+    @Override
+    public List<UUID> activeApplicationTargetBindings(
+            TenantContext tenant, UUID applicationTargetId) {
+        return jdbc.query("""
+                SELECT id
+                FROM integration.connector_binding
+                WHERE tenant_id = ?
+                  AND target_kind = 'APPLICATION_TARGET'
+                  AND target_id = ?
+                  AND lifecycle_state = 'ACTIVE'
+                ORDER BY id
+                """,
+                (rs,row) -> rs.getObject(1, UUID.class),
+                tenant.tenantId(), applicationTargetId);
     }
 
     private static EntitlementObservationMapping mapping(java.sql.ResultSet rs)
