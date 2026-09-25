@@ -42,15 +42,30 @@ public final class DesiredStateDerivationService {
 
         var entitlement = catalog.resolveActiveEntitlement(tenant, entitlementId);
         if (entitlement.status() != CatalogAccessReferenceQuery.Status.VALID) {
-            desired.reconcileGrant(
-                    tenant,
-                    identityId,
-                    null,
-                    entitlementId,
-                    principalConstraintKey,
-                    null,
-                    DesiredStateProjectionRepository.DesiredPresence.ABSENT,
-                    at);
+            desired.findGrantTuple(
+                            tenant, identityId, entitlementId, principalConstraintKey)
+                    .ifPresent(existing -> {
+                        desired.reconcileGrant(
+                                tenant,
+                                identityId,
+                                existing.applicationTargetId(),
+                                entitlementId,
+                                principalConstraintKey,
+                                null,
+                                DesiredStateProjectionRepository.DesiredPresence.ABSENT,
+                                at);
+                        desired.reconcilePrincipal(
+                                tenant,
+                                identityId,
+                                existing.applicationTargetId(),
+                                desired.hasPresentGrant(
+                                                tenant,
+                                                identityId,
+                                                existing.applicationTargetId())
+                                        ? DesiredStateProjectionRepository.DesiredPresence.PRESENT
+                                        : DesiredStateProjectionRepository.DesiredPresence.ABSENT,
+                                at);
+                    });
             return;
         }
 
