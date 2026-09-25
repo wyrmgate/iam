@@ -13,10 +13,15 @@ import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.integration.application.GrantProvisioningPlannerService;
 import io.wyrmgate.iam.integration.application.GrantProvisioningPlanningProcessor;
 import io.wyrmgate.iam.integration.application.GrantProvisioningRepository;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalProvisioningFactSink;
+import io.wyrmgate.iam.integration.application.PrincipalProvisioningPlannerService;
+import io.wyrmgate.iam.integration.application.PrincipalProvisioningPlanningProcessor;
+import io.wyrmgate.iam.integration.application.PrincipalProvisioningRepository;
 import io.wyrmgate.iam.catalog.application.CatalogEntitlementReferenceQuery;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredProvisioningStateQuery;
 import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery;
+import io.wyrmgate.iam.identity.application.PrincipalProvisioningProfileQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -41,9 +46,14 @@ public class IntegrationRuntimeConfiguration {
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
             IdGenerator idGenerator,
-            IntegrationObservedAccessFactSink observedAccessFacts) {
+            IntegrationObservedAccessFactSink observedAccessFacts,
+            IntegrationPrincipalProvisioningFactSink principalProvisioningFacts) {
         return new JdbcIntegrationRuntimeRepository(
-                jdbcTemplate, objectMapper, idGenerator, observedAccessFacts);
+                jdbcTemplate,
+                objectMapper,
+                idGenerator,
+                observedAccessFacts,
+                principalProvisioningFacts);
     }
 
     @Bean
@@ -63,6 +73,15 @@ public class IntegrationRuntimeConfiguration {
             JdbcOutboxRepository outboxRepository,
             IdGenerator idGenerator) {
         return new JdbcIntegrationAdministrationFactSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
+    IntegrationPrincipalProvisioningFactSink integrationPrincipalProvisioningFactSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator idGenerator,
+            ObjectMapper objectMapper) {
+        return new JdbcIntegrationPrincipalProvisioningFactSink(
+                outboxRepository, idGenerator, objectMapper);
     }
 
     @Bean
@@ -93,6 +112,43 @@ public class IntegrationRuntimeConfiguration {
             TransactionExecutor transactions) {
         return new IntegrationEntitlementMappingService(
                 administration, mappings, catalog, facts, observedAccessFacts, ids, transactions);
+    }
+
+    @Bean
+    PrincipalProvisioningRepository principalProvisioningRepository(
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
+            IdGenerator idGenerator) {
+        return new JdbcPrincipalProvisioningRepository(
+                jdbcTemplate, objectMapper, idGenerator);
+    }
+
+    @Bean
+    PrincipalProvisioningPlannerService principalProvisioningPlannerService(
+            DesiredProvisioningStateQuery desiredProvisioningStateQuery,
+            PrincipalTechnicalReferenceQuery principalTechnicalReferenceQuery,
+            PrincipalProvisioningProfileQuery principalProvisioningProfileQuery,
+            PrincipalProvisioningRepository principalProvisioningRepository) {
+        return new PrincipalProvisioningPlannerService(
+                desiredProvisioningStateQuery,
+                principalTechnicalReferenceQuery,
+                principalProvisioningProfileQuery,
+                principalProvisioningRepository);
+    }
+
+    @Bean
+    PrincipalProvisioningPlanningProcessor principalProvisioningPlanningProcessor(
+            JdbcOutboxRepository outboxRepository,
+            PrincipalProvisioningPlannerService planner,
+            TransactionExecutor transactions) {
+        return new PrincipalProvisioningPlanningProcessor(
+                outboxRepository, planner, transactions);
+    }
+
+    @Bean
+    PrincipalProvisioningPlanningScheduler principalProvisioningPlanningScheduler(
+            PrincipalProvisioningPlanningProcessor processor) {
+        return new PrincipalProvisioningPlanningScheduler(processor);
     }
 
     @Bean
