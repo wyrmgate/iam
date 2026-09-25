@@ -26,6 +26,21 @@ public final class IdentityAccessReferenceQueryService
     }
 
     @Override
+    public PrincipalSelection selectUniqueActivePrincipal(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
+        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
+        var matches = principals.findActiveByIdentityAndTarget(
+                tenant, identityId, applicationTargetId);
+        if (matches.isEmpty()) return PrincipalSelection.none();
+        if (matches.size() > 1) return PrincipalSelection.ambiguous();
+        return PrincipalSelection.resolved(matches.getFirst().id());
+    }
+
+    @Override
     public PrincipalReference principal(
             TenantContext tenant, UUID principalId) {
         Objects.requireNonNull(tenant, "tenant");
