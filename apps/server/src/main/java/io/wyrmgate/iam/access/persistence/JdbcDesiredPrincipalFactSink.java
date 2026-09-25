@@ -23,12 +23,24 @@ public final class JdbcDesiredPrincipalFactSink implements DesiredPrincipalFactS
 
     @Override
     public void changed(TenantContext tenant, DesiredPrincipalState state) {
+        append(tenant, state, DESIRED_PRINCIPAL_CHANGED);
+    }
+
+    @Override
+    public void revalidate(TenantContext tenant, DesiredPrincipalState state) {
+        append(tenant, state, DESIRED_PRINCIPAL_REVALIDATE);
+    }
+
+    private void append(
+            TenantContext tenant,
+            DesiredPrincipalState state,
+            String eventType) {
         UUID eventId = ids.nextId();
         outbox.append(
                 tenant,
                 new OutboxEvent(
                         eventId,
-                        DESIRED_PRINCIPAL_CHANGED,
+                        eventType,
                         1,
                         "desired-principal",
                         state.id(),
