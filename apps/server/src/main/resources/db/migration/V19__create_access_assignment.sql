@@ -46,6 +46,8 @@ CREATE TABLE access.access_assignment (
         CHECK (lifecycle_state IN (
             'SCHEDULED', 'ACTIVE', 'SUSPENDED',
             'REVOKED', 'EXPIRED', 'CANCELLED')),
+    CONSTRAINT access_assignment_scheduled_valid_from_ck
+        CHECK (lifecycle_state <> 'SCHEDULED' OR valid_from IS NOT NULL),
     CONSTRAINT access_assignment_validity_ck
         CHECK (valid_until IS NULL OR valid_from IS NULL OR valid_until > valid_from),
     CONSTRAINT access_assignment_revision_ck CHECK (revision > 0),
