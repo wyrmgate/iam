@@ -15,6 +15,20 @@ public final class DesiredProvisioningStateQueryService
     }
 
     @Override
+    public PrincipalResult desiredPrincipal(
+            TenantContext tenant, UUID desiredPrincipalId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(desiredPrincipalId, "desiredPrincipalId");
+        try {
+            return repository.findPrincipalById(tenant, desiredPrincipalId)
+                    .map(PrincipalResult::current)
+                    .orElseGet(PrincipalResult::absent);
+        } catch (RuntimeException unavailable) {
+            return PrincipalResult.unavailable();
+        }
+    }
+
+    @Override
     public Result desiredGrant(TenantContext tenant, UUID desiredGrantId) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(desiredGrantId, "desiredGrantId");
