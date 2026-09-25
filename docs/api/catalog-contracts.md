@@ -2,13 +2,14 @@
 
 ## Scope
 
-The first Catalog runtime slice implements authoritative:
+The Catalog runtime now implements authoritative:
 
 - `Application`;
 - `ApplicationTarget`;
-- `Entitlement`.
+- `Entitlement`;
+- internal/runtime `Role` and `RoleVersion` composition.
 
-It intentionally does not implement Role/RoleVersion, automatic provider observation adoption, AccessAssignment, EffectiveAccess, or provider-side grant execution. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
+The checked-in public Catalog HTTP contract still exposes only Application/ApplicationTarget/Entitlement in this slice. Role/RoleVersion public CRUD is intentionally deferred; the new Role runtime is consumed by Access through the framework-neutral `RoleExpansionQuery`. Automatic provider observation adoption, AccessAssignment authority, EffectiveAccess ownership, and provider-side grant execution remain outside Catalog. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
 
 Machine-readable contract:
 
@@ -21,6 +22,17 @@ Catalog owns the governed meaning of Application, ApplicationTarget and Entitlem
 Integration may later discover provider-native groups/permissions as `ObservedEntitlement` and memberships as `ObservedGrant`, but provider observations never silently create or mutate Catalog authority.
 
 An Entitlement has a stable IAM ID. A SCIM Group/provider object ID is provider-native observation/mapping evidence, not the Entitlement primary identity. Catalog validates mapping references but does not own or persist provider-observation mappings.
+
+## Role runtime boundary
+
+- Role is either BUSINESS or APPLICATION.
+- APPLICATION Role belongs to exactly one active Application.
+- APPLICATION RoleVersion contains only active target-scoped Entitlements from that Application.
+- BUSINESS RoleVersion contains target-scoped Entitlements and/or APPLICATION Roles; BUSINESS -> BUSINESS and APPLICATION -> Role are not supported.
+- an active Role has at most one ACTIVE RoleVersion;
+- ACTIVE/SUPERSEDED RoleVersion content is immutable;
+- BUSINESS expansion resolves member APPLICATION Roles through their current ACTIVE versions and returns exact ordered RoleVersion derivation paths;
+- Role activation/retirement emits internal expansion-change facts for Access projection repair; these are not automatically public integration events.
 
 ## Structural invariants
 

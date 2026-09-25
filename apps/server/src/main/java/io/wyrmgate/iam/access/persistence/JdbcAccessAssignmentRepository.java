@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -66,6 +67,23 @@ public final class JdbcAccessAssignmentRepository
                 assignmentId)
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    public List<AccessAssignment> findByRoleId(
+            TenantContext tenant, UUID roleId) {
+        return jdbc.query("""
+                SELECT id, identity_id, target_kind, role_id, entitlement_id,
+                       principal_constraint_kind, specific_principal_id,
+                       provenance_kind, provenance_ref_id, lifecycle_state,
+                       valid_from, valid_until, revision, created_at, updated_at
+                FROM access.access_assignment
+                WHERE tenant_id = ? AND target_kind = 'ROLE' AND role_id = ?
+                ORDER BY id
+                """,
+                (rs,row) -> assignment(rs),
+                tenant.tenantId(),
+                roleId);
     }
 
     @Override

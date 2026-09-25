@@ -7,8 +7,12 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -159,6 +163,189 @@ public final class JdbcEffectiveAccessRepository
                         effectiveId);
             }
         }
+    }
+
+    @Override
+    public List<UUID> replaceRoleAssignmentSupport(
+            TenantContext tenant,
+            AccessAssignment assignment,
+            String principalConstraintKey,
+            List<RoleSupportPath> paths,
+            Instant computedAt) {
+        record Existing(
+                UUID supportId,
+                UUID effectiveAccessId,
+                UUID entitlementId,
+                String pathHash) {}
+
+        List<Existing> existing = jdbc.query("""
+                SELECT s.id, s.effective_access_id, ea.entitlement_id, s.path_hash
+                FROM access.effective_access_support s
+                JOIN access.effective_access ea
+                  ON ea.tenant_id = s.tenant_id
+                 AND ea.id = s.effective_access_id
+                WHERE s.tenant_id = ? AND s.access_assignment_id = ?
+                """,
+                (rs,row) -> new Existing(
+                        rs.getObject(1, UUID.class),
+                        rs.getObject(2, UUID.class),
+                        rs.getObject(3, UUID.class),
+                        rs.getString(4)),
+                tenant.tenantId(),
+                assignment.id());
+
+        Map<String,RoleSupportPath> desired = new LinkedHashMap<>();
+        for (RoleSupportPath path : paths) {
+            String key = path.entitlementId() + "|" + path.pathHash();
+            if (desired.putIfAbsent(key, path) != null) {
+                throw new IllegalArgumentException(
+                        "duplicate role support path " + key);
+            }
+        }
+
+        Set<UUID> touchedEntitlements = new LinkedHashSet<>();
+        Set<UUID> changedEffective = new LinkedHashSet<>();
+        Set<UUID> createdEffective = new LinkedHashSet<>();
+        Set<String> existingKeys = new LinkedHashSet<>();
+
+        for (Existing current : existing) {
+            String key = current.entitlementId() + "|" + current.pathHash();
+            touchedEntitlements.add(current.entitlementId());
+            if (desired.containsKey(key)) {
+                existingKeys.add(key);
+                continue;
+            }
+            jdbc.update("""
+                    DELETE FROM access.effective_access_support
+                    WHERE tenant_id = ? AND id = ?
+                    """,
+                    tenant.tenantId(), current.supportId());
+            changedEffective.add(current.effectiveAccessId());
+        }
+
+        for (Map.Entry<String,RoleSupportPath> entry : desired.entrySet()) {
+            RoleSupportPath path = entry.getValue();
+            touchedEntitlements.add(path.entitlementId());
+            if (existingKeys.contains(entry.getKey())) continue;
+
+            UUID effectiveId = findTupleId(
+                            tenant,
+                            assignment.identityId(),
+                            path.entitlementId(),
+                            principalConstraintKey)
+                    .orElse(null);
+            if (effectiveId == null) {
+                UUID candidate = ids.nextId();
+                int inserted = jdbc.update("""
+                        INSERT INTO access.effective_access (
+                            id, tenant_id, identity_id, entitlement_id,
+                            principal_constraint_key, support_count,
+                            computed_at, projection_generation)
+                        VALUES (?, ?, ?, ?, ?, 1, ?, 1)
+                        ON CONFLICT (
+                            tenant_id, identity_id, entitlement_id,
+                            principal_constraint_key)
+                        DO NOTHING
+                        """,
+                        candidate,
+                        tenant.tenantId(),
+                        assignment.identityId(),
+                        path.entitlementId(),
+                        principalConstraintKey,
+                        Timestamp.from(computedAt));
+                if (inserted == 1) {
+                    effectiveId = candidate;
+                    createdEffective.add(effectiveId);
+                } else {
+                    effectiveId = findTupleId(
+                                    tenant,
+                                    assignment.identityId(),
+                                    path.entitlementId(),
+                                    principalConstraintKey)
+                            .orElseThrow();
+                }
+            }
+
+            UUID supportId = ids.nextId();
+            int supportInserted = jdbc.update("""
+                    INSERT INTO access.effective_access_support (
+                        id, tenant_id, effective_access_id,
+                        access_assignment_id, role_version_id,
+                        path_hash, path_depth)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (
+                        tenant_id, effective_access_id,
+                        access_assignment_id, path_hash)
+                    DO NOTHING
+                    """,
+                    supportId,
+                    tenant.tenantId(),
+                    effectiveId,
+                    assignment.id(),
+                    path.roleVersionPath().getFirst(),
+                    path.pathHash(),
+                    path.roleVersionPath().size());
+            if (supportInserted == 1) {
+                for (int ordinal = 0;
+                        ordinal < path.roleVersionPath().size();
+                        ordinal++) {
+                    jdbc.update("""
+                            INSERT INTO access.effective_access_support_role_version (
+                                tenant_id, effective_access_support_id,
+                                path_ordinal, role_version_id)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            tenant.tenantId(),
+                            supportId,
+                            ordinal,
+                            path.roleVersionPath().get(ordinal));
+                }
+                changedEffective.add(effectiveId);
+            }
+        }
+
+        for (UUID effectiveId : changedEffective) {
+            Integer remaining = jdbc.queryForObject("""
+                    SELECT count(*)
+                    FROM access.effective_access_support
+                    WHERE tenant_id = ? AND effective_access_id = ?
+                    """,
+                    Integer.class,
+                    tenant.tenantId(),
+                    effectiveId);
+            int count = remaining == null ? 0 : remaining;
+            if (count == 0) {
+                jdbc.update("""
+                        DELETE FROM access.effective_access
+                        WHERE tenant_id = ? AND id = ?
+                        """,
+                        tenant.tenantId(), effectiveId);
+            } else if (createdEffective.contains(effectiveId)) {
+                jdbc.update("""
+                        UPDATE access.effective_access
+                        SET support_count = ?, computed_at = ?
+                        WHERE tenant_id = ? AND id = ?
+                        """,
+                        count,
+                        Timestamp.from(computedAt),
+                        tenant.tenantId(),
+                        effectiveId);
+            } else {
+                jdbc.update("""
+                        UPDATE access.effective_access
+                        SET support_count = ?,
+                            computed_at = ?,
+                            projection_generation = projection_generation + 1
+                        WHERE tenant_id = ? AND id = ?
+                        """,
+                        count,
+                        Timestamp.from(computedAt),
+                        tenant.tenantId(),
+                        effectiveId);
+            }
+        }
+
+        return List.copyOf(touchedEntitlements);
     }
 
     @Override

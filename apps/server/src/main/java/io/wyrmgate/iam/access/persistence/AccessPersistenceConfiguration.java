@@ -18,6 +18,7 @@ import io.wyrmgate.iam.access.application.DesiredStateDerivationService;
 import io.wyrmgate.iam.access.application.DesiredStateProcessingService;
 import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
+import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
@@ -40,6 +41,7 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentRepository repository,
             IdentityAccessReferenceQuery identityReferences,
             CatalogAccessReferenceQuery catalogReferences,
+            RoleExpansionQuery roleExpansion,
             AccessAssignmentFactSink facts,
             AccessAssignmentBoundaryScheduler boundaries,
             IdGenerator idGenerator,
@@ -48,6 +50,7 @@ public class AccessPersistenceConfiguration {
                 repository,
                 identityReferences,
                 catalogReferences,
+                roleExpansion,
                 facts,
                 boundaries,
                 idGenerator,
@@ -85,12 +88,14 @@ public class AccessPersistenceConfiguration {
             JdbcScheduledWorkRepository scheduledWorkRepository,
             AccessAssignmentRepository assignmentRepository,
             EffectiveAccessRepository effectiveAccessRepository,
+            RoleExpansionQuery roleExpansion,
             DesiredStateDerivationService desiredStateDerivationService) {
         return new EffectiveAccessProcessingService(
                 outboxRepository,
                 scheduledWorkRepository,
                 assignmentRepository,
                 effectiveAccessRepository,
+                roleExpansion,
                 desiredStateDerivationService);
     }
 

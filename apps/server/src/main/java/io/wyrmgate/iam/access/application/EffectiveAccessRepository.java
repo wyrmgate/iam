@@ -22,6 +22,13 @@ public interface EffectiveAccessRepository {
             UUID assignmentId,
             Instant computedAt);
 
+    List<UUID> replaceRoleAssignmentSupport(
+            TenantContext tenant,
+            AccessAssignment assignment,
+            String principalConstraintKey,
+            List<RoleSupportPath> paths,
+            Instant computedAt);
+
     Optional<EffectiveAccess> findCurrent(
             TenantContext tenant,
             UUID identityId,
@@ -33,4 +40,22 @@ public interface EffectiveAccessRepository {
             TenantContext tenant,
             UUID effectiveAccessId,
             Instant at);
+
+    record RoleSupportPath(
+            UUID entitlementId,
+            List<UUID> roleVersionPath,
+            String pathHash) {
+        public RoleSupportPath {
+            java.util.Objects.requireNonNull(entitlementId, "entitlementId");
+            roleVersionPath = List.copyOf(roleVersionPath);
+            if (roleVersionPath.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "roleVersionPath must not be empty");
+            }
+            if (pathHash == null || pathHash.isBlank()) {
+                throw new IllegalArgumentException(
+                        "pathHash must not be blank");
+            }
+        }
+    }
 }

@@ -2,6 +2,7 @@ package io.wyrmgate.iam.access.application;
 
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
+import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -16,6 +17,7 @@ public final class AccessAssignmentCommandService {
     private final AccessAssignmentRepository assignments;
     private final IdentityAccessReferenceQuery identityReferences;
     private final CatalogAccessReferenceQuery catalogReferences;
+    private final RoleExpansionQuery roleExpansion;
     private final AccessAssignmentFactSink facts;
     private final AccessAssignmentBoundaryScheduler boundaries;
     private final IdGenerator ids;
@@ -29,11 +31,34 @@ public final class AccessAssignmentCommandService {
             AccessAssignmentBoundaryScheduler boundaries,
             IdGenerator ids,
             TransactionExecutor transactions) {
+        this(
+                assignments,
+                identityReferences,
+                catalogReferences,
+                (tenant, roleId) -> RoleExpansionQuery.Result.unavailable(
+                        RoleExpansionQuery.Status.NOT_FOUND, roleId),
+                facts,
+                boundaries,
+                ids,
+                transactions);
+    }
+
+    public AccessAssignmentCommandService(
+            AccessAssignmentRepository assignments,
+            IdentityAccessReferenceQuery identityReferences,
+            CatalogAccessReferenceQuery catalogReferences,
+            RoleExpansionQuery roleExpansion,
+            AccessAssignmentFactSink facts,
+            AccessAssignmentBoundaryScheduler boundaries,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
         this.assignments = Objects.requireNonNull(assignments, "assignments");
         this.identityReferences = Objects.requireNonNull(
                 identityReferences, "identityReferences");
         this.catalogReferences = Objects.requireNonNull(
                 catalogReferences, "catalogReferences");
+        this.roleExpansion = Objects.requireNonNull(
+                roleExpansion, "roleExpansion");
         this.facts = Objects.requireNonNull(facts, "facts");
         this.boundaries = Objects.requireNonNull(boundaries, "boundaries");
         this.ids = Objects.requireNonNull(ids, "ids");
@@ -140,6 +165,126 @@ public final class AccessAssignmentCommandService {
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 null,
                 entitlementId,
+                principalConstraintKind,
+                specificPrincipalId,
+                AccessAssignment.ProvenanceKind.MANUAL,
+                null,
+                lifecycleState,
+                validFrom,
+                validUntil,
+                1,
+                now,
+                now);
+
+        return transactions.required(() -> {
+            assignments.insert(tenant, assignment);
+            facts.projectionInputChanged(tenant, assignment);
+            boundaries.scheduleBoundaries(tenant, assignment, now);
+            return assignments.findById(tenant, assignment.id())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "created AccessAssignment could not be reloaded"));
+        });
+    }
+
+    public AccessAssignment createRoleAssignment(
+            TenantContext tenant,
+            UUID identityId,
+            UUID roleId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            Instant validFrom,
+            Instant validUntil,
+            Instant now) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
+        Objects.requireNonNull(roleId, "roleId");
+        Objects.requireNonNull(principalConstraintKind, "principalConstraintKind");
+        Objects.requireNonNull(now, "now");
+
+        if (!identityReferences.identityExists(tenant, identityId)) {
+            throw new AccessAssignmentCommandException(
+                    "identity_not_found",
+                    "The requested Identity was not found in the tenant.");
+        }
+
+        var expansion = roleExpansion.expandCurrent(tenant, roleId);
+        if (expansion.status() != RoleExpansionQuery.Status.AVAILABLE
+                || expansion.paths().isEmpty()) {
+            throw new AccessAssignmentCommandException(
+                    "role_not_assignable",
+                    "The requested Role has no valid current expansion.");
+        }
+
+        if (principalConstraintKind
+                == AccessAssignment.PrincipalConstraintKind.SPECIFIC) {
+            if (specificPrincipalId == null) {
+                throw new AccessAssignmentCommandException(
+                        "specific_principal_required",
+                        "SPECIFIC principal constraint requires a Principal.");
+            }
+            var principal = identityReferences.principal(
+                    tenant, specificPrincipalId);
+            if (principal.status()
+                    == IdentityAccessReferenceQuery.Status.NOT_FOUND) {
+                throw new AccessAssignmentCommandException(
+                        "principal_not_found",
+                        "The requested Principal was not found.");
+            }
+            if (principal.status()
+                    == IdentityAccessReferenceQuery.Status.UNCORRELATED) {
+                throw new AccessAssignmentCommandException(
+                        "principal_uncorrelated",
+                        "The requested Principal is not correlated to an Identity.");
+            }
+            if (!identityId.equals(principal.identityId())) {
+                throw new AccessAssignmentCommandException(
+                        "principal_identity_mismatch",
+                        "The requested Principal belongs to another Identity.");
+            }
+            var targetIds = expansion.paths().stream()
+                    .map(RoleExpansionQuery.EntitlementPath::applicationTargetId)
+                    .distinct()
+                    .toList();
+            if (targetIds.size() != 1) {
+                throw new AccessAssignmentCommandException(
+                        "specific_role_target_ambiguous",
+                        "SPECIFIC principal constraint requires a Role expansion with exactly one ApplicationTarget.");
+            }
+            if (!targetIds.getFirst().equals(
+                    principal.applicationTargetId())) {
+                throw new AccessAssignmentCommandException(
+                        "principal_target_mismatch",
+                        "The requested Principal belongs to another ApplicationTarget.");
+            }
+        } else if (specificPrincipalId != null) {
+            throw new AccessAssignmentCommandException(
+                    "specific_principal_not_allowed",
+                    "ANY principal constraint must not include a specific Principal.");
+        }
+
+        if (validUntil != null && !validUntil.isAfter(now)) {
+            throw new AccessAssignmentCommandException(
+                    "validity_already_ended",
+                    "AccessAssignment validity must not already be ended.");
+        }
+        if (validFrom != null && validUntil != null
+                && !validUntil.isAfter(validFrom)) {
+            throw new AccessAssignmentCommandException(
+                    "invalid_validity_window",
+                    "validUntil must be after validFrom.");
+        }
+
+        AccessAssignment.LifecycleState lifecycleState =
+                validFrom != null && validFrom.isAfter(now)
+                        ? AccessAssignment.LifecycleState.SCHEDULED
+                        : AccessAssignment.LifecycleState.ACTIVE;
+
+        AccessAssignment assignment = new AccessAssignment(
+                ids.nextId(),
+                identityId,
+                AccessAssignment.TargetKind.ROLE,
+                roleId,
+                null,
                 principalConstraintKind,
                 specificPrincipalId,
                 AccessAssignment.ProvenanceKind.MANUAL,
