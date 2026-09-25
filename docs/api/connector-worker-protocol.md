@@ -114,6 +114,7 @@ The first runtime slice is intentionally bounded:
 - remote reconciliation supports negotiated `PRINCIPAL`, `ENTITLEMENT`, and `GRANT` observations under protocol v1; each observation batch must match the run's object-class scope;
 - positive observations from PARTIAL/UNKNOWN runs may materialize, but unseen observations are marked absent only after Integration validates effective `COMPLETE` coverage;
 - ProvisioningJob, ProvisioningTask and immutable ProvisioningAttempt persistence are implemented;
+- current DesiredGrantState revisions now automatically plan provider-neutral ADD_GRANT/REMOVE_GRANT work after Integration resolves a safe technical ConnectorBinding/entitlement/Principal target; unresolved or ambiguous privilege increases create no claimable task;
 - provisioning work revalidates through Access-owned `DesiredAccessStateQuery`; matching `CURRENT` revision is claimable, `ABSENT` or revision mismatch becomes `SUPERSEDED`, and `UNAVAILABLE` leaves work unclaimed;
 - connector/provider credentials remain external opaque secret references and never transit ordinary worker payloads;
 - an opt-in in-process SCIM executor may execute the same Integration-owned durable work using the same lease/fencing and completion persistence; this does not change worker protocol v1 or grant local execution any additional governance authority;
