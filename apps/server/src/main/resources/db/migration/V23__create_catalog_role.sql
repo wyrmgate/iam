@@ -118,3 +118,61 @@ COMMENT ON TABLE catalog.role_version IS
     'Versioned Role composition. Activated and superseded content is immutable.';
 COMMENT ON TABLE catalog.role_version_member IS
     'Normalized typed RoleVersion composition; graph/type validity is enforced by Catalog domain logic.';
+
+
+CREATE OR REPLACE FUNCTION catalog.reject_immutable_activated_role_version_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.role_id <> OLD.role_id
+       OR NEW.version_number <> OLD.version_number THEN
+        RAISE EXCEPTION 'RoleVersion identity is immutable';
+    END IF;
+    IF NEW.content_hash <> OLD.content_hash
+       AND (
+           OLD.state IN ('ACTIVE','SUPERSEDED')
+           OR NEW.state IN ('ACTIVE','SUPERSEDED')
+       ) THEN
+        RAISE EXCEPTION 'activated RoleVersion content is immutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER catalog_role_version_immutable_trg
+BEFORE UPDATE ON catalog.role_version
+FOR EACH ROW EXECUTE FUNCTION catalog.reject_immutable_activated_role_version_change();
+
+CREATE OR REPLACE FUNCTION catalog.reject_immutable_activated_role_version_member_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    version_id uuid;
+    version_state varchar(24);
+BEGIN
+    version_id := CASE WHEN TG_OP = 'DELETE'
+        THEN OLD.role_version_id ELSE NEW.role_version_id END;
+    SELECT state INTO version_state
+    FROM catalog.role_version
+    WHERE tenant_id = CASE WHEN TG_OP = 'DELETE'
+            THEN OLD.tenant_id ELSE NEW.tenant_id END
+      AND id = version_id;
+
+    IF version_state IN ('ACTIVE','SUPERSEDED') THEN
+        RAISE EXCEPTION 'activated RoleVersion members are immutable';
+    END IF;
+
+    IF TG_OP = 'UPDATE'
+       AND OLD.role_version_id <> NEW.role_version_id THEN
+        RAISE EXCEPTION 'RoleVersion member ownership is immutable';
+    END IF;
+
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+CREATE TRIGGER catalog_role_version_member_immutable_trg
+BEFORE INSERT OR UPDATE OR DELETE ON catalog.role_version_member
+FOR EACH ROW EXECUTE FUNCTION catalog.reject_immutable_activated_role_version_member_change();
