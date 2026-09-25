@@ -86,7 +86,7 @@ class CatalogApiIntegrationTest {
         commands = new CatalogCommandService(repository, ids, transactions);
         queries = new CatalogQueryService(repository);
         idempotency = new JdbcIdempotencyRepository(jdbc, ids);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("19");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
     }
 
     @AfterAll
