@@ -129,9 +129,18 @@ class GrantProvisioningPlanningIntegrationTest {
                 NOW);
         facts.changed(tenant, grant);
 
+        assertThat(provisioning.addTargets(
+                tenant, targetId, entitlementId, "provider-user-1"))
+                .hasSize(1);
+
         var processor = processor(activePrincipal(
                 principalId, identityId, targetId, "provider-user-1"));
-        assertThat(processor.processAvailable()).isEqualTo(1);
+        int processed = processor.processAvailable();
+        assertThat(processed)
+                .withFailMessage(
+                        "planner outbox error: %s",
+                        latestOutboxError(tenant))
+                .isEqualTo(1);
 
         assertThat(jobCount(tenant)).isEqualTo(1);
         assertThat(taskCount(tenant)).isEqualTo(1);
@@ -251,7 +260,12 @@ class GrantProvisioningPlanningIntegrationTest {
         facts.changed(tenant, present);
         var processor = processor(activePrincipal(
                 principalId, identityId, targetId, "provider-user-1"));
-        assertThat(processor.processAvailable()).isEqualTo(1);
+        int initialProcessed = processor.processAvailable();
+        assertThat(initialProcessed)
+                .withFailMessage(
+                        "planner outbox error: %s",
+                        latestOutboxError(tenant))
+                .isEqualTo(1);
 
         jdbc.update("""
                 UPDATE integration.provisioning_task
@@ -475,6 +489,22 @@ class GrantProvisioningPlanningIntegrationTest {
                 ORDER BY id
                 LIMIT 1
                 """, UUID.class, tenant.tenantId(), targetId);
+    }
+
+    private String latestOutboxError(TenantContext tenant) {
+        return jdbc.query("""
+                SELECT COALESCE(last_error_code, '<none>')
+                FROM platform.outbox_event
+                WHERE tenant_id = ?
+                  AND event_type = 'access.desired-grant-changed'
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (rs,row) -> rs.getString(1),
+                tenant.tenantId())
+                .stream()
+                .findFirst()
+                .orElse("<missing>");
     }
 
     private int jobCount(TenantContext tenant) {
