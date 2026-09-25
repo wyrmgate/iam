@@ -1,6 +1,8 @@
 package io.wyrmgate.iam.access.application;
 
 import io.wyrmgate.iam.access.domain.AccessAssignment;
+import io.wyrmgate.iam.catalog.application.RoleExpansionFactSink;
+import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
@@ -11,6 +13,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
@@ -30,6 +33,7 @@ public final class EffectiveAccessProcessingService {
     private final JdbcScheduledWorkRepository scheduledWork;
     private final AccessAssignmentRepository assignments;
     private final EffectiveAccessRepository effectiveAccess;
+    private final RoleExpansionQuery roleExpansion;
     private final DesiredStateDerivationService desiredState;
     private final Clock clock;
 
@@ -39,7 +43,32 @@ public final class EffectiveAccessProcessingService {
             AccessAssignmentRepository assignments,
             EffectiveAccessRepository effectiveAccess,
             DesiredStateDerivationService desiredState) {
-        this(outbox, scheduledWork, assignments, effectiveAccess, desiredState, Clock.systemUTC());
+        this(
+                outbox,
+                scheduledWork,
+                assignments,
+                effectiveAccess,
+                (tenant, roleId) -> RoleExpansionQuery.Result.unavailable(
+                        RoleExpansionQuery.Status.NOT_FOUND, roleId),
+                desiredState,
+                Clock.systemUTC());
+    }
+
+    public EffectiveAccessProcessingService(
+            JdbcOutboxRepository outbox,
+            JdbcScheduledWorkRepository scheduledWork,
+            AccessAssignmentRepository assignments,
+            EffectiveAccessRepository effectiveAccess,
+            RoleExpansionQuery roleExpansion,
+            DesiredStateDerivationService desiredState) {
+        this(
+                outbox,
+                scheduledWork,
+                assignments,
+                effectiveAccess,
+                roleExpansion,
+                desiredState,
+                Clock.systemUTC());
     }
 
     EffectiveAccessProcessingService(
@@ -49,10 +78,30 @@ public final class EffectiveAccessProcessingService {
             EffectiveAccessRepository effectiveAccess,
             DesiredStateDerivationService desiredState,
             Clock clock) {
+        this(
+                outbox,
+                scheduledWork,
+                assignments,
+                effectiveAccess,
+                (tenant, roleId) -> RoleExpansionQuery.Result.unavailable(
+                        RoleExpansionQuery.Status.NOT_FOUND, roleId),
+                desiredState,
+                clock);
+    }
+
+    EffectiveAccessProcessingService(
+            JdbcOutboxRepository outbox,
+            JdbcScheduledWorkRepository scheduledWork,
+            AccessAssignmentRepository assignments,
+            EffectiveAccessRepository effectiveAccess,
+            RoleExpansionQuery roleExpansion,
+            DesiredStateDerivationService desiredState,
+            Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.scheduledWork = Objects.requireNonNull(scheduledWork, "scheduledWork");
         this.assignments = Objects.requireNonNull(assignments, "assignments");
         this.effectiveAccess = Objects.requireNonNull(effectiveAccess, "effectiveAccess");
+        this.roleExpansion = Objects.requireNonNull(roleExpansion, "roleExpansion");
         this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
@@ -66,7 +115,9 @@ public final class EffectiveAccessProcessingService {
     private int processFacts() {
         Instant now = clock.instant();
         List<ClaimedOutboxEvent> claimed = outbox.claimPending(
-                Set.of(AccessAssignmentFactSink.PROJECTION_INPUT_CHANGED),
+                Set.of(
+                        AccessAssignmentFactSink.PROJECTION_INPUT_CHANGED,
+                        RoleExpansionFactSink.ROLE_EXPANSION_CHANGED),
                 now,
                 CLAIM_LEASE,
                 BATCH_SIZE);
@@ -75,12 +126,37 @@ public final class EffectiveAccessProcessingService {
             try {
                 var event = item.event();
                 if (event.eventVersion() != 1
-                        || !"access-assignment".equals(event.aggregateType())
                         || event.aggregateId() == null) {
                     throw new IllegalArgumentException(
-                            "unsupported AccessAssignment projection fact");
+                            "unsupported EffectiveAccess projection fact");
                 }
-                reconcile(item.tenant(), event.aggregateId(), clock.instant());
+                if (AccessAssignmentFactSink.PROJECTION_INPUT_CHANGED.equals(
+                        event.eventType())) {
+                    if (!"access-assignment".equals(event.aggregateType())) {
+                        throw new IllegalArgumentException(
+                                "invalid AccessAssignment projection fact");
+                    }
+                    reconcile(
+                            item.tenant(),
+                            event.aggregateId(),
+                            clock.instant());
+                } else if (RoleExpansionFactSink.ROLE_EXPANSION_CHANGED.equals(
+                        event.eventType())) {
+                    if (!"role".equals(event.aggregateType())) {
+                        throw new IllegalArgumentException(
+                                "invalid Role expansion fact");
+                    }
+                    for (AccessAssignment assignment : assignments.findByRoleId(
+                            item.tenant(), event.aggregateId())) {
+                        reconcile(
+                                item.tenant(),
+                                assignment.id(),
+                                clock.instant());
+                    }
+                } else {
+                    throw new IllegalArgumentException(
+                            "unsupported EffectiveAccess projection fact");
+                }
                 outbox.markPublished(
                         item.tenant(), event.eventId(), clock.instant());
                 processed++;
@@ -138,30 +214,62 @@ public final class EffectiveAccessProcessingService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "AccessAssignment projection input does not exist"));
 
-        if (assignment.targetKind() != AccessAssignment.TargetKind.ENTITLEMENT) {
-            effectiveAccess.removeAssignmentSupport(tenant, assignmentId, at);
+        String constraintKey = principalConstraintKey(assignment);
+        if (assignment.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT) {
+            if (!assignment.isSemanticallyEffectiveAt(at)) {
+                effectiveAccess.removeAssignmentSupport(
+                        tenant, assignmentId, at);
+            } else {
+                effectiveAccess.applyDirectAssignment(
+                        tenant,
+                        assignment,
+                        constraintKey,
+                        directPathHash(assignment, constraintKey),
+                        at);
+            }
+
+            desiredState.reconcileGrant(
+                    tenant,
+                    assignment.identityId(),
+                    assignment.entitlementId(),
+                    constraintKey,
+                    at);
             return;
         }
 
-        String constraintKey = principalConstraintKey(assignment);
-        if (!assignment.isSemanticallyEffectiveAt(at)) {
-            effectiveAccess.removeAssignmentSupport(
-                    tenant, assignmentId, at);
-        } else {
-            effectiveAccess.applyDirectAssignment(
-                    tenant,
-                    assignment,
-                    constraintKey,
-                    directPathHash(assignment, constraintKey),
-                    at);
+        List<EffectiveAccessRepository.RoleSupportPath> desiredPaths =
+                new ArrayList<>();
+        if (assignment.isSemanticallyEffectiveAt(at)) {
+            var expansion = roleExpansion.expandCurrent(
+                    tenant, assignment.roleId());
+            if (expansion.status() == RoleExpansionQuery.Status.AVAILABLE) {
+                for (var path : expansion.paths()) {
+                    desiredPaths.add(new EffectiveAccessRepository.RoleSupportPath(
+                            path.entitlementId(),
+                            path.roleVersionPath(),
+                            rolePathHash(
+                                    assignment,
+                                    path.entitlementId(),
+                                    constraintKey,
+                                    path.roleVersionPath())));
+                }
+            }
         }
 
-        desiredState.reconcileGrant(
+        List<UUID> touched = effectiveAccess.replaceRoleAssignmentSupport(
                 tenant,
-                assignment.identityId(),
-                assignment.entitlementId(),
+                assignment,
                 constraintKey,
+                desiredPaths,
                 at);
+        for (UUID entitlementId : touched) {
+            desiredState.reconcileGrant(
+                    tenant,
+                    assignment.identityId(),
+                    entitlementId,
+                    constraintKey,
+                    at);
+        }
     }
 
     static String principalConstraintKey(AccessAssignment assignment) {
@@ -169,6 +277,23 @@ public final class EffectiveAccessProcessingService {
             case ANY -> "ANY";
             case SPECIFIC -> "SPECIFIC:" + assignment.specificPrincipalId();
         };
+    }
+
+    static String rolePathHash(
+            AccessAssignment assignment,
+            UUID entitlementId,
+            String principalConstraintKey,
+            List<UUID> roleVersionPath) {
+        String canonical = "ROLE|"
+                + assignment.id()
+                + "|" + assignment.identityId()
+                + "|" + entitlementId
+                + "|" + principalConstraintKey
+                + "|" + roleVersionPath.stream()
+                        .map(UUID::toString)
+                        .reduce((left, right) -> left + ">" + right)
+                        .orElseThrow();
+        return sha256(canonical);
     }
 
     static String directPathHash(
@@ -179,6 +304,10 @@ public final class EffectiveAccessProcessingService {
                 + "|" + assignment.identityId()
                 + "|" + assignment.entitlementId()
                 + "|" + principalConstraintKey;
+        return sha256(canonical);
+    }
+
+    private static String sha256(String canonical) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(
