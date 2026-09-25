@@ -16,6 +16,7 @@ public final class DesiredStateDerivationService {
     private final CatalogAccessReferenceQuery catalog;
     private final IdentityAccessReferenceQuery identities;
     private final DesiredGrantFactSink grantFacts;
+    private final DesiredPrincipalFactSink principalFacts;
     private final TransactionExecutor transactions;
 
     public DesiredStateDerivationService(
@@ -24,12 +25,14 @@ public final class DesiredStateDerivationService {
             CatalogAccessReferenceQuery catalog,
             IdentityAccessReferenceQuery identities,
             DesiredGrantFactSink grantFacts,
+            DesiredPrincipalFactSink principalFacts,
             TransactionExecutor transactions) {
         this.effectiveAccess = Objects.requireNonNull(effectiveAccess, "effectiveAccess");
         this.desired = Objects.requireNonNull(desired, "desired");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.grantFacts = Objects.requireNonNull(grantFacts, "grantFacts");
+        this.principalFacts = Objects.requireNonNull(principalFacts, "principalFacts");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
 
@@ -77,16 +80,10 @@ public final class DesiredStateDerivationService {
                         if (updated.desiredRevision() != existing.desiredRevision()) {
                             grantFacts.changed(tenant, updated);
                         }
-                        desired.reconcilePrincipal(
+                        reconcilePrincipalAndPublish(
                                 tenant,
                                 identityId,
                                 existing.applicationTargetId(),
-                                desired.hasPresentGrant(
-                                                tenant,
-                                                identityId,
-                                                existing.applicationTargetId())
-                                        ? DesiredStateProjectionRepository.DesiredPresence.PRESENT
-                                        : DesiredStateProjectionRepository.DesiredPresence.ABSENT,
                                 at);
                     });
             return;
@@ -132,15 +129,32 @@ public final class DesiredStateDerivationService {
             grantFacts.changed(tenant, updatedGrant);
         }
 
-        desired.reconcilePrincipal(
+        reconcilePrincipalAndPublish(
                 tenant,
                 identityId,
                 entitlement.applicationTargetId(),
-                desired.hasPresentGrant(
-                        tenant, identityId, entitlement.applicationTargetId())
+                at);
+    }
+
+    private void reconcilePrincipalAndPublish(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId,
+            Instant at) {
+        var previous = desired.findPrincipalTuple(
+                tenant, identityId, applicationTargetId);
+        var updated = desired.reconcilePrincipal(
+                tenant,
+                identityId,
+                applicationTargetId,
+                desired.hasPresentGrant(tenant, identityId, applicationTargetId)
                         ? DesiredStateProjectionRepository.DesiredPresence.PRESENT
                         : DesiredStateProjectionRepository.DesiredPresence.ABSENT,
                 at);
+        if (previous.isEmpty()
+                || previous.get().desiredRevision() != updated.desiredRevision()) {
+            principalFacts.changed(tenant, updated);
+        }
     }
 
     public void reconcileAnyForPrincipalChange(
