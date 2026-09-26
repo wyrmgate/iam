@@ -38,6 +38,24 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission ENTITLEMENT_RETIRE =
             new AdministrativePermission("entitlement", "retire");
 
+    public static final AdministrativePermission ROLE_READ =
+            new AdministrativePermission("role", "read");
+    public static final AdministrativePermission ROLE_CREATE =
+            new AdministrativePermission("role", "create");
+    public static final AdministrativePermission ROLE_UPDATE =
+            new AdministrativePermission("role", "update");
+    public static final AdministrativePermission ROLE_RETIRE =
+            new AdministrativePermission("role", "retire");
+
+    public static final AdministrativePermission ROLE_VERSION_READ =
+            new AdministrativePermission("role-version", "read");
+    public static final AdministrativePermission ROLE_VERSION_CREATE =
+            new AdministrativePermission("role-version", "create");
+    public static final AdministrativePermission ROLE_VERSION_VALIDATE =
+            new AdministrativePermission("role-version", "validate");
+    public static final AdministrativePermission ROLE_VERSION_ACTIVATE =
+            new AdministrativePermission("role-version", "activate");
+
     public static final AdministrativePermission CONNECTOR_READ =
             new AdministrativePermission("connector", "read");
     public static final AdministrativePermission CONNECTOR_CREATE =
