@@ -308,7 +308,7 @@ class AccessApiIntegrationTest {
                                         entitlement.id())))
                 .andExpect(status().isCreated())
                 .andExpect(
-                        header().string("ETag", "\\\"rev-1\\\""))
+                        header().string("ETag", "\"rev-1\""))
                 .andExpect(
                         jsonPath("$.provenanceKind")
                                 .value("MANUAL"))
@@ -402,13 +402,13 @@ class AccessApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, actor)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-1\\\"")
+                                        "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
                                         "assignment-suspend-0001"))
                 .andExpect(status().isOk())
                 .andExpect(
-                        header().string("ETag", "\\\"rev-2\\\""))
+                        header().string("ETag", "\"rev-2\""))
                 .andExpect(
                         jsonPath("$.lifecycleState")
                                 .value("SUSPENDED"));
@@ -427,13 +427,13 @@ class AccessApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, actor)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-2\\\"")
+                                        "\"rev-2\"")
                                 .header(
                                         "Idempotency-Key",
                                         "assignment-resume-0001"))
                 .andExpect(status().isOk())
                 .andExpect(
-                        header().string("ETag", "\\\"rev-3\\\""))
+                        header().string("ETag", "\"rev-3\""))
                 .andExpect(
                         jsonPath("$.lifecycleState")
                                 .value("ACTIVE"));
@@ -452,13 +452,13 @@ class AccessApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, actor)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-3\\\"")
+                                        "\"rev-3\"")
                                 .header(
                                         "Idempotency-Key",
                                         "assignment-revoke-0001"))
                 .andExpect(status().isOk())
                 .andExpect(
-                        header().string("ETag", "\\\"rev-4\\\""))
+                        header().string("ETag", "\"rev-4\""))
                 .andExpect(
                         jsonPath("$.lifecycleState")
                                 .value("REVOKED"));
@@ -477,7 +477,7 @@ class AccessApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, actor)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-1\\\"")
+                                        "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
                                         "assignment-stale-0001"))
@@ -654,7 +654,7 @@ class AccessApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, actor)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-1\\\"")
+                                        "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
                                         "scheduled-cancel-0001"))
@@ -713,10 +713,10 @@ class AccessApiIntegrationTest {
                                         targetKind,
                                         roleId == null
                                                 ? "null"
-                                                : "\\\"" + roleId + "\\\"",
+                                                : "\"" + roleId + "\"",
                                         entitlementId == null
                                                 ? "null"
-                                                : "\\\"" + entitlementId + "\\\"")))
+                                                : "\"" + entitlementId + "\"")))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
