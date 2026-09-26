@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.access.persistence;
 
+import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveSupport;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.domain.EffectiveAccess;
@@ -420,6 +421,158 @@ public final class JdbcEffectiveAccessRepository
                 effectiveAccessId,
                 Timestamp.from(at),
                 Timestamp.from(at));
+    }
+
+    @Override
+    public List<EffectiveAccess> findCurrentPage(
+            TenantContext tenant,
+            UUID identityId,
+            UUID afterId,
+            int limit,
+            Instant at) {
+        String identityClause = identityId == null
+                ? ""
+                : " AND ea.identity_id = ? ";
+        String afterClause = afterId == null
+                ? ""
+                : " AND ea.id > ? ";
+        String sql = """
+                SELECT ea.id, ea.identity_id, ea.entitlement_id,
+                       ea.principal_constraint_key, ea.support_count,
+                       ea.computed_at, ea.projection_generation
+                FROM access.effective_access ea
+                WHERE ea.tenant_id = ?
+                """ + identityClause + afterClause + """
+                  AND EXISTS (
+                      SELECT 1
+                      FROM access.effective_access_support s
+                      JOIN access.access_assignment a
+                        ON a.tenant_id = s.tenant_id
+                       AND a.id = s.access_assignment_id
+                      WHERE s.tenant_id = ea.tenant_id
+                        AND s.effective_access_id = ea.id
+                        AND a.lifecycle_state NOT IN (
+                            'SUSPENDED', 'REVOKED', 'EXPIRED', 'CANCELLED')
+                        AND (a.valid_from IS NULL OR a.valid_from <= ?)
+                        AND (a.valid_until IS NULL OR a.valid_until > ?)
+                  )
+                ORDER BY ea.id
+                LIMIT ?
+                """;
+        List<Object> args = new java.util.ArrayList<>();
+        args.add(tenant.tenantId());
+        if (identityId != null) args.add(identityId);
+        if (afterId != null) args.add(afterId);
+        args.add(Timestamp.from(at));
+        args.add(Timestamp.from(at));
+        args.add(limit);
+        return jdbc.query(
+                sql,
+                (rs,row) -> new EffectiveAccess(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("identity_id", UUID.class),
+                        rs.getObject("entitlement_id", UUID.class),
+                        rs.getString("principal_constraint_key"),
+                        rs.getInt("support_count"),
+                        rs.getTimestamp("computed_at").toInstant(),
+                        rs.getLong("projection_generation")),
+                args.toArray());
+    }
+
+    @Override
+    public Optional<EffectiveAccess> findCurrentById(
+            TenantContext tenant,
+            UUID effectiveAccessId,
+            Instant at) {
+        return jdbc.query("""
+                SELECT ea.id, ea.identity_id, ea.entitlement_id,
+                       ea.principal_constraint_key, ea.support_count,
+                       ea.computed_at, ea.projection_generation
+                FROM access.effective_access ea
+                WHERE ea.tenant_id = ?
+                  AND ea.id = ?
+                  AND EXISTS (
+                      SELECT 1
+                      FROM access.effective_access_support s
+                      JOIN access.access_assignment a
+                        ON a.tenant_id = s.tenant_id
+                       AND a.id = s.access_assignment_id
+                      WHERE s.tenant_id = ea.tenant_id
+                        AND s.effective_access_id = ea.id
+                        AND a.lifecycle_state NOT IN (
+                            'SUSPENDED', 'REVOKED', 'EXPIRED', 'CANCELLED')
+                        AND (a.valid_from IS NULL OR a.valid_from <= ?)
+                        AND (a.valid_until IS NULL OR a.valid_until > ?)
+                  )
+                """,
+                (rs,row) -> new EffectiveAccess(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("identity_id", UUID.class),
+                        rs.getObject("entitlement_id", UUID.class),
+                        rs.getString("principal_constraint_key"),
+                        rs.getInt("support_count"),
+                        rs.getTimestamp("computed_at").toInstant(),
+                        rs.getLong("projection_generation")),
+                tenant.tenantId(),
+                effectiveAccessId,
+                Timestamp.from(at),
+                Timestamp.from(at))
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public List<EffectiveSupport> currentSupportEvidence(
+            TenantContext tenant,
+            UUID effectiveAccessId,
+            Instant at) {
+        record Base(
+                UUID supportId,
+                UUID assignmentId,
+                String pathHash,
+                int pathDepth) {}
+        List<Base> bases = jdbc.query("""
+                SELECT s.id, s.access_assignment_id, s.path_hash, s.path_depth
+                FROM access.effective_access_support s
+                JOIN access.access_assignment a
+                  ON a.tenant_id = s.tenant_id
+                 AND a.id = s.access_assignment_id
+                WHERE s.tenant_id = ?
+                  AND s.effective_access_id = ?
+                  AND a.lifecycle_state NOT IN (
+                      'SUSPENDED', 'REVOKED', 'EXPIRED', 'CANCELLED')
+                  AND (a.valid_from IS NULL OR a.valid_from <= ?)
+                  AND (a.valid_until IS NULL OR a.valid_until > ?)
+                ORDER BY s.access_assignment_id, s.path_hash
+                """,
+                (rs,row) -> new Base(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("access_assignment_id", UUID.class),
+                        rs.getString("path_hash"),
+                        rs.getInt("path_depth")),
+                tenant.tenantId(),
+                effectiveAccessId,
+                Timestamp.from(at),
+                Timestamp.from(at));
+        List<EffectiveSupport> result = new java.util.ArrayList<>();
+        for (Base base : bases) {
+            List<UUID> roleVersions = jdbc.query("""
+                    SELECT role_version_id
+                    FROM access.effective_access_support_role_version
+                    WHERE tenant_id = ?
+                      AND effective_access_support_id = ?
+                    ORDER BY path_ordinal
+                    """,
+                    (rs,row) -> rs.getObject("role_version_id", UUID.class),
+                    tenant.tenantId(),
+                    base.supportId());
+            result.add(new EffectiveSupport(
+                    base.assignmentId(),
+                    base.pathHash(),
+                    base.pathDepth(),
+                    roleVersions));
+        }
+        return List.copyOf(result);
     }
 
     private Optional<UUID> findTupleId(
