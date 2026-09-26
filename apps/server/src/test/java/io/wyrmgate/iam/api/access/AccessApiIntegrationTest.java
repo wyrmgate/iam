@@ -734,8 +734,7 @@ class AccessApiIntegrationTest {
                 assignmentRepository,
                 effectiveRepository,
                 expansion,
-                desiredDerivation,
-                Clock.fixed(at, ZoneOffset.UTC));
+                desiredDerivation);
     }
 
     private Identity identity(String displayName) {
