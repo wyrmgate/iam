@@ -63,6 +63,42 @@ final class CatalogCursorCodec {
         return decode(cursor, "application-target", tenant, applicationId);
     }
 
+    String encodeRoles(TenantContext tenant, PagePosition position) {
+        return position == null ? null : sign(payload(
+                "role",
+                tenant.tenantId().toString(),
+                "",
+                clock.instant().toString(),
+                Long.toString(position.createdAt().getEpochSecond()),
+                Integer.toString(position.createdAt().getNano()),
+                position.id().toString()));
+    }
+
+    PagePosition decodeRoles(String cursor, TenantContext tenant) {
+        return decode(cursor, "role", tenant, null);
+    }
+
+    String encodeRoleVersions(
+            TenantContext tenant,
+            UUID roleId,
+            PagePosition position) {
+        return position == null ? null : sign(payload(
+                "role-version",
+                tenant.tenantId().toString(),
+                roleId.toString(),
+                clock.instant().toString(),
+                Long.toString(position.createdAt().getEpochSecond()),
+                Integer.toString(position.createdAt().getNano()),
+                position.id().toString()));
+    }
+
+    PagePosition decodeRoleVersions(
+            String cursor,
+            TenantContext tenant,
+            UUID roleId) {
+        return decode(cursor, "role-version", tenant, roleId);
+    }
+
     String encodeEntitlements(TenantContext tenant, UUID applicationId, PagePosition position) {
         return position == null ? null : sign(payload(
                 "entitlement",

@@ -11,6 +11,7 @@ public record RoleVersion(
         long versionNumber,
         State state,
         String contentHash,
+        long revision,
         Instant activatedAt,
         Instant createdAt,
         Instant updatedAt) {
@@ -22,6 +23,7 @@ public record RoleVersion(
         if (contentHash == null || contentHash.isBlank()) {
             throw new IllegalArgumentException("contentHash must not be blank");
         }
+        if (revision < 1) throw new IllegalArgumentException("revision must be positive");
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
         if (versionNumber < 1) throw new IllegalArgumentException("versionNumber must be positive");

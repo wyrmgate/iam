@@ -4,6 +4,8 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationSer
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogRepository;
+import io.wyrmgate.iam.catalog.application.RoleCommandService;
+import io.wyrmgate.iam.catalog.application.RoleRepository;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -28,6 +30,17 @@ class CatalogApiConfiguration {
             TransactionExecutor transactions) {
         return new CatalogApiMutationService(
                 authorization, commands, repository, idempotency, transactions);
+    }
+
+    @Bean
+    CatalogRoleApiMutationService catalogRoleApiMutationService(
+            AdministrativeAuthorizationService authorization,
+            RoleCommandService commands,
+            RoleRepository roles,
+            JdbcIdempotencyRepository idempotency,
+            TransactionExecutor transactions) {
+        return new CatalogRoleApiMutationService(
+                authorization, commands, roles, idempotency, transactions);
     }
 
     @Bean
