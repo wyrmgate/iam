@@ -86,7 +86,7 @@ class RoleEffectiveAccessIntegrationTest {
         flyway.migrate();
         flyway.validate();
         assertThat(flyway.info().current().getVersion().getVersion())
-                .isEqualTo("24");
+                .isEqualTo("25");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
