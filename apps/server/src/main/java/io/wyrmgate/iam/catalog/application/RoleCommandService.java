@@ -137,9 +137,29 @@ public final class RoleCommandService {
         });
     }
 
+    public Role renameRole(
+            TenantContext tenant,
+            UUID roleId,
+            String name,
+            long expectedRevision,
+            Instant now) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(roleId, "roleId");
+        Objects.requireNonNull(now, "now");
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name must not be blank");
+        }
+        return transactions.required(() -> {
+            requireActiveRole(tenant, roleId);
+            return roles.updateRoleName(
+                    tenant, roleId, name, expectedRevision, now);
+        });
+    }
+
     public RoleVersion markReady(
             TenantContext tenant,
             UUID roleVersionId,
+            long expectedRevision,
             Instant now) {
         Objects.requireNonNull(now, "now");
         return transactions.required(() -> {
@@ -152,13 +172,19 @@ public final class RoleCommandService {
             }
             Role role = requireActiveRole(tenant, version.roleId());
             validatePersistedVersion(tenant, role, version, true);
-            return roles.markReady(tenant, roleVersionId, now);
+            if (version.revision() != expectedRevision) {
+                throw new io.wyrmgate.iam.platform.persistence.StaleWriteException(
+                        "catalog-role-version", roleVersionId, expectedRevision);
+            }
+            return roles.markReady(
+                    tenant, roleVersionId, expectedRevision, now);
         });
     }
 
     public RoleVersion activate(
             TenantContext tenant,
             UUID roleVersionId,
+            long expectedRevision,
             Instant now) {
         Objects.requireNonNull(now, "now");
         return transactions.required(() -> {
@@ -169,10 +195,14 @@ public final class RoleCommandService {
                 throw new IllegalStateException(
                         "only READY RoleVersion can be activated");
             }
+            if (version.revision() != expectedRevision) {
+                throw new io.wyrmgate.iam.platform.persistence.StaleWriteException(
+                        "catalog-role-version", roleVersionId, expectedRevision);
+            }
             Role role = requireActiveRole(tenant, version.roleId());
             validatePersistedVersion(tenant, role, version, true);
             RoleVersion activated = roles.activate(
-                    tenant, roleVersionId, now);
+                    tenant, roleVersionId, expectedRevision, now);
             UUID correlationId = ids.nextId();
             publishRoleAndParents(
                     tenant, role, now, correlationId, activated.id());
