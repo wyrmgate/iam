@@ -244,13 +244,14 @@ catalog.role_version
 - version_number bigint NOT NULL CHECK (version_number > 0)
 - state varchar(24) NOT NULL
 - content_hash varchar(128) NOT NULL
+- revision bigint NOT NULL CHECK (revision > 0)
 - activated_at timestamptz NULL
 - created_at timestamptz NOT NULL
 - UNIQUE (tenant_id, id)
 - UNIQUE (tenant_id, role_id, version_number)
 ```
 
-Activated/superseded RoleVersion content is immutable. Migration V23 implements `catalog.role`, `catalog.role_version` and `catalog.role_version_member`, including a partial unique index that permits at most one ACTIVE version per Role and database triggers that reject activated/superseded content mutation. `catalog.role_version_member` normalizes composition and uses a typed `member_kind` plus mutually exclusive `member_role_id` / `member_entitlement_id`. The first runtime graph is intentionally shallow: BUSINESS -> APPLICATION Role / Entitlement and APPLICATION Role -> Entitlement. Graph/type/current-member validation remains a Catalog domain invariant rather than an ORM cascade.
+Activated/superseded RoleVersion content is immutable. Migration V23 implements `catalog.role`, `catalog.role_version` and `catalog.role_version_member`, including a partial unique index that permits at most one ACTIVE version per Role and database triggers that reject activated/superseded content mutation. Migration V25 adds the positive optimistic `revision` column used by the public validation/activation concurrency contract; validation and activation increment the selected version revision, and automatic supersession increments the previously active version revision. `catalog.role_version_member` normalizes composition and uses a typed `member_kind` plus mutually exclusive `member_role_id` / `member_entitlement_id`. The first runtime graph is intentionally shallow: BUSINESS -> APPLICATION Role / Entitlement and APPLICATION Role -> Entitlement. Graph/type/current-member validation remains a Catalog domain invariant rather than an ORM cascade.
 
 ### Access
 
