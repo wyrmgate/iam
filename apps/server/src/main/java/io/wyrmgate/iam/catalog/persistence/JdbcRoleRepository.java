@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.catalog.persistence;
 
+import io.wyrmgate.iam.catalog.application.CatalogQueryModels.PagePosition;
 import io.wyrmgate.iam.catalog.application.RoleRepository;
 import io.wyrmgate.iam.catalog.domain.CatalogLifecycleState;
 import io.wyrmgate.iam.catalog.domain.Role;
@@ -48,6 +49,57 @@ public final class JdbcRoleRepository implements RoleRepository {
                 WHERE tenant_id = ? AND id = ?
                 """, (rs,row) -> role(rs), tenant.tenantId(), roleId)
                 .stream().findFirst();
+    }
+
+    @Override
+    public List<Role> findRolePage(
+            TenantContext tenant, PagePosition after, int limit) {
+        if (after == null) {
+            return jdbc.query("""
+                    SELECT id, role_type, application_id, code, name,
+                           lifecycle_state, revision, created_at, updated_at
+                    FROM catalog.role
+                    WHERE tenant_id = ?
+                    ORDER BY created_at, id
+                    LIMIT ?
+                    """,
+                    (rs,row) -> role(rs),
+                    tenant.tenantId(), limit);
+        }
+        return jdbc.query("""
+                SELECT id, role_type, application_id, code, name,
+                       lifecycle_state, revision, created_at, updated_at
+                FROM catalog.role
+                WHERE tenant_id = ?
+                  AND (created_at, id) > (?, ?)
+                ORDER BY created_at, id
+                LIMIT ?
+                """,
+                (rs,row) -> role(rs),
+                tenant.tenantId(),
+                Timestamp.from(after.createdAt()),
+                after.id(),
+                limit);
+    }
+
+    @Override
+    public Role updateRoleName(
+            TenantContext tenant,
+            UUID roleId,
+            String name,
+            long expectedRevision,
+            Instant now) {
+        int affected = jdbc.update("""
+                UPDATE catalog.role
+                SET name = ?, revision = revision + 1, updated_at = ?
+                WHERE tenant_id = ? AND id = ?
+                  AND revision = ? AND lifecycle_state = 'ACTIVE'
+                """,
+                name, Timestamp.from(now), tenant.tenantId(),
+                roleId, expectedRevision);
+        OptimisticUpdate.requireSingleRow(
+                affected, "catalog-role", roleId, expectedRevision);
+        return findRole(tenant, roleId).orElseThrow();
     }
 
     @Override
@@ -143,6 +195,38 @@ public final class JdbcRoleRepository implements RoleRepository {
     }
 
     @Override
+    public List<RoleVersion> findVersionPage(
+            TenantContext tenant,
+            UUID roleId,
+            PagePosition after,
+            int limit) {
+        if (after == null) {
+            return jdbc.query("""
+                    SELECT id, role_id, version_number, state, content_hash, revision,
+                           activated_at, created_at, updated_at
+                    FROM catalog.role_version
+                    WHERE tenant_id = ? AND role_id = ?
+                    ORDER BY created_at, id
+                    LIMIT ?
+                    """,
+                    (rs,row) -> version(rs),
+                    tenant.tenantId(), roleId, limit);
+        }
+        return jdbc.query("""
+                SELECT id, role_id, version_number, state, content_hash, revision,
+                       activated_at, created_at, updated_at
+                FROM catalog.role_version
+                WHERE tenant_id = ? AND role_id = ?
+                  AND (created_at, id) > (?, ?)
+                ORDER BY created_at, id
+                LIMIT ?
+                """,
+                (rs,row) -> version(rs),
+                tenant.tenantId(), roleId,
+                Timestamp.from(after.createdAt()), after.id(), limit);
+    }
+
+    @Override
     public List<RoleVersionMember> findMembers(
             TenantContext tenant, UUID roleVersionId) {
         return jdbc.query("""
@@ -167,17 +251,21 @@ public final class JdbcRoleRepository implements RoleRepository {
     public RoleVersion markReady(
             TenantContext tenant,
             UUID roleVersionId,
+            long expectedRevision,
             Instant now) {
         int affected = jdbc.update("""
                 UPDATE catalog.role_version
-                SET state = 'READY', updated_at = ?
-                WHERE tenant_id = ? AND id = ? AND state = 'DRAFT'
+                SET state = 'READY',
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ? AND id = ?
+                  AND revision = ? AND state = 'DRAFT'
                 """,
-                Timestamp.from(now), tenant.tenantId(), roleVersionId);
-        if (affected != 1) {
-            throw new IllegalStateException(
-                    "only DRAFT RoleVersion can become READY");
-        }
+                Timestamp.from(now), tenant.tenantId(),
+                roleVersionId, expectedRevision);
+        OptimisticUpdate.requireSingleRow(
+                affected, "catalog-role-version",
+                roleVersionId, expectedRevision);
         return findVersion(tenant, roleVersionId).orElseThrow();
     }
 
@@ -185,6 +273,7 @@ public final class JdbcRoleRepository implements RoleRepository {
     public RoleVersion activate(
             TenantContext tenant,
             UUID roleVersionId,
+            long expectedRevision,
             Instant now) {
         RoleVersion selected = findVersion(tenant, roleVersionId)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -196,21 +285,27 @@ public final class JdbcRoleRepository implements RoleRepository {
 
         jdbc.update("""
                 UPDATE catalog.role_version
-                SET state = 'SUPERSEDED', updated_at = ?
+                SET state = 'SUPERSEDED',
+                    revision = revision + 1,
+                    updated_at = ?
                 WHERE tenant_id = ? AND role_id = ? AND state = 'ACTIVE'
                 """,
                 Timestamp.from(now), tenant.tenantId(), selected.roleId());
 
         int affected = jdbc.update("""
                 UPDATE catalog.role_version
-                SET state = 'ACTIVE', activated_at = ?, updated_at = ?
-                WHERE tenant_id = ? AND id = ? AND state = 'READY'
+                SET state = 'ACTIVE',
+                    activated_at = ?,
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ? AND id = ?
+                  AND revision = ? AND state = 'READY'
                 """,
                 Timestamp.from(now), Timestamp.from(now),
-                tenant.tenantId(), roleVersionId);
-        if (affected != 1) {
-            throw new IllegalStateException("RoleVersion activation failed");
-        }
+                tenant.tenantId(), roleVersionId, expectedRevision);
+        OptimisticUpdate.requireSingleRow(
+                affected, "catalog-role-version",
+                roleVersionId, expectedRevision);
         return findVersion(tenant, roleVersionId).orElseThrow();
     }
 
