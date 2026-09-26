@@ -9,7 +9,7 @@ The Catalog runtime now implements authoritative:
 - `Entitlement`;
 - internal/runtime `Role` and `RoleVersion` composition.
 
-The checked-in public Catalog HTTP contract still exposes only Application/ApplicationTarget/Entitlement in this slice. Role/RoleVersion public CRUD is intentionally deferred; the new Role runtime is consumed by Access through the framework-neutral `RoleExpansionQuery`. Automatic provider observation adoption, AccessAssignment authority, EffectiveAccess ownership, and provider-side grant execution remain outside Catalog. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
+The checked-in public Catalog HTTP contract now exposes Application/ApplicationTarget/Entitlement plus governed Role/RoleVersion management. Access still consumes Role composition only through the framework-neutral `RoleExpansionQuery`; the public management API never becomes an Access projection shortcut. Automatic provider observation adoption, AccessAssignment authority, EffectiveAccess ownership, and provider-side grant execution remain outside Catalog. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
 
 Machine-readable contract:
 
@@ -33,6 +33,37 @@ An Entitlement has a stable IAM ID. A SCIM Group/provider object ID is provider-
 - ACTIVE/SUPERSEDED RoleVersion content is immutable;
 - BUSINESS expansion resolves member APPLICATION Roles through their current ACTIVE versions and returns exact ordered RoleVersion derivation paths;
 - Role activation/retirement emits internal expansion-change facts for Access projection repair; these are not automatically public integration events.
+
+## Public Role management
+
+Base path: `/api/v1`.
+
+Roles:
+
+- `GET /roles`
+- `POST /roles`
+- `GET /roles/{roleId}`
+- `PATCH /roles/{roleId}` — name only
+- `POST /roles/{roleId}/retire`
+
+RoleVersions:
+
+- `GET /roles/{roleId}/versions`
+- `POST /roles/{roleId}/versions` — creates a complete DRAFT composition snapshot
+- `GET /roles/{roleId}/versions/{roleVersionId}`
+- `POST /roles/{roleId}/versions/{roleVersionId}/validate`
+- `POST /roles/{roleId}/versions/{roleVersionId}/activate`
+
+Role type, application binding and code are immutable after Role creation. RoleVersion membership is supplied as a complete typed set at creation and is not patched in place. Validation re-checks current member references and moves DRAFT to READY. Activation re-checks the composition, moves READY to ACTIVE, and atomically supersedes the prior ACTIVE version.
+
+Role and RoleVersion lifecycle mutations use strong revision ETags plus `If-Match`. RoleVersion has its own positive authoritative revision; DRAFT creation starts at revision 1, validation advances it, activation advances it again, and automatic supersession advances the superseded version revision. Retryable mutations use causal idempotency. Role lists and per-Role version lists use signed tenant/context-bound cursors; a RoleVersion cursor cannot be replayed for another Role.
+
+The initial public composition member union is intentionally typed:
+
+- `ENTITLEMENT` + `entitlementId`;
+- `APPLICATION_ROLE` + `roleId`.
+
+Arbitrary JSON composition and arbitrary status mutation are not public contracts.
 
 ## Structural invariants
 
@@ -133,6 +164,14 @@ A target-list cursor cannot be replayed as an entitlement-list cursor or against
 
 The initial semantic permissions are:
 
+- `role:read`
+- `role:create`
+- `role:update`
+- `role:retire`
+- `role-version:read`
+- `role-version:create`
+- `role-version:validate`
+- `role-version:activate`
 - `application:read`
 - `application:create`
 - `application:update`
