@@ -37,6 +37,12 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
+    AccessAssignmentQueryService accessAssignmentQueryService(
+            AccessAssignmentRepository repository) {
+        return new AccessAssignmentQueryService(repository);
+    }
+
+    @Bean
     AccessAssignmentCommandService accessAssignmentCommandService(
             AccessAssignmentRepository repository,
             IdentityAccessReferenceQuery identityReferences,
@@ -80,6 +86,12 @@ public class AccessPersistenceConfiguration {
     @Bean
     EffectiveAccessQuery effectiveAccessQuery(EffectiveAccessRepository repository) {
         return new EffectiveAccessQueryService(repository);
+    }
+
+    @Bean
+    EffectiveAccessReadService effectiveAccessReadService(
+            EffectiveAccessRepository repository) {
+        return new EffectiveAccessReadService(repository);
     }
 
     @Bean
