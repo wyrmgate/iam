@@ -88,13 +88,14 @@ public final class JdbcRoleRepository implements RoleRepository {
         jdbc.update("""
                 INSERT INTO catalog.role_version (
                     id, tenant_id, role_id, version_number,
-                    state, content_hash, activated_at,
+                    state, content_hash, revision, activated_at,
                     created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 version.id(), tenant.tenantId(), version.roleId(),
                 version.versionNumber(), version.state().name(),
                 version.contentHash(),
+                version.revision(),
                 version.activatedAt() == null
                         ? null : Timestamp.from(version.activatedAt()),
                 Timestamp.from(version.createdAt()),
@@ -117,7 +118,7 @@ public final class JdbcRoleRepository implements RoleRepository {
     public Optional<RoleVersion> findVersion(
             TenantContext tenant, UUID roleVersionId) {
         return jdbc.query("""
-                SELECT id, role_id, version_number, state, content_hash,
+                SELECT id, role_id, version_number, state, content_hash, revision,
                        activated_at, created_at, updated_at
                 FROM catalog.role_version
                 WHERE tenant_id = ? AND id = ?
@@ -131,7 +132,7 @@ public final class JdbcRoleRepository implements RoleRepository {
     public Optional<RoleVersion> findActiveVersion(
             TenantContext tenant, UUID roleId) {
         return jdbc.query("""
-                SELECT id, role_id, version_number, state, content_hash,
+                SELECT id, role_id, version_number, state, content_hash, revision,
                        activated_at, created_at, updated_at
                 FROM catalog.role_version
                 WHERE tenant_id = ? AND role_id = ? AND state = 'ACTIVE'
@@ -260,6 +261,7 @@ public final class JdbcRoleRepository implements RoleRepository {
                 rs.getLong("version_number"),
                 RoleVersion.State.valueOf(rs.getString("state")),
                 rs.getString("content_hash"),
+                rs.getLong("revision"),
                 activated == null ? null : activated.toInstant(),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
