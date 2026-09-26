@@ -1,0 +1,910 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "Wyrmgate IAM Access API",
+    "version": "0.1.0",
+    "description": "Authoritative AccessAssignment management plus read-only EffectiveAccess projection. Desired technical state, provisioning and provider observation remain separate internal/integration concerns."
+  },
+  "security": [
+    {
+      "controlPlaneBearer": []
+    }
+  ],
+  "paths": {
+    "/access-assignments": {
+      "get": {
+        "operationId": "listAccessAssignments",
+        "summary": "List authoritative access assignments",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AccessAssignment page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAssignmentPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative state",
+        "x-wyrmgate-administrative-permission": "access-assignment:read"
+      },
+      "post": {
+        "operationId": "createAccessAssignment",
+        "summary": "Create a manual Role-or-Entitlement access assignment",
+        "description": "Creates authoritative business access intent with MANUAL provenance. This does not synchronously provision a provider.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessAssignmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "AccessAssignment created",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAssignmentResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative state",
+        "x-wyrmgate-administrative-permission": "access-assignment:create",
+        "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/access-assignments/{assignmentId}": {
+      "get": {
+        "operationId": "getAccessAssignment",
+        "summary": "Get authoritative access assignment",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AssignmentId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AccessAssignment",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAssignmentResource"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative state",
+        "x-wyrmgate-administrative-permission": "access-assignment:read"
+      }
+    },
+    "/access-assignments/{assignmentId}/suspend": {
+      "post": {
+        "operationId": "suspendAccessAssignment",
+        "summary": "Suspend access assignment",
+        "description": "Transitions ACTIVE to SUSPENDED. Technical provider state is handled asynchronously from resulting desired state.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AssignmentId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AccessAssignment updated",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAssignmentResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/StaleRevision"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative state",
+        "x-wyrmgate-administrative-permission": "access-assignment:suspend",
+        "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/access-assignments/{assignmentId}/resume": {
+      "post": {
+        "operationId": "resumeAccessAssignment",
+        "summary": "Resume access assignment",
+        "description": "Transitions SUSPENDED to ACTIVE only while the assignment remains temporally valid.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AssignmentId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AccessAssignment updated",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAssignmentResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/StaleRevision"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative state",
+        "x-wyrmgate-administrative-permission": "access-assignment:resume",
+        "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/access-assignments/{assignmentId}/cancel": {
+      "post": {
+        "operationId": "cancelAccessAssignment",
+        "summary": "Cancel access assignment",
+        "description": "Transitions a future SCHEDULED assignment to terminal CANCELLED.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AssignmentId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AccessAssignment updated",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAssignmentResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/StaleRevision"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative state",
+        "x-wyrmgate-administrative-permission": "access-assignment:cancel",
+        "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/access-assignments/{assignmentId}/revoke": {
+      "post": {
+        "operationId": "revokeAccessAssignment",
+        "summary": "Revoke access assignment",
+        "description": "Transitions ACTIVE or SUSPENDED assignment to terminal REVOKED immediately; provider-side removal is tracked separately.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AssignmentId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AccessAssignment updated",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessAssignmentResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/StaleRevision"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative state",
+        "x-wyrmgate-administrative-permission": "access-assignment:revoke",
+        "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/effective-access": {
+      "get": {
+        "operationId": "listEffectiveAccess",
+        "summary": "List current semantic EffectiveAccess projection",
+        "description": "Returns entitlement-level projected access currently supported by semantically effective AccessAssignments. This collection is read-only.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdentityIdFilter"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EffectiveAccess page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveAccessPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "x-wyrmgate-authority": "Access rebuildable projection",
+        "x-wyrmgate-administrative-permission": "effective-access:read",
+        "x-wyrmgate-consistency": "Projection rows are filtered against authoritative assignment lifecycle/time at read time."
+      }
+    },
+    "/effective-access/{effectiveAccessId}": {
+      "get": {
+        "operationId": "getEffectiveAccess",
+        "summary": "Get current EffectiveAccess with support paths",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/EffectiveAccessId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EffectiveAccess detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveAccessResource"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-wyrmgate-authority": "Access rebuildable projection",
+        "x-wyrmgate-administrative-permission": "effective-access:read",
+        "x-wyrmgate-consistency": "Support evidence is filtered against authoritative assignment lifecycle/time at read time."
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "controlPlaneBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Authentication is transport-level only; Administrative Authorization remains separately default-deny."
+      }
+    },
+    "parameters": {
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque signed tenant/context-bound time-bounded continuation cursor.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200
+        }
+      },
+      "CorrelationId": {
+        "name": "X-Correlation-Id",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "AssignmentId": {
+        "name": "assignmentId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "EffectiveAccessId": {
+        "name": "effectiveAccessId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "IdentityIdFilter": {
+        "name": "identityId",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Optional governed Identity filter. Cursor context is bound to the filter value."
+      }
+    },
+    "headers": {
+      "RevisionEtag": {
+        "description": "Strong authoritative revision ETag.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Validation failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Administrative authorization denied",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found in tenant",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Semantic/idempotency conflict",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "StaleRevision": {
+        "description": "Stale If-Match revision",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "AccessAssignmentTargetKind": {
+        "type": "string",
+        "enum": [
+          "ROLE",
+          "ENTITLEMENT"
+        ]
+      },
+      "PrincipalConstraintKind": {
+        "type": "string",
+        "enum": [
+          "ANY",
+          "SPECIFIC"
+        ]
+      },
+      "AccessAssignmentLifecycleState": {
+        "type": "string",
+        "enum": [
+          "SCHEDULED",
+          "ACTIVE",
+          "SUSPENDED",
+          "REVOKED",
+          "EXPIRED",
+          "CANCELLED"
+        ]
+      },
+      "CreateAccessAssignmentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identityId",
+          "targetKind",
+          "roleId",
+          "entitlementId",
+          "principalConstraintKind",
+          "specificPrincipalId",
+          "validFrom",
+          "validUntil"
+        ],
+        "properties": {
+          "identityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetKind": {
+            "$ref": "#/components/schemas/AccessAssignmentTargetKind"
+          },
+          "roleId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Required only for ROLE target."
+          },
+          "entitlementId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Required only for ENTITLEMENT target."
+          },
+          "principalConstraintKind": {
+            "$ref": "#/components/schemas/PrincipalConstraintKind"
+          },
+          "specificPrincipalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Required only for SPECIFIC principal constraint."
+          },
+          "validFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AccessAssignmentResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "identityId",
+          "targetKind",
+          "principalConstraintKind",
+          "provenanceKind",
+          "lifecycleState",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "identityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetKind": {
+            "$ref": "#/components/schemas/AccessAssignmentTargetKind"
+          },
+          "roleId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "entitlementId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "principalConstraintKind": {
+            "$ref": "#/components/schemas/PrincipalConstraintKind"
+          },
+          "specificPrincipalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "provenanceKind": {
+            "type": "string",
+            "const": "MANUAL"
+          },
+          "provenanceRefId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "lifecycleState": {
+            "$ref": "#/components/schemas/AccessAssignmentLifecycleState"
+          },
+          "validFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AccessAssignmentPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessAssignmentResource"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "EffectiveAccessSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "identityId",
+          "entitlementId",
+          "principalConstraintKey",
+          "supportCount",
+          "computedAt",
+          "projectionGeneration"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "identityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entitlementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "principalConstraintKey": {
+            "type": "string"
+          },
+          "supportCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "computedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "projectionGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "EffectiveAccessSupport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accessAssignmentId",
+          "pathHash",
+          "pathDepth",
+          "roleVersionPath"
+        ],
+        "properties": {
+          "accessAssignmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pathHash": {
+            "type": "string"
+          },
+          "pathDepth": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "roleVersionPath": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "EffectiveAccessResource": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EffectiveAccessSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "supports"
+            ],
+            "properties": {
+              "supports": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/components/schemas/EffectiveAccessSupport"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "EffectiveAccessPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveAccessSummary"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "x-wyrmgate-contract-status": "runtime-exposed-authenticated-authorized"
+}

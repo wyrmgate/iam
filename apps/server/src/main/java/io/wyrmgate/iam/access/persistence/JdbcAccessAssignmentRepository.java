@@ -87,10 +87,49 @@ public final class JdbcAccessAssignmentRepository
     }
 
     @Override
-    public AccessAssignment terminate(
+    public List<AccessAssignment> findPage(
+            TenantContext tenant,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        if (afterCreatedAt == null || afterId == null) {
+            return jdbc.query("""
+                    SELECT id, identity_id, target_kind, role_id, entitlement_id,
+                           principal_constraint_kind, specific_principal_id,
+                           provenance_kind, provenance_ref_id, lifecycle_state,
+                           valid_from, valid_until, revision, created_at, updated_at
+                    FROM access.access_assignment
+                    WHERE tenant_id = ?
+                    ORDER BY created_at, id
+                    LIMIT ?
+                    """,
+                    (rs,row) -> assignment(rs),
+                    tenant.tenantId(),
+                    limit);
+        }
+        return jdbc.query("""
+                SELECT id, identity_id, target_kind, role_id, entitlement_id,
+                       principal_constraint_kind, specific_principal_id,
+                       provenance_kind, provenance_ref_id, lifecycle_state,
+                       valid_from, valid_until, revision, created_at, updated_at
+                FROM access.access_assignment
+                WHERE tenant_id = ?
+                  AND (created_at, id) > (?, ?)
+                ORDER BY created_at, id
+                LIMIT ?
+                """,
+                (rs,row) -> assignment(rs),
+                tenant.tenantId(),
+                Timestamp.from(afterCreatedAt),
+                afterId,
+                limit);
+    }
+
+    @Override
+    public AccessAssignment updateLifecycle(
             TenantContext tenant,
             UUID assignmentId,
-            AccessAssignment.LifecycleState terminalState,
+            AccessAssignment.LifecycleState lifecycleState,
             long expectedRevision,
             Instant now) {
         int affected = jdbc.update("""
@@ -102,7 +141,7 @@ public final class JdbcAccessAssignmentRepository
                   AND id = ?
                   AND revision = ?
                 """,
-                terminalState.name(),
+                lifecycleState.name(),
                 Timestamp.from(now),
                 tenant.tenantId(),
                 assignmentId,
@@ -117,9 +156,24 @@ public final class JdbcAccessAssignmentRepository
                         "access-assignment", assignmentId, expectedRevision);
             }
             throw new IllegalStateException(
-                    "AccessAssignment termination did not update");
+                    "AccessAssignment lifecycle did not update");
         }
         return findById(tenant, assignmentId).orElseThrow();
+    }
+
+    @Override
+    public AccessAssignment terminate(
+            TenantContext tenant,
+            UUID assignmentId,
+            AccessAssignment.LifecycleState terminalState,
+            long expectedRevision,
+            Instant now) {
+        return updateLifecycle(
+                tenant,
+                assignmentId,
+                terminalState,
+                expectedRevision,
+                now);
     }
 
     private static AccessAssignment assignment(ResultSet rs) throws SQLException {

@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.access.application;
 
+import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveSupport;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.domain.EffectiveAccess;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -37,6 +38,23 @@ public interface EffectiveAccessRepository {
             Instant at);
 
     List<UUID> currentSupportingAssignmentIds(
+            TenantContext tenant,
+            UUID effectiveAccessId,
+            Instant at);
+
+    List<EffectiveAccess> findCurrentPage(
+            TenantContext tenant,
+            UUID identityId,
+            UUID afterId,
+            int limit,
+            Instant at);
+
+    Optional<EffectiveAccess> findCurrentById(
+            TenantContext tenant,
+            UUID effectiveAccessId,
+            Instant at);
+
+    List<EffectiveSupport> currentSupportEvidence(
             TenantContext tenant,
             UUID effectiveAccessId,
             Instant at);

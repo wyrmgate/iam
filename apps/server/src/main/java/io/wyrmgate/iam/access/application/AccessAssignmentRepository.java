@@ -18,6 +18,21 @@ public interface AccessAssignmentRepository {
         return List.of();
     }
 
+    default List<AccessAssignment> findPage(
+            TenantContext tenant,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        return List.of();
+    }
+
+    AccessAssignment updateLifecycle(
+            TenantContext tenant,
+            UUID assignmentId,
+            AccessAssignment.LifecycleState lifecycleState,
+            long expectedRevision,
+            Instant now);
+
     AccessAssignment terminate(
             TenantContext tenant,
             UUID assignmentId,

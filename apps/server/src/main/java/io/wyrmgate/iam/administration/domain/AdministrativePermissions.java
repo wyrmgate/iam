@@ -56,6 +56,21 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission ROLE_VERSION_ACTIVATE =
             new AdministrativePermission("role-version", "activate");
 
+    public static final AdministrativePermission ACCESS_ASSIGNMENT_READ =
+            new AdministrativePermission("access-assignment", "read");
+    public static final AdministrativePermission ACCESS_ASSIGNMENT_CREATE =
+            new AdministrativePermission("access-assignment", "create");
+    public static final AdministrativePermission ACCESS_ASSIGNMENT_SUSPEND =
+            new AdministrativePermission("access-assignment", "suspend");
+    public static final AdministrativePermission ACCESS_ASSIGNMENT_RESUME =
+            new AdministrativePermission("access-assignment", "resume");
+    public static final AdministrativePermission ACCESS_ASSIGNMENT_CANCEL =
+            new AdministrativePermission("access-assignment", "cancel");
+    public static final AdministrativePermission ACCESS_ASSIGNMENT_REVOKE =
+            new AdministrativePermission("access-assignment", "revoke");
+    public static final AdministrativePermission EFFECTIVE_ACCESS_READ =
+            new AdministrativePermission("effective-access", "read");
+
     public static final AdministrativePermission CONNECTOR_READ =
             new AdministrativePermission("connector", "read");
     public static final AdministrativePermission CONNECTOR_CREATE =

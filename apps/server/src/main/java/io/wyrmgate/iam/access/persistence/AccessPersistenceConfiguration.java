@@ -4,8 +4,10 @@ import io.wyrmgate.iam.access.application.AccessAssignmentBoundaryScheduler;
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
+import io.wyrmgate.iam.access.application.AccessAssignmentQueryService;
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
+import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
@@ -34,6 +36,12 @@ public class AccessPersistenceConfiguration {
     @Bean
     AccessAssignmentRepository accessAssignmentRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcAccessAssignmentRepository(jdbcTemplate);
+    }
+
+    @Bean
+    AccessAssignmentQueryService accessAssignmentQueryService(
+            AccessAssignmentRepository repository) {
+        return new AccessAssignmentQueryService(repository);
     }
 
     @Bean
@@ -80,6 +88,12 @@ public class AccessPersistenceConfiguration {
     @Bean
     EffectiveAccessQuery effectiveAccessQuery(EffectiveAccessRepository repository) {
         return new EffectiveAccessQueryService(repository);
+    }
+
+    @Bean
+    EffectiveAccessReadService effectiveAccessReadService(
+            EffectiveAccessRepository repository) {
+        return new EffectiveAccessReadService(repository);
     }
 
     @Bean
