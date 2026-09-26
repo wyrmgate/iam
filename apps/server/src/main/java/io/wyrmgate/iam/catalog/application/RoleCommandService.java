@@ -115,6 +115,7 @@ public final class RoleCommandService {
                     versionNumber,
                     RoleVersion.State.DRAFT,
                     contentHash,
+                    1,
                     null,
                     now,
                     now);
