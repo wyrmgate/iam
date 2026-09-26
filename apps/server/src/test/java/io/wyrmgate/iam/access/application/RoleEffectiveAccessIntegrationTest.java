@@ -429,9 +429,9 @@ class RoleEffectiveAccessIntegrationTest {
         var version = roles.createDraftVersion(
                 tenant, roleId, members, at);
         roles.markReady(
-                tenant, version.id(), at.plusSeconds(1));
+                tenant, version.id(), 1, at.plusSeconds(1));
         return roles.activate(
-                tenant, version.id(), at.plusSeconds(2));
+                tenant, version.id(), 2, at.plusSeconds(2));
     }
 
     private TenantContext tenant(String name) {
