@@ -8,6 +8,7 @@ import io.wyrmgate.iam.catalog.application.RoleExpansionFactSink;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQueryService;
 import io.wyrmgate.iam.catalog.application.RoleRepository;
+import io.wyrmgate.iam.catalog.application.RoleQueryService;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -33,6 +34,11 @@ public class CatalogPersistenceConfiguration {
             JdbcOutboxRepository outboxRepository,
             IdGenerator ids) {
         return new JdbcRoleExpansionFactSink(outboxRepository, ids);
+    }
+
+    @Bean
+    RoleQueryService roleQueryService(RoleRepository roleRepository) {
+        return new RoleQueryService(roleRepository);
     }
 
     @Bean
