@@ -123,9 +123,9 @@ class RolePersistenceIntegrationTest {
                 role.id(),
                 List.of(RoleCommandService.MemberSpec.entitlement(e1.id())),
                 NOW.plusSeconds(1));
-        roles.markReady(tenant, v1.id(), NOW.plusSeconds(2));
+        roles.markReady(tenant, v1.id(), 1, NOW.plusSeconds(2));
         var activeV1 = roles.activate(
-                tenant, v1.id(), NOW.plusSeconds(3));
+                tenant, v1.id(), 2, NOW.plusSeconds(3));
 
         var first = expansion.expandCurrent(tenant, role.id());
         assertThat(first.status())
@@ -141,8 +141,8 @@ class RolePersistenceIntegrationTest {
                 role.id(),
                 List.of(RoleCommandService.MemberSpec.entitlement(e2.id())),
                 NOW.plusSeconds(4));
-        roles.markReady(tenant, v2.id(), NOW.plusSeconds(5));
-        roles.activate(tenant, v2.id(), NOW.plusSeconds(6));
+        roles.markReady(tenant, v2.id(), 1, NOW.plusSeconds(5));
+        roles.activate(tenant, v2.id(), 2, NOW.plusSeconds(6));
 
         assertThat(jdbc.queryForObject("""
                 SELECT state
@@ -293,9 +293,9 @@ class RolePersistenceIntegrationTest {
             Instant at) {
         var version = roles.createDraftVersion(
                 tenant, roleId, members, at);
-        roles.markReady(tenant, version.id(), at.plusSeconds(1));
+        roles.markReady(tenant, version.id(), 1, at.plusSeconds(1));
         return roles.activate(
-                tenant, version.id(), at.plusSeconds(2));
+                tenant, version.id(), 2, at.plusSeconds(2));
     }
 
     private TenantContext tenant(String name) {
