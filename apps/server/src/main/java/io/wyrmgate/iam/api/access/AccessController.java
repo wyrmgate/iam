@@ -567,7 +567,7 @@ public class AccessController {
             String value, UUID correlationId) {
         if (value == null
                 || !value.matches(
-                        "\\"rev-[1-9][0-9]*\\"")) {
+                        "\\\"rev-[1-9][0-9]*\\\"")) {
             throw AccessApiException.validation(
                     correlationId,
                     "If-Match",
