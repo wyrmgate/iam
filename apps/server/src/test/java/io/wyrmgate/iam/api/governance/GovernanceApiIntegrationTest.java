@@ -49,7 +49,6 @@ import java.security.Signature;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -343,10 +342,7 @@ class GovernanceApiIntegrationTest {
         var evaluator = new AccessRequestEvaluationProcessingService(
                 outbox,
                 requestRepository,
-                requestCommands,
-                Clock.fixed(
-                        NOW.plusSeconds(5),
-                        ZoneOffset.UTC));
+                requestCommands);
         assertThat(evaluator.processAvailable().processed())
                 .isEqualTo(1);
 
