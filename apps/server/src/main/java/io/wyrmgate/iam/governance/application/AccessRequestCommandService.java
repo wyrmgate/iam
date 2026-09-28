@@ -25,6 +25,7 @@ public final class AccessRequestCommandService {
     private final AccessRequestRepository repository;
     private final AccessRequestEligibilityEvaluator evaluator;
     private final ApprovalCommandService approvals;
+    private final SubmittedRequestItemSink submittedItems;
     private final AuthorizedAccessIntentSink authorizedAccess;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
@@ -36,9 +37,29 @@ public final class AccessRequestCommandService {
             AuthorizedAccessIntentSink authorizedAccess,
             IdGenerator ids,
             TransactionExecutor transactions) {
+        this(
+                repository,
+                evaluator,
+                approvals,
+                (tenant, item) -> { },
+                authorizedAccess,
+                ids,
+                transactions);
+    }
+
+    public AccessRequestCommandService(
+            AccessRequestRepository repository,
+            AccessRequestEligibilityEvaluator evaluator,
+            ApprovalCommandService approvals,
+            SubmittedRequestItemSink submittedItems,
+            AuthorizedAccessIntentSink authorizedAccess,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.evaluator = Objects.requireNonNull(evaluator, "evaluator");
         this.approvals = Objects.requireNonNull(approvals, "approvals");
+        this.submittedItems = Objects.requireNonNull(
+                submittedItems, "submittedItems");
         this.authorizedAccess = Objects.requireNonNull(
                 authorizedAccess, "authorizedAccess");
         this.ids = Objects.requireNonNull(ids, "ids");
@@ -136,7 +157,7 @@ public final class AccessRequestCommandService {
                             "request_item_not_draft",
                             "All RequestItems must be DRAFT at submission.");
                 }
-                repository.updateItemState(
+                RequestItem submitted = repository.updateItemState(
                         tenant,
                         item.id(),
                         ItemState.SUBMITTED,
@@ -145,6 +166,7 @@ public final class AccessRequestCommandService {
                         null,
                         item.revision(),
                         now);
+                submittedItems.submitted(tenant, submitted);
             }
             repository.updateRequestState(
                     tenant,

@@ -186,6 +186,8 @@ Do not introduce arbitrary BPM DAGs or script-defined approval semantics.
 
 AccessRequest/RequestItem is the first consumer, but approval persistence contains no access-request target or provisioning semantics. Later administrative elevation, exception or high-risk activation flows may reuse the same ApprovalCase contract while keeping their authoritative state outside the approval process.
 
+Public request submission does not expose Governance evaluation as a client-owned workflow step. The transaction that moves each item to `SUBMITTED` appends `governance.request-item-submitted`; a retryable Governance consumer re-reads current state and invokes eligibility evaluation. Mandatory evaluator unavailability leaves the item `EVALUATING` and retains retryable work. This keeps privilege-increase evaluation fail-closed and durable across process restarts.
+
 At each important transition, the consuming flow revalidates its material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Material change may supersede approval context and cause reevaluation.
 
 Reminders, deadlines, escalation and delegation remain later typed Governance extensions. Generic scheduling owns only timer delivery.
