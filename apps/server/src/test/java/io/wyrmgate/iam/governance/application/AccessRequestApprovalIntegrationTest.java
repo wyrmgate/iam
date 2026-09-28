@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.governance.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
@@ -341,6 +342,14 @@ class AccessRequestApprovalIntegrationTest {
         assertThat(item.lifecycleState())
                 .isEqualTo(RequestItem.LifecycleState.EVALUATING);
         assertThat(item.approvalCaseId()).isNull();
+
+        assertThatThrownBy(() -> jdbc.update("""
+                UPDATE governance.request_item
+                SET entitlement_id = ?
+                WHERE tenant_id = ? AND id = ?
+                """, ids.nextId(), tenant.tenantId(), item.id()))
+                .hasMessageContaining("immutable");
+
         assertThat(jdbc.queryForObject("""
                 SELECT count(*)
                 FROM governance.approval_case
