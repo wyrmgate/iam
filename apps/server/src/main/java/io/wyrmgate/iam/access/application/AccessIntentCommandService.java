@@ -4,7 +4,6 @@ import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.Objects;
-import org.springframework.dao.DataIntegrityViolationException;
 
 public final class AccessIntentCommandService
         implements AccessIntentCommand {
@@ -62,7 +61,7 @@ public final class AccessIntentCommandService
                                 request.validUntil(),
                                 now);
             };
-        } catch (DataIntegrityViolationException race) {
+        } catch (AccessAssignmentProvenanceConflictException race) {
             AccessAssignment replay = assignments.findByProvenance(
                             tenant,
                             AccessAssignment.ProvenanceKind.REQUEST_ITEM,
