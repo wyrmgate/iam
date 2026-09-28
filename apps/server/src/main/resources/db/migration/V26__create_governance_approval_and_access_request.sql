@@ -150,11 +150,9 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER governance_approval_stage_immutable_trg
-BEFORE INSERT OR DELETE ON governance.approval_stage
-FOR EACH ROW
-WHEN (pg_trigger_depth() > 0)
-EXECUTE FUNCTION governance.reject_approval_structure_change();
+CREATE TRIGGER governance_approval_stage_delete_immutable_trg
+BEFORE DELETE ON governance.approval_stage
+FOR EACH ROW EXECUTE FUNCTION governance.reject_approval_structure_change();
 
 CREATE OR REPLACE FUNCTION governance.reject_approval_stage_content_change()
 RETURNS trigger
