@@ -8,6 +8,7 @@ import io.wyrmgate.iam.governance.application.AccessRequestCommandService;
 import io.wyrmgate.iam.governance.application.AccessRequestEligibilityEvaluator;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.EligibilityResult;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.ItemSpec;
+import io.wyrmgate.iam.governance.application.AccessRequestModels.PrincipalConstraintKind;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.ItemState;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.TargetKind;
 import io.wyrmgate.iam.governance.application.ApprovalCommandException;
@@ -70,7 +71,7 @@ class ApprovalRequestPersistenceIntegrationTest {
         assertThat(
                 flyway.info().current()
                         .getVersion().getVersion())
-                .isEqualTo("26");
+                .isEqualTo("27");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -84,7 +85,8 @@ class ApprovalRequestPersistenceIntegrationTest {
         approvals = new ApprovalCommandService(
                 approvalRepository,
                 new AccessRequestApprovalResultSink(
-                        requestRepository),
+                        requestRepository,
+                        (requestedTenant, item) -> { }),
                 ids,
                 transactions);
     }
@@ -219,6 +221,7 @@ class ApprovalRequestPersistenceIntegrationTest {
                         requestRepository,
                         evaluator,
                         approvals,
+                        (requestedTenant, authorizedItem) -> { },
                         ids,
                         transactions);
 
@@ -228,7 +231,11 @@ class ApprovalRequestPersistenceIntegrationTest {
                 beneficiary,
                 List.of(new ItemSpec(
                         TargetKind.ENTITLEMENT,
-                        entitlementId)),
+                        entitlementId,
+                        PrincipalConstraintKind.ANY,
+                        null,
+                        null,
+                        null)),
                 NOW);
         var submitted = requests.submit(
                 tenant,
@@ -283,6 +290,7 @@ class ApprovalRequestPersistenceIntegrationTest {
                                     "policy service unavailable");
                         },
                         approvals,
+                        (requestedTenant, authorizedItem) -> { },
                         ids,
                         transactions);
 
@@ -292,7 +300,11 @@ class ApprovalRequestPersistenceIntegrationTest {
                 beneficiary,
                 List.of(new ItemSpec(
                         TargetKind.ROLE,
-                        roleId)),
+                        roleId,
+                        PrincipalConstraintKind.ANY,
+                        null,
+                        null,
+                        null)),
                 NOW);
         var submitted = unavailableRequests.submit(
                 tenant,

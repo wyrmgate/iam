@@ -12,10 +12,14 @@ public final class AccessRequestApprovalResultSink
         implements ApprovalResultSink {
 
     private final AccessRequestRepository requests;
+    private final AuthorizedAccessIntentSink authorizedAccess;
 
     public AccessRequestApprovalResultSink(
-            AccessRequestRepository requests) {
+            AccessRequestRepository requests,
+            AuthorizedAccessIntentSink authorizedAccess) {
         this.requests = Objects.requireNonNull(requests, "requests");
+        this.authorizedAccess = Objects.requireNonNull(
+                authorizedAccess, "authorizedAccess");
     }
 
     @Override
@@ -42,17 +46,21 @@ public final class AccessRequestApprovalResultSink
                     "ApprovalCase no longer matches pending RequestItem");
         }
 
-        requests.updateItemState(
+        RequestItem updated = requests.updateItemState(
                 tenant,
                 item.id(),
                 approvalCase.state() == CaseState.APPROVED
                         ? ItemState.AUTHORIZED
                         : ItemState.REJECTED,
                 approvalCase.id(),
+                null,
                 approvalCase.state() == CaseState.APPROVED
                         ? "approved"
                         : "rejected",
                 item.revision(),
                 approvalCase.updatedAt());
+        if (updated.state() == ItemState.AUTHORIZED) {
+            authorizedAccess.authorized(tenant, updated);
+        }
     }
 }

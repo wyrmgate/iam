@@ -1,6 +1,9 @@
 package io.wyrmgate.iam.governance.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.wyrmgate.iam.access.application.AccessIntentCommand;
+import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationScheduler;
+import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationService;
 import io.wyrmgate.iam.governance.application.AccessRequestApprovalResultSink;
 import io.wyrmgate.iam.governance.application.AccessRequestCommandService;
 import io.wyrmgate.iam.governance.application.AccessRequestEligibilityEvaluator;
@@ -11,6 +14,7 @@ import io.wyrmgate.iam.governance.application.ApprovalQueryService;
 import io.wyrmgate.iam.governance.application.ApprovalRepository;
 import io.wyrmgate.iam.governance.application.ApprovalResultQuery;
 import io.wyrmgate.iam.governance.application.ApprovalResultSink;
+import io.wyrmgate.iam.governance.application.AuthorizedAccessIntentSink;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingScheduler;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingService;
@@ -43,9 +47,18 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    AuthorizedAccessIntentSink authorizedAccessIntentSink(
+            JdbcOutboxRepository outbox,
+            IdGenerator ids) {
+        return new JdbcAuthorizedAccessIntentSink(outbox, ids);
+    }
+
+    @Bean
     ApprovalResultSink approvalResultSink(
-            AccessRequestRepository requests) {
-        return new AccessRequestApprovalResultSink(requests);
+            AccessRequestRepository requests,
+            AuthorizedAccessIntentSink authorizedAccess) {
+        return new AccessRequestApprovalResultSink(
+                requests, authorizedAccess);
     }
 
     @Bean
@@ -69,6 +82,7 @@ public class GovernancePersistenceConfiguration {
             AccessRequestRepository requests,
             ObjectProvider<AccessRequestEligibilityEvaluator> evaluators,
             ApprovalCommandService approvals,
+            AuthorizedAccessIntentSink authorizedAccess,
             IdGenerator ids,
             TransactionExecutor transactions) {
         AccessRequestEligibilityEvaluator evaluator =
@@ -77,7 +91,28 @@ public class GovernancePersistenceConfiguration {
                                 EligibilityResult.unavailable(
                                         "mandatory_evaluator_unavailable"));
         return new AccessRequestCommandService(
-                requests, evaluator, approvals, ids, transactions);
+                requests,
+                evaluator,
+                approvals,
+                authorizedAccess,
+                ids,
+                transactions);
+    }
+
+    @Bean
+    AccessRequestAccessApplicationService accessRequestAccessApplicationService(
+            JdbcOutboxRepository outbox,
+            AccessRequestRepository requests,
+            AccessIntentCommand access,
+            TransactionExecutor transactions) {
+        return new AccessRequestAccessApplicationService(
+                outbox, requests, access, transactions);
+    }
+
+    @Bean
+    AccessRequestAccessApplicationScheduler accessRequestAccessApplicationScheduler(
+            AccessRequestAccessApplicationService service) {
+        return new AccessRequestAccessApplicationScheduler(service);
     }
 
     @Bean

@@ -5,6 +5,8 @@ import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
 import io.wyrmgate.iam.access.application.AccessAssignmentQueryService;
+import io.wyrmgate.iam.access.application.AccessIntentCommand;
+import io.wyrmgate.iam.access.application.AccessIntentCommandService;
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
@@ -63,6 +65,13 @@ public class AccessPersistenceConfiguration {
                 boundaries,
                 idGenerator,
                 transactionExecutor);
+    }
+
+    @Bean
+    AccessIntentCommand accessIntentCommand(
+            AccessAssignmentRepository repository,
+            AccessAssignmentCommandService commands) {
+        return new AccessIntentCommandService(repository, commands);
     }
 
     @Bean

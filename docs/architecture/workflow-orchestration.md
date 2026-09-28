@@ -190,6 +190,26 @@ At each important transition, the consuming flow revalidates its material depend
 
 Reminders, deadlines, escalation and delegation remain later typed Governance extensions. Generic scheduling owns only timer delivery.
 
+### Authorized AccessRequest application
+
+Governance records `RequestItem.AUTHORIZED` and the corresponding
+`governance.request-item-authorized` outbox fact in one transaction. A separate
+Governance-owned technical consumer leases that fact, re-reads the RequestItem and
+AccessRequest, and invokes the Access-owned semantic `AccessIntentCommand`. Governance
+never writes Access repositories or tables.
+
+Access application is causally idempotent on `REQUEST_ITEM + requestItemId` provenance.
+The Access transaction creates the authoritative AccessAssignment, emits its normal
+projection-input fact and schedules temporal boundaries; it does not call a provider.
+Governance then commits `AUTHORIZED -> APPLIED` separately and stores only the stable
+AccessAssignment ID for traceability, with no cross-capability database foreign key.
+
+If Access or the later Governance update fails, the RequestItem remains AUTHORIZED and the
+outbox item is retried. If Access already committed before a retry, provenance lookup
+returns the same assignment rather than creating another one. A stale event for an item
+that is no longer AUTHORIZED is a no-op. Provider provisioning remains further downstream
+through EffectiveAccess and desired-state projections.
+
 ## Review orchestration
 
 ReviewCampaign coordinates generation and campaign timing. ReviewItem is the scalable reviewer work boundary.
