@@ -24,6 +24,7 @@ The kernel owns:
 - ordered sequential `ApprovalStage` snapshots;
 - stage decision mode `ANY_ONE` or `ALL`;
 - resolved governed approver Identity snapshots;
+- an immutable consumer-supplied approval-requirements fingerprint used to detect material policy/context changes without storing arbitrary consumer payloads;
 - immutable `ApprovalDecision` evidence;
 - current plan/stage outcome and optimistic revision;
 - deadline/expiry semantics;
@@ -56,8 +57,11 @@ Later stages are not actionable until all earlier stages approve. Decisions are 
 participant may record at most one decision per plan stage. Completed, rejected, expired or
 superseded plans accept no new decisions.
 
-Plan replacement is explicit: material dependency changes create a new plan and supersede the old
-one rather than mutating historical plan content or decision evidence.
+Plan replacement is explicit: material dependency changes create a new plan rather than mutating
+historical plan content or decision evidence. Consumers re-resolve requirements before final
+authorization and compare the typed structure plus immutable requirements fingerprint; an older
+APPROVED plan may remain valid historical evidence while a successor plan becomes the current
+requirement for the business subject.
 
 Deadlines are semantic. A plan is expired by time comparison even if a timeout materializer is
 late. Timeout never implies approval.
