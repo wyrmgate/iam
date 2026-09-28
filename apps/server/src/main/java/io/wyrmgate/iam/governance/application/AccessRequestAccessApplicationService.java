@@ -1,7 +1,6 @@
 package io.wyrmgate.iam.governance.application;
 
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
-import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.ItemState;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.PrincipalConstraintKind;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.RequestItem;
@@ -134,7 +133,7 @@ public final class AccessRequestAccessApplicationService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "AccessRequest does not exist"));
 
-        AccessAssignment assignment = access.applyRequestedAccess(
+        AccessIntentCommand.Result application = access.applyRequestedAccess(
                 claimed.tenant(),
                 new AccessIntentCommand.RequestedAccess(
                         item.id(),
@@ -146,8 +145,8 @@ public final class AccessRequestAccessApplicationService {
                         item.entitlementId(),
                         item.principalConstraintKind()
                                 == PrincipalConstraintKind.ANY
-                                ? AccessAssignment.PrincipalConstraintKind.ANY
-                                : AccessAssignment.PrincipalConstraintKind.SPECIFIC,
+                                ? AccessIntentCommand.PrincipalConstraintKind.ANY
+                                : AccessIntentCommand.PrincipalConstraintKind.SPECIFIC,
                         item.specificPrincipalId(),
                         item.validFrom(),
                         item.validUntil()),
@@ -160,7 +159,7 @@ public final class AccessRequestAccessApplicationService {
                     .orElseThrow(() -> new IllegalStateException(
                             "RequestItem disappeared during access application"));
             if (current.state() == ItemState.APPLIED) {
-                if (!assignment.id().equals(
+                if (!application.accessAssignmentId().equals(
                         current.accessAssignmentId())) {
                     throw new IllegalStateException(
                             "RequestItem is APPLIED to a different AccessAssignment");
@@ -175,7 +174,7 @@ public final class AccessRequestAccessApplicationService {
                     current.id(),
                     ItemState.APPLIED,
                     current.approvalCaseId(),
-                    assignment.id(),
+                    application.accessAssignmentId(),
                     current.evaluationCode(),
                     current.revision(),
                     now);
