@@ -169,7 +169,7 @@ Materially changing approval participants or approval requirements creates/super
 
 ## Approval orchestration
 
-ApprovalPlan is an immutable snapshot of required decisions for one RequestItem. Initial supported structures remain intentionally constrained:
+ApprovalCase is the reusable Governance-owned approval process for one typed business subject. ApprovalPlan is its immutable snapshot of required decisions. AccessRequest/RequestItem is the first consumer, but later typed subjects may reuse the same approval capability without transferring their business-state ownership to Governance approval. Initial supported structures remain intentionally constrained:
 
 - sequential stages;
 - stage decision mode `ANY_ONE` or `ALL`;
@@ -178,7 +178,11 @@ ApprovalPlan is an immutable snapshot of required decisions for one RequestItem.
 
 Do not introduce arbitrary BPM DAGs initially.
 
-At each important transition, revalidate material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Material change may supersede the plan and return the item to evaluation.
+Only a resolved current-stage participant may decide; administrative authority does not substitute for approval participation. Requester self-approval is denied by default through immutable plan policy.
+
+Terminal approval emits a typed, data-minimized outcome fact containing the captured subject revision. The subject owner must re-read current state before applying the outcome. A stale approval outcome cannot mutate changed subject state.
+
+At each important transition, revalidate material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Material change may supersede the case/plan and return the subject to evaluation.
 
 ApprovalDecision remains append-only evidence.
 
