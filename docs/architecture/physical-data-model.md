@@ -301,7 +301,7 @@ Migration V26 implements the first reusable approval/request table family:
 - `access_request` — one requester + beneficiary request envelope;
 - `request_item` — scalable governable Role/Entitlement request units.
 
-A partial unique index permits only one PENDING ApprovalCase for one tenant + typed subject. Approval plan/stage/participant rows are insert-only through the application contract; decisions are append-only and uniquely constrained per case/stage/participant. The RequestItem references its ApprovalCase through a same-capability tenant-safe FK, while `access_assignment_id` remains a stable cross-capability ID without FK. `APPROVED_REQUEST` Access provenance is unique by RequestItem ID, making Access application retry-safe.
+A partial unique index permits only one PENDING ApprovalCase for one tenant + typed subject. V26 database triggers reject UPDATE/DELETE of approval plan/stage/participant snapshots and approval decisions, reject changes to the ApprovalCase subject snapshot, and reject changes to RequestItem business-intent fields after insertion. Decisions are append-only and uniquely constrained per case/stage/participant. The RequestItem references its ApprovalCase through a same-capability tenant-safe FK, while `access_assignment_id` remains a stable cross-capability ID without FK. `APPROVED_REQUEST` Access provenance is unique by RequestItem ID, making Access application retry-safe.
 
 Later Governance table families remain:
 
