@@ -45,7 +45,7 @@ Multiple assignments may legitimately support the same access because they prese
 
 Governance owns requests, approvals, reviews, policy/versioning, SoD/risk evaluation orchestration, exceptions and findings.
 
-`AccessRequest` has one beneficiary and one or more `RequestItem` objects. Approval plans are decision-time workflow snapshots. `ApprovalDecision` and `ReviewDecision` are immutable evidence.
+`AccessRequest` has one beneficiary and one or more scalable `RequestItem` objects. Reusable `ApprovalCase` objects reference typed business subjects and captured subject revisions; `ApprovalPlan` is an immutable decision-time workflow snapshot with constrained sequential stages. `ApprovalDecision` and `ReviewDecision` are immutable evidence. Approval does not become authority for the subject it approves.
 
 `GovernanceException` is an explicit, scoped, time-bound deviation and never removes the underlying violation. `GovernanceFinding` is the common actionable issue lifecycle for drift, missing ownership, stale access, credential issues and policy violations.
 
