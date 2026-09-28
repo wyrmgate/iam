@@ -23,5 +23,6 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0013 Initial public integration-event transport and compatibility lifecycle](0013-initial-public-event-webhook-transport.md)
 - [ADR-0014 Remote connector-worker protocol and compatibility](0014-remote-connector-worker-protocol.md)
 - [ADR-0015 Provider observation mapping and governance drift boundary](0015-provider-observation-mapping-and-governance-drift.md)
+- [ADR-0016 Reusable typed approval orchestration within Governance](0016-reusable-typed-approval-orchestration.md)
 
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. An accepted ADR may amend a formal specification between document revisions; the next formal revision must fold the ADR into the specification.
