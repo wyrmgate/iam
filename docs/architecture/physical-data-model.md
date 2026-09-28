@@ -309,6 +309,8 @@ Migration V26 implements the first reusable approval/request foundation. `approv
 
 Migration V27 adds explicit RequestItem principal-constraint and validity semantics plus `access_assignment_id` traceability. The assignment ID is intentionally a cross-capability stable reference with no Governance-to-Access database foreign key. Existing V26 RequestItems are migrated explicitly to `ANY`; new request creation must supply the typed principal constraint. V27 also extends AccessAssignment provenance with `REQUEST_ITEM`, requires a provenance reference for that kind, and adds a tenant-scoped unique partial index so one RequestItem can cause at most one authoritative AccessAssignment.
 
+Migration V28 adds an approver-identity-first index over `approval_approver` to support the reusable pending approval inbox without scanning stage-first approval membership at high cardinality. The inbox remains a read model over existing approval authority/evidence tables; V28 introduces no new ApprovalTask authority.
+
 Approval-plan content is immutable from creation in this first slice. Decisions remain append-only evidence even if later typed plan-supersession semantics create replacement approval context.
 
 ### Credential
