@@ -53,6 +53,11 @@ public record AccessAssignment(
         if (provenanceKind == ProvenanceKind.MANUAL && provenanceRefId != null) {
             throw new IllegalArgumentException("MANUAL provenance must not carry provenanceRefId");
         }
+        if (provenanceKind == ProvenanceKind.APPROVED_REQUEST
+                && provenanceRefId == null) {
+            throw new IllegalArgumentException(
+                    "APPROVED_REQUEST provenance requires provenanceRefId");
+        }
 
         if (lifecycleState == LifecycleState.SCHEDULED && validFrom == null) {
             throw new IllegalArgumentException(
@@ -95,7 +100,8 @@ public record AccessAssignment(
     }
 
     public enum ProvenanceKind {
-        MANUAL
+        MANUAL,
+        APPROVED_REQUEST
     }
 
     public enum LifecycleState {
