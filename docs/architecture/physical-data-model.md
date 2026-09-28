@@ -293,8 +293,9 @@ Migration V21 makes the desired tuples explicit. `desired_principal_state` is un
 
 Initial table families include:
 
-- `access_request`, `request_item`;
-- `approval_plan`, `approval_plan_stage`, `approval_plan_participant`;
+- `access_request`, scalable `request_item`;
+- reusable `approval_case` mutable process state;
+- immutable `approval_plan`, ordered `approval_stage`, resolved `approval_approver` snapshots;
 - immutable `approval_decision`;
 - `review_campaign`, high-cardinality `review_item`, immutable `review_decision`, `review_remediation`;
 - `policy`, immutable activated `policy_version`;
@@ -304,7 +305,9 @@ Initial table families include:
 
 `review_item` is its own scalable consistency boundary; a campaign repository never requires loading all review items as an aggregate child collection.
 
-Approval-plan/version content that is a decision-time snapshot becomes immutable when active. Decisions remain append-only evidence even if a later plan supersedes them.
+Migration V26 implements the first reusable approval/request foundation. `approval_case` carries typed subject kind + stable subject ID, current stage ordinal and optimistic revision. It contains no AccessRequest-specific target data. Plan/stage/approver rows and decisions are protected by database update/delete rejection triggers. `request_item.approval_case_id` is a same-capability link from the first consumer into the reusable approval process.
+
+Approval-plan content is immutable from creation in this first slice. Decisions remain append-only evidence even if later typed plan-supersession semantics create replacement approval context.
 
 ### Credential
 

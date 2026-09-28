@@ -129,7 +129,7 @@ class AccessApiIntegrationTest {
                         .current()
                         .getVersion()
                         .getVersion())
-                .isEqualTo("25");
+                .isEqualTo("26");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -635,7 +635,7 @@ class AccessApiIntegrationTest {
                                         """.formatted(
                                         identity.id(),
                                         entitlement.id(),
-                                        NOW.plusSeconds(3600))))
+                                        Instant.now().plusSeconds(3600))))
                 .andExpect(status().isCreated())
                 .andExpect(
                         jsonPath("$.lifecycleState")

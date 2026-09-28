@@ -1,6 +1,16 @@
 package io.wyrmgate.iam.governance.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.wyrmgate.iam.governance.application.AccessRequestApprovalResultSink;
+import io.wyrmgate.iam.governance.application.AccessRequestCommandService;
+import io.wyrmgate.iam.governance.application.AccessRequestEligibilityEvaluator;
+import io.wyrmgate.iam.governance.application.AccessRequestModels.EligibilityResult;
+import io.wyrmgate.iam.governance.application.AccessRequestRepository;
+import io.wyrmgate.iam.governance.application.ApprovalCommandService;
+import io.wyrmgate.iam.governance.application.ApprovalQueryService;
+import io.wyrmgate.iam.governance.application.ApprovalRepository;
+import io.wyrmgate.iam.governance.application.ApprovalResultQuery;
+import io.wyrmgate.iam.governance.application.ApprovalResultSink;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingScheduler;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingService;
@@ -12,6 +22,7 @@ import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -20,6 +31,54 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @Configuration
 @EnableScheduling
 public class GovernancePersistenceConfiguration {
+
+    @Bean
+    ApprovalRepository approvalRepository(JdbcTemplate jdbc) {
+        return new JdbcApprovalRepository(jdbc);
+    }
+
+    @Bean
+    AccessRequestRepository accessRequestRepository(JdbcTemplate jdbc) {
+        return new JdbcAccessRequestRepository(jdbc);
+    }
+
+    @Bean
+    ApprovalResultSink approvalResultSink(
+            AccessRequestRepository requests) {
+        return new AccessRequestApprovalResultSink(requests);
+    }
+
+    @Bean
+    ApprovalCommandService approvalCommandService(
+            ApprovalRepository approvals,
+            ApprovalResultSink resultSink,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new ApprovalCommandService(
+                approvals, resultSink, ids, transactions);
+    }
+
+    @Bean
+    ApprovalResultQuery approvalResultQuery(
+            ApprovalRepository approvals) {
+        return new ApprovalQueryService(approvals);
+    }
+
+    @Bean
+    AccessRequestCommandService accessRequestCommandService(
+            AccessRequestRepository requests,
+            ObjectProvider<AccessRequestEligibilityEvaluator> evaluators,
+            ApprovalCommandService approvals,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        AccessRequestEligibilityEvaluator evaluator =
+                evaluators.getIfAvailable(() ->
+                        (tenant, request, item) ->
+                                EligibilityResult.unavailable(
+                                        "mandatory_evaluator_unavailable"));
+        return new AccessRequestCommandService(
+                requests, evaluator, approvals, ids, transactions);
+    }
 
     @Bean
     GovernanceFindingRepository governanceFindingRepository(JdbcTemplate jdbc) {
