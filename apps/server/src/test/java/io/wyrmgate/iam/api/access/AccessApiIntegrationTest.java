@@ -129,7 +129,7 @@ class AccessApiIntegrationTest {
                         .current()
                         .getVersion()
                         .getVersion())
-                .isEqualTo("25");
+                .isEqualTo("26");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
