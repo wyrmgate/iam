@@ -188,3 +188,28 @@ COMMENT ON TABLE governance.access_request IS
     'Governance-owned access request envelope; authorization and downstream Access application remain separate.';
 COMMENT ON TABLE governance.request_item IS
     'Scalable governable unit for requested Role-or-Entitlement access.';
+
+CREATE OR REPLACE FUNCTION governance.reject_immutable_approval_evidence_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'approval plan/stage/approver/decision evidence is immutable';
+END;
+$$;
+
+CREATE TRIGGER approval_plan_immutable_trg
+BEFORE UPDATE OR DELETE ON governance.approval_plan
+FOR EACH ROW EXECUTE FUNCTION governance.reject_immutable_approval_evidence_change();
+
+CREATE TRIGGER approval_stage_immutable_trg
+BEFORE UPDATE OR DELETE ON governance.approval_stage
+FOR EACH ROW EXECUTE FUNCTION governance.reject_immutable_approval_evidence_change();
+
+CREATE TRIGGER approval_approver_immutable_trg
+BEFORE UPDATE OR DELETE ON governance.approval_approver
+FOR EACH ROW EXECUTE FUNCTION governance.reject_immutable_approval_evidence_change();
+
+CREATE TRIGGER approval_decision_immutable_trg
+BEFORE UPDATE OR DELETE ON governance.approval_decision
+FOR EACH ROW EXECUTE FUNCTION governance.reject_immutable_approval_evidence_change();
