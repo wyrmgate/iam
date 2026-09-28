@@ -135,8 +135,8 @@ The following is the initial physical table-family contract. Additional subordin
 | `catalog` | `application`, `application_target`, `entitlement`, `role`, `role_version`, role composition | Catalog | Authoritative |
 | `access` | `access_assignment` | Access | Authoritative |
 | `access` | `effective_access`, support/path, `desired_principal_state`, `desired_grant_state`, `assignment_fulfillment` | Access | Projection |
-| `governance` | request/item/plan, review campaign/item/remediation, policy/version, exception, finding | Governance | Authoritative/process |
-| `governance` | approval/review decision, policy/risk/SoD evaluation result | Governance | Evidence/result |
+| `governance` | access_request/request_item, approval_case/plan/stage/participant, review campaign/item/remediation, policy/version, exception, finding | Governance | Authoritative/process |
+| `governance` | approval_decision/review_decision, policy/risk/SoD evaluation result | Governance | Evidence/result |
 | `credential` | `credential`, credential binding, rotation process | Credential | Authoritative/process |
 | `integration` | connector instance/binding, provisioning job/task, reconciliation run | Integration | Authoritative/process |
 | `integration` | provisioning attempt | Integration | Evidence |
@@ -281,7 +281,7 @@ access.access_assignment
 
 Identity, Role, Entitlement and Principal references are cross-capability stable IDs. Access uses semantic queries to validate material current facts when an assignment mutation requires them; the references never authorize direct foreign repository mutation.
 
-The first runtime implementation of this authoritative contract is migration V19. The initial command surface creates Entitlement-target assignments only because canonical Role/RoleVersion runtime is not yet implemented; the relational shape retains both target kinds for the later Role slice. Initial provenance is typed as `MANUAL` with no provenance reference, and principal constraints are `ANY` or `SPECIFIC`. A SPECIFIC Principal must resolve through Identity semantics to the same Identity and the Entitlement's active ApplicationTarget. Creation materializes `SCHEDULED` when `valid_from` is future and otherwise `ACTIVE`; semantic effectiveness is still evaluated directly from lifecycle plus the validity window, so scheduler delay cannot extend expired authority or delay a reached valid-from instant. The first termination command materializes `CANCELLED`, `REVOKED` or `EXPIRED` with optimistic revision. EffectiveAccess, desired-state derivation and fulfillment remain separate later projections.
+Migration V19 introduced the authoritative AccessAssignment table. The runtime now supports both Entitlement and Role targets with `ANY`/`SPECIFIC` principal constraints. Public administrative creation uses `MANUAL` provenance with no reference. Migration V26 adds `APPROVED_REQUEST` provenance, which requires a RequestItem stable ID and is unique per tenant; this is the idempotency boundary for Governance -> Access request application. RequestItem remains Governance-owned and is deliberately not a database foreign key from Access. A SPECIFIC Principal must resolve through Identity semantics to the same Identity and applicable ApplicationTarget. Creation materializes `SCHEDULED` when `valid_from` is future and otherwise `ACTIVE`; semantic effectiveness is evaluated directly from lifecycle plus the validity window, so scheduler delay cannot extend expired authority or delay a reached valid-from instant. Lifecycle mutation uses optimistic revision. EffectiveAccess, desired-state derivation and fulfillment remain separate projections.
 
 The first Access desired-state implementation materializes `access.desired_principal_state` and `access.desired_grant_state` as rebuildable projections. Each row carries tenant scope, stable projection ID, technical target context, desired state, positive `desired_revision`, positive `source_generation`, and `computed_at`; grant rows additionally carry entitlement and optional principal context. Cross-capability references remain stable IDs without database foreign keys.
 
@@ -291,20 +291,29 @@ Migration V21 makes the desired tuples explicit. `desired_principal_state` is un
 
 ### Governance
 
-Initial table families include:
+Migration V26 implements the first reusable approval/request table family:
 
-- `access_request`, `request_item`;
-- `approval_plan`, `approval_plan_stage`, `approval_plan_participant`;
-- immutable `approval_decision`;
+- `approval_case` — mutable Governance approval process state with typed subject, captured subject revision, requester, current stage ordinal and optimistic revision;
+- `approval_plan` — one immutable plan snapshot per case;
+- `approval_stage` — ordered sequential stages with `ANY_ONE`/`ALL`;
+- `approval_participant` — immutable resolved Identity participants;
+- append-only `approval_decision`;
+- `access_request` — one requester + beneficiary request envelope;
+- `request_item` — scalable governable Role/Entitlement request units.
+
+A partial unique index permits only one PENDING ApprovalCase for one tenant + typed subject. Approval plan/stage/participant rows are insert-only through the application contract; decisions are append-only and uniquely constrained per case/stage/participant. The RequestItem references its ApprovalCase through a same-capability tenant-safe FK, while `access_assignment_id` remains a stable cross-capability ID without FK. `APPROVED_REQUEST` Access provenance is unique by RequestItem ID, making Access application retry-safe.
+
+Later Governance table families remain:
+
 - `review_campaign`, high-cardinality `review_item`, immutable `review_decision`, `review_remediation`;
 - `policy`, immutable activated `policy_version`;
 - `governance_exception`;
 - `governance_finding`;
 - immutable/result-oriented `risk_assessment`, `policy_evaluation`, `sod_conflict`.
 
-`review_item` is its own scalable consistency boundary; a campaign repository never requires loading all review items as an aggregate child collection.
+`review_item` and `request_item` are scalable consistency boundaries; parent repositories never require loading unbounded item collections as aggregate children.
 
-Approval-plan/version content that is a decision-time snapshot becomes immutable when active. Decisions remain append-only evidence even if a later plan supersedes them.
+ApprovalPlan/stage/participant content is a decision-time immutable snapshot. Decisions remain append-only evidence even if a later ApprovalCase/plan supersedes them.
 
 ### Credential
 
