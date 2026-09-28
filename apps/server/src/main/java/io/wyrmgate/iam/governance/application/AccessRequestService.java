@@ -170,6 +170,150 @@ public final class AccessRequestService {
         return evaluateItem(tenant, itemId, now);
     }
 
+    public RequestItem finalizeApprovedItem(
+            TenantContext tenant,
+            UUID itemId,
+            UUID approvedPlanId,
+            Instant now) {
+        RequestItem item = requests.findItem(tenant, itemId)
+                .orElseThrow(() -> new AccessRequestCommandException(
+                        "request_item_not_found",
+                        "RequestItem was not found."));
+        if (item.lifecycleState() == RequestItem.LifecycleState.APPLIED) {
+            return item;
+        }
+        if (item.lifecycleState() == RequestItem.LifecycleState.AUTHORIZED) {
+            return applyAuthorizedItem(tenant, item.id(), now);
+        }
+        if (item.lifecycleState()
+                != RequestItem.LifecycleState.PENDING_APPROVAL
+                || !Objects.equals(item.approvalPlanId(), approvedPlanId)) {
+            throw new AccessRequestCommandException(
+                    "request_item_approval_state_changed",
+                    "RequestItem no longer matches the approved plan.");
+        }
+
+        AccessRequest request = requests.findRequest(
+                        tenant, item.accessRequestId())
+                .orElseThrow();
+        if (!identities.identityExists(
+                tenant, request.beneficiaryIdentityId())) {
+            return deny(
+                    tenant,
+                    item,
+                    "beneficiary_not_eligible",
+                    now);
+        }
+        if (item.principalConstraintKind()
+                == RequestItem.PrincipalConstraintKind.SPECIFIC) {
+            var principal = identities.principal(
+                    tenant, item.specificPrincipalId());
+            if (principal.status()
+                            != IdentityAccessReferenceQuery.Status.RESOLVED
+                    || !request.beneficiaryIdentityId().equals(
+                            principal.identityId())) {
+                return deny(
+                        tenant,
+                        item,
+                        "principal_beneficiary_mismatch",
+                        now);
+            }
+        }
+
+        var eligibilityResult =
+                eligibility.evaluate(tenant, item);
+        if (eligibilityResult.status()
+                == AccessRequestEligibilityEvaluator.Status.UNAVAILABLE) {
+            throw new AccessRequestCommandException(
+                    eligibilityResult.code() == null
+                            ? "eligibility_unavailable"
+                            : eligibilityResult.code(),
+                    "Mandatory eligibility evaluation is unavailable.");
+        }
+        if (eligibilityResult.status()
+                == AccessRequestEligibilityEvaluator.Status.DENIED) {
+            return deny(
+                    tenant,
+                    item,
+                    eligibilityResult.code(),
+                    now);
+        }
+
+        var requirement = approvalRequirements.resolve(
+                tenant, item, now);
+        if (requirement.status()
+                == AccessRequestApprovalRequirementsResolver.Status.UNAVAILABLE) {
+            throw new AccessRequestCommandException(
+                    requirement.code() == null
+                            ? "approval_requirements_unavailable"
+                            : requirement.code(),
+                    "Mandatory approval requirements are unavailable.");
+        }
+        if (requirement.status()
+                == AccessRequestApprovalRequirementsResolver.Status.APPROVAL_REQUIRED
+                && !requirementsMatch(
+                        tenant,
+                        approvedPlanId,
+                        requirement.stages())) {
+            ApprovalSubject subject = new ApprovalSubject(
+                    ApprovalSubject.Kind.ACCESS_REQUEST_ITEM,
+                    item.id());
+            var replacement = approvals.createPlan(
+                    tenant,
+                    subject,
+                    requirement.stages(),
+                    requirement.deadlineAt(),
+                    now);
+            long revision = item.revision();
+            return transactions.required(() ->
+                    requests.updateItemState(
+                            tenant,
+                            itemId,
+                            RequestItem.LifecycleState.PENDING_APPROVAL,
+                            replacement.id(),
+                            null,
+                            null,
+                            revision,
+                            now));
+        }
+
+        RequestItem authorized = authorize(
+                tenant, item, approvedPlanId, now);
+        return applyAuthorizedItem(
+                tenant, authorized.id(), now);
+    }
+
+    private boolean requirementsMatch(
+            TenantContext tenant,
+            UUID planId,
+            List<ApprovalService.StageSpec> requiredStages) {
+        var existingStages = approvalRepository.findStages(
+                tenant, planId);
+        if (existingStages.size() != requiredStages.size()) {
+            return false;
+        }
+        for (int i = 0; i < existingStages.size(); i++) {
+            var existingStage = existingStages.get(i);
+            var requiredStage = requiredStages.get(i);
+            if (existingStage.decisionMode()
+                    != requiredStage.decisionMode()) {
+                return false;
+            }
+            var existingApprovers = approvalRepository
+                    .findParticipants(tenant, existingStage.id())
+                    .stream()
+                    .map(io.wyrmgate.iam.governance.domain.ApprovalParticipant::approverIdentityId)
+                    .collect(java.util.stream.Collectors.toSet());
+            var requiredApprovers =
+                    new java.util.HashSet<>(
+                            requiredStage.approverIdentityIds());
+            if (!existingApprovers.equals(requiredApprovers)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public RequestItem applyAuthorizedItem(
             TenantContext tenant,
             UUID itemId,
