@@ -5,6 +5,7 @@ import io.wyrmgate.iam.governance.domain.ApprovalSubject;
 import io.wyrmgate.iam.governance.domain.RequestItem;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
+import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,18 +25,21 @@ public final class AccessRequestApprovalProcessingService {
     private final ApprovalRepository approvals;
     private final AccessRequestRepository requests;
     private final AccessRequestService requestService;
+    private final TransactionExecutor transactions;
     private final Clock clock;
 
     public AccessRequestApprovalProcessingService(
             JdbcOutboxRepository outbox,
             ApprovalRepository approvals,
             AccessRequestRepository requests,
-            AccessRequestService requestService) {
+            AccessRequestService requestService,
+            TransactionExecutor transactions) {
         this(
                 outbox,
                 approvals,
                 requests,
                 requestService,
+                transactions,
                 Clock.systemUTC());
     }
 
@@ -44,6 +48,7 @@ public final class AccessRequestApprovalProcessingService {
             ApprovalRepository approvals,
             AccessRequestRepository requests,
             AccessRequestService requestService,
+            TransactionExecutor transactions,
             Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.approvals = Objects.requireNonNull(
@@ -52,6 +57,8 @@ public final class AccessRequestApprovalProcessingService {
                 requests, "requests");
         this.requestService = Objects.requireNonNull(
                 requestService, "requestService");
+        this.transactions = Objects.requireNonNull(
+                transactions, "transactions");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -188,15 +195,16 @@ public final class AccessRequestApprovalProcessingService {
             throw new IllegalStateException(
                     "terminal approval outcome cannot change current RequestItem state");
         }
-        RequestItem updated = requests.updateItemState(
-                claimed.tenant(),
-                item.id(),
-                terminal,
-                item.approvalPlanId(),
-                null,
-                null,
-                item.revision(),
-                now);
+        RequestItem updated = transactions.required(() ->
+                requests.updateItemState(
+                        claimed.tenant(),
+                        item.id(),
+                        terminal,
+                        item.approvalPlanId(),
+                        null,
+                        null,
+                        item.revision(),
+                        now));
         requestService.refreshRequestCompletion(
                 claimed.tenant(),
                 updated.accessRequestId(),
@@ -211,15 +219,16 @@ public final class AccessRequestApprovalProcessingService {
                 != RequestItem.LifecycleState.PENDING_APPROVAL) {
             return;
         }
-        RequestItem evaluating = requests.updateItemState(
-                claimed.tenant(),
-                item.id(),
-                RequestItem.LifecycleState.EVALUATING,
-                null,
-                null,
-                null,
-                item.revision(),
-                now);
+        RequestItem evaluating = transactions.required(() ->
+                requests.updateItemState(
+                        claimed.tenant(),
+                        item.id(),
+                        RequestItem.LifecycleState.EVALUATING,
+                        null,
+                        null,
+                        null,
+                        item.revision(),
+                        now));
         requestService.reevaluate(
                 claimed.tenant(),
                 evaluating.id(),
