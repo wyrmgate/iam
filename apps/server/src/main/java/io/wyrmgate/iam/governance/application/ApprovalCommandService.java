@@ -56,10 +56,20 @@ public final class ApprovalCommandService {
         Objects.requireNonNull(planSpec, "planSpec");
         Objects.requireNonNull(now, "now");
 
+        String requestedHash = contentHash(planSpec);
         return transactions.required(() -> {
             var existing = repository.findPendingBySubject(
                     tenant, subjectKind, subjectId);
             if (existing.isPresent()) {
+                ApprovalPlan existingPlan =
+                        repository.findPlan(
+                                tenant, existing.get().id());
+                if (!existingPlan.contentHash()
+                        .equals(requestedHash)) {
+                    throw new ApprovalCommandException(
+                            "approval_case_plan_conflict",
+                            "A pending ApprovalCase already exists with a different immutable plan.");
+                }
                 return existing.get();
             }
 
@@ -82,7 +92,7 @@ public final class ApprovalCommandService {
                     planId,
                     caseId,
                     1,
-                    contentHash(planSpec),
+                    requestedHash,
                     now);
             repository.insertPlan(tenant, plan);
 
@@ -135,12 +145,6 @@ public final class ApprovalCommandService {
                     .orElseThrow(() -> new ApprovalCommandException(
                             "approval_case_not_found",
                             "The requested ApprovalCase was not found."));
-            if (current.state() != CaseState.PENDING) {
-                throw new ApprovalCommandException(
-                        "approval_case_not_pending",
-                        "Only a PENDING ApprovalCase accepts decisions.");
-            }
-
             ApprovalPlan plan = repository.findPlan(
                     tenant, approvalCaseId);
             List<ApprovalStage> stages =
@@ -178,6 +182,12 @@ public final class ApprovalCommandService {
                 throw new ApprovalCommandException(
                         "approval_decision_conflict",
                         "The approver already recorded a different immutable decision.");
+            }
+
+            if (current.state() != CaseState.PENDING) {
+                throw new ApprovalCommandException(
+                        "approval_case_not_pending",
+                        "Only a PENDING ApprovalCase accepts new decisions.");
             }
 
             if (current.revision() != expectedRevision) {
