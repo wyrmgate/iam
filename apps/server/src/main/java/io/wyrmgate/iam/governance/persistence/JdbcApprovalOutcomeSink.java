@@ -42,7 +42,7 @@ public final class JdbcApprovalOutcomeSink
                 tenant,
                 new OutboxEvent(
                         ids.nextId(),
-                        OUTCOME_CHANGED,
+                        ApprovalOutcomeSink.eventType(plan.subject().kind()),
                         1,
                         "approval-plan",
                         plan.id(),
