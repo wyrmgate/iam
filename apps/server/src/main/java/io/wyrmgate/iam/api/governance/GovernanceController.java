@@ -21,6 +21,7 @@ import io.wyrmgate.iam.governance.application.AccessRequestModels.TargetKind;
 import io.wyrmgate.iam.governance.application.AccessRequestRepository;
 import io.wyrmgate.iam.governance.application.ApprovalModels.ApprovalCase;
 import io.wyrmgate.iam.governance.application.ApprovalModels.DecisionValue;
+import io.wyrmgate.iam.governance.application.ApprovalReadModels;
 import io.wyrmgate.iam.governance.application.ApprovalReadModels.CaseEvidence;
 import io.wyrmgate.iam.governance.application.ApprovalReadService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
