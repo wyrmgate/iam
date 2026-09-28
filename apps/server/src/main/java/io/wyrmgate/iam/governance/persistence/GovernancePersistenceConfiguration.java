@@ -82,7 +82,7 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
-    ApprovalResultQuery approvalResultQuery(
+    ApprovalQueryService approvalResultQuery(
             ApprovalRepository approvals) {
         return new ApprovalQueryService(approvals);
     }
