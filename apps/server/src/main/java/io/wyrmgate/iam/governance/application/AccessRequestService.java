@@ -254,13 +254,16 @@ public final class AccessRequestService {
                 && !requirementsMatch(
                         tenant,
                         approvedPlanId,
-                        requirement.stages())) {
+                        requirement.requirementsFingerprint(),
+                        requirement.stages(),
+                        requirement.deadlineAt())) {
             ApprovalSubject subject = new ApprovalSubject(
                     ApprovalSubject.Kind.ACCESS_REQUEST_ITEM,
                     item.id());
             var replacement = approvals.createPlan(
                     tenant,
                     subject,
+                    requirement.requirementsFingerprint(),
                     requirement.stages(),
                     requirement.deadlineAt(),
                     now);
@@ -286,7 +289,19 @@ public final class AccessRequestService {
     private boolean requirementsMatch(
             TenantContext tenant,
             UUID planId,
-            List<ApprovalService.StageSpec> requiredStages) {
+            String requirementsFingerprint,
+            List<ApprovalService.StageSpec> requiredStages,
+            Instant requiredDeadlineAt) {
+        var existingPlan = approvalRepository.findPlan(
+                        tenant, planId)
+                .orElseThrow();
+        if (!existingPlan.requirementsFingerprint().equals(
+                requirementsFingerprint)
+                || !Objects.equals(
+                        existingPlan.deadlineAt(),
+                        requiredDeadlineAt)) {
+            return false;
+        }
         var existingStages = approvalRepository.findStages(
                 tenant, planId);
         if (existingStages.size() != requiredStages.size()) {
@@ -474,6 +489,7 @@ public final class AccessRequestService {
                 approvals.createPlan(
                         tenant,
                         subject,
+                        requirement.requirementsFingerprint(),
                         requirement.stages(),
                         requirement.deadlineAt(),
                         now));
