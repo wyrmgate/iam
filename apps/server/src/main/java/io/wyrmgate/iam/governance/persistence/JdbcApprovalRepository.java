@@ -31,15 +31,17 @@ public final class JdbcApprovalRepository
         jdbc.update("""
                 INSERT INTO governance.approval_plan (
                     id, tenant_id, subject_kind, subject_id,
+                    requirements_fingerprint,
                     lifecycle_state, current_stage_ordinal,
                     deadline_at, revision, created_at, updated_at,
                     completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 plan.id(),
                 tenant.tenantId(),
                 plan.subject().kind().name(),
                 plan.subject().id(),
+                plan.requirementsFingerprint(),
                 plan.lifecycleState().name(),
                 plan.currentStageOrdinal(),
                 nullableTimestamp(plan.deadlineAt()),
@@ -93,6 +95,7 @@ public final class JdbcApprovalRepository
             TenantContext tenant, UUID planId) {
         return jdbc.query("""
                 SELECT id, subject_kind, subject_id,
+                       requirements_fingerprint,
                        lifecycle_state, current_stage_ordinal,
                        deadline_at, revision, created_at,
                        updated_at, completed_at
@@ -112,6 +115,7 @@ public final class JdbcApprovalRepository
             ApprovalSubject subject) {
         return jdbc.query("""
                 SELECT id, subject_kind, subject_id,
+                       requirements_fingerprint,
                        lifecycle_state, current_stage_ordinal,
                        deadline_at, revision, created_at,
                        updated_at, completed_at
@@ -360,6 +364,7 @@ public final class JdbcApprovalRepository
                         rs.getObject(
                                 "subject_id",
                                 UUID.class)),
+                rs.getString("requirements_fingerprint"),
                 ApprovalPlan.LifecycleState.valueOf(
                         rs.getString("lifecycle_state")),
                 rs.getInt("current_stage_ordinal"),
