@@ -36,6 +36,11 @@ public final class AccessRequestModels {
         ENTITLEMENT
     }
 
+    public enum PrincipalConstraintKind {
+        ANY,
+        SPECIFIC
+    }
+
     public record AccessRequest(
             UUID id,
             UUID requesterIdentityId,
@@ -52,8 +57,13 @@ public final class AccessRequestModels {
             TargetKind targetKind,
             UUID roleId,
             UUID entitlementId,
+            PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            Instant validFrom,
+            Instant validUntil,
             ItemState state,
             UUID approvalCaseId,
+            UUID accessAssignmentId,
             String evaluationCode,
             long revision,
             Instant createdAt,
@@ -62,6 +72,7 @@ public final class AccessRequestModels {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(accessRequestId, "accessRequestId");
             Objects.requireNonNull(targetKind, "targetKind");
+            Objects.requireNonNull(principalConstraintKind, "principalConstraintKind");
             Objects.requireNonNull(state, "state");
             if (targetKind == TargetKind.ROLE) {
                 Objects.requireNonNull(roleId, "roleId");
@@ -76,6 +87,27 @@ public final class AccessRequestModels {
                             "ENTITLEMENT request item must not carry roleId");
                 }
             }
+            if (principalConstraintKind == PrincipalConstraintKind.SPECIFIC) {
+                Objects.requireNonNull(
+                        specificPrincipalId,
+                        "SPECIFIC request item requires specificPrincipalId");
+            } else if (specificPrincipalId != null) {
+                throw new IllegalArgumentException(
+                        "ANY request item must not carry specificPrincipalId");
+            }
+            if (validFrom != null && validUntil != null
+                    && !validUntil.isAfter(validFrom)) {
+                throw new IllegalArgumentException(
+                        "validUntil must be after validFrom");
+            }
+            if (state == ItemState.APPLIED && accessAssignmentId == null) {
+                throw new IllegalArgumentException(
+                        "APPLIED request item requires accessAssignmentId");
+            }
+            if (state != ItemState.APPLIED && accessAssignmentId != null) {
+                throw new IllegalArgumentException(
+                        "Only APPLIED request item may carry accessAssignmentId");
+            }
             if (revision < 1) {
                 throw new IllegalArgumentException("revision must be positive");
             }
@@ -84,10 +116,30 @@ public final class AccessRequestModels {
 
     public record ItemSpec(
             TargetKind targetKind,
-            UUID targetId) {
+            UUID targetId,
+            PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            Instant validFrom,
+            Instant validUntil) {
         public ItemSpec {
             Objects.requireNonNull(targetKind, "targetKind");
             Objects.requireNonNull(targetId, "targetId");
+            Objects.requireNonNull(
+                    principalConstraintKind,
+                    "principalConstraintKind");
+            if (principalConstraintKind == PrincipalConstraintKind.SPECIFIC) {
+                Objects.requireNonNull(
+                        specificPrincipalId,
+                        "SPECIFIC request item requires specificPrincipalId");
+            } else if (specificPrincipalId != null) {
+                throw new IllegalArgumentException(
+                        "ANY request item must not carry specificPrincipalId");
+            }
+            if (validFrom != null && validUntil != null
+                    && !validUntil.isAfter(validFrom)) {
+                throw new IllegalArgumentException(
+                        "validUntil must be after validFrom");
+            }
         }
     }
 
