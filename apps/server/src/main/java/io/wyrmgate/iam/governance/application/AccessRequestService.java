@@ -248,6 +248,7 @@ public final class AccessRequestService {
                         "RequestItem was not found."));
 
         if (item.lifecycleState() == RequestItem.LifecycleState.SUBMITTED) {
+            long submittedRevision = item.revision();
             item = transactions.required(() ->
                     requests.updateItemState(
                             tenant,
@@ -256,7 +257,7 @@ public final class AccessRequestService {
                             null,
                             null,
                             null,
-                            item.revision(),
+                            submittedRevision,
                             now));
         }
         if (item.lifecycleState()
@@ -274,6 +275,21 @@ public final class AccessRequestService {
                     item,
                     "beneficiary_not_eligible",
                     now);
+        }
+        if (item.principalConstraintKind()
+                == RequestItem.PrincipalConstraintKind.SPECIFIC) {
+            var principal = identities.principal(
+                    tenant, item.specificPrincipalId());
+            if (principal.status()
+                            != IdentityAccessReferenceQuery.Status.RESOLVED
+                    || !request.beneficiaryIdentityId().equals(
+                            principal.identityId())) {
+                return deny(
+                        tenant,
+                        item,
+                        "principal_beneficiary_mismatch",
+                        now);
+            }
         }
 
         var eligibilityResult =
@@ -317,15 +333,17 @@ public final class AccessRequestService {
                         requirement.stages(),
                         requirement.deadlineAt(),
                         now));
+        long evaluatingRevision = item.revision();
+        UUID pendingItemId = item.id();
         return transactions.required(() ->
                 requests.updateItemState(
                         tenant,
-                        item.id(),
+                        pendingItemId,
                         RequestItem.LifecycleState.PENDING_APPROVAL,
                         plan.id(),
                         null,
                         null,
-                        item.revision(),
+                        evaluatingRevision,
                         now));
     }
 
