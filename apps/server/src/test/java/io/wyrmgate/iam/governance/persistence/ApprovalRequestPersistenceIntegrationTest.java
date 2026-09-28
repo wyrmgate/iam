@@ -221,6 +221,7 @@ class ApprovalRequestPersistenceIntegrationTest {
                         requestRepository,
                         evaluator,
                         approvals,
+                        (requestedTenant, submittedItem) -> { },
                         (requestedTenant, authorizedItem) -> { },
                         ids,
                         transactions);
@@ -290,6 +291,7 @@ class ApprovalRequestPersistenceIntegrationTest {
                                     "policy service unavailable");
                         },
                         approvals,
+                        (requestedTenant, submittedItem) -> { },
                         (requestedTenant, authorizedItem) -> { },
                         ids,
                         transactions);
