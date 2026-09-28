@@ -13,6 +13,13 @@ public interface AccessAssignmentRepository {
 
     Optional<AccessAssignment> findById(TenantContext tenant, UUID assignmentId);
 
+    default Optional<AccessAssignment> findByProvenance(
+            TenantContext tenant,
+            AccessAssignment.ProvenanceKind provenanceKind,
+            UUID provenanceRefId) {
+        return Optional.empty();
+    }
+
     default List<AccessAssignment> findByRoleId(
             TenantContext tenant, UUID roleId) {
         return List.of();
