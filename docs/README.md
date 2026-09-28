@@ -60,9 +60,9 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, C
 
 ## Current status
 
-IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0016 are the current architecture checkpoint. ADR-0011 through ADR-0016 are controlled post-v0.2 amendments and must be folded into the next formal Security/SAD/Integration/RTM revision.
+IAM v2 is pre-release and under active design. The v0.3 formal specification set is the current controlled architecture checkpoint and incorporates accepted ADR-0010 through ADR-0016 alongside the earlier baseline decisions. The package preserves framework-neutral capability ownership while recording the implemented persistence, authentication, cursor, public-event transport, remote-worker, provider-observation mapping and reusable approval boundaries.
 
-The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 and [`architecture/physical-data-model.md`](architecture/physical-data-model.md) are the current controlled amendment, and the next formal-specification revision must fold them into the Data Architecture/SAD/RTM package.
+The v0.3 RTM records OD-001, OD-002 and OD-004 as resolved at their architecture/interface scope, OD-003 as partially implemented, and OD-005/OD-006 as open. Architecture resolution is not treated as implementation completion: requirement rows explicitly distinguish Implemented, Partially Implemented and Planned coverage.
 
 The first real DEV/testing/demo environment is activated on the managed-service topology documented in [`engineering/dev-cd.md`](engineering/dev-cd.md): Cloudflare Pages/Functions, Railway Serverless, and Neon PostgreSQL. The deployment path, same-origin API proxy, Railway health path, database connectivity, and Flyway startup migration path have been validated. This DEV/demo deployment choice does not settle production HA/DR or change canonical IAM capability architecture. Grafana/OTLP remains intentionally disabled in managed DEV pending deliberate serverless-idle validation.
 
