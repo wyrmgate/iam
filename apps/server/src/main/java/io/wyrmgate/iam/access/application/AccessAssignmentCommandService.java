@@ -74,6 +74,54 @@ public final class AccessAssignmentCommandService {
             Instant validFrom,
             Instant validUntil,
             Instant now) {
+        return createEntitlementAssignmentInternal(
+                tenant,
+                identityId,
+                entitlementId,
+                principalConstraintKind,
+                specificPrincipalId,
+                validFrom,
+                validUntil,
+                AccessAssignment.ProvenanceKind.MANUAL,
+                null,
+                now);
+    }
+
+    public AccessAssignment createRequestedEntitlementAssignment(
+            TenantContext tenant,
+            UUID requestItemId,
+            UUID identityId,
+            UUID entitlementId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            Instant validFrom,
+            Instant validUntil,
+            Instant now) {
+        Objects.requireNonNull(requestItemId, "requestItemId");
+        return createEntitlementAssignmentInternal(
+                tenant,
+                identityId,
+                entitlementId,
+                principalConstraintKind,
+                specificPrincipalId,
+                validFrom,
+                validUntil,
+                AccessAssignment.ProvenanceKind.REQUEST_ITEM,
+                requestItemId,
+                now);
+    }
+
+    private AccessAssignment createEntitlementAssignmentInternal(
+            TenantContext tenant,
+            UUID identityId,
+            UUID entitlementId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            Instant validFrom,
+            Instant validUntil,
+            AccessAssignment.ProvenanceKind provenanceKind,
+            UUID provenanceRefId,
+            Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(identityId, "identityId");
         Objects.requireNonNull(entitlementId, "entitlementId");
@@ -167,8 +215,8 @@ public final class AccessAssignmentCommandService {
                 entitlementId,
                 principalConstraintKind,
                 specificPrincipalId,
-                AccessAssignment.ProvenanceKind.MANUAL,
-                null,
+                provenanceKind,
+                provenanceRefId,
                 lifecycleState,
                 validFrom,
                 validUntil,
@@ -194,6 +242,54 @@ public final class AccessAssignmentCommandService {
             UUID specificPrincipalId,
             Instant validFrom,
             Instant validUntil,
+            Instant now) {
+        return createRoleAssignmentInternal(
+                tenant,
+                identityId,
+                roleId,
+                principalConstraintKind,
+                specificPrincipalId,
+                validFrom,
+                validUntil,
+                AccessAssignment.ProvenanceKind.MANUAL,
+                null,
+                now);
+    }
+
+    public AccessAssignment createRequestedRoleAssignment(
+            TenantContext tenant,
+            UUID requestItemId,
+            UUID identityId,
+            UUID roleId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            Instant validFrom,
+            Instant validUntil,
+            Instant now) {
+        Objects.requireNonNull(requestItemId, "requestItemId");
+        return createRoleAssignmentInternal(
+                tenant,
+                identityId,
+                roleId,
+                principalConstraintKind,
+                specificPrincipalId,
+                validFrom,
+                validUntil,
+                AccessAssignment.ProvenanceKind.REQUEST_ITEM,
+                requestItemId,
+                now);
+    }
+
+    private AccessAssignment createRoleAssignmentInternal(
+            TenantContext tenant,
+            UUID identityId,
+            UUID roleId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            Instant validFrom,
+            Instant validUntil,
+            AccessAssignment.ProvenanceKind provenanceKind,
+            UUID provenanceRefId,
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(identityId, "identityId");
@@ -287,8 +383,8 @@ public final class AccessAssignmentCommandService {
                 null,
                 principalConstraintKind,
                 specificPrincipalId,
-                AccessAssignment.ProvenanceKind.MANUAL,
-                null,
+                provenanceKind,
+                provenanceRefId,
                 lifecycleState,
                 validFrom,
                 validUntil,
