@@ -432,6 +432,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                 requestRepository,
                 evaluator,
                 approvals,
+                (requestedTenant, submittedItem) -> { },
                 authorizedAccess,
                 ids,
                 transactions);
