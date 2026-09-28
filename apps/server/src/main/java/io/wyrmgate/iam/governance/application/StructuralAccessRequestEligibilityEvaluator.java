@@ -28,13 +28,6 @@ public final class StructuralAccessRequestEligibilityEvaluator
             TenantContext tenant,
             RequestItem item) {
         try {
-            if (!identities.identityExists(
-                    tenant, item.accessRequestId())) {
-                // AccessRequest owns beneficiary context; this evaluator is
-                // intentionally item-focused and the service validates the
-                // actual beneficiary before invoking it.
-            }
-
             if (item.targetKind() == RequestItem.TargetKind.ENTITLEMENT) {
                 var entitlement = catalog.resolveActiveEntitlement(
                         tenant, item.entitlementId());
