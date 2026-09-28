@@ -295,3 +295,73 @@ COMMENT ON TABLE governance.access_request IS
     'Governance-owned request envelope with one beneficiary and scalable RequestItems.';
 COMMENT ON TABLE governance.request_item IS
     'Governable access request unit. Authorization, Access application and provider fulfillment are distinct states.';
+
+
+CREATE OR REPLACE FUNCTION governance.reject_approval_snapshot_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'approval plan snapshots and decision evidence are immutable';
+END;
+$$;
+
+CREATE TRIGGER governance_approval_plan_immutable_trg
+BEFORE UPDATE OR DELETE ON governance.approval_plan
+FOR EACH ROW EXECUTE FUNCTION governance.reject_approval_snapshot_mutation();
+
+CREATE TRIGGER governance_approval_stage_immutable_trg
+BEFORE UPDATE OR DELETE ON governance.approval_stage
+FOR EACH ROW EXECUTE FUNCTION governance.reject_approval_snapshot_mutation();
+
+CREATE TRIGGER governance_approval_participant_immutable_trg
+BEFORE UPDATE OR DELETE ON governance.approval_participant
+FOR EACH ROW EXECUTE FUNCTION governance.reject_approval_snapshot_mutation();
+
+CREATE TRIGGER governance_approval_decision_append_only_trg
+BEFORE UPDATE OR DELETE ON governance.approval_decision
+FOR EACH ROW EXECUTE FUNCTION governance.reject_approval_snapshot_mutation();
+
+CREATE OR REPLACE FUNCTION governance.reject_approval_case_subject_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.subject_type <> OLD.subject_type
+       OR NEW.subject_id <> OLD.subject_id
+       OR NEW.subject_revision <> OLD.subject_revision
+       OR NEW.requester_identity_id IS DISTINCT FROM OLD.requester_identity_id
+       OR NEW.created_at <> OLD.created_at THEN
+        RAISE EXCEPTION 'ApprovalCase subject snapshot is immutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER governance_approval_case_subject_immutable_trg
+BEFORE UPDATE ON governance.approval_case
+FOR EACH ROW EXECUTE FUNCTION governance.reject_approval_case_subject_change();
+
+CREATE OR REPLACE FUNCTION governance.reject_request_item_intent_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.access_request_id <> OLD.access_request_id
+       OR NEW.target_kind <> OLD.target_kind
+       OR NEW.role_id IS DISTINCT FROM OLD.role_id
+       OR NEW.entitlement_id IS DISTINCT FROM OLD.entitlement_id
+       OR NEW.principal_constraint_kind <> OLD.principal_constraint_kind
+       OR NEW.specific_principal_id IS DISTINCT FROM OLD.specific_principal_id
+       OR NEW.valid_from IS DISTINCT FROM OLD.valid_from
+       OR NEW.valid_until IS DISTINCT FROM OLD.valid_until
+       OR NEW.created_at <> OLD.created_at THEN
+        RAISE EXCEPTION 'RequestItem business intent is immutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER governance_request_item_intent_immutable_trg
+BEFORE UPDATE ON governance.request_item
+FOR EACH ROW EXECUTE FUNCTION governance.reject_request_item_intent_change();
