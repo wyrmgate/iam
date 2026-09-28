@@ -59,7 +59,7 @@ class PrincipalPersistenceIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("25");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("26");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
