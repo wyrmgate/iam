@@ -30,6 +30,9 @@ public interface ApprovalRepository {
     Optional<ApprovalCase> findPendingBySubject(
             TenantContext tenant, SubjectKind subjectKind, UUID subjectId);
 
+    Optional<ApprovalCase> findLatestBySubject(
+            TenantContext tenant, SubjectKind subjectKind, UUID subjectId);
+
     ApprovalPlan findPlan(TenantContext tenant, UUID caseId);
 
     List<ApprovalStage> findStages(TenantContext tenant, UUID planId);
