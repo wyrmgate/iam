@@ -74,11 +74,67 @@ public final class AccessAssignmentCommandService {
             Instant validFrom,
             Instant validUntil,
             Instant now) {
+        return createEntitlementAssignment(
+                tenant,
+                identityId,
+                entitlementId,
+                principalConstraintKind,
+                specificPrincipalId,
+                AccessAssignment.ProvenanceKind.MANUAL,
+                null,
+                validFrom,
+                validUntil,
+                now);
+    }
+
+    public AccessAssignment createApprovedRequestEntitlementAssignment(
+            TenantContext tenant,
+            UUID identityId,
+            UUID entitlementId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            UUID requestItemId,
+            Instant validFrom,
+            Instant validUntil,
+            Instant now) {
+        Objects.requireNonNull(requestItemId, "requestItemId");
+        return createEntitlementAssignment(
+                tenant,
+                identityId,
+                entitlementId,
+                principalConstraintKind,
+                specificPrincipalId,
+                AccessAssignment.ProvenanceKind.APPROVED_REQUEST,
+                requestItemId,
+                validFrom,
+                validUntil,
+                now);
+    }
+
+    private AccessAssignment createEntitlementAssignment(
+            TenantContext tenant,
+            UUID identityId,
+            UUID entitlementId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            AccessAssignment.ProvenanceKind provenanceKind,
+            UUID provenanceRefId,
+            Instant validFrom,
+            Instant validUntil,
+            Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(identityId, "identityId");
         Objects.requireNonNull(entitlementId, "entitlementId");
         Objects.requireNonNull(principalConstraintKind, "principalConstraintKind");
+        Objects.requireNonNull(provenanceKind, "provenanceKind");
         Objects.requireNonNull(now, "now");
+
+        if (provenanceKind == AccessAssignment.ProvenanceKind.APPROVED_REQUEST) {
+            AccessAssignment existing = assignments.findByProvenance(
+                            tenant, provenanceKind, provenanceRefId)
+                    .orElse(null);
+            if (existing != null) return existing;
+        }
 
         if (!identityReferences.identityExists(tenant, identityId)) {
             throw new AccessAssignmentCommandException(
@@ -97,7 +153,7 @@ public final class AccessAssignmentCommandService {
                     "The requested Entitlement is retired.");
             case UNTARGETED -> throw new AccessAssignmentCommandException(
                     "entitlement_untargeted",
-                    "The first AccessAssignment slice requires a target-scoped Entitlement.");
+                    "AccessAssignment requires a target-scoped Entitlement.");
             case TARGET_RETIRED -> throw new AccessAssignmentCommandException(
                     "application_target_retired",
                     "The Entitlement belongs to a retired ApplicationTarget.");
@@ -142,23 +198,7 @@ public final class AccessAssignmentCommandService {
                     "ANY principal constraint must not include a specific Principal.");
         }
 
-        if (validUntil != null && !validUntil.isAfter(now)) {
-            throw new AccessAssignmentCommandException(
-                    "validity_already_ended",
-                    "AccessAssignment validity must not already be ended.");
-        }
-        if (validFrom != null && validUntil != null
-                && !validUntil.isAfter(validFrom)) {
-            throw new AccessAssignmentCommandException(
-                    "invalid_validity_window",
-                    "validUntil must be after validFrom.");
-        }
-
-        AccessAssignment.LifecycleState lifecycleState =
-                validFrom != null && validFrom.isAfter(now)
-                        ? AccessAssignment.LifecycleState.SCHEDULED
-                        : AccessAssignment.LifecycleState.ACTIVE;
-
+        validateValidity(validFrom, validUntil, now);
         AccessAssignment assignment = new AccessAssignment(
                 ids.nextId(),
                 identityId,
@@ -167,23 +207,15 @@ public final class AccessAssignmentCommandService {
                 entitlementId,
                 principalConstraintKind,
                 specificPrincipalId,
-                AccessAssignment.ProvenanceKind.MANUAL,
-                null,
-                lifecycleState,
+                provenanceKind,
+                provenanceRefId,
+                lifecycle(validFrom, now),
                 validFrom,
                 validUntil,
                 1,
                 now,
                 now);
-
-        return transactions.required(() -> {
-            assignments.insert(tenant, assignment);
-            facts.projectionInputChanged(tenant, assignment);
-            boundaries.scheduleBoundaries(tenant, assignment, now);
-            return assignments.findById(tenant, assignment.id())
-                    .orElseThrow(() -> new IllegalStateException(
-                            "created AccessAssignment could not be reloaded"));
-        });
+        return persistCreated(tenant, assignment, now);
     }
 
     public AccessAssignment createRoleAssignment(
@@ -195,11 +227,67 @@ public final class AccessAssignmentCommandService {
             Instant validFrom,
             Instant validUntil,
             Instant now) {
+        return createRoleAssignment(
+                tenant,
+                identityId,
+                roleId,
+                principalConstraintKind,
+                specificPrincipalId,
+                AccessAssignment.ProvenanceKind.MANUAL,
+                null,
+                validFrom,
+                validUntil,
+                now);
+    }
+
+    public AccessAssignment createApprovedRequestRoleAssignment(
+            TenantContext tenant,
+            UUID identityId,
+            UUID roleId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            UUID requestItemId,
+            Instant validFrom,
+            Instant validUntil,
+            Instant now) {
+        Objects.requireNonNull(requestItemId, "requestItemId");
+        return createRoleAssignment(
+                tenant,
+                identityId,
+                roleId,
+                principalConstraintKind,
+                specificPrincipalId,
+                AccessAssignment.ProvenanceKind.APPROVED_REQUEST,
+                requestItemId,
+                validFrom,
+                validUntil,
+                now);
+    }
+
+    private AccessAssignment createRoleAssignment(
+            TenantContext tenant,
+            UUID identityId,
+            UUID roleId,
+            AccessAssignment.PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            AccessAssignment.ProvenanceKind provenanceKind,
+            UUID provenanceRefId,
+            Instant validFrom,
+            Instant validUntil,
+            Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(identityId, "identityId");
         Objects.requireNonNull(roleId, "roleId");
         Objects.requireNonNull(principalConstraintKind, "principalConstraintKind");
+        Objects.requireNonNull(provenanceKind, "provenanceKind");
         Objects.requireNonNull(now, "now");
+
+        if (provenanceKind == AccessAssignment.ProvenanceKind.APPROVED_REQUEST) {
+            AccessAssignment existing = assignments.findByProvenance(
+                            tenant, provenanceKind, provenanceRefId)
+                    .orElse(null);
+            if (existing != null) return existing;
+        }
 
         if (!identityReferences.identityExists(tenant, identityId)) {
             throw new AccessAssignmentCommandException(
@@ -262,6 +350,28 @@ public final class AccessAssignmentCommandService {
                     "ANY principal constraint must not include a specific Principal.");
         }
 
+        validateValidity(validFrom, validUntil, now);
+        AccessAssignment assignment = new AccessAssignment(
+                ids.nextId(),
+                identityId,
+                AccessAssignment.TargetKind.ROLE,
+                roleId,
+                null,
+                principalConstraintKind,
+                specificPrincipalId,
+                provenanceKind,
+                provenanceRefId,
+                lifecycle(validFrom, now),
+                validFrom,
+                validUntil,
+                1,
+                now,
+                now);
+        return persistCreated(tenant, assignment, now);
+    }
+
+    private static void validateValidity(
+            Instant validFrom, Instant validUntil, Instant now) {
         if (validUntil != null && !validUntil.isAfter(now)) {
             throw new AccessAssignmentCommandException(
                     "validity_already_ended",
@@ -273,30 +383,29 @@ public final class AccessAssignmentCommandService {
                     "invalid_validity_window",
                     "validUntil must be after validFrom.");
         }
+    }
 
-        AccessAssignment.LifecycleState lifecycleState =
-                validFrom != null && validFrom.isAfter(now)
-                        ? AccessAssignment.LifecycleState.SCHEDULED
-                        : AccessAssignment.LifecycleState.ACTIVE;
+    private static AccessAssignment.LifecycleState lifecycle(
+            Instant validFrom, Instant now) {
+        return validFrom != null && validFrom.isAfter(now)
+                ? AccessAssignment.LifecycleState.SCHEDULED
+                : AccessAssignment.LifecycleState.ACTIVE;
+    }
 
-        AccessAssignment assignment = new AccessAssignment(
-                ids.nextId(),
-                identityId,
-                AccessAssignment.TargetKind.ROLE,
-                roleId,
-                null,
-                principalConstraintKind,
-                specificPrincipalId,
-                AccessAssignment.ProvenanceKind.MANUAL,
-                null,
-                lifecycleState,
-                validFrom,
-                validUntil,
-                1,
-                now,
-                now);
-
+    private AccessAssignment persistCreated(
+            TenantContext tenant,
+            AccessAssignment assignment,
+            Instant now) {
         return transactions.required(() -> {
+            if (assignment.provenanceKind()
+                    == AccessAssignment.ProvenanceKind.APPROVED_REQUEST) {
+                AccessAssignment existing = assignments.findByProvenance(
+                                tenant,
+                                assignment.provenanceKind(),
+                                assignment.provenanceRefId())
+                        .orElse(null);
+                if (existing != null) return existing;
+            }
             assignments.insert(tenant, assignment);
             facts.projectionInputChanged(tenant, assignment);
             boundaries.scheduleBoundaries(tenant, assignment, now);
