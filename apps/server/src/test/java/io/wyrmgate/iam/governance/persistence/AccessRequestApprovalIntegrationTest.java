@@ -577,6 +577,7 @@ class AccessRequestApprovalIntegrationTest {
                 RequestItem item,
                 Instant now) {
             return Resolution.approvalRequired(
+                    "policy:" + approverId,
                     List.of(new ApprovalService.StageSpec(
                             ApprovalStage.DecisionMode.ANY_ONE,
                             List.of(approverId))),
