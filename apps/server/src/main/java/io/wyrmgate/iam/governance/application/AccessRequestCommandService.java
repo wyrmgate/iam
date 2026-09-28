@@ -25,6 +25,7 @@ public final class AccessRequestCommandService {
     private final AccessRequestRepository repository;
     private final AccessRequestEligibilityEvaluator evaluator;
     private final ApprovalCommandService approvals;
+    private final AuthorizedAccessIntentSink authorizedAccess;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
@@ -32,11 +33,14 @@ public final class AccessRequestCommandService {
             AccessRequestRepository repository,
             AccessRequestEligibilityEvaluator evaluator,
             ApprovalCommandService approvals,
+            AuthorizedAccessIntentSink authorizedAccess,
             IdGenerator ids,
             TransactionExecutor transactions) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.evaluator = Objects.requireNonNull(evaluator, "evaluator");
         this.approvals = Objects.requireNonNull(approvals, "approvals");
+        this.authorizedAccess = Objects.requireNonNull(
+                authorizedAccess, "authorizedAccess");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -85,7 +89,12 @@ public final class AccessRequestCommandService {
                         spec.targetKind() == TargetKind.ENTITLEMENT
                                 ? spec.targetId()
                                 : null,
+                        spec.principalConstraintKind(),
+                        spec.specificPrincipalId(),
+                        spec.validFrom(),
+                        spec.validUntil(),
                         ItemState.DRAFT,
+                        null,
                         null,
                         null,
                         1,
@@ -133,6 +142,7 @@ public final class AccessRequestCommandService {
                         ItemState.SUBMITTED,
                         null,
                         null,
+                        null,
                         item.revision(),
                         now);
             }
@@ -174,6 +184,7 @@ public final class AccessRequestCommandService {
                         ItemState.EVALUATING,
                         null,
                         null,
+                        null,
                         current.revision(),
                         now);
             }
@@ -197,6 +208,7 @@ public final class AccessRequestCommandService {
                         itemId,
                         ItemState.EVALUATING,
                         null,
+                        null,
                         normalizeCode(result.code()),
                         evaluating.revision(),
                         now);
@@ -207,19 +219,23 @@ public final class AccessRequestCommandService {
                         itemId,
                         ItemState.DENIED,
                         null,
+                        null,
                         normalizeCode(result.code()),
                         evaluating.revision(),
                         now);
             }
             if (result.outcome() == EligibilityOutcome.AUTHORIZED) {
-                return repository.updateItemState(
+                RequestItem authorized = repository.updateItemState(
                         tenant,
                         itemId,
                         ItemState.AUTHORIZED,
                         null,
+                        null,
                         normalizeCode(result.code()),
                         evaluating.revision(),
                         now);
+                authorizedAccess.authorized(tenant, authorized);
+                return authorized;
             }
 
             ApprovalCase approvalCase = approvals.start(
@@ -234,6 +250,7 @@ public final class AccessRequestCommandService {
                     itemId,
                     ItemState.PENDING_APPROVAL,
                     approvalCase.id(),
+                    null,
                     normalizeCode(result.code()),
                     evaluating.revision(),
                     now);
