@@ -194,6 +194,9 @@ CREATE TABLE governance.request_item (
     CONSTRAINT governance_request_item_request_fk
         FOREIGN KEY (tenant_id, access_request_id)
         REFERENCES governance.access_request (tenant_id, id),
+    CONSTRAINT governance_request_item_approval_case_fk
+        FOREIGN KEY (tenant_id, approval_case_id)
+        REFERENCES governance.approval_case (tenant_id, id),
     CONSTRAINT governance_request_item_target_kind_ck
         CHECK (target_kind IN ('ROLE','ENTITLEMENT')),
     CONSTRAINT governance_request_item_target_shape_ck CHECK (
