@@ -158,28 +158,21 @@ public final class AccessRequestApprovalProcessingService {
             ApprovalPlan plan,
             RequestItem item,
             Instant now) {
-        RequestItem current = item;
+        RequestItem current = requestService.finalizeApprovedItem(
+                claimed.tenant(),
+                item.id(),
+                plan.id(),
+                now);
         if (current.lifecycleState()
-                == RequestItem.LifecycleState.PENDING_APPROVAL) {
-            current = requestService.authorize(
-                    claimed.tenant(),
-                    current,
-                    plan.id(),
-                    now);
-        }
-        if (current.lifecycleState()
-                == RequestItem.LifecycleState.AUTHORIZED) {
-            requestService.applyAuthorizedItem(
-                    claimed.tenant(),
-                    current.id(),
-                    now);
+                == RequestItem.LifecycleState.PENDING_APPROVAL
+                || current.lifecycleState()
+                == RequestItem.LifecycleState.APPLIED
+                || current.lifecycleState()
+                == RequestItem.LifecycleState.DENIED) {
             return;
         }
-        if (current.lifecycleState()
-                != RequestItem.LifecycleState.APPLIED) {
-            throw new IllegalStateException(
-                    "approved RequestItem is in an incompatible state");
-        }
+        throw new IllegalStateException(
+                "approved RequestItem ended in an incompatible state");
     }
 
     private void processTerminal(
