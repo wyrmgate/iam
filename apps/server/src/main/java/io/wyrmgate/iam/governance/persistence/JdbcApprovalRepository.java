@@ -307,6 +307,119 @@ public final class JdbcApprovalRepository implements ApprovalRepository {
     }
 
     @Override
+    public List<ApprovalCase> findInbox(
+            TenantContext tenant,
+            UUID approverIdentityId,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        if (afterCreatedAt == null || afterId == null) {
+            return jdbc.query("""
+                    SELECT DISTINCT c.id, c.subject_kind, c.subject_id,
+                           c.initiator_identity_id, c.state,
+                           c.current_stage_ordinal, c.revision,
+                           c.created_at, c.updated_at, c.completed_at
+                    FROM governance.approval_case c
+                    JOIN governance.approval_plan p
+                      ON p.tenant_id = c.tenant_id
+                     AND p.approval_case_id = c.id
+                    JOIN governance.approval_stage s
+                      ON s.tenant_id = p.tenant_id
+                     AND s.approval_plan_id = p.id
+                     AND s.stage_ordinal = c.current_stage_ordinal
+                    JOIN governance.approval_approver a
+                      ON a.tenant_id = s.tenant_id
+                     AND a.approval_stage_id = s.id
+                     AND a.approver_identity_id = ?
+                    LEFT JOIN governance.approval_decision d
+                      ON d.tenant_id = s.tenant_id
+                     AND d.approval_stage_id = s.id
+                     AND d.approver_identity_id = ?
+                    WHERE c.tenant_id = ?
+                      AND c.state = 'PENDING'
+                      AND d.id IS NULL
+                    ORDER BY c.created_at, c.id
+                    LIMIT ?
+                    """,
+                    (rs,row) -> caseRow(rs),
+                    approverIdentityId,
+                    approverIdentityId,
+                    tenant.tenantId(),
+                    limit);
+        }
+        return jdbc.query("""
+                SELECT DISTINCT c.id, c.subject_kind, c.subject_id,
+                       c.initiator_identity_id, c.state,
+                       c.current_stage_ordinal, c.revision,
+                       c.created_at, c.updated_at, c.completed_at
+                FROM governance.approval_case c
+                JOIN governance.approval_plan p
+                  ON p.tenant_id = c.tenant_id
+                 AND p.approval_case_id = c.id
+                JOIN governance.approval_stage s
+                  ON s.tenant_id = p.tenant_id
+                 AND s.approval_plan_id = p.id
+                 AND s.stage_ordinal = c.current_stage_ordinal
+                JOIN governance.approval_approver a
+                  ON a.tenant_id = s.tenant_id
+                 AND a.approval_stage_id = s.id
+                 AND a.approver_identity_id = ?
+                LEFT JOIN governance.approval_decision d
+                  ON d.tenant_id = s.tenant_id
+                 AND d.approval_stage_id = s.id
+                 AND d.approver_identity_id = ?
+                WHERE c.tenant_id = ?
+                  AND c.state = 'PENDING'
+                  AND d.id IS NULL
+                  AND (c.created_at, c.id) > (?, ?)
+                ORDER BY c.created_at, c.id
+                LIMIT ?
+                """,
+                (rs,row) -> caseRow(rs),
+                approverIdentityId,
+                approverIdentityId,
+                tenant.tenantId(),
+                Timestamp.from(afterCreatedAt),
+                afterId,
+                limit);
+    }
+
+    @Override
+    public boolean isParticipant(
+            TenantContext tenant,
+            UUID caseId,
+            UUID identityId) {
+        Integer count = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM governance.approval_case c
+                WHERE c.tenant_id = ?
+                  AND c.id = ?
+                  AND (
+                    c.initiator_identity_id = ?
+                    OR EXISTS (
+                        SELECT 1
+                        FROM governance.approval_plan p
+                        JOIN governance.approval_stage s
+                          ON s.tenant_id = p.tenant_id
+                         AND s.approval_plan_id = p.id
+                        JOIN governance.approval_approver a
+                          ON a.tenant_id = s.tenant_id
+                         AND a.approval_stage_id = s.id
+                        WHERE p.tenant_id = c.tenant_id
+                          AND p.approval_case_id = c.id
+                          AND a.approver_identity_id = ?
+                    )
+                  )
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                caseId,
+                identityId,
+                identityId);
+        return count != null && count > 0;
+    }
+
+    @Override
     public ApprovalCase updateCase(
             TenantContext tenant,
             UUID caseId,
