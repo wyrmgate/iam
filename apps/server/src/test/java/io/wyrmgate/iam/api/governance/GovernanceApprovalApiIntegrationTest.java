@@ -178,14 +178,14 @@ class GovernanceApprovalApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, actor)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-1\\\"")
+                                        "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
                                         "approval-api-idem-0001"))
                 .andExpect(status().isOk())
                 .andExpect(
                         header().string(
-                                "ETag", "\\\"rev-2\\\""))
+                                "ETag", "\"rev-2\""))
                 .andExpect(
                         jsonPath("$.lifecycleState")
                                 .value("APPROVED"))
@@ -200,7 +200,7 @@ class GovernanceApprovalApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, actor)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-1\\\"")
+                                        "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
                                         "approval-api-idem-0001"))
@@ -216,7 +216,7 @@ class GovernanceApprovalApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, other)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-1\\\"")
+                                        "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
                                         "approval-api-other-0001"))
@@ -233,7 +233,7 @@ class GovernanceApprovalApiIntegrationTest {
                                         ACTOR_ATTRIBUTE, actor)
                                 .header(
                                         "If-Match",
-                                        "\\\"rev-1\\\"")
+                                        "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
                                         "approval-api-idem-0002"))
