@@ -14,6 +14,7 @@ public interface AccessRequestApprovalRequirementsResolver {
 
     record Resolution(
             Status status,
+            String requirementsFingerprint,
             List<ApprovalService.StageSpec> stages,
             Instant deadlineAt,
             String code) {
@@ -22,10 +23,17 @@ public interface AccessRequestApprovalRequirementsResolver {
         }
 
         public static Resolution approvalRequired(
+                String requirementsFingerprint,
                 List<ApprovalService.StageSpec> stages,
                 Instant deadlineAt) {
+            if (requirementsFingerprint == null
+                    || requirementsFingerprint.isBlank()) {
+                throw new IllegalArgumentException(
+                        "requirementsFingerprint must not be blank");
+            }
             return new Resolution(
                     Status.APPROVAL_REQUIRED,
+                    requirementsFingerprint,
                     stages,
                     deadlineAt,
                     null);
@@ -34,6 +42,7 @@ public interface AccessRequestApprovalRequirementsResolver {
         public static Resolution noApproval() {
             return new Resolution(
                     Status.NO_APPROVAL,
+                    null,
                     List.of(),
                     null,
                     null);
@@ -42,6 +51,7 @@ public interface AccessRequestApprovalRequirementsResolver {
         public static Resolution unavailable(String code) {
             return new Resolution(
                     Status.UNAVAILABLE,
+                    null,
                     List.of(),
                     null,
                     code);
