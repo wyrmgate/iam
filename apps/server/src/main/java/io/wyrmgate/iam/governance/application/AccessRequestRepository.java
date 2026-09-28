@@ -38,6 +38,7 @@ public interface AccessRequestRepository {
             UUID itemId,
             ItemState state,
             UUID approvalCaseId,
+            UUID accessAssignmentId,
             String evaluationCode,
             long expectedRevision,
             Instant now);
