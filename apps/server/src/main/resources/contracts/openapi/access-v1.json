@@ -728,14 +728,18 @@
           },
           "provenanceKind": {
             "type": "string",
-            "const": "MANUAL"
+            "enum": [
+              "MANUAL",
+              "REQUEST_ITEM"
+            ]
           },
           "provenanceRefId": {
             "type": [
               "string",
               "null"
             ],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Null for MANUAL; RequestItem ID for REQUEST_ITEM provenance."
           },
           "lifecycleState": {
             "$ref": "#/components/schemas/AccessAssignmentLifecycleState"
@@ -907,4 +911,4 @@
     }
   },
   "x-wyrmgate-contract-status": "runtime-exposed-authenticated-authorized"
-}
+}\n
