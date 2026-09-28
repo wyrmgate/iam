@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 public final class JdbcAccessAssignmentRepository
@@ -25,30 +26,57 @@ public final class JdbcAccessAssignmentRepository
 
     @Override
     public void insert(TenantContext tenant, AccessAssignment assignment) {
-        jdbc.update("""
-                INSERT INTO access.access_assignment (
-                    id, tenant_id, identity_id, target_kind, role_id, entitlement_id,
-                    principal_constraint_kind, specific_principal_id,
-                    provenance_kind, provenance_ref_id, lifecycle_state,
-                    valid_from, valid_until, revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                assignment.id(),
-                tenant.tenantId(),
-                assignment.identityId(),
-                assignment.targetKind().name(),
-                assignment.roleId(),
-                assignment.entitlementId(),
-                assignment.principalConstraintKind().name(),
-                assignment.specificPrincipalId(),
-                assignment.provenanceKind().name(),
-                assignment.provenanceRefId(),
-                assignment.lifecycleState().name(),
-                timestamp(assignment.validFrom()),
-                timestamp(assignment.validUntil()),
-                assignment.revision(),
-                Timestamp.from(assignment.createdAt()),
-                Timestamp.from(assignment.updatedAt()));
+        try {
+            jdbc.update("""
+                    INSERT INTO access.access_assignment (
+                        id, tenant_id, identity_id, target_kind, role_id, entitlement_id,
+                        principal_constraint_kind, specific_principal_id,
+                        provenance_kind, provenance_ref_id, lifecycle_state,
+                        valid_from, valid_until, revision, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    assignment.id(),
+                    tenant.tenantId(),
+                    assignment.identityId(),
+                    assignment.targetKind().name(),
+                    assignment.roleId(),
+                    assignment.entitlementId(),
+                    assignment.principalConstraintKind().name(),
+                    assignment.specificPrincipalId(),
+                    assignment.provenanceKind().name(),
+                    assignment.provenanceRefId(),
+                    assignment.lifecycleState().name(),
+                    timestamp(assignment.validFrom()),
+                    timestamp(assignment.validUntil()),
+                    assignment.revision(),
+                    Timestamp.from(assignment.createdAt()),
+                    Timestamp.from(assignment.updatedAt()));
+        } catch (DataIntegrityViolationException conflict) {
+            if (assignment.provenanceKind()
+                            == AccessAssignment.ProvenanceKind.REQUEST_ITEM
+                    && causedByConstraint(
+                            conflict,
+                            "access_assignment_request_item_provenance_uq")) {
+                throw new io.wyrmgate.iam.access.application
+                        .AccessAssignmentProvenanceConflictException();
+            }
+            throw conflict;
+        }
+    }
+
+    private static boolean causedByConstraint(
+            Throwable error,
+            String constraintName) {
+        Throwable current = error;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null
+                    && message.contains(constraintName)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     @Override
