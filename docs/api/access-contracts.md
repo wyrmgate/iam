@@ -41,8 +41,11 @@ Creation supports exactly one target:
 - `ROLE + roleId`; or
 - `ENTITLEMENT + entitlementId`.
 
-Public creation uses `MANUAL` provenance only. Governance request/review provenance is
-reserved for the later Governance-to-Access command slice.
+Public administrative creation uses `MANUAL` provenance only. Governance now applies
+authorized RequestItems through the internal Access-owned `AccessIntentCommand`; those
+assignments use `APPROVED_REQUEST` provenance with `provenanceRefId = requestItemId`.
+The same RequestItem provenance is unique per tenant so crash/retry cannot create duplicate
+authoritative assignments.
 
 Principal constraints remain typed:
 
