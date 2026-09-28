@@ -110,7 +110,9 @@ Unfinished items may also become CANCELLED or EXPIRED. `AUTHORIZED` means govern
 
 Before final authorization, material identity/role/policy/risk/SoD dependency revisions are revalidated. Stale context may supersede an ApprovalPlan and cause reevaluation.
 
-ApprovalPlan is an immutable workflow snapshot. ApprovalDecision is immutable evidence.
+ApprovalCase is reusable typed Governance process state for one subject. Its plan, stages and resolved approvers are immutable snapshots. Stages execute sequentially; ANY_ONE completes after one approval, ALL completes only after all snapshotted approvers approve, and any valid rejection rejects the case. Only a resolved approver for the current stage may decide. Self-approval by the case initiator is denied by default. ApprovalDecision is append-only immutable evidence. An approved case does not itself mutate the subject; the subject-owning flow consumes the result through a semantic boundary.
+
+For AccessRequest, evaluator unavailability during privilege increase leaves the RequestItem in EVALUATING rather than authorizing it. An eligible item may become PENDING_APPROVAL and bind to an ApprovalCase. APPROVED advances the item to AUTHORIZED; REJECTED advances it to REJECTED. AUTHORIZED still does not mean Access has applied an AccessAssignment or that provider fulfillment succeeded.
 
 ## Review
 
