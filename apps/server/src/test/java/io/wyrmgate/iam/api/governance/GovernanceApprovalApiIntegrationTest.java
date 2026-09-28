@@ -55,7 +55,7 @@ class GovernanceApprovalApiIntegrationTest {
     private static final String ACTOR_ATTRIBUTE =
             ControlPlaneActorRequestContext.class.getName() + ".actor";
     private static final Instant NOW =
-            Instant.parse("2026-09-28T05:30:00Z");
+            Instant.parse("2026-09-01T05:30:00Z");
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
