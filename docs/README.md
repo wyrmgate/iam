@@ -60,7 +60,7 @@ The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, C
 
 ## Current status
 
-IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0015 are the current architecture checkpoint. ADR-0011 through ADR-0015 are controlled post-v0.2 amendments and must be folded into the next formal Security/SAD/Integration/RTM revision.
+IAM v2 is pre-release and under active design. The v0.2 formal specification set plus accepted ADR-0001 through ADR-0015 are the current architecture checkpoint. ADR-0011 through ADR-0016 are controlled post-v0.2 amendments and must be folded into the next formal Security/SAD/Integration/RTM revision.
 
 The v0.2 formal RTM predates ADR-0010 and still lists OD-002 as open; ADR-0010 and [`architecture/physical-data-model.md`](architecture/physical-data-model.md) are the current controlled amendment, and the next formal-specification revision must fold them into the Data Architecture/SAD/RTM package.
 
