@@ -184,7 +184,7 @@ Initial supported structures remain intentionally constrained:
 
 Do not introduce arbitrary BPM DAGs or script-defined approval semantics.
 
-AccessRequest/RequestItem is the first consumer, but approval persistence contains no access-request target or provisioning semantics. Later administrative elevation, exception or high-risk activation flows may reuse the same ApprovalCase contract while keeping their authoritative state outside the approval process.
+AccessRequest/RequestItem is the first consumer, but approval persistence contains no access-request target or provisioning semantics. Public request submission does not synchronously drive eligibility evaluation: SUBMITTED is committed with a durable internal work fact, and a retryable Governance consumer re-reads current RequestItem state before invoking the eligibility/approval flow. Later administrative elevation, exception or high-risk activation flows may reuse the same ApprovalCase contract while keeping their authoritative state outside the approval process.
 
 At each important transition, the consuming flow revalidates its material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Material change may supersede approval context and cause reevaluation.
 
