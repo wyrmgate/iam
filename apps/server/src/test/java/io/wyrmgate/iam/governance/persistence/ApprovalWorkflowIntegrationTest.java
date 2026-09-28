@@ -121,6 +121,7 @@ class ApprovalWorkflowIntegrationTest {
                 new ApprovalSubject(
                         ApprovalSubject.Kind.ACCESS_REQUEST_ITEM,
                         subjectId),
+                "access-request-policy-v1",
                 List.of(
                         new ApprovalService.StageSpec(
                                 ApprovalStage.DecisionMode.ALL,
@@ -239,6 +240,7 @@ class ApprovalWorkflowIntegrationTest {
                 new ApprovalSubject(
                         ApprovalSubject.Kind.CREDENTIAL_ACTION,
                         ids.nextId()),
+                "credential-policy-v1",
                 List.of(new ApprovalService.StageSpec(
                         ApprovalStage.DecisionMode.ANY_ONE,
                         List.of(approver))),
@@ -284,6 +286,7 @@ class ApprovalWorkflowIntegrationTest {
                 new ApprovalSubject(
                         ApprovalSubject.Kind.GOVERNANCE_EXCEPTION,
                         ids.nextId()),
+                "exception-policy-v1",
                 List.of(
                         new ApprovalService.StageSpec(
                                 ApprovalStage.DecisionMode.ANY_ONE,
