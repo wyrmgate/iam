@@ -30,6 +30,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`api/identity-contracts.md`](api/identity-contracts.md) — first OD-003 machine-readable Identity OpenAPI/AsyncAPI implementation slice and runtime authorization boundary.
 - [`api/catalog-contracts.md`](api/catalog-contracts.md) — authoritative Application/ApplicationTarget/Entitlement/Role runtime contract, revisions, retirement, pagination and provider-observation boundary.
 - [`api/access-contracts.md`](api/access-contracts.md) — authoritative AccessAssignment control-plane API and read-only EffectiveAccess projection contract.
+- [`api/governance-contracts.md`](api/governance-contracts.md) — public AccessRequest/RequestItem and reusable Approval API, visibility, concurrency and idempotency contract.
 - [`api/connector-worker-protocol.md`](api/connector-worker-protocol.md) — OD-004 remote connector-worker v1 session, leasing, fencing, result, observation, and compatibility contract.
 - [`api/integration-administration.md`](api/integration-administration.md) — governed ConnectorInstance/Binding/worker control-plane management API, permissions, revisions, idempotency and secret boundary.
 - [`operations/scim-principal-connector.md`](operations/scim-principal-connector.md) — SCIM 2.0 principal and Group provider adapter, observation/membership semantics, secret-resolution edge, reconciliation coverage and provider-error semantics.
