@@ -56,6 +56,11 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission ROLE_VERSION_ACTIVATE =
             new AdministrativePermission("role-version", "activate");
 
+    public static final AdministrativePermission ACCESS_REQUEST_READ =
+            new AdministrativePermission("access-request", "read");
+    public static final AdministrativePermission ACCESS_REQUEST_FOR_OTHERS =
+            new AdministrativePermission("access-request", "request-for-others");
+
     public static final AdministrativePermission ACCESS_ASSIGNMENT_READ =
             new AdministrativePermission("access-assignment", "read");
     public static final AdministrativePermission ACCESS_ASSIGNMENT_CREATE =
