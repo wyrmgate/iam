@@ -41,8 +41,10 @@ Creation supports exactly one target:
 - `ROLE + roleId`; or
 - `ENTITLEMENT + entitlementId`.
 
-Public creation uses `MANUAL` provenance only. Governance request/review provenance is
-reserved for the later Governance-to-Access command slice.
+Public creation uses `MANUAL` provenance only. Governance may create assignments through
+the internal semantic `AccessIntentCommand` with `REQUEST_ITEM + requestItemId` provenance.
+Request-derived assignments are visible through Access reads but cannot be forged through the
+manual public creation endpoint.
 
 Principal constraints remain typed:
 
