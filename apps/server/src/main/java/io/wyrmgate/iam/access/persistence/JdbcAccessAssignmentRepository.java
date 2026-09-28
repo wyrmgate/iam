@@ -70,6 +70,29 @@ public final class JdbcAccessAssignmentRepository
     }
 
     @Override
+    public Optional<AccessAssignment> findByProvenance(
+            TenantContext tenant,
+            AccessAssignment.ProvenanceKind provenanceKind,
+            UUID provenanceRefId) {
+        return jdbc.query("""
+                SELECT id, identity_id, target_kind, role_id, entitlement_id,
+                       principal_constraint_kind, specific_principal_id,
+                       provenance_kind, provenance_ref_id, lifecycle_state,
+                       valid_from, valid_until, revision, created_at, updated_at
+                FROM access.access_assignment
+                WHERE tenant_id = ?
+                  AND provenance_kind = ?
+                  AND provenance_ref_id = ?
+                """,
+                (rs,row) -> assignment(rs),
+                tenant.tenantId(),
+                provenanceKind.name(),
+                provenanceRefId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public List<AccessAssignment> findByRoleId(
             TenantContext tenant, UUID roleId) {
         return jdbc.query("""
