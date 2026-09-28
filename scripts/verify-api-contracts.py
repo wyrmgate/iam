@@ -17,6 +17,7 @@ OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/identity-v1.j
 ASYNCAPI = ROOT / "apps/server/src/main/resources/contracts/asyncapi/identity-events-v1.json"
 CONNECTOR_WORKER_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/connector-worker-v1.json"
 INTEGRATION_ADMIN_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/integration-admin-v1.json"
+GOVERNANCE_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/governance-v1.json"
 
 
 def load_json(path: Path) -> dict:
@@ -330,11 +331,71 @@ def verify_integration_admin_openapi(document: dict) -> None:
                  "ConnectorWorkerResource", "WorkerPermission"):
         assert schemas[name].get("additionalProperties") is False
 
+
+def verify_governance_openapi(document: dict) -> None:
+    assert document.get("openapi", "").startswith("3.1.")
+    assert document.get("security") == [{"controlPlaneBearer": []}]
+    paths = document.get("paths", {})
+    expected_paths = {
+        "/access-requests",
+        "/access-requests/{requestId}",
+        "/access-requests/{requestId}/submit",
+        "/request-items/{itemId}",
+        "/approval-inbox",
+        "/approval-cases/{caseId}",
+        "/approval-cases/{caseId}/approve",
+        "/approval-cases/{caseId}/reject",
+    }
+    assert set(paths) == expected_paths
+
+    create = paths["/access-requests"]["post"]
+    assert "IdempotencyKey" in ref_names(create)
+    create_schema = document["components"]["schemas"]["CreateAccessRequest"]
+    create_properties = set(create_schema.get("properties", {}))
+    assert "requesterIdentityId" not in create_properties, (
+        "requester identity must come only from the authenticated governed actor"
+    )
+    assert {"beneficiaryIdentityId", "items"} == set(
+        create_schema.get("required", [])
+    )
+
+    submit = paths["/access-requests/{requestId}/submit"]["post"]
+    assert {"IfMatch", "IdempotencyKey"}.issubset(ref_names(submit))
+
+    for operation_path in (
+        "/approval-cases/{caseId}/approve",
+        "/approval-cases/{caseId}/reject",
+    ):
+        operation = paths[operation_path]["post"]
+        assert {"IfMatch", "IdempotencyKey"}.issubset(ref_names(operation))
+
+    assert "post" not in paths["/request-items/{itemId}"], (
+        "RequestItem status must not be externally mutated"
+    )
+    assert set(paths["/approval-inbox"]) == {"get"}, (
+        "approval inbox is an actor-bound query, not an administrative mutation surface"
+    )
+
+    serialized = json.dumps(document, sort_keys=True).lower()
+    for forbidden in (
+        "password",
+        "privatekey",
+        "private_key",
+        "refreshtoken",
+        "refresh_token",
+        "secretvalue",
+        "secret_value",
+    ):
+        assert forbidden not in serialized, (
+            f"Governance ordinary API leaked secret-shaped field: {forbidden}"
+        )
+
 def main() -> None:
     verify_openapi(load_json(OPENAPI))
     verify_asyncapi(load_json(ASYNCAPI))
     verify_connector_worker_openapi(load_json(CONNECTOR_WORKER_OPENAPI))
     verify_integration_admin_openapi(load_json(INTEGRATION_ADMIN_OPENAPI))
+    verify_governance_openapi(load_json(GOVERNANCE_OPENAPI))
     print("API contracts verified")
 
 
