@@ -41,8 +41,11 @@ Creation supports exactly one target:
 - `ROLE + roleId`; or
 - `ENTITLEMENT + entitlementId`.
 
-Public creation uses `MANUAL` provenance only. Governance request/review provenance is
-reserved for the later Governance-to-Access command slice.
+Public creation uses `MANUAL` provenance only. Governance applies authorized
+RequestItems through the internal semantic `AccessIntentCommand`; Access creates
+`REQUEST_ITEM` provenance with `provenanceRefId = requestItemId`. That internal
+path is idempotent by provenance and is not exposed as a public arbitrary-provenance
+creation option.
 
 Principal constraints remain typed:
 
@@ -67,9 +70,10 @@ The public operations expose business meaning rather than arbitrary status mutat
 still evaluated directly from authoritative state/time, so scheduler delay cannot extend
 or prematurely start access.
 
-Lifecycle mutation does not synchronously call a provider. It emits the existing Access
-projection-input fact; EffectiveAccess, desired state and Integration provisioning converge
-asynchronously.
+Neither public lifecycle mutation nor internal request application synchronously calls a
+provider. Access emits the existing projection-input fact; EffectiveAccess, desired state
+and Integration provisioning converge asynchronously. Governance `APPLIED` means Access
+accepted the authoritative AccessAssignment, not that technical provisioning succeeded.
 
 Mutable authoritative assignment operations use strong `ETag: "rev-N"` plus
 `If-Match`. Retryable mutations use durable causal `Idempotency-Key` records.
