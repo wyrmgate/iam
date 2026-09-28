@@ -3,6 +3,8 @@ package io.wyrmgate.iam.governance.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationScheduler;
+import io.wyrmgate.iam.governance.application.AccessRequestEvaluationProcessingScheduler;
+import io.wyrmgate.iam.governance.application.AccessRequestEvaluationProcessingService;
 import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationService;
 import io.wyrmgate.iam.governance.application.AccessRequestApprovalResultSink;
 import io.wyrmgate.iam.governance.application.AccessRequestCommandService;
@@ -15,6 +17,7 @@ import io.wyrmgate.iam.governance.application.ApprovalRepository;
 import io.wyrmgate.iam.governance.application.ApprovalResultQuery;
 import io.wyrmgate.iam.governance.application.ApprovalResultSink;
 import io.wyrmgate.iam.governance.application.AuthorizedAccessIntentSink;
+import io.wyrmgate.iam.governance.application.SubmittedRequestItemSink;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingScheduler;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingService;
@@ -44,6 +47,13 @@ public class GovernancePersistenceConfiguration {
     @Bean
     AccessRequestRepository accessRequestRepository(JdbcTemplate jdbc) {
         return new JdbcAccessRequestRepository(jdbc);
+    }
+
+    @Bean
+    SubmittedRequestItemSink submittedRequestItemSink(
+            JdbcOutboxRepository outbox,
+            IdGenerator ids) {
+        return new JdbcSubmittedRequestItemSink(outbox, ids);
     }
 
     @Bean
@@ -82,6 +92,7 @@ public class GovernancePersistenceConfiguration {
             AccessRequestRepository requests,
             ObjectProvider<AccessRequestEligibilityEvaluator> evaluators,
             ApprovalCommandService approvals,
+            SubmittedRequestItemSink submittedItems,
             AuthorizedAccessIntentSink authorizedAccess,
             IdGenerator ids,
             TransactionExecutor transactions) {
@@ -94,9 +105,25 @@ public class GovernancePersistenceConfiguration {
                 requests,
                 evaluator,
                 approvals,
+                submittedItems,
                 authorizedAccess,
                 ids,
                 transactions);
+    }
+
+    @Bean
+    AccessRequestEvaluationProcessingService accessRequestEvaluationProcessingService(
+            JdbcOutboxRepository outbox,
+            AccessRequestRepository requests,
+            AccessRequestCommandService commands) {
+        return new AccessRequestEvaluationProcessingService(
+                outbox, requests, commands);
+    }
+
+    @Bean
+    AccessRequestEvaluationProcessingScheduler accessRequestEvaluationProcessingScheduler(
+            AccessRequestEvaluationProcessingService service) {
+        return new AccessRequestEvaluationProcessingScheduler(service);
     }
 
     @Bean
