@@ -7,6 +7,7 @@ import java.util.UUID;
 public record ApprovalPlan(
         UUID id,
         ApprovalSubject subject,
+        String requirementsFingerprint,
         LifecycleState lifecycleState,
         int currentStageOrdinal,
         Instant deadlineAt,
@@ -18,6 +19,10 @@ public record ApprovalPlan(
     public ApprovalPlan {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(subject, "subject");
+        if (requirementsFingerprint == null || requirementsFingerprint.isBlank()) {
+            throw new IllegalArgumentException(
+                    "requirementsFingerprint must not be blank");
+        }
         Objects.requireNonNull(lifecycleState, "lifecycleState");
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
