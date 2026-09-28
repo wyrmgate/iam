@@ -1,0 +1,286 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "Wyrmgate IAM Governance API",
+    "version": "0.1.0",
+    "description": "Public AccessRequest and reusable Approval control-plane API. Request authorization, approval evidence, authoritative Access application, and provider fulfillment remain distinct state dimensions."
+  },
+  "security": [{"controlPlaneBearer": []}],
+  "paths": {
+    "/access-requests": {
+      "post": {
+        "operationId": "createAccessRequest",
+        "summary": "Create a draft access request",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreateAccessRequest"}
+            }
+          }
+        },
+        "responses": {
+          "201": {"description": "Draft AccessRequest created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccessRequest"}}}},
+          "400": {"$ref": "#/components/responses/ValidationError"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"}
+        },
+        "x-wyrmgate-idempotency": "Required",
+        "x-wyrmgate-requester": "Authenticated governed actor; requesterIdentityId is not accepted from the body."
+      }
+    },
+    "/access-requests/{requestId}": {
+      "get": {
+        "operationId": "getAccessRequest",
+        "summary": "Get an access request and its items",
+        "parameters": [
+          {"$ref": "#/components/parameters/RequestId"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {"description": "AccessRequest detail", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccessRequest"}}}},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/access-requests/{requestId}/submit": {
+      "post": {
+        "operationId": "submitAccessRequest",
+        "summary": "Submit a draft access request for durable evaluation",
+        "parameters": [
+          {"$ref": "#/components/parameters/RequestId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {"description": "AccessRequest submitted", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccessRequest"}}}},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/StaleRevision"}
+        },
+        "x-wyrmgate-idempotency": "Required",
+        "x-wyrmgate-consistency": "SUBMITTED and one durable evaluation fact per RequestItem commit atomically."
+      }
+    },
+    "/request-items/{itemId}": {
+      "get": {
+        "operationId": "getRequestItem",
+        "summary": "Get request item status",
+        "parameters": [
+          {"$ref": "#/components/parameters/ItemId"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {"description": "RequestItem", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RequestItem"}}}},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/approval-inbox": {
+      "get": {
+        "operationId": "getApprovalInbox",
+        "summary": "List actionable approval cases for the authenticated actor",
+        "parameters": [
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {"description": "Approval inbox page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalInboxPage"}}}}
+        },
+        "x-wyrmgate-authorization": "Current-stage snapshotted approver identity; no generic admin permission substitutes for approver authority."
+      }
+    },
+    "/approval-cases/{caseId}": {
+      "get": {
+        "operationId": "getApprovalEvidence",
+        "summary": "Get immutable approval plan and decision evidence",
+        "parameters": [
+          {"$ref": "#/components/parameters/CaseId"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {"description": "Approval evidence", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalEvidence"}}}},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        },
+        "x-wyrmgate-visibility": "Case initiator or snapshotted approver participant only."
+      }
+    },
+    "/approval-cases/{caseId}/approve": {
+      "post": {
+        "operationId": "approveApprovalCase",
+        "summary": "Record an approval decision",
+        "parameters": [
+          {"$ref": "#/components/parameters/CaseId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {"required": false, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DecisionBody"}}}},
+        "responses": {
+          "200": {"description": "Updated approval evidence", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalEvidence"}}}},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/StaleRevision"}
+        },
+        "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/approval-cases/{caseId}/reject": {
+      "post": {
+        "operationId": "rejectApprovalCase",
+        "summary": "Record a rejection decision",
+        "parameters": [
+          {"$ref": "#/components/parameters/CaseId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {"required": false, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DecisionBody"}}}},
+        "responses": {
+          "200": {"description": "Updated approval evidence", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalEvidence"}}}},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/StaleRevision"}
+        },
+        "x-wyrmgate-idempotency": "Required"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "controlPlaneBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Transport authentication resolves a governed actor; approval authority and administrative authorization remain separate semantic checks."
+      }
+    },
+    "parameters": {
+      "RequestId": {"name": "requestId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "ItemId": {"name": "itemId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "CaseId": {"name": "caseId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "Cursor": {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string"}},
+      "Limit": {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+      "IfMatch": {"name": "If-Match", "in": "header", "required": true, "schema": {"type": "string", "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"}},
+      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 200}},
+      "CorrelationId": {"name": "X-Correlation-Id", "in": "header", "required": false, "schema": {"type": "string", "format": "uuid"}}
+    },
+    "schemas": {
+      "CreateAccessRequest": {
+        "type": "object",
+        "required": ["beneficiaryIdentityId", "items"],
+        "properties": {
+          "beneficiaryIdentityId": {"type": "string", "format": "uuid"},
+          "items": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"$ref": "#/components/schemas/CreateRequestItem"}}
+        }
+      },
+      "CreateRequestItem": {
+        "type": "object",
+        "required": ["targetKind", "targetId", "principalConstraintKind"],
+        "properties": {
+          "targetKind": {"type": "string", "enum": ["ROLE", "ENTITLEMENT"]},
+          "targetId": {"type": "string", "format": "uuid"},
+          "principalConstraintKind": {"type": "string", "enum": ["ANY", "SPECIFIC"]},
+          "specificPrincipalId": {"type": ["string", "null"], "format": "uuid"},
+          "validFrom": {"type": ["string", "null"], "format": "date-time"},
+          "validUntil": {"type": ["string", "null"], "format": "date-time"}
+        }
+      },
+      "AccessRequest": {
+        "type": "object",
+        "required": ["id", "requesterIdentityId", "beneficiaryIdentityId", "state", "revision", "createdAt", "updatedAt", "items"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "requesterIdentityId": {"type": "string", "format": "uuid"},
+          "beneficiaryIdentityId": {"type": "string", "format": "uuid"},
+          "state": {"type": "string"},
+          "revision": {"type": "integer", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "submittedAt": {"type": ["string", "null"], "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/RequestItem"}}
+        }
+      },
+      "RequestItem": {
+        "type": "object",
+        "required": ["id", "accessRequestId", "targetKind", "principalConstraintKind", "state", "revision", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "accessRequestId": {"type": "string", "format": "uuid"},
+          "targetKind": {"type": "string", "enum": ["ROLE", "ENTITLEMENT"]},
+          "roleId": {"type": ["string", "null"], "format": "uuid"},
+          "entitlementId": {"type": ["string", "null"], "format": "uuid"},
+          "principalConstraintKind": {"type": "string", "enum": ["ANY", "SPECIFIC"]},
+          "specificPrincipalId": {"type": ["string", "null"], "format": "uuid"},
+          "validFrom": {"type": ["string", "null"], "format": "date-time"},
+          "validUntil": {"type": ["string", "null"], "format": "date-time"},
+          "state": {"type": "string"},
+          "approvalCaseId": {"type": ["string", "null"], "format": "uuid"},
+          "accessAssignmentId": {"type": ["string", "null"], "format": "uuid"},
+          "evaluationCode": {"type": ["string", "null"]},
+          "revision": {"type": "integer", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ApprovalInboxPage": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/ApprovalCaseSummary"}},
+          "nextCursor": {"type": ["string", "null"]}
+        }
+      },
+      "ApprovalCaseSummary": {
+        "type": "object",
+        "required": ["id", "subjectKind", "subjectId", "state", "currentStageOrdinal", "revision", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "subjectKind": {"type": "string"},
+          "subjectId": {"type": "string", "format": "uuid"},
+          "state": {"type": "string"},
+          "currentStageOrdinal": {"type": "integer", "minimum": 0},
+          "revision": {"type": "integer", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "DecisionBody": {
+        "type": "object",
+        "properties": {"reason": {"type": ["string", "null"], "maxLength": 1000}}
+      },
+      "ApprovalEvidence": {
+        "type": "object",
+        "description": "ApprovalCase mutable process state plus immutable plan/stage/approver/decision evidence.",
+        "additionalProperties": true
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["code", "message", "correlationId", "fieldErrors"],
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"},
+          "correlationId": {"type": "string", "format": "uuid"},
+          "fieldErrors": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    },
+    "responses": {
+      "ValidationError": {"description": "Validation error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Forbidden": {"description": "Forbidden", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "NotFound": {"description": "Not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Conflict": {"description": "Conflict", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "StaleRevision": {"description": "Stale revision", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+    }
+  }
+}
