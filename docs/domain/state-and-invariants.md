@@ -108,6 +108,8 @@ DRAFT → SUBMITTED → EVALUATING → PENDING_APPROVAL → AUTHORIZED → APPLI
 
 Unfinished items may also become CANCELLED or EXPIRED. `AUTHORIZED` means governance requirements succeeded; `APPLIED` means Access accepted the authoritative change. Neither means provider provisioning succeeded.
 
+Submitting an AccessRequest is one caller-visible operation. Each RequestItem transition to `SUBMITTED` durably emits internal evaluation work in the same transaction. The evaluator consumer may move the item to `EVALUATING`, `PENDING_APPROVAL`, `AUTHORIZED` or `DENIED`; mandatory evaluator outage remains `EVALUATING` and is retried. A public client never drives arbitrary evaluation or status mutation.
+
 Before final authorization, material identity/role/policy/risk/SoD dependency revisions are revalidated. Stale context may supersede an ApprovalPlan and cause reevaluation.
 
 ApprovalCase is reusable typed Governance process state for one subject. Its plan, stages and resolved approvers are immutable snapshots. Stages execute sequentially; ANY_ONE completes after one approval, ALL completes only after all snapshotted approvers approve, and any valid rejection rejects the case. Only a resolved approver for the current stage may decide. Self-approval by the case initiator is denied by default. ApprovalDecision is append-only immutable evidence. An approved case does not itself mutate the subject; the subject-owning flow consumes the result through a semantic boundary.
