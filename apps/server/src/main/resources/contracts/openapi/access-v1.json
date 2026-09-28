@@ -728,7 +728,11 @@
           },
           "provenanceKind": {
             "type": "string",
-            "const": "MANUAL"
+            "enum": [
+              "MANUAL",
+              "APPROVED_REQUEST"
+            ],
+            "description": "MANUAL for public administrative creation; APPROVED_REQUEST for AccessIntentCommand application of an authorized Governance RequestItem."
           },
           "provenanceRefId": {
             "type": [
