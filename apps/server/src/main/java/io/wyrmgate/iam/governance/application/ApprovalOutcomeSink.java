@@ -6,7 +6,11 @@ import java.util.UUID;
 
 public interface ApprovalOutcomeSink {
 
-    String OUTCOME_CHANGED = "governance.approval-outcome-changed";
+    String OUTCOME_PREFIX = "governance.approval-outcome.";
+
+    static String eventType(io.wyrmgate.iam.governance.domain.ApprovalSubject.Kind kind) {
+        return OUTCOME_PREFIX + kind.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+    }
 
     void outcomeChanged(
             TenantContext tenant,
