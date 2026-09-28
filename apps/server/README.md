@@ -124,3 +124,6 @@ make server-run
 ```
 
 `server-build` and `server-test` require Docker because the PostgreSQL persistence contract is verified with Testcontainers. `server-run` requires the local PostgreSQL stack; the root Makefile starts it automatically through `dev-up`.
+
+
+The public Governance request/approval contract is `src/main/resources/contracts/openapi/governance-v1.json`.
