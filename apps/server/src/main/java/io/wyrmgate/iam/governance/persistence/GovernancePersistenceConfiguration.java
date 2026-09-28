@@ -82,6 +82,7 @@ public class GovernancePersistenceConfiguration {
             AccessRequestRepository requests,
             ObjectProvider<AccessRequestEligibilityEvaluator> evaluators,
             ApprovalCommandService approvals,
+            AuthorizedAccessIntentSink authorizedAccess,
             IdGenerator ids,
             TransactionExecutor transactions) {
         AccessRequestEligibilityEvaluator evaluator =
