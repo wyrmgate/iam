@@ -314,14 +314,14 @@ class AccessRequestAccessApplicationIntegrationTest {
                 .isEqualTo(
                         AccessAssignment.LifecycleState.SCHEDULED);
 
-        AccessAssignment replay =
+        AccessIntentCommand.Result replay =
                 accessIntent.applyRequestedAccess(
                         tenant,
                         requestedAccess(
                                 applied,
                                 beneficiary.id()),
                         NOW.plusSeconds(4));
-        assertThat(replay.id())
+        assertThat(replay.accessAssignmentId())
                 .isEqualTo(assignment.id());
         assertThat(requestDerivedAssignmentCount(
                 authorized.id())).isEqualTo(1);
@@ -413,14 +413,14 @@ class AccessRequestAccessApplicationIntegrationTest {
         assertThat(requestDerivedAssignmentCount(
                 authorized.id())).isEqualTo(1);
 
-        AccessAssignment replay =
+        AccessIntentCommand.Result replay =
                 accessIntent.applyRequestedAccess(
                         tenant,
                         requestedAccess(
                                 applied,
                                 beneficiary.id()),
                         NOW.plusSeconds(11));
-        assertThat(replay.id())
+        assertThat(replay.accessAssignmentId())
                 .isEqualTo(applied.accessAssignmentId());
         assertThat(requestDerivedAssignmentCount(
                 authorized.id())).isEqualTo(1);
@@ -461,8 +461,8 @@ class AccessRequestAccessApplicationIntegrationTest {
                 item.entitlementId(),
                 item.principalConstraintKind()
                         == PrincipalConstraintKind.ANY
-                        ? AccessAssignment.PrincipalConstraintKind.ANY
-                        : AccessAssignment.PrincipalConstraintKind.SPECIFIC,
+                        ? AccessIntentCommand.PrincipalConstraintKind.ANY
+                        : AccessIntentCommand.PrincipalConstraintKind.SPECIFIC,
                 item.specificPrincipalId(),
                 item.validFrom(),
                 item.validUntil());
