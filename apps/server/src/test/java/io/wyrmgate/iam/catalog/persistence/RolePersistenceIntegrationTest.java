@@ -53,7 +53,7 @@ class RolePersistenceIntegrationTest {
         flyway.migrate();
         flyway.validate();
         assertThat(flyway.info().current().getVersion().getVersion())
-                .isEqualTo("26");
+                .isEqualTo("27");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
