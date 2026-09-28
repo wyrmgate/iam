@@ -3,6 +3,7 @@ CREATE TABLE governance.approval_plan (
     tenant_id uuid NOT NULL,
     subject_kind varchar(64) NOT NULL,
     subject_id uuid NOT NULL,
+    requirements_fingerprint varchar(128) NOT NULL,
     lifecycle_state varchar(24) NOT NULL,
     current_stage_ordinal integer NOT NULL DEFAULT 0,
     deadline_at timestamptz NULL,
@@ -21,6 +22,8 @@ CREATE TABLE governance.approval_plan (
             'ADMINISTRATIVE_ELEVATION',
             'CREDENTIAL_ACTION'
         )),
+    CONSTRAINT governance_approval_plan_requirements_fingerprint_ck
+        CHECK (btrim(requirements_fingerprint) <> ''),
     CONSTRAINT governance_approval_plan_state_ck
         CHECK (lifecycle_state IN (
             'PENDING','APPROVED','REJECTED','EXPIRED','SUPERSEDED'
@@ -127,8 +130,11 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF NEW.subject_kind <> OLD.subject_kind
+    IF NEW.id <> OLD.id
+       OR NEW.tenant_id <> OLD.tenant_id
+       OR NEW.subject_kind <> OLD.subject_kind
        OR NEW.subject_id <> OLD.subject_id
+       OR NEW.requirements_fingerprint <> OLD.requirements_fingerprint
        OR NEW.created_at <> OLD.created_at
        OR NEW.deadline_at IS DISTINCT FROM OLD.deadline_at THEN
         RAISE EXCEPTION 'ApprovalPlan content is immutable';
@@ -159,7 +165,9 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    IF NEW.approval_plan_id <> OLD.approval_plan_id
+    IF NEW.id <> OLD.id
+       OR NEW.tenant_id <> OLD.tenant_id
+       OR NEW.approval_plan_id <> OLD.approval_plan_id
        OR NEW.stage_ordinal <> OLD.stage_ordinal
        OR NEW.decision_mode <> OLD.decision_mode
        OR NEW.created_at <> OLD.created_at THEN
