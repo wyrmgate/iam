@@ -2,6 +2,7 @@ package io.wyrmgate.iam.governance.persistence;
 
 import io.wyrmgate.iam.governance.application.AccessRequestModels.AccessRequest;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.ItemState;
+import io.wyrmgate.iam.governance.application.AccessRequestModels.PrincipalConstraintKind;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.RequestItem;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.RequestState;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.TargetKind;
@@ -58,9 +59,11 @@ public final class JdbcAccessRequestRepository
                 INSERT INTO governance.request_item (
                     id, tenant_id, access_request_id,
                     target_kind, role_id, entitlement_id,
-                    state, approval_case_id, evaluation_code,
+                    principal_constraint_kind, specific_principal_id,
+                    valid_from, valid_until, state,
+                    approval_case_id, access_assignment_id, evaluation_code,
                     revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 item.id(),
                 tenant.tenantId(),
@@ -68,8 +71,13 @@ public final class JdbcAccessRequestRepository
                 item.targetKind().name(),
                 item.roleId(),
                 item.entitlementId(),
+                item.principalConstraintKind().name(),
+                item.specificPrincipalId(),
+                timestamp(item.validFrom()),
+                timestamp(item.validUntil()),
                 item.state().name(),
                 item.approvalCaseId(),
+                item.accessAssignmentId(),
                 item.evaluationCode(),
                 item.revision(),
                 Timestamp.from(item.createdAt()),
@@ -100,8 +108,10 @@ public final class JdbcAccessRequestRepository
             UUID itemId) {
         return jdbc.query("""
                 SELECT id, access_request_id, target_kind,
-                       role_id, entitlement_id, state,
-                       approval_case_id, evaluation_code,
+                       role_id, entitlement_id,
+                       principal_constraint_kind, specific_principal_id,
+                       valid_from, valid_until, state,
+                       approval_case_id, access_assignment_id, evaluation_code,
                        revision, created_at, updated_at
                 FROM governance.request_item
                 WHERE tenant_id = ? AND id = ?
@@ -119,8 +129,10 @@ public final class JdbcAccessRequestRepository
             UUID requestId) {
         return jdbc.query("""
                 SELECT id, access_request_id, target_kind,
-                       role_id, entitlement_id, state,
-                       approval_case_id, evaluation_code,
+                       role_id, entitlement_id,
+                       principal_constraint_kind, specific_principal_id,
+                       valid_from, valid_until, state,
+                       approval_case_id, access_assignment_id, evaluation_code,
                        revision, created_at, updated_at
                 FROM governance.request_item
                 WHERE tenant_id = ?
@@ -169,6 +181,7 @@ public final class JdbcAccessRequestRepository
             UUID itemId,
             ItemState state,
             UUID approvalCaseId,
+            UUID accessAssignmentId,
             String evaluationCode,
             long expectedRevision,
             Instant now) {
@@ -176,6 +189,7 @@ public final class JdbcAccessRequestRepository
                 UPDATE governance.request_item
                 SET state = ?,
                     approval_case_id = ?,
+                    access_assignment_id = ?,
                     evaluation_code = ?,
                     revision = revision + 1,
                     updated_at = ?
@@ -185,6 +199,7 @@ public final class JdbcAccessRequestRepository
                 """,
                 state.name(),
                 approvalCaseId,
+                accessAssignmentId,
                 evaluationCode,
                 Timestamp.from(now),
                 tenant.tenantId(),
@@ -247,11 +262,25 @@ public final class JdbcAccessRequestRepository
                 TargetKind.valueOf(rs.getString("target_kind")),
                 rs.getObject("role_id", UUID.class),
                 rs.getObject("entitlement_id", UUID.class),
+                PrincipalConstraintKind.valueOf(
+                        rs.getString("principal_constraint_kind")),
+                rs.getObject("specific_principal_id", UUID.class),
+                instant(rs.getTimestamp("valid_from")),
+                instant(rs.getTimestamp("valid_until")),
                 ItemState.valueOf(rs.getString("state")),
                 rs.getObject("approval_case_id", UUID.class),
+                rs.getObject("access_assignment_id", UUID.class),
                 rs.getString("evaluation_code"),
                 rs.getLong("revision"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
+    }
+
+    private static Timestamp timestamp(Instant value) {
+        return value == null ? null : Timestamp.from(value);
+    }
+
+    private static Instant instant(Timestamp value) {
+        return value == null ? null : value.toInstant();
     }
 }
