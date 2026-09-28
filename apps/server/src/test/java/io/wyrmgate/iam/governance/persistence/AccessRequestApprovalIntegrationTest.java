@@ -28,7 +28,7 @@ import io.wyrmgate.iam.governance.domain.ApprovalPlan;
 import io.wyrmgate.iam.governance.domain.ApprovalStage;
 import io.wyrmgate.iam.governance.domain.RequestItem;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
-import io.wyrmgate.iam.identity.application.IdentityApprovalActorEligibilityQuery;
+import io.wyrmgate.iam.identity.persistence.IdentityApprovalActorEligibilityQuery;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.domain.Identity;
