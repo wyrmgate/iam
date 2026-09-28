@@ -108,9 +108,13 @@ DRAFT → SUBMITTED → EVALUATING → PENDING_APPROVAL → AUTHORIZED → APPLI
 
 Unfinished items may also become CANCELLED or EXPIRED. `AUTHORIZED` means governance requirements succeeded; `APPLIED` means Access accepted the authoritative change. Neither means provider provisioning succeeded.
 
-Before final authorization, material identity/role/policy/risk/SoD dependency revisions are revalidated. Stale context may supersede an ApprovalPlan and cause reevaluation.
+Before final authorization, material identity/role/policy/risk/SoD dependency revisions are revalidated. Stale context may supersede an ApprovalCase/ApprovalPlan and cause reevaluation.
 
-ApprovalPlan is an immutable workflow snapshot. ApprovalDecision is immutable evidence.
+ApprovalCase is reusable across explicitly typed subjects and carries the subject revision captured when approval starts. ApprovalPlan/stages/resolved participants are immutable workflow snapshots. Sequential stages support ANY_ONE and ALL modes. Requester self-approval is denied by default. ApprovalDecision is immutable evidence.
+
+A terminal approval outcome never directly mutates another capability. The subject owner revalidates case ID + captured subject revision before applying it; a stale outcome is a no-op.
+
+For the first AccessRequest consumer, unavailable mandatory eligibility/approver resolution leaves the RequestItem in EVALUATING and cannot create approval or access. APPROVED moves a still-current item to AUTHORIZED; Access then applies the business intent through AccessIntentCommand. Only Access creates the AccessAssignment, using APPROVED_REQUEST provenance keyed by RequestItem ID. APPLIED means Access accepted authoritative intent, not that provider provisioning succeeded.
 
 ## Review
 
