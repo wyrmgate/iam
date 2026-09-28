@@ -169,18 +169,26 @@ Materially changing approval participants or approval requirements creates/super
 
 ## Approval orchestration
 
-ApprovalPlan is an immutable snapshot of required decisions for one RequestItem. Initial supported structures remain intentionally constrained:
+ADR-0016 generalizes the approval mechanism into a reusable Governance-owned typed approval process without turning Governance into a generic workflow engine.
+
+`ApprovalCase` owns mutable approval-process state for one typed subject reference. The subject's owning business capability retains its own lifecycle and decides what an approved result means. `ApprovalPlan`, ordered `ApprovalStage` rows, resolved approver snapshots and `ApprovalDecision` evidence are immutable.
+
+Initial supported structures remain intentionally constrained:
 
 - sequential stages;
 - stage decision mode `ANY_ONE` or `ALL`;
-- typed approver-resolution rules;
-- reminders, deadlines and escalation policy.
+- resolved governed-Identity approvers snapshotted into the plan;
+- self-approval denied by default;
+- append-only decisions;
+- optimistic case revision.
 
-Do not introduce arbitrary BPM DAGs initially.
+Do not introduce arbitrary BPM DAGs or script-defined approval semantics.
 
-At each important transition, revalidate material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Material change may supersede the plan and return the item to evaluation.
+AccessRequest/RequestItem is the first consumer, but approval persistence contains no access-request target or provisioning semantics. Later administrative elevation, exception or high-risk activation flows may reuse the same ApprovalCase contract while keeping their authoritative state outside the approval process.
 
-ApprovalDecision remains append-only evidence.
+At each important transition, the consuming flow revalidates its material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Material change may supersede approval context and cause reevaluation.
+
+Reminders, deadlines, escalation and delegation remain later typed Governance extensions. Generic scheduling owns only timer delivery.
 
 ## Review orchestration
 
