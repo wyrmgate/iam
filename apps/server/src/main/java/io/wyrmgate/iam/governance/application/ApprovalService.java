@@ -40,11 +40,17 @@ public final class ApprovalService {
     public ApprovalPlan createPlan(
             TenantContext tenant,
             ApprovalSubject subject,
+            String requirementsFingerprint,
             List<StageSpec> stages,
             Instant deadlineAt,
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(subject, "subject");
+        if (requirementsFingerprint == null || requirementsFingerprint.isBlank()) {
+            throw new ApprovalCommandException(
+                    "approval_requirements_fingerprint_required",
+                    "ApprovalPlan requires a non-blank requirements fingerprint.");
+        }
         Objects.requireNonNull(stages, "stages");
         Objects.requireNonNull(now, "now");
         if (stages.isEmpty()) {
@@ -89,6 +95,7 @@ public final class ApprovalService {
             ApprovalPlan plan = new ApprovalPlan(
                     ids.nextId(),
                     subject,
+                    requirementsFingerprint,
                     ApprovalPlan.LifecycleState.PENDING,
                     0,
                     deadlineAt,
