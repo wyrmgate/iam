@@ -169,18 +169,29 @@ Materially changing approval participants or approval requirements creates/super
 
 ## Approval orchestration
 
-ApprovalPlan is an immutable snapshot of required decisions for one RequestItem. Initial supported structures remain intentionally constrained:
+ADR-0016 makes approval mechanics a reusable Governance-owned orchestration capability without making a generic workflow engine or approval table the owner of consumer business state.
 
-- sequential stages;
+A reusable `ApprovalPlan` references one consumer through a typed `ApprovalSubject(kind, id)`. The initial runtime subject is `ACCESS_REQUEST_ITEM`; reserved typed extension points cover RoleVersion activation, GovernanceException, administrative elevation and credential/security actions. Each consumer still owns why approval is required, its own lifecycle and the semantic action that follows approval or rejection.
+
+ApprovalPlan is an immutable snapshot of required decisions. The first reusable kernel supports:
+
+- ordered sequential stages;
 - stage decision mode `ANY_ONE` or `ALL`;
-- typed approver-resolution rules;
-- reminders, deadlines and escalation policy.
+- already-resolved governed approver Identity snapshots;
+- an immutable consumer-supplied requirements fingerprint for material policy/context revisions;
+- optional semantic deadline;
+- optimistic plan revision;
+- immutable ApprovalDecision evidence.
 
-Do not introduce arbitrary BPM DAGs initially.
+The kernel validates that plan participants and deciding actors are currently eligible governed Identities. Later approver-resolution adapters may resolve manager, owner, group or policy rules before plan creation; those rules do not become arbitrary workflow scripts inside the kernel.
 
-At each important transition, revalidate material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Material change may supersede the plan and return the item to evaluation.
+Do not introduce arbitrary BPM DAGs initially. The reusable mechanism is approval decision orchestration, not generic business-process ownership.
 
-ApprovalDecision remains append-only evidence.
+At each important consumer transition, material dependencies such as identity lifecycle, target eligibility, RoleVersion, policy, risk and SoD context are revalidated. Before final authorization the consumer re-resolves approval requirements and compares the immutable requirements fingerprint, deadline and stage/participant structure. Changed requirements create a successor plan rather than allowing stale approval to authorize a privilege increase.
+
+Approval outcomes are emitted through typed subject-routed internal facts. The consumer adapter reacts to its own subject kind and advances only consumer-owned state. ApprovalDecision remains append-only evidence.
+
+The first AccessRequest consumer demonstrates forward recovery: Governance records `AUTHORIZED`, then issues Access-owned `AccessIntentCommand` outside that Governance transaction. Access creates an idempotent request-derived AccessAssignment keyed by RequestItem provenance. Governance records `APPLIED` only after Access accepts the command. A crash between those steps is retried without duplicating access.
 
 ## Review orchestration
 
