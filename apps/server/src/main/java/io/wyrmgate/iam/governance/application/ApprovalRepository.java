@@ -44,6 +44,18 @@ public interface ApprovalRepository {
 
     List<ApprovalDecision> findDecisions(TenantContext tenant, UUID stageId);
 
+    List<ApprovalCase> findInbox(
+            TenantContext tenant,
+            UUID approverIdentityId,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit);
+
+    boolean isParticipant(
+            TenantContext tenant,
+            UUID caseId,
+            UUID identityId);
+
     ApprovalCase updateCase(
             TenantContext tenant,
             UUID caseId,
