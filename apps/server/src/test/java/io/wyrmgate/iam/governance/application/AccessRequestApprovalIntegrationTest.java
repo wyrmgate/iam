@@ -234,7 +234,10 @@ class AccessRequestApprovalIntegrationTest {
         var processor = new AccessRequestApprovalOutcomeProcessingService(
                 outbox,
                 service,
-                new ObjectMapper());
+                new ObjectMapper(),
+                java.time.Clock.fixed(
+                        NOW.plusSeconds(10),
+                        java.time.ZoneOffset.UTC));
         var result = processor.processAvailable();
         assertThat(result.processed()).isEqualTo(1);
 
