@@ -9,7 +9,9 @@ import io.wyrmgate.iam.identity.application.CanonicalAttributeReadRepository;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeRepository;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluator;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
+import io.wyrmgate.iam.governance.application.ApprovalActorEligibilityQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
+import io.wyrmgate.iam.identity.application.IdentityApprovalActorEligibilityQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityFactSink;
@@ -77,6 +79,12 @@ public class IdentityPersistenceConfiguration {
     @Bean
     GovernedActorStatusQuery governedActorStatusQuery(IdentityRepository identityRepository) {
         return new IdentityGovernedActorStatusQuery(identityRepository);
+    }
+
+    @Bean
+    ApprovalActorEligibilityQuery approvalActorEligibilityQuery(
+            IdentityRepository identityRepository) {
+        return new IdentityApprovalActorEligibilityQuery(identityRepository);
     }
 
     @Bean
