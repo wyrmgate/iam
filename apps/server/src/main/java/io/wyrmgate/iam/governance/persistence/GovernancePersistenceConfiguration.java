@@ -13,6 +13,7 @@ import io.wyrmgate.iam.governance.application.AccessRequestModels.EligibilityRes
 import io.wyrmgate.iam.governance.application.AccessRequestRepository;
 import io.wyrmgate.iam.governance.application.ApprovalCommandService;
 import io.wyrmgate.iam.governance.application.ApprovalQueryService;
+import io.wyrmgate.iam.governance.application.ApprovalReadService;
 import io.wyrmgate.iam.governance.application.ApprovalRepository;
 import io.wyrmgate.iam.governance.application.ApprovalResultQuery;
 import io.wyrmgate.iam.governance.application.ApprovalResultSink;
@@ -85,6 +86,12 @@ public class GovernancePersistenceConfiguration {
     ApprovalResultQuery approvalResultQuery(
             ApprovalRepository approvals) {
         return new ApprovalQueryService(approvals);
+    }
+
+    @Bean
+    ApprovalReadService approvalReadService(
+            ApprovalRepository approvals) {
+        return new ApprovalReadService(approvals);
     }
 
     @Bean
