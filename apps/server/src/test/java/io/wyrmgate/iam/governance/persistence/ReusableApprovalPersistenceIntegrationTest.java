@@ -197,6 +197,31 @@ class ReusableApprovalPersistenceIntegrationTest {
                   AND aggregate_id = ?
                 """, Integer.class, tenant.tenantId(), opened.id()))
                 .isEqualTo(1);
+
+        UUID planId = jdbc.queryForObject("""
+                SELECT id
+                FROM governance.approval_plan
+                WHERE tenant_id = ? AND approval_case_id = ?
+                """, UUID.class, tenant.tenantId(), opened.id());
+        assertThatThrownBy(() -> jdbc.update("""
+                UPDATE governance.approval_plan
+                SET self_approval_policy = 'ALLOW_REQUESTER'
+                WHERE tenant_id = ? AND id = ?
+                """, tenant.tenantId(), planId))
+                .hasMessageContaining("immutable");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                DELETE FROM governance.approval_decision
+                WHERE tenant_id = ? AND approval_case_id = ?
+                """, tenant.tenantId(), opened.id()))
+                .hasMessageContaining("immutable");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                UPDATE governance.approval_case
+                SET subject_revision = subject_revision + 1
+                WHERE tenant_id = ? AND id = ?
+                """, tenant.tenantId(), opened.id()))
+                .hasMessageContaining("immutable");
     }
 
     @Test
