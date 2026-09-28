@@ -14,12 +14,14 @@ public final class AccessIntentCommandService
     public AccessIntentCommandService(
             AccessAssignmentRepository assignments,
             AccessAssignmentCommandService commands) {
-        this.assignments = Objects.requireNonNull(assignments, "assignments");
-        this.commands = Objects.requireNonNull(commands, "commands");
+        this.assignments = Objects.requireNonNull(
+                assignments, "assignments");
+        this.commands = Objects.requireNonNull(
+                commands, "commands");
     }
 
     @Override
-    public AccessAssignment applyRequestedAccess(
+    public Result applyRequestedAccess(
             TenantContext tenant,
             RequestedAccess request,
             Instant now) {
@@ -33,18 +35,19 @@ public final class AccessIntentCommandService
                 request.requestItemId());
         if (existing.isPresent()) {
             requireSameIntent(existing.get(), request);
-            return existing.get();
+            return new Result(existing.get().id());
         }
 
         try {
-            return switch (request.targetKind()) {
+            AccessAssignment created = switch (request.targetKind()) {
                 case ENTITLEMENT ->
                         commands.createRequestedEntitlementAssignment(
                                 tenant,
                                 request.requestItemId(),
                                 request.identityId(),
                                 request.entitlementId(),
-                                request.principalConstraintKind(),
+                                principalConstraint(
+                                        request.principalConstraintKind()),
                                 request.specificPrincipalId(),
                                 request.validFrom(),
                                 request.validUntil(),
@@ -55,12 +58,14 @@ public final class AccessIntentCommandService
                                 request.requestItemId(),
                                 request.identityId(),
                                 request.roleId(),
-                                request.principalConstraintKind(),
+                                principalConstraint(
+                                        request.principalConstraintKind()),
                                 request.specificPrincipalId(),
                                 request.validFrom(),
                                 request.validUntil(),
                                 now);
             };
+            return new Result(created.id());
         } catch (AccessAssignmentProvenanceConflictException race) {
             AccessAssignment replay = assignments.findByProvenance(
                             tenant,
@@ -68,8 +73,16 @@ public final class AccessIntentCommandService
                             request.requestItemId())
                     .orElseThrow(() -> race);
             requireSameIntent(replay, request);
-            return replay;
+            return new Result(replay.id());
         }
+    }
+
+    private static AccessAssignment.PrincipalConstraintKind
+            principalConstraint(
+                    PrincipalConstraintKind constraint) {
+        return constraint == PrincipalConstraintKind.ANY
+                ? AccessAssignment.PrincipalConstraintKind.ANY
+                : AccessAssignment.PrincipalConstraintKind.SPECIFIC;
     }
 
     private static void requireSameIntent(
@@ -86,8 +99,8 @@ public final class AccessIntentCommandService
                                 request.entitlementId());
         if (!existing.identityId().equals(request.identityId())
                 || !sameTarget
-                || existing.principalConstraintKind()
-                        != request.principalConstraintKind()
+                || !existing.principalConstraintKind().name()
+                        .equals(request.principalConstraintKind().name())
                 || !Objects.equals(
                         existing.specificPrincipalId(),
                         request.specificPrincipalId())
