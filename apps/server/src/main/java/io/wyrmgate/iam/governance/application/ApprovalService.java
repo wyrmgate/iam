@@ -19,16 +19,20 @@ public final class ApprovalService {
 
     private final ApprovalRepository repository;
     private final ApprovalOutcomeSink outcomes;
+    private final ApprovalActorEligibilityQuery actorEligibility;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
     public ApprovalService(
             ApprovalRepository repository,
             ApprovalOutcomeSink outcomes,
+            ApprovalActorEligibilityQuery actorEligibility,
             IdGenerator ids,
             TransactionExecutor transactions) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.outcomes = Objects.requireNonNull(outcomes, "outcomes");
+        this.actorEligibility = Objects.requireNonNull(
+                actorEligibility, "actorEligibility");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -64,6 +68,14 @@ public final class ApprovalService {
                 throw new ApprovalCommandException(
                         "approval_stage_duplicate_approver",
                         "An approver may appear only once in one approval stage.");
+            }
+            for (UUID approverId : stage.approverIdentityIds()) {
+                if (!actorEligibility.isEligibleApprover(
+                        tenant, approverId)) {
+                    throw new ApprovalCommandException(
+                            "approval_actor_ineligible",
+                            "ApprovalPlan participants must be active governed Identities.");
+                }
             }
         }
 
@@ -175,6 +187,13 @@ public final class ApprovalService {
                 throw new ApprovalCommandException(
                         "approval_actor_not_participant",
                         "The actor is not an approver for the active stage.");
+            }
+
+            if (!actorEligibility.isEligibleApprover(
+                    tenant, approverIdentityId)) {
+                throw new ApprovalCommandException(
+                        "approval_actor_ineligible",
+                        "The approver Identity is not currently eligible to decide.");
             }
 
             var existing = repository.findDecision(
