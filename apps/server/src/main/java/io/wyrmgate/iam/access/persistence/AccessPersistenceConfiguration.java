@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.access.persistence;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessAssignmentBoundaryScheduler;
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
@@ -18,6 +19,12 @@ import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
+import io.wyrmgate.iam.access.application.IdentityAccessReductionIntakeScheduler;
+import io.wyrmgate.iam.access.application.IdentityAccessReductionIntakeService;
+import io.wyrmgate.iam.access.application.IdentityAccessReductionProcessingScheduler;
+import io.wyrmgate.iam.access.application.IdentityAccessReductionProcessingService;
+import io.wyrmgate.iam.access.application.IdentityAccessReductionRepository;
+import io.wyrmgate.iam.access.application.IdentityAccessReductionWorkSink;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredGrantFactSink;
 import io.wyrmgate.iam.access.application.DesiredPrincipalFactSink;
@@ -115,6 +122,68 @@ public class AccessPersistenceConfiguration {
     AccessAssignmentBoundaryScheduler accessAssignmentBoundaryScheduler(
             JdbcScheduledWorkRepository scheduledWorkRepository) {
         return new JdbcAccessAssignmentBoundaryScheduler(scheduledWorkRepository);
+    }
+
+    @Bean
+    IdentityAccessReductionRepository identityAccessReductionRepository(
+            JdbcTemplate jdbcTemplate) {
+        return new JdbcIdentityAccessReductionRepository(jdbcTemplate);
+    }
+
+    @Bean
+    IdentityAccessReductionWorkSink identityAccessReductionWorkSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator idGenerator) {
+        return new JdbcIdentityAccessReductionWorkSink(
+                outboxRepository, idGenerator);
+    }
+
+    @Bean
+    IdentityAccessReductionIntakeService identityAccessReductionIntakeService(
+            JdbcOutboxRepository outboxRepository,
+            IdentityAccessReductionRepository reductions,
+            IdentityAccessReductionWorkSink work,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor,
+            ObjectMapper objectMapper) {
+        return new IdentityAccessReductionIntakeService(
+                outboxRepository,
+                reductions,
+                work,
+                idGenerator,
+                transactionExecutor,
+                objectMapper);
+    }
+
+    @Bean
+    IdentityAccessReductionIntakeScheduler identityAccessReductionIntakeScheduler(
+            IdentityAccessReductionIntakeService service) {
+        return new IdentityAccessReductionIntakeScheduler(service);
+    }
+
+    @Bean
+    IdentityAccessReductionProcessingService identityAccessReductionProcessingService(
+            JdbcOutboxRepository outboxRepository,
+            IdentityAccessReductionRepository reductions,
+            AccessAssignmentRepository assignments,
+            AccessAssignmentCommandService commands,
+            IdentityAccessReferenceQuery identities,
+            IdentityAccessReductionWorkSink work,
+            TransactionExecutor transactionExecutor) {
+        return new IdentityAccessReductionProcessingService(
+                outboxRepository,
+                reductions,
+                assignments,
+                commands,
+                identities,
+                work,
+                transactionExecutor);
+    }
+
+    @Bean
+    IdentityAccessReductionProcessingScheduler identityAccessReductionProcessingScheduler(
+            IdentityAccessReductionProcessingService service) {
+        return new IdentityAccessReductionProcessingScheduler(service);
     }
 
     @Bean
