@@ -69,7 +69,7 @@ public final class CredentialQueryService {
 
     private static CredentialPosition position(Credential value) {
         return new CredentialPosition(
-                value.state(), value.createdAt(), value.id());
+                value.createdAt(), value.id());
     }
 
     private static RotationPosition position(CredentialRotation value) {
