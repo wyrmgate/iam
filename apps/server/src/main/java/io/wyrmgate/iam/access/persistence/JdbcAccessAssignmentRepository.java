@@ -184,9 +184,9 @@ public final class JdbcAccessAssignmentRepository
             Instant afterCreatedAt,
             UUID afterId,
             int limit) {
-        if (limit < 1 || limit > 500) {
+        if (limit < 1 || limit > 501) {
             throw new IllegalArgumentException(
-                    "review page limit must be between 1 and 500");
+                    "internal review page limit must be between 1 and 501");
         }
         String pagePredicate =
                 afterCreatedAt == null || afterId == null
