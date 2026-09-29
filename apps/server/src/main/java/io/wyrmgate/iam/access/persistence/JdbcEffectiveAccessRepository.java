@@ -419,7 +419,7 @@ public final class JdbcEffectiveAccessRepository
                 FROM access.effective_access ea
                 WHERE ea.tenant_id = ?
                   AND ea.identity_id = ?
-                  AND ea.entitlement_id IN (""" + placeholders + """)
+                  AND ea.entitlement_id IN (%s)
                   AND EXISTS (
                       SELECT 1
                       FROM access.effective_access_support s
@@ -433,7 +433,7 @@ public final class JdbcEffectiveAccessRepository
                         AND (a.valid_from IS NULL OR a.valid_from <= ?)
                         AND (a.valid_until IS NULL OR a.valid_until > ?)
                   )
-                """;
+                """.formatted(placeholders);
         List<Object> args = new java.util.ArrayList<>();
         args.add(tenant.tenantId());
         args.add(identityId);
