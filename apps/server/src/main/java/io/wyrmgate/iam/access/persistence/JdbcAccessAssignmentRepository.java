@@ -177,6 +177,53 @@ public final class JdbcAccessAssignmentRepository
     }
 
     @Override
+    public List<AccessAssignment> findReviewPage(
+            TenantContext tenant,
+            UUID identityId,
+            Instant snapshotAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        if (limit < 1 || limit > 501) {
+            throw new IllegalArgumentException(
+                    "internal review page limit must be between 1 and 501");
+        }
+        String pagePredicate =
+                afterCreatedAt == null || afterId == null
+                        ? ""
+                        : " AND (created_at, id) > (?, ?)";
+        String sql = """
+                SELECT id, identity_id, target_kind, role_id, entitlement_id,
+                       principal_constraint_kind, specific_principal_id,
+                       provenance_kind, provenance_ref_id, lifecycle_state,
+                       valid_from, valid_until, revision, created_at, updated_at
+                FROM access.access_assignment
+                WHERE tenant_id = ?
+                  AND identity_id = ?
+                  AND created_at <= ?
+                  AND lifecycle_state IN ('ACTIVE','SUSPENDED','SCHEDULED')
+                  AND (valid_until IS NULL OR valid_until > ?)
+                """ + pagePredicate + """
+                ORDER BY created_at, id
+                LIMIT ?
+                """;
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        args.add(tenant.tenantId());
+        args.add(identityId);
+        args.add(Timestamp.from(snapshotAt));
+        args.add(Timestamp.from(snapshotAt));
+        if (!pagePredicate.isEmpty()) {
+            args.add(Timestamp.from(afterCreatedAt));
+            args.add(afterId);
+        }
+        args.add(limit);
+        return jdbc.query(
+                sql,
+                (rs,row) -> assignment(rs),
+                args.toArray());
+    }
+
+    @Override
     public AccessAssignment updateLifecycle(
             TenantContext tenant,
             UUID assignmentId,

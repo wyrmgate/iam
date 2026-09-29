@@ -7,6 +7,11 @@ import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
 import io.wyrmgate.iam.access.application.AccessAssignmentQueryService;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.access.application.AccessIntentCommandService;
+import io.wyrmgate.iam.access.application.AccessReviewSnapshotQuery;
+import io.wyrmgate.iam.access.application.AccessReviewSnapshotQueryService;
+import io.wyrmgate.iam.access.application.AccessReviewRemediationCommand;
+import io.wyrmgate.iam.access.application.AccessReviewRemediationCommandService;
+import io.wyrmgate.iam.access.application.AccessReviewRemediationRepository;
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
@@ -65,6 +70,31 @@ public class AccessPersistenceConfiguration {
                 boundaries,
                 idGenerator,
                 transactionExecutor);
+    }
+
+    @Bean
+    AccessReviewSnapshotQuery accessReviewSnapshotQuery(
+            AccessAssignmentRepository repository) {
+        return new AccessReviewSnapshotQueryService(repository);
+    }
+
+    @Bean
+    AccessReviewRemediationRepository accessReviewRemediationRepository(
+            JdbcTemplate jdbcTemplate) {
+        return new JdbcAccessReviewRemediationRepository(jdbcTemplate);
+    }
+
+    @Bean
+    AccessReviewRemediationCommand accessReviewRemediationCommand(
+            AccessAssignmentRepository assignments,
+            AccessAssignmentCommandService commands,
+            AccessReviewRemediationRepository applications,
+            TransactionExecutor transactions) {
+        return new AccessReviewRemediationCommandService(
+                assignments,
+                commands,
+                applications,
+                transactions);
     }
 
     @Bean

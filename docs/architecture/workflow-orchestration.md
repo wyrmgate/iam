@@ -216,13 +216,15 @@ through EffectiveAccess and desired-state projections.
 
 ## Review orchestration
 
-ReviewCampaign coordinates generation and campaign timing. ReviewItem is the scalable reviewer work boundary.
+The first review runtime is Governance-owned `IDENTITY_ACCESS`. ReviewCampaign coordinates one subject Identity, one explicit reviewer Identity, a fixed snapshot cutoff and durable generation continuation. Starting generation appends durable Governance work. Each worker invocation requests one bounded deterministic page from the Access-owned `AccessReviewSnapshotQuery`, commits ReviewItems plus the next continuation, and transactionally queues the next page when more work remains. Item uniqueness on campaign + AccessAssignment makes replay safe.
 
-Campaign completion means required reviewer decisions are complete according to campaign rules. It does not mean all technical remediation is complete.
+ReviewItem is the scalable reviewer work boundary. ReviewDecision is immutable `KEEP`/`REVOKE` evidence and only the assigned reviewer may decide. Campaign completion means every generated ReviewItem is decided; it does not mean remediation or provider fulfillment is complete.
 
-ReviewRemediation reads current authoritative state before action. If access was already changed elsewhere, remediation may complete as `NO_ACTION_REQUIRED` rather than replaying the historical snapshot.
+`REVOKE` creates one ReviewRemediation and a durable remediation fact in the same Governance transaction. A separate worker invokes the Access-owned `AccessReviewRemediationCommand` outside Governance transaction scope. Access re-reads current AccessAssignment authority and either terminates it or returns `NO_ACTION_REQUIRED`. Access persists the result keyed by ReviewRemediation ID so retry after Access commit but before Governance completion is deterministic. Governance then records remediation outcome separately. Provider mutation remains downstream through EffectiveAccess/desired-state/Integration processing.
 
-Escalations/reminders apply to undecided ReviewItems; they do not mutate earlier ReviewDecisions.
+The campaign cutoff prevents access created later from entering the campaign, but v1 does not invent historical lifecycle reconstruction that AccessAssignment does not store. Each ReviewItem snapshots the authoritative state actually read during bounded generation; concurrent removals may be omitted or later produce `NO_ACTION_REQUIRED`, never resurrection.
+
+Escalations/reminders apply to undecided ReviewItems; they remain a later typed extension and do not mutate earlier ReviewDecisions.
 
 ## Provisioning orchestration
 

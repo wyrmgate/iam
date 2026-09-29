@@ -3,6 +3,8 @@ package io.wyrmgate.iam.governance.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
+import io.wyrmgate.iam.access.application.AccessReviewSnapshotQuery;
+import io.wyrmgate.iam.access.application.AccessReviewRemediationCommand;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationScheduler;
@@ -40,6 +42,13 @@ import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingSer
 import io.wyrmgate.iam.governance.application.GovernanceObservationReporter;
 import io.wyrmgate.iam.governance.application.GovernanceObservationReportingService;
 import io.wyrmgate.iam.governance.application.ObservedAccessDriftEvaluationService;
+import io.wyrmgate.iam.governance.application.ReviewGenerationProcessingScheduler;
+import io.wyrmgate.iam.governance.application.ReviewGenerationProcessingService;
+import io.wyrmgate.iam.governance.application.ReviewRemediationProcessingScheduler;
+import io.wyrmgate.iam.governance.application.ReviewRemediationProcessingService;
+import io.wyrmgate.iam.governance.application.ReviewRepository;
+import io.wyrmgate.iam.governance.application.ReviewService;
+import io.wyrmgate.iam.governance.application.ReviewWorkSink;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.PrincipalResolutionQuery;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
@@ -292,6 +301,75 @@ public class GovernancePersistenceConfiguration {
     AccessRequestAccessApplicationScheduler accessRequestAccessApplicationScheduler(
             AccessRequestAccessApplicationService service) {
         return new AccessRequestAccessApplicationScheduler(service);
+    }
+
+    @Bean
+    ReviewRepository reviewRepository(JdbcTemplate jdbc) {
+        return new JdbcReviewRepository(jdbc);
+    }
+
+    @Bean
+    ReviewWorkSink reviewWorkSink(
+            JdbcOutboxRepository outbox,
+            IdGenerator ids) {
+        return new JdbcReviewWorkSink(outbox, ids);
+    }
+
+    @Bean
+    ReviewService reviewService(
+            ReviewRepository reviews,
+            IdentityAccessReferenceQuery identities,
+            ReviewWorkSink work,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new ReviewService(
+                reviews,
+                identities,
+                work,
+                ids,
+                transactions);
+    }
+
+    @Bean
+    ReviewGenerationProcessingService reviewGenerationProcessingService(
+            JdbcOutboxRepository outbox,
+            ReviewRepository reviews,
+            AccessReviewSnapshotQuery access,
+            ReviewWorkSink work,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new ReviewGenerationProcessingService(
+                outbox,
+                reviews,
+                access,
+                work,
+                ids,
+                transactions);
+    }
+
+    @Bean
+    ReviewGenerationProcessingScheduler reviewGenerationProcessingScheduler(
+            ReviewGenerationProcessingService service) {
+        return new ReviewGenerationProcessingScheduler(service);
+    }
+
+    @Bean
+    ReviewRemediationProcessingService reviewRemediationProcessingService(
+            JdbcOutboxRepository outbox,
+            ReviewRepository reviews,
+            AccessReviewRemediationCommand access,
+            TransactionExecutor transactions) {
+        return new ReviewRemediationProcessingService(
+                outbox,
+                reviews,
+                access,
+                transactions);
+    }
+
+    @Bean
+    ReviewRemediationProcessingScheduler reviewRemediationProcessingScheduler(
+            ReviewRemediationProcessingService service) {
+        return new ReviewRemediationProcessingScheduler(service);
     }
 
     @Bean
