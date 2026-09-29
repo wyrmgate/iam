@@ -14,7 +14,7 @@ A public Credential resource contains its stable ID, Identity-owned Principal ID
 
 The API never dereferences SecretReference. It contains no field for raw password values, API-key values, private keys, certificate private keys, OAuth client secrets, tokens or equivalent secret/private material.
 
-A public CredentialRotation read model contains the stable rotation ID, old Credential ID, optional replacement Credential ID once attached internally, initiator governed Identity ID, durable process state, checkpoint/failure code, optimistic revision, and timestamps. Rotation process state is not Credential lifecycle and is not provider fulfillment.
+A public CredentialRotation read model contains the stable rotation ID, old Credential ID, optional replacement Credential ID once attached internally, initiator governed Identity ID, durable process state, normalized failure code, optimistic revision, and timestamps. The internal resumability checkpoint is deliberately not exposed. Rotation process state is not Credential lifecycle and is not provider fulfillment.
 
 ## Operations
 
