@@ -33,6 +33,10 @@ CREATE TABLE credential.credential (
         CHECK (lifecycle_state IN (
             'SCHEDULED','ACTIVE','REVOKED',
             'EXPIRED','COMPROMISED')),
+    CONSTRAINT credential_credential_scheduled_ck
+        CHECK (
+            lifecycle_state <> 'SCHEDULED'
+            OR valid_from IS NOT NULL),
     CONSTRAINT credential_credential_validity_ck
         CHECK (
             valid_from IS NULL
@@ -119,6 +123,13 @@ CREATE TABLE credential.credential_rotation (
             AND completed_at IS NULL)
     )
 );
+
+CREATE UNIQUE INDEX credential_rotation_open_old_uq
+    ON credential.credential_rotation (
+        tenant_id, old_credential_id)
+    WHERE process_state NOT IN (
+        'COMPLETED','FAILED',
+        'MANUAL_REQUIRED','FAILED_REMEDIATION');
 
 CREATE INDEX credential_rotation_old_idx
     ON credential.credential_rotation (
