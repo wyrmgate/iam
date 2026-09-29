@@ -43,6 +43,7 @@ public final class GovernancePolicyEligibilityEvaluator
     private final CatalogAccessReferenceQuery catalog;
     private final RoleExpansionQuery roles;
     private final EffectiveAccessQuery effectiveAccess;
+    private final GovernanceExceptionQuery exceptions;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
     private final Clock clock;
@@ -63,6 +64,30 @@ public final class GovernancePolicyEligibilityEvaluator
                 catalog,
                 roles,
                 effectiveAccess,
+                (tenant, identityId, ruleIds, at) -> Map.of(),
+                ids,
+                transactions,
+                Clock.systemUTC());
+    }
+
+    public GovernancePolicyEligibilityEvaluator(
+            GovernancePolicyService policyService,
+            GovernancePolicyRepository policyRepository,
+            AccessRequestRepository requests,
+            CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roles,
+            EffectiveAccessQuery effectiveAccess,
+            GovernanceExceptionQuery exceptions,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        this(
+                policyService,
+                policyRepository,
+                requests,
+                catalog,
+                roles,
+                effectiveAccess,
+                exceptions,
                 ids,
                 transactions,
                 Clock.systemUTC());
@@ -78,6 +103,30 @@ public final class GovernancePolicyEligibilityEvaluator
             IdGenerator ids,
             TransactionExecutor transactions,
             Clock clock) {
+        this(
+                policyService,
+                policyRepository,
+                requests,
+                catalog,
+                roles,
+                effectiveAccess,
+                (tenant, identityId, ruleIds, at) -> Map.of(),
+                ids,
+                transactions,
+                clock);
+    }
+
+    GovernancePolicyEligibilityEvaluator(
+            GovernancePolicyService policyService,
+            GovernancePolicyRepository policyRepository,
+            AccessRequestRepository requests,
+            CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roles,
+            EffectiveAccessQuery effectiveAccess,
+            GovernanceExceptionQuery exceptions,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            Clock clock) {
         this.policyService = Objects.requireNonNull(
                 policyService, "policyService");
         this.policyRepository = Objects.requireNonNull(
@@ -88,6 +137,8 @@ public final class GovernancePolicyEligibilityEvaluator
         this.roles = Objects.requireNonNull(roles, "roles");
         this.effectiveAccess = Objects.requireNonNull(
                 effectiveAccess, "effectiveAccess");
+        this.exceptions = Objects.requireNonNull(
+                exceptions, "exceptions");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
@@ -162,6 +213,19 @@ public final class GovernancePolicyEligibilityEvaluator
                         otherRequested,
                         currentlyEffective);
 
+        Set<UUID> conflictRuleIds =
+                conflicts.stream()
+                        .map(ConflictCandidate::ruleId)
+                        .collect(java.util.stream.Collectors.toSet());
+        Map<UUID,UUID> exceptionIds =
+                conflictRuleIds.isEmpty()
+                        ? Map.of()
+                        : exceptions.effectiveExceptionIds(
+                                tenant,
+                                request.beneficiaryIdentityId(),
+                                conflictRuleIds,
+                                evaluatedAt);
+
         RiskSeverity severity = conflicts.stream()
                 .map(ConflictCandidate::severity)
                 .max(Comparator.comparingInt(
@@ -171,7 +235,13 @@ public final class GovernancePolicyEligibilityEvaluator
 
         PolicyDecision decision =
                 policy.version().defaultDecision();
+        boolean hasUncoveredConflict = false;
         for (ConflictCandidate conflict : conflicts) {
+            if (exceptionIds.containsKey(
+                    conflict.ruleId())) {
+                continue;
+            }
+            hasUncoveredConflict = true;
             PolicyDecision candidate =
                     conflict.action()
                             == SoDAction.DENY
@@ -184,7 +254,9 @@ public final class GovernancePolicyEligibilityEvaluator
         }
 
         String code = decisionCode(
-                decision, conflicts.isEmpty());
+                decision,
+                conflicts.isEmpty(),
+                hasUncoveredConflict);
         PolicyDecision finalDecision = decision;
 
         transactions.required(() -> {
@@ -211,6 +283,8 @@ public final class GovernancePolicyEligibilityEvaluator
                                 conflict.source(),
                                 conflict.severity(),
                                 conflict.action(),
+                                exceptionIds.get(
+                                        conflict.ruleId()),
                                 evaluatedAt));
             }
             policyRepository.insertPolicyEvaluation(
@@ -433,18 +507,21 @@ public final class GovernancePolicyEligibilityEvaluator
 
     private static String decisionCode(
             PolicyDecision decision,
-            boolean noConflicts) {
+            boolean noConflicts,
+            boolean hasUncoveredConflict) {
         return switch (decision) {
             case AUTHORIZE ->
-                    "policy_authorized";
+                    noConflicts
+                            ? "policy_authorized"
+                            : "sod_exception_authorized";
             case REQUIRE_APPROVAL ->
-                    noConflicts
-                            ? "policy_approval_required"
-                            : "sod_approval_required";
+                    hasUncoveredConflict
+                            ? "sod_approval_required"
+                            : "policy_approval_required";
             case DENY ->
-                    noConflicts
-                            ? "policy_denied"
-                            : "sod_denied";
+                    hasUncoveredConflict
+                            ? "sod_denied"
+                            : "policy_denied";
         };
     }
 
