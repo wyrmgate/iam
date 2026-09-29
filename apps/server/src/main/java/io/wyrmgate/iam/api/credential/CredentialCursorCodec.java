@@ -2,7 +2,6 @@ package io.wyrmgate.iam.api.credential;
 
 import io.wyrmgate.iam.credential.application.CredentialQueryModels.CredentialPosition;
 import io.wyrmgate.iam.credential.application.CredentialQueryModels.RotationPosition;
-import io.wyrmgate.iam.credential.domain.CredentialModels.CredentialState;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -50,7 +49,6 @@ final class CredentialCursorCodec {
                 tenant.tenantId().toString(),
                 principalId.toString(),
                 clock.instant().toString(),
-                position.lifecycleState().name(),
                 Long.toString(position.createdAt().getEpochSecond()),
                 Integer.toString(position.createdAt().getNano()),
                 position.id().toString()));
@@ -61,7 +59,7 @@ final class CredentialCursorCodec {
             TenantContext tenant,
             UUID principalId) {
         String[] parts = verifiedPayload(cursor);
-        if (parts.length != 9
+        if (parts.length != 8
                 || !PAYLOAD_VERSION.equals(parts[0])
                 || !"credential".equals(parts[1])
                 || !tenant.tenantId().toString().equals(parts[2])
@@ -71,11 +69,10 @@ final class CredentialCursorCodec {
         validateIssuedAt(parts[4]);
         try {
             return new CredentialPosition(
-                    CredentialState.valueOf(parts[5]),
                     Instant.ofEpochSecond(
-                            Long.parseLong(parts[6]),
-                            Integer.parseInt(parts[7])),
-                    UUID.fromString(parts[8]));
+                            Long.parseLong(parts[5]),
+                            Integer.parseInt(parts[6])),
+                    UUID.fromString(parts[7]));
         } catch (RuntimeException invalid) {
             throw invalid(invalid);
         }
