@@ -355,8 +355,9 @@ public final class JdbcGovernancePolicyRepository
                 INSERT INTO governance.sod_conflict (
                     id, tenant_id, risk_assessment_id, sod_rule_id,
                     requested_entitlement_id, conflicting_entitlement_id,
-                    conflict_source, severity, enforcement_action, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    conflict_source, severity, enforcement_action,
+                    governance_exception_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 conflict.id(),
                 tenant.tenantId(),
@@ -367,6 +368,7 @@ public final class JdbcGovernancePolicyRepository
                 conflict.source().name(),
                 conflict.severity().name(),
                 conflict.action().name(),
+                conflict.governanceExceptionId(),
                 Timestamp.from(conflict.createdAt()));
     }
 
