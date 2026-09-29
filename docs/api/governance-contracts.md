@@ -124,3 +124,26 @@ Important codes include:
   `approval_case_not_pending`, and `approval_decision_conflict`.
 
 Provider errors are not Governance API errors and do not roll back approval.
+
+
+## Access review runtime boundary
+
+The first `IDENTITY_ACCESS` ReviewCampaign runtime is internal in this slice and has no
+public HTTP surface yet.
+
+Governance owns ReviewCampaign, ReviewItem, immutable ReviewDecision and
+ReviewRemediation. Campaign generation uses the Access-owned semantic
+`AccessReviewSnapshotQuery`; Governance never reads Access persistence. The fixed
+`snapshotAt` is a creation/validity cutoff and each ReviewItem stores the assignment state
+actually read during bounded generation.
+
+`KEEP` creates no remediation. `REVOKE` creates durable remediation work. A separate
+worker invokes the Access-owned `AccessReviewRemediationCommand`, which re-reads current
+AccessAssignment authority and returns `APPLIED` or `NO_ACTION_REQUIRED` causally
+idempotently by ReviewRemediation ID.
+
+ReviewCampaign `COMPLETED` means all generated ReviewItems have immutable decisions. It
+does not mean ReviewRemediation or provider fulfillment is complete.
+
+Public campaign create/read/start, reviewer inbox/decision, and remediation-status
+operations remain a later OD-003 API slice.
