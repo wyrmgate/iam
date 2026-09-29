@@ -30,6 +30,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -458,6 +459,18 @@ class GovernanceExceptionIntegrationTest {
                         tenant, predecessor.id())
                         .orElseThrow().validUntil())
                 .isEqualTo(NOW.plusSeconds(100));
+        assertThatThrownBy(() -> jdbc.update("""
+                UPDATE governance.governance_exception
+                SET valid_until = ?
+                WHERE tenant_id = ? AND id = ?
+                """,
+                java.sql.Timestamp.from(
+                        NOW.plusSeconds(500)),
+                tenant.tenantId(),
+                predecessor.id()))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining(
+                        "renewal creates a successor");
 
         SoDRule replacementRule =
                 activateDenyRule(
