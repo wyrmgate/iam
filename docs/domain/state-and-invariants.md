@@ -59,6 +59,15 @@ The first Role runtime slice keeps the accepted shallow graph explicit. An APPLI
 
 RoleVersion membership is immutable after activation and after supersession. RoleVersion lifecycle is an authoritative concurrency boundary with its own positive revision: validation and activation are revision-guarded, and superseding the prior ACTIVE version advances that prior version's revision as part of the same activation transaction. Activation revalidates current member state and atomically supersedes the prior ACTIVE version so there is at most one ACTIVE RoleVersion per Role. A Role with no valid current expansion is not assignable for new access and contributes no role-derived EffectiveAccess until the expansion becomes valid again.
 
+
+### Identity lifecycle eligibility and Leaver reduction
+
+Identity lifecycle is authoritative in Identity and is distinct from AccessAssignment lifecycle. In the first lifecycle policy only `ACTIVE` is access-eligible; `PENDING`, `SUSPENDED`, `INACTIVE` and `DECOMMISSIONED` are access-ineligible. EffectiveAccess semantic reads must therefore re-check Identity access eligibility and return no authority for an ineligible Identity even while derived rows or non-terminal AccessAssignments still exist.
+
+A transition from access-eligible to access-ineligible emits a minimized semantic fact atomically with the Identity revision change. Access owns the resulting durable reduction process and never permits Identity to mutate Access tables. New AccessAssignment creation requires an access-eligible Identity. Existing non-terminal assignments at the reduction snapshot are terminated with the ordinary Access semantics: future scheduled access becomes `CANCELLED`, already-ended validity becomes `EXPIRED`, and otherwise the assignment becomes `REVOKED`. Terminal assignments remain terminal.
+
+Reduction processing is bounded and resumable. Its continuation is ordered by assignment `createdAt + id` and is causally unique by tenant + Identity + source Identity revision. Before every page, Access re-reads current Identity eligibility; a stale reduction completes without further mutation after reactivation. The fixed source-fact snapshot also excludes assignments created after the old reduction event. Provider or evaluator failure cannot restore eligibility or a terminated AccessAssignment.
+
 ## AccessAssignment
 
 Recommended lifecycle:
