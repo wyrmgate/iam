@@ -364,6 +364,12 @@ class EffectiveAccessProcessingIntegrationTest {
                 catalog.entitlement().id(),
                 "SPECIFIC:" + principal.id(),
                 NOW)).isPresent();
+        assertThat(effectiveQuery.currentEntitlementIds(
+                tenant,
+                identity.id(),
+                Set.of(catalog.entitlement().id()),
+                NOW))
+                .containsExactly(catalog.entitlement().id());
 
         TenantContext other = tenant("other");
         assertThat(effectiveQuery.find(
