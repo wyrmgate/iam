@@ -81,6 +81,11 @@ public final class CredentialModels {
                 throw new IllegalArgumentException(
                         "updatedAt must not be before createdAt");
             }
+            if (state == CredentialState.SCHEDULED
+                    && validFrom == null) {
+                throw new IllegalArgumentException(
+                        "SCHEDULED Credential requires validFrom");
+            }
             switch (state) {
                 case SCHEDULED, ACTIVE -> {
                     if (compromisedAt != null
