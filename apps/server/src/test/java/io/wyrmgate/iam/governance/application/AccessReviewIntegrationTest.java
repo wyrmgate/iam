@@ -186,7 +186,7 @@ class AccessReviewIntegrationTest {
                         accessRemediation,
                         transactions,
                         Clock.fixed(
-                                NOW.plusSeconds(20),
+                                NOW.plusSeconds(100),
                                 ZoneOffset.UTC));
     }
 
