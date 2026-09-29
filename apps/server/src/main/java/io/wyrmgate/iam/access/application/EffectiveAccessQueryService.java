@@ -4,6 +4,7 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
@@ -12,6 +13,20 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
 
     public EffectiveAccessQueryService(EffectiveAccessRepository repository) {
         this.repository = Objects.requireNonNull(repository, "repository");
+    }
+
+    @Override
+    public Set<UUID> currentEntitlementIds(
+            TenantContext tenant,
+            UUID identityId,
+            Set<UUID> entitlementIds,
+            Instant at) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
+        Objects.requireNonNull(entitlementIds, "entitlementIds");
+        Objects.requireNonNull(at, "at");
+        return Set.copyOf(repository.findCurrentEntitlementIds(
+                tenant, identityId, entitlementIds, at));
     }
 
     @Override
