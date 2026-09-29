@@ -266,6 +266,158 @@ class IdentityPersistenceIntegrationTest {
         assertThat(outbox.countPending(tenant)).isZero();
     }
 
+    @Test
+    void lifecycleTransitionsAreRevisionGuardedAndDecommissionedIsTerminal() {
+        Instant now = Instant.now();
+        TenantContext tenant = tenant("Lifecycle Tenant", now);
+        Identity active = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Lifecycle Person",
+                now,
+                idGenerator.nextId(),
+                null);
+
+        Identity suspended = commands.changeLifecycle(
+                tenant,
+                active.id(),
+                IdentityLifecycleState.SUSPENDED,
+                active.revision(),
+                now.plusSeconds(1),
+                idGenerator.nextId(),
+                null);
+        assertThat(suspended.lifecycleState())
+                .isEqualTo(IdentityLifecycleState.SUSPENDED);
+        assertThat(suspended.revision()).isEqualTo(2);
+
+        assertThatThrownBy(() -> commands.changeLifecycle(
+                        tenant,
+                        active.id(),
+                        IdentityLifecycleState.INACTIVE,
+                        active.revision(),
+                        now.plusSeconds(2),
+                        idGenerator.nextId(),
+                        null))
+                .isInstanceOf(StaleWriteException.class);
+
+        assertThatThrownBy(() -> commands.changeLifecycle(
+                        tenant,
+                        suspended.id(),
+                        IdentityLifecycleState.PENDING,
+                        suspended.revision(),
+                        now.plusSeconds(2),
+                        idGenerator.nextId(),
+                        null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("invalid Identity lifecycle transition");
+
+        Identity decommissioned = commands.changeLifecycle(
+                tenant,
+                suspended.id(),
+                IdentityLifecycleState.DECOMMISSIONED,
+                suspended.revision(),
+                now.plusSeconds(3),
+                idGenerator.nextId(),
+                null);
+        assertThat(decommissioned.lifecycleState())
+                .isEqualTo(IdentityLifecycleState.DECOMMISSIONED);
+
+        assertThatThrownBy(() -> commands.changeLifecycle(
+                        tenant,
+                        decommissioned.id(),
+                        IdentityLifecycleState.ACTIVE,
+                        decommissioned.revision(),
+                        now.plusSeconds(4),
+                        idGenerator.nextId(),
+                        null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("terminal");
+
+        Integer eligibilityFacts = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM platform.outbox_event
+                WHERE tenant_id = ?
+                  AND aggregate_id = ?
+                  AND event_type = 'identity.access-eligibility-changed'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                active.id());
+        assertThat(eligibilityFacts).isEqualTo(1);
+    }
+
+    @Test
+    void lifecycleMutationRollsBackWhenAtomicFactAppendFails() {
+        Instant now = Instant.now();
+        TenantContext tenant = tenant(
+                "Lifecycle Atomic Tenant", now);
+        Identity active = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Atomic Lifecycle",
+                now,
+                idGenerator.nextId(),
+                null);
+
+        io.wyrmgate.iam.identity.application.IdentityFactSink failingFacts =
+                new io.wyrmgate.iam.identity.application.IdentityFactSink() {
+                    @Override
+                    public void identityCreated(
+                            TenantContext ignoredTenant,
+                            Identity ignoredIdentity,
+                            UUID ignoredCorrelation,
+                            UUID ignoredCausation) {
+                    }
+
+                    @Override
+                    public void displayNameChanged(
+                            TenantContext ignoredTenant,
+                            Identity ignoredIdentity,
+                            UUID ignoredCorrelation,
+                            UUID ignoredCausation) {
+                    }
+
+                    @Override
+                    public void lifecycleChanged(
+                            TenantContext ignoredTenant,
+                            IdentityLifecycleState previousState,
+                            Identity ignoredIdentity,
+                            UUID ignoredCorrelation,
+                            UUID ignoredCausation) {
+                        throw new IllegalStateException(
+                                "force lifecycle fact failure");
+                    }
+                };
+        IdentityCommandService failing = new IdentityCommandService(
+                identities,
+                failingFacts,
+                idGenerator,
+                transactions);
+
+        assertThatThrownBy(() -> failing.changeLifecycle(
+                        tenant,
+                        active.id(),
+                        IdentityLifecycleState.INACTIVE,
+                        active.revision(),
+                        now.plusSeconds(1),
+                        idGenerator.nextId(),
+                        null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("force lifecycle fact failure");
+
+        Identity persisted = identities.findById(
+                tenant, active.id()).orElseThrow();
+        assertThat(persisted.lifecycleState())
+                .isEqualTo(IdentityLifecycleState.ACTIVE);
+        assertThat(persisted.revision())
+                .isEqualTo(active.revision());
+    }
+
     private static TenantContext tenant(String displayName, Instant now) {
         return new TenantContext(tenants.create(displayName, now).id());
     }
