@@ -10,4 +10,11 @@ public interface SubmittedRequestItemSink {
             "governance.request-item-submitted";
 
     void submitted(TenantContext tenant, RequestItem item);
+
+    default void retryEvaluation(
+            TenantContext tenant,
+            RequestItem item) {
+        throw new UnsupportedOperationException(
+                "evaluation retry is not configured");
+    }
 }

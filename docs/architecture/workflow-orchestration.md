@@ -188,7 +188,9 @@ AccessRequest/RequestItem is the first consumer, but approval persistence contai
 
 Public request submission does not expose Governance evaluation as a client-owned workflow step. The transaction that moves each item to `SUBMITTED` appends `governance.request-item-submitted`; a retryable Governance consumer re-reads current state and invokes eligibility evaluation. Mandatory evaluator unavailability leaves the item `EVALUATING` and retains retryable work. This keeps privilege-increase evaluation fail-closed and durable across process restarts.
 
-At each important transition, the consuming flow revalidates its material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Material change may supersede approval context and cause reevaluation.
+The first concrete evaluator uses the active immutable ACCESS_REQUEST PolicyVersion, current Role expansion, original sibling RequestItem intent and a bounded Access-owned current-EffectiveAccess query. It records immutable RiskAssessment, SoDConflict and PolicyEvaluation evidence. Risk explains severity/factors while policy decides AUTHORIZE, REQUIRE_APPROVAL or DENY.
+
+At each important transition, the consuming flow revalidates its material dependencies such as identity lifecycle, requested access eligibility, RoleVersion, policy, risk and SoD context. Final approval is re-evaluated before authorization: current DENY wins, evaluator outage returns the item to durable EVALUATING retry, and a changed approval-plan fingerprint creates a successor ApprovalCase instead of allowing stale approval evidence to mutate current state.
 
 Reminders, deadlines, escalation and delegation remain later typed Governance extensions. Generic scheduling owns only timer delivery.
 

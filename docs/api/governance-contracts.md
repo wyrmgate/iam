@@ -54,8 +54,16 @@ The Governance transaction that records each RequestItem as `SUBMITTED` also app
 state and invokes the existing eligibility evaluator. Duplicate or stale facts are safe.
 
 Mandatory evaluator unavailability leaves the item `EVALUATING` and the durable work
-is retried. Successful evaluation may produce `DENIED`, `AUTHORIZED`, or
-`PENDING_APPROVAL`. Existing authorized-intent processing then continues the chain
+is retried. The production evaluator uses the active immutable ACCESS_REQUEST
+PolicyVersion, current Role expansion, original sibling RequestItem intent and a bounded
+Access-owned current-EffectiveAccess query. Completed RiskAssessment, SoDConflict and
+PolicyEvaluation records are immutable evidence. Successful evaluation may produce
+`DENIED`, `AUTHORIZED`, or `PENDING_APPROVAL`.
+
+A final approval is revalidated before authorization. Current DENY wins, unavailable
+evaluation returns the item to durable `EVALUATING` retry, and a changed approval-plan
+fingerprint creates a successor ApprovalCase. Completed approval evidence never becomes
+stale mutation authority. Existing authorized-intent processing then continues the chain
 toward Access without the HTTP client coordinating internal workflow steps.
 
 ## Reusable approval API

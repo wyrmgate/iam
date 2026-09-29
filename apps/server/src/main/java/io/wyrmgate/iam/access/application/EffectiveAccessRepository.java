@@ -7,6 +7,7 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface EffectiveAccessRepository {
@@ -35,6 +36,12 @@ public interface EffectiveAccessRepository {
             UUID identityId,
             UUID entitlementId,
             String principalConstraintKey,
+            Instant at);
+
+    Set<UUID> findCurrentEntitlementIds(
+            TenantContext tenant,
+            UUID identityId,
+            Set<UUID> entitlementIds,
             Instant at);
 
     List<UUID> currentSupportingAssignmentIds(

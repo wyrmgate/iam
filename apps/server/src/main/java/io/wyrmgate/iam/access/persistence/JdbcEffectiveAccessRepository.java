@@ -398,6 +398,56 @@ public final class JdbcEffectiveAccessRepository
     }
 
     @Override
+    public Set<UUID> findCurrentEntitlementIds(
+            TenantContext tenant,
+            UUID identityId,
+            Set<UUID> entitlementIds,
+            Instant at) {
+        if (entitlementIds == null || entitlementIds.isEmpty()) {
+            return Set.of();
+        }
+        if (entitlementIds.size() > 2000) {
+            throw new IllegalArgumentException(
+                    "bounded entitlement query supports at most 2000 IDs");
+        }
+        String placeholders = String.join(
+                ",",
+                java.util.Collections.nCopies(
+                        entitlementIds.size(), "?"));
+        String sql = """
+                SELECT DISTINCT ea.entitlement_id
+                FROM access.effective_access ea
+                WHERE ea.tenant_id = ?
+                  AND ea.identity_id = ?
+                  AND ea.entitlement_id IN (%s)
+                  AND EXISTS (
+                      SELECT 1
+                      FROM access.effective_access_support s
+                      JOIN access.access_assignment a
+                        ON a.tenant_id = s.tenant_id
+                       AND a.id = s.access_assignment_id
+                      WHERE s.tenant_id = ea.tenant_id
+                        AND s.effective_access_id = ea.id
+                        AND a.lifecycle_state NOT IN (
+                            'SUSPENDED', 'REVOKED', 'EXPIRED', 'CANCELLED')
+                        AND (a.valid_from IS NULL OR a.valid_from <= ?)
+                        AND (a.valid_until IS NULL OR a.valid_until > ?)
+                  )
+                """.formatted(placeholders);
+        List<Object> args = new java.util.ArrayList<>();
+        args.add(tenant.tenantId());
+        args.add(identityId);
+        args.addAll(entitlementIds);
+        args.add(Timestamp.from(at));
+        args.add(Timestamp.from(at));
+        return new LinkedHashSet<>(jdbc.query(
+                sql,
+                (rs,row) -> rs.getObject(
+                        "entitlement_id", UUID.class),
+                args.toArray()));
+    }
+
+    @Override
     public List<UUID> currentSupportingAssignmentIds(
             TenantContext tenant,
             UUID effectiveAccessId,

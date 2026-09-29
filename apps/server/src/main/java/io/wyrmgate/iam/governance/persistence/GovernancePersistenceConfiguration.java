@@ -2,6 +2,9 @@ package io.wyrmgate.iam.governance.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
+import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
+import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
+import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationScheduler;
 import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationService;
 import io.wyrmgate.iam.governance.application.AccessRequestApprovalResultSink;
@@ -11,6 +14,7 @@ import io.wyrmgate.iam.governance.application.AccessRequestEvaluationProcessingS
 import io.wyrmgate.iam.governance.application.AccessRequestEligibilityEvaluator;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.EligibilityResult;
 import io.wyrmgate.iam.governance.application.AccessRequestRepository;
+import io.wyrmgate.iam.governance.application.ApprovalCaseStartService;
 import io.wyrmgate.iam.governance.application.ApprovalCommandService;
 import io.wyrmgate.iam.governance.application.ApprovalQueryService;
 import io.wyrmgate.iam.governance.application.ApprovalRepository;
@@ -19,11 +23,15 @@ import io.wyrmgate.iam.governance.application.ApprovalResultSink;
 import io.wyrmgate.iam.governance.application.AuthorizedAccessIntentSink;
 import io.wyrmgate.iam.governance.application.SubmittedRequestItemSink;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
+import io.wyrmgate.iam.governance.application.GovernancePolicyEligibilityEvaluator;
+import io.wyrmgate.iam.governance.application.GovernancePolicyRepository;
+import io.wyrmgate.iam.governance.application.GovernancePolicyService;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingScheduler;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingService;
 import io.wyrmgate.iam.governance.application.GovernanceObservationReporter;
 import io.wyrmgate.iam.governance.application.GovernanceObservationReportingService;
 import io.wyrmgate.iam.governance.application.ObservedAccessDriftEvaluationService;
+import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.PrincipalResolutionQuery;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -64,11 +72,67 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    GovernancePolicyRepository governancePolicyRepository(
+            JdbcTemplate jdbc) {
+        return new JdbcGovernancePolicyRepository(jdbc);
+    }
+
+    @Bean
+    GovernancePolicyService governancePolicyService(
+            GovernancePolicyRepository policies,
+            CatalogAccessReferenceQuery catalog,
+            IdentityAccessReferenceQuery identities,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new GovernancePolicyService(
+                policies, catalog, identities, ids, transactions);
+    }
+
+    @Bean
+    AccessRequestEligibilityEvaluator accessRequestEligibilityEvaluator(
+            GovernancePolicyService policyService,
+            GovernancePolicyRepository policies,
+            AccessRequestRepository requests,
+            CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roleExpansion,
+            EffectiveAccessQuery effectiveAccess,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new GovernancePolicyEligibilityEvaluator(
+                policyService,
+                policies,
+                requests,
+                catalog,
+                roleExpansion,
+                effectiveAccess,
+                ids,
+                transactions);
+    }
+
+    @Bean
+    ApprovalCaseStartService approvalCaseStartService(
+            ApprovalRepository approvals,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new ApprovalCaseStartService(
+                approvals, ids, transactions);
+    }
+
+    @Bean
     ApprovalResultSink approvalResultSink(
             AccessRequestRepository requests,
-            AuthorizedAccessIntentSink authorizedAccess) {
+            AuthorizedAccessIntentSink authorizedAccess,
+            AccessRequestEligibilityEvaluator evaluator,
+            ApprovalRepository approvals,
+            ApprovalCaseStartService starter,
+            SubmittedRequestItemSink submittedItems) {
         return new AccessRequestApprovalResultSink(
-                requests, authorizedAccess);
+                requests,
+                authorizedAccess,
+                evaluator,
+                approvals,
+                starter,
+                submittedItems);
     }
 
     @Bean

@@ -33,6 +33,7 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Set;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -75,7 +76,7 @@ class EffectiveAccessProcessingIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("28");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("29");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -364,6 +365,12 @@ class EffectiveAccessProcessingIntegrationTest {
                 catalog.entitlement().id(),
                 "SPECIFIC:" + principal.id(),
                 NOW)).isPresent();
+        assertThat(effectiveQuery.currentEntitlementIds(
+                tenant,
+                identity.id(),
+                Set.of(catalog.entitlement().id()),
+                NOW))
+                .containsExactly(catalog.entitlement().id());
 
         TenantContext other = tenant("other");
         assertThat(effectiveQuery.find(
