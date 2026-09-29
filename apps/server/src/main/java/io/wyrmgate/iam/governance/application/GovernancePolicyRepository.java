@@ -18,6 +18,7 @@ public interface GovernancePolicyRepository {
     Optional<PolicyVersion> findVersion(TenantContext tenant, UUID versionId);
     Optional<PolicyVersion> findActiveVersion(TenantContext tenant, PolicyKind kind);
     List<SoDRule> findRules(TenantContext tenant, UUID versionId);
+    Optional<SoDRule> findRule(TenantContext tenant, UUID ruleId);
     List<PolicyApprovalStage> findApprovalStages(TenantContext tenant, UUID versionId);
     List<PolicyApprovalApprover> findApprovalApprovers(TenantContext tenant, UUID stageId);
     PolicyVersion updateVersionState(

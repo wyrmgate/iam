@@ -119,6 +119,7 @@ public final class GovernancePolicyModels {
             ConflictSource source,
             RiskSeverity severity,
             SoDAction action,
+            UUID governanceExceptionId,
             Instant createdAt) {}
 
     public record PolicyEvaluation(

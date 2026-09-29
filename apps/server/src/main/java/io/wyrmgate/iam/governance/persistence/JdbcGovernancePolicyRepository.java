@@ -222,6 +222,32 @@ public final class JdbcGovernancePolicyRepository
     }
 
     @Override
+    public Optional<SoDRule> findRule(
+            TenantContext tenant,
+            UUID ruleId) {
+        return jdbc.query("""
+                SELECT id, policy_version_id, rule_code,
+                       left_entitlement_id, right_entitlement_id,
+                       severity, enforcement_action, created_at
+                FROM governance.sod_rule
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs,row) -> new SoDRule(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("policy_version_id", UUID.class),
+                        rs.getString("rule_code"),
+                        rs.getObject("left_entitlement_id", UUID.class),
+                        rs.getObject("right_entitlement_id", UUID.class),
+                        RiskSeverity.valueOf(rs.getString("severity")),
+                        SoDAction.valueOf(rs.getString("enforcement_action")),
+                        rs.getTimestamp("created_at").toInstant()),
+                tenant.tenantId(),
+                ruleId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public List<PolicyApprovalStage> findApprovalStages(
             TenantContext tenant,
             UUID versionId) {
@@ -329,8 +355,9 @@ public final class JdbcGovernancePolicyRepository
                 INSERT INTO governance.sod_conflict (
                     id, tenant_id, risk_assessment_id, sod_rule_id,
                     requested_entitlement_id, conflicting_entitlement_id,
-                    conflict_source, severity, enforcement_action, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    conflict_source, severity, enforcement_action,
+                    governance_exception_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 conflict.id(),
                 tenant.tenantId(),
@@ -341,6 +368,7 @@ public final class JdbcGovernancePolicyRepository
                 conflict.source().name(),
                 conflict.severity().name(),
                 conflict.action().name(),
+                conflict.governanceExceptionId(),
                 Timestamp.from(conflict.createdAt()));
     }
 

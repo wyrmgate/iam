@@ -126,7 +126,7 @@ ReviewDecision is immutable evidence. ReviewRemediation always reads current aut
 
 ## GovernanceException and finding
 
-Exception is effective only while both its lifecycle state and ValidityWindow are valid. Expiry does not disappear because a scheduler is late, and renewal creates a successor exception.
+The first GovernanceException lifecycle is `PENDING_APPROVAL -> APPROVED | REJECTED` and `APPROVED -> REVOKED | EXPIRED`. Approval is necessary but not sufficient: an exception is effective only while state is APPROVED and `validFrom <= now < validUntil`. Expiry does not disappear because a scheduler is late. Revocation is immediate authority reduction and is not blocked by evaluator failure. Renewal creates a successor exception with the same Identity + exact SoDRule scope and a non-overlapping validity window; it never edits or extends predecessor history. Because scope references the exact immutable SoDRule, replacement PolicyVersions do not inherit old exceptions. Policy/SoD evaluation still persists every conflict and risk factor; covered conflicts retain the exact GovernanceException evidence reference while their rule enforcement action is waived.
 
 Finding lifecycle distinguishes unresolved, acknowledged/remediation-pending, mitigated/accepted and truly resolved states. `MITIGATED` or `ACCEPTED` can reopen if compensating controls/exception coverage cease. `RESOLVED` means the condition actually disappeared.
 
