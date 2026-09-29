@@ -495,9 +495,9 @@ class CredentialPersistenceIntegrationTest {
                         old.id(),
                         initiator,
                         NOW.plusSeconds(1)))
-                .isInstanceOf(
-                        org.springframework.dao
-                                .DataIntegrityViolationException.class);
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(
+                        "routine rotation already exists");
     }
 
     @Test
