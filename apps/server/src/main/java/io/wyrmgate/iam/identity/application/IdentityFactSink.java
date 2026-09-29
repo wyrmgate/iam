@@ -18,4 +18,11 @@ public interface IdentityFactSink {
             Identity identity,
             UUID correlationId,
             UUID causationId);
+
+    void lifecycleChanged(
+            TenantContext tenant,
+            io.wyrmgate.iam.identity.domain.IdentityLifecycleState previousState,
+            Identity identity,
+            UUID correlationId,
+            UUID causationId);
 }
