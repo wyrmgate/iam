@@ -311,7 +311,9 @@ Migration V27 adds explicit RequestItem principal-constraint and validity semant
 
 Migration V28 adds an approver-identity-first index over `approval_approver` to support the reusable pending approval inbox without scanning stage-first approval membership at high cardinality. The inbox remains a read model over existing approval authority/evidence tables; V28 introduces no new ApprovalTask authority.
 
-Approval-plan content is immutable from creation in this first slice. Decisions remain append-only evidence even if later typed plan-supersession semantics create replacement approval context.
+Migration V29 adds Governance-owned `policy` / `policy_version`, typed symmetric `sod_rule`, immutable policy approval-stage/approver content, and immutable `risk_assessment`, `sod_conflict` and `policy_evaluation` evidence. At most one ACCESS_REQUEST PolicyVersion is ACTIVE per tenant/policy. SoD entitlement IDs are stable cross-capability references without Catalog foreign keys; canonical pair ordering prevents duplicate symmetric rules. Policy-version content is insert-only while DRAFT and cannot be changed after validation/activation; activated changes create a successor version.
+
+Approval-plan content is immutable from creation in this slice. Decisions remain append-only evidence; policy revalidation may create successor approval context rather than mutating completed approval evidence.
 
 ### Credential
 
