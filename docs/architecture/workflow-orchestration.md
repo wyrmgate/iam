@@ -23,6 +23,7 @@ A generic workflow engine may be added later as an adapter for selected operatio
 | --- | --- | --- |
 | access request / approval | Governance | AccessRequest, RequestItem, ApprovalPlan, ApprovalDecision |
 | access review | Governance | ReviewCampaign, ReviewItem, ReviewDecision, ReviewRemediation |
+| Identity lifecycle access reduction | Access, triggered by Identity semantic fact | IdentityAccessReduction plus authoritative AccessAssignment transitions |
 | identity merge/split | Identity | IdentityMergeOperation / IdentitySplitOperation |
 | credential rotation | Credential | CredentialRotation |
 | provisioning | Integration | ProvisioningJob, ProvisioningTask, ProvisioningAttempt |
@@ -369,3 +370,10 @@ Start with:
 - no mandatory external BPM engine.
 
 This architecture can later map timers/work to Kafka, SQS, Temporal, Camunda or another platform without redefining canonical domain/process semantics.
+
+
+## Identity lifecycle access reduction
+
+The Leaver reduction path follows the same domain-owned durable orchestration rule. Identity commits its lifecycle revision and access-eligibility fact first. Access then creates one `IdentityAccessReduction` process for that Identity revision, commits a deterministic assignment-page checkpoint after bounded work, and emits an Access-owned continuation fact when another page remains. Duplicate or replayed Identity facts resolve the same causal process; stale continuation facts are fenced by the reduction revision.
+
+A worker re-reads current Identity access eligibility before each page. If the Identity is access-eligible again, the old process completes without further terminations. Otherwise each selected non-terminal AccessAssignment is terminated through the existing Access command path so EffectiveAccess and desired-state projection facts continue through the established provisioning/revocation pipeline. No provider call or foreign-capability mutation occurs inside the authoritative Access transaction.
