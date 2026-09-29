@@ -222,6 +222,32 @@ public final class JdbcGovernancePolicyRepository
     }
 
     @Override
+    public Optional<SoDRule> findRule(
+            TenantContext tenant,
+            UUID ruleId) {
+        return jdbc.query("""
+                SELECT id, policy_version_id, rule_code,
+                       left_entitlement_id, right_entitlement_id,
+                       severity, enforcement_action, created_at
+                FROM governance.sod_rule
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs,row) -> new SoDRule(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("policy_version_id", UUID.class),
+                        rs.getString("rule_code"),
+                        rs.getObject("left_entitlement_id", UUID.class),
+                        rs.getObject("right_entitlement_id", UUID.class),
+                        RiskSeverity.valueOf(rs.getString("severity")),
+                        SoDAction.valueOf(rs.getString("enforcement_action")),
+                        rs.getTimestamp("created_at").toInstant()),
+                tenant.tenantId(),
+                ruleId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public List<PolicyApprovalStage> findApprovalStages(
             TenantContext tenant,
             UUID versionId) {
