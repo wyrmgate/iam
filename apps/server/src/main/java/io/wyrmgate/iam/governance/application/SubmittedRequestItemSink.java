@@ -10,4 +10,6 @@ public interface SubmittedRequestItemSink {
             "governance.request-item-submitted";
 
     void submitted(TenantContext tenant, RequestItem item);
+
+    void retryEvaluation(TenantContext tenant, RequestItem item);
 }
