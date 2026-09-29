@@ -55,9 +55,9 @@ The first review runtime is `IDENTITY_ACCESS`. `ReviewCampaign` owns durable gen
 
 ## Credential
 
-`Credential` is a durable authentication instrument/configuration belonging to one Principal. IAM governs metadata, lifecycle, policy, risk and rotation but does not store raw secret/private material by default. Secret material is represented by opaque `SecretReference` values and handled by external secret-provider capabilities.
+`Credential` is Credential-owned authoritative authentication-instrument metadata belonging to exactly one Identity-owned Principal by stable ID. The first runtime supports typed PASSWORD/API_KEY/SSH_KEY/CERTIFICATE/OAUTH_CLIENT_SECRET metadata and stores only an opaque external `SecretReference(providerType, referenceKey)`; no raw secret/private material exists in the Credential domain or persistence model. Credential lifecycle is SCHEDULED/ACTIVE/REVOKED/EXPIRED/COMPROMISED, with temporal effectiveness evaluated directly from lifecycle plus validity.
 
-Rotation is a durable `CredentialRotation` orchestration rather than a `ROTATING` credential status because old and replacement credentials can coexist during cutover.
+`CredentialRotation` is a durable Credential-owned process rather than a `ROTATING` credential status because old and replacement credentials can coexist during cutover. The first runtime persists PLANNED → CREATING_REPLACEMENT → DISTRIBUTING → VERIFYING → CUTOVER_COMPLETE → REVOKING_OLD → COMPLETED plus explicit failure exits, requires the replacement to belong to the same Principal, and keeps provider/SecretProvider execution deferred behind future typed ports. `CredentialBinding` remains canonical but its concrete provider/consumer relationship is intentionally deferred because v0.3 does not define its fields.
 
 ## Integration and observation
 

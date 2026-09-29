@@ -144,7 +144,9 @@ SCHEDULED? → ACTIVE → REVOKED
                  ↘ COMPROMISED
 ```
 
-`SCHEDULED` is optional where a credential has a future activation time. A compromised credential stops being considered safe immediately even when external revocation has not succeeded yet. Once revocation is authoritatively decided, the Credential is `REVOKED`; any provider residue is tracked as observation/finding/remediation state.
+`SCHEDULED` is used when a credential has a future activation time. A Credential is semantically effective only while state is `ACTIVE`, `validFrom` is absent or reached, and `validUntil` is absent or not yet reached. Platform scheduled work may materialize SCHEDULED → ACTIVE and SCHEDULED/ACTIVE → EXPIRED, but scheduler delay never extends validity. A compromised credential stops being considered safe immediately even when external revocation has not succeeded yet. Once revocation is authoritatively decided, the Credential is `REVOKED`; any provider residue is tracked as observation/finding/remediation state.
+
+The first CredentialRotation runtime keeps process state separate from Credential lifecycle. Routine rotation begins only from an effective ACTIVE old Credential. A replacement is attached once, must belong to the same Principal, and must be effective before cutover can become complete. Rotation cannot become COMPLETED while the old Credential is still effective. Failure exits are durable terminal process states and never restore or rewrite Credential history.
 
 ## Provisioning
 

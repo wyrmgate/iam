@@ -30,3 +30,5 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. An accepted ADR may amend a formal specification between document revisions; the next formal revision must fold the ADR into the specification.
 
 - [ADR-0019 Scalable Identity access review and current-state remediation](0019-scalable-identity-access-review-current-state-remediation.md)
+
+- [ADR-0020 Credential authority, external secret references and durable rotation](0020-credential-authority-external-secret-reference-durable-rotation.md)
