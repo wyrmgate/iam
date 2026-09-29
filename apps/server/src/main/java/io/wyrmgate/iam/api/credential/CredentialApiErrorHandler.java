@@ -100,18 +100,6 @@ public class CredentialApiErrorHandler {
                         "request", "invalid", "The request is invalid.")));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    ResponseEntity<ErrorResponse> invalidState(
-            IllegalStateException error,
-            HttpServletRequest request) {
-        return response(
-                HttpStatus.CONFLICT,
-                "invalid_state",
-                "The Credential operation is not valid in the current state.",
-                CredentialApiRequestContext.correlationIdForError(request, ids),
-                List.of());
-    }
-
     @ExceptionHandler(Exception.class)
     ResponseEntity<ErrorResponse> internal(
             Exception error,
