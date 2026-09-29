@@ -363,7 +363,10 @@ public final class GovernancePolicyService {
             }
             UUID left = rule.leftEntitlementId();
             UUID right = rule.rightEntitlementId();
-            if (left.compareTo(right) > 0) {
+            // PostgreSQL uuid ordering follows the canonical UUID byte
+            // sequence; canonical text ordering has the same unsigned byte
+            // order. Do not use UUID.compareTo(), which compares signed longs.
+            if (left.toString().compareTo(right.toString()) > 0) {
                 UUID swap = left;
                 left = right;
                 right = swap;
