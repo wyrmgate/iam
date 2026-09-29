@@ -321,25 +321,43 @@ Approval-plan content is immutable from creation in this slice. Decisions remain
 
 ### Credential
 
+Migration V32 materializes the first Credential capability runtime:
+
 ```text
 credential.credential
 - id uuid PRIMARY KEY
 - tenant_id uuid NOT NULL
-- principal_id uuid NOT NULL                 -- cross-capability stable ID
-- credential_type varchar(32) NOT NULL
+- principal_id uuid NOT NULL                 -- cross-capability stable ID, no Identity FK
+- credential_kind varchar(32) NOT NULL
+- secret_provider_type varchar(64) NOT NULL
+- secret_reference_key varchar(512) NOT NULL
 - lifecycle_state varchar(24) NOT NULL
-- secret_reference varchar(1024) NULL
-- provider_reference varchar(1024) NULL
 - valid_from timestamptz NULL
 - valid_until timestamptz NULL
-- compromised_at timestamptz NULL
 - revision bigint NOT NULL
 - created_at timestamptz NOT NULL
 - updated_at timestamptz NOT NULL
+- compromised_at timestamptz NULL
+- revoked_at timestamptz NULL
+- expired_at timestamptz NULL
 - UNIQUE (tenant_id, id)
+
+credential.credential_rotation
+- id uuid PRIMARY KEY
+- tenant_id uuid NOT NULL
+- old_credential_id uuid NOT NULL
+- replacement_credential_id uuid NULL
+- initiator_identity_id uuid NOT NULL        -- stable cross-capability ID, no Identity FK
+- process_state varchar(32) NOT NULL
+- checkpoint varchar(256) NULL
+- failure_code varchar(128) NULL
+- revision bigint NOT NULL
+- created_at timestamptz NOT NULL
+- updated_at timestamptz NOT NULL
+- completed_at timestamptz NULL
 ```
 
-`secret_reference` is an opaque external locator only. Raw passwords, private keys, refresh tokens, secret bytes or equivalent material are structurally excluded from ordinary IAM relational rows, event payloads, audit snapshots, task payloads and error records.
+`secret_provider_type + secret_reference_key` is an opaque external SecretReference only. V32 has no raw password, API-key value, private-key, token or client-secret material column. Credential ownership/kind/reference/validity is immutable in the first slice; lifecycle changes are revision guarded. Rotation subject/initiator and an attached replacement are immutable, and terminal rotation rows cannot be rewritten. CredentialBinding remains a canonical planned concept but no generic binding table is introduced until its provider/consumer semantics are concretely specified.
 
 ### Integration configuration and processes
 
