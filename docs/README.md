@@ -27,7 +27,8 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`adr/README.md`](adr/README.md) — canonical Architecture Decision Record index.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
-- [`api/identity-contracts.md`](api/identity-contracts.md) — first OD-003 machine-readable Identity OpenAPI/AsyncAPI implementation slice and runtime authorization boundary.\n- [`api/credential-contracts.md`](api/credential-contracts.md) — Credential public control-plane resource/operation, secret-reference, concurrency, idempotency and cursor boundary.
+- [`api/identity-contracts.md`](api/identity-contracts.md) — first OD-003 machine-readable Identity OpenAPI/AsyncAPI implementation slice and runtime authorization boundary.
+- [`api/credential-contracts.md`](api/credential-contracts.md) — Credential public control-plane resource/operation, secret-reference, concurrency, idempotency and cursor boundary.
 - [`api/catalog-contracts.md`](api/catalog-contracts.md) — authoritative Application/ApplicationTarget/Entitlement/Role runtime contract, revisions, retirement, pagination and provider-observation boundary.
 - [`api/access-contracts.md`](api/access-contracts.md) — authoritative AccessAssignment control-plane API and read-only EffectiveAccess projection contract.
 - [`api/governance-contracts.md`](api/governance-contracts.md) — self-service AccessRequest and reusable Approval inbox/evidence/decision API contract.
