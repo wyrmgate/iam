@@ -224,13 +224,6 @@ class GovernanceExceptionIntegrationTest {
                                 scheduledWork),
                         ids,
                         transactions);
-        approvalCommands =
-                new ApprovalCommandService(
-                        approvalRepository,
-                        new GovernanceExceptionApprovalResultSink(
-                                exceptionService),
-                        ids,
-                        transactions);
         requests = new JdbcAccessRequestRepository(jdbc);
         evaluator =
                 new GovernancePolicyEligibilityEvaluator(
@@ -246,6 +239,36 @@ class GovernanceExceptionIntegrationTest {
                         Clock.fixed(
                                 NOW.plusSeconds(30),
                                 ZoneOffset.UTC));
+        SubmittedRequestItemSink submitted =
+                new SubmittedRequestItemSink() {
+                    @Override
+                    public void submitted(
+                            TenantContext requestedTenant,
+                            RequestItem item) {}
+
+                    @Override
+                    public void retryEvaluation(
+                            TenantContext requestedTenant,
+                            RequestItem item) {}
+                };
+        AccessRequestApprovalResultSink requestResults =
+                new AccessRequestApprovalResultSink(
+                        requests,
+                        (requestedTenant, item) -> { },
+                        evaluator,
+                        approvalRepository,
+                        starter,
+                        submitted);
+        approvalCommands =
+                new ApprovalCommandService(
+                        approvalRepository,
+                        new CompositeApprovalResultSink(
+                                List.of(
+                                        requestResults,
+                                        new GovernanceExceptionApprovalResultSink(
+                                                exceptionService))),
+                        ids,
+                        transactions);
 
         activeEntitlements.clear();
         currentEffective.clear();
@@ -473,6 +496,191 @@ class GovernanceExceptionIntegrationTest {
     }
 
     @Test
+    void rejectionSelfApprovalAndFutureValidityNeverGrantPrematureCoverage() {
+        UUID left = entitlement();
+        UUID right = entitlement();
+        UUID subject = ids.nextId();
+        UUID requester = ids.nextId();
+        UUID approver = ids.nextId();
+        SoDRule rule = activateDenyRule(
+                "approval-semantics",
+                left,
+                right,
+                NOW);
+
+        GovernanceException selfApproval =
+                exceptionService.request(
+                        tenant,
+                        subject,
+                        rule.id(),
+                        requester,
+                        "self approval forbidden",
+                        NOW,
+                        NOW.plusSeconds(100),
+                        null,
+                        plan(requester),
+                        NOW.plusSeconds(1));
+        assertThatThrownBy(() -> approvalCommands.decide(
+                tenant,
+                selfApproval.approvalCaseId(),
+                requester,
+                DecisionValue.APPROVE,
+                null,
+                1,
+                NOW.plusSeconds(2)))
+                .isInstanceOf(ApprovalCommandException.class)
+                .hasMessageContaining("Self-approval");
+
+        GovernanceException rejected =
+                exceptionService.request(
+                        tenant,
+                        subject,
+                        rule.id(),
+                        requester,
+                        "rejected exception",
+                        NOW,
+                        NOW.plusSeconds(100),
+                        null,
+                        plan(approver),
+                        NOW.plusSeconds(3));
+        approvalCommands.decide(
+                tenant,
+                rejected.approvalCaseId(),
+                approver,
+                DecisionValue.REJECT,
+                "not acceptable",
+                1,
+                NOW.plusSeconds(4));
+        assertThat(exceptionService.find(
+                tenant, rejected.id()).orElseThrow()
+                .lifecycleState())
+                .isEqualTo(LifecycleState.REJECTED);
+
+        GovernanceException future =
+                exceptionService.request(
+                        tenant,
+                        subject,
+                        rule.id(),
+                        requester,
+                        "future exception",
+                        NOW.plusSeconds(50),
+                        NOW.plusSeconds(150),
+                        null,
+                        plan(approver),
+                        NOW.plusSeconds(5));
+        approvalCommands.decide(
+                tenant,
+                future.approvalCaseId(),
+                approver,
+                DecisionValue.APPROVE,
+                null,
+                1,
+                NOW.plusSeconds(6));
+
+        assertThat(exceptionService.effectiveExceptionIds(
+                tenant,
+                subject,
+                Set.of(rule.id()),
+                NOW.plusSeconds(40)))
+                .isEmpty();
+        assertThat(exceptionService.effectiveExceptionIds(
+                tenant,
+                subject,
+                Set.of(rule.id()),
+                NOW.plusSeconds(50)))
+                .containsEntry(rule.id(), future.id());
+    }
+
+    @Test
+    void finalRequestApprovalRevalidatesRevokedExceptionAndDefaultPolicyStillApplies() {
+        UUID held = entitlement();
+        UUID requested = entitlement();
+        UUID subject = ids.nextId();
+        UUID requester = ids.nextId();
+        UUID exceptionApprover = ids.nextId();
+        UUID requestApprover = ids.nextId();
+        currentEffective.add(held);
+
+        SoDRule rule = activateRule(
+                "default-approval-with-deny-rule",
+                held,
+                requested,
+                PolicyDecision.REQUIRE_APPROVAL,
+                SoDAction.DENY,
+                plan(requestApprover),
+                NOW);
+
+        GovernanceException exception =
+                approveException(
+                        subject,
+                        rule.id(),
+                        requester,
+                        exceptionApprover,
+                        NOW,
+                        NOW.plusSeconds(3600),
+                        null);
+
+        AccessRequestCommandService commands =
+                new AccessRequestCommandService(
+                        requests,
+                        evaluator,
+                        approvalCommands,
+                        (requestedTenant, item) -> { },
+                        ids,
+                        transactions);
+        RequestDetail draft = commands.createDraft(
+                tenant,
+                requester,
+                subject,
+                List.of(new ItemSpec(
+                        TargetKind.ENTITLEMENT,
+                        requested,
+                        PrincipalConstraintKind.ANY,
+                        null,
+                        null,
+                        null)),
+                NOW.plusSeconds(10));
+        RequestDetail submitted = commands.submit(
+                tenant,
+                draft.request().id(),
+                1,
+                NOW.plusSeconds(11));
+        RequestItem pending = commands.evaluateItem(
+                tenant,
+                submitted.items().getFirst().id(),
+                submitted.items().getFirst().revision(),
+                NOW.plusSeconds(12));
+        assertThat(pending.state())
+                .isEqualTo(ItemState.PENDING_APPROVAL);
+        assertThat(pending.evaluationCode())
+                .isEqualTo("policy_approval_required");
+
+        GovernanceException approved = exceptionService.find(
+                tenant, exception.id()).orElseThrow();
+        exceptionService.revoke(
+                tenant,
+                exception.id(),
+                approved.revision(),
+                NOW.plusSeconds(13));
+
+        approvalCommands.decide(
+                tenant,
+                pending.approvalCaseId(),
+                requestApprover,
+                DecisionValue.APPROVE,
+                null,
+                1,
+                NOW.plusSeconds(14));
+
+        RequestItem denied = requests.findItem(
+                tenant, pending.id()).orElseThrow();
+        assertThat(denied.state())
+                .isEqualTo(ItemState.DENIED);
+        assertThat(denied.evaluationCode())
+                .isEqualTo("sod_denied");
+    }
+
+    @Test
     void scheduledExpiryMaterializesIdempotentlyAfterSemanticExpiry() {
         UUID left = entitlement();
         UUID right = entitlement();
@@ -582,17 +790,11 @@ class GovernanceExceptionIntegrationTest {
             UUID beneficiary,
             UUID requestedEntitlement,
             Instant at) {
-        ApprovalCommandService noApproval =
-                new ApprovalCommandService(
-                        approvalRepository,
-                        (requestedTenant, approvalCase) -> { },
-                        ids,
-                        transactions);
         AccessRequestCommandService commands =
                 new AccessRequestCommandService(
                         requests,
                         evaluator,
-                        noApproval,
+                        approvalCommands,
                         (requestedTenant, item) -> { },
                         ids,
                         transactions);
@@ -625,17 +827,35 @@ class GovernanceExceptionIntegrationTest {
             UUID left,
             UUID right,
             Instant at) {
+        return activateRule(
+                code,
+                left,
+                right,
+                PolicyDecision.AUTHORIZE,
+                SoDAction.DENY,
+                null,
+                at);
+    }
+
+    private SoDRule activateRule(
+            String code,
+            UUID left,
+            UUID right,
+            PolicyDecision defaultDecision,
+            SoDAction action,
+            PlanSpec approvalPlan,
+            Instant at) {
         PolicyVersion draft = policyService.createDraft(
                 tenant,
                 PolicyKind.ACCESS_REQUEST,
-                PolicyDecision.AUTHORIZE,
+                defaultDecision,
                 List.of(new SoDRuleSpec(
                         code,
                         left,
                         right,
                         RiskSeverity.CRITICAL,
-                        SoDAction.DENY)),
-                null,
+                        action)),
+                approvalPlan,
                 at);
         PolicyVersion ready = policyService.markReady(
                 tenant,
