@@ -71,7 +71,7 @@ class ApprovalRequestPersistenceIntegrationTest {
         assertThat(
                 flyway.info().current()
                         .getVersion().getVersion())
-                .isEqualTo("29");
+                .isEqualTo("30");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
