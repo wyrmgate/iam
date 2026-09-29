@@ -313,6 +313,8 @@ Migration V28 adds an approver-identity-first index over `approval_approver` to 
 
 Migration V29 adds Governance-owned `policy` / `policy_version`, typed symmetric `sod_rule`, immutable policy approval-stage/approver content, and immutable `risk_assessment`, `sod_conflict` and `policy_evaluation` evidence. At most one ACCESS_REQUEST PolicyVersion is ACTIVE per tenant/policy. SoD entitlement IDs are stable cross-capability references without Catalog foreign keys; canonical pair ordering prevents duplicate symmetric rules. Policy-version content is insert-only while DRAFT and cannot be changed after validation/activation; activated changes create a successor version.
 
+Migration V30 adds Governance-owned `governance_exception` authoritative lifecycle state. The first scope binds a stable cross-capability Identity ID to one exact same-capability SoDRule, required reason, reusable ApprovalCase, mandatory validity window and optional predecessor exception. Identity IDs intentionally have no database FK. `sod_conflict.governance_exception_id` is immutable evidence of exact coverage and never removes the conflict. The effective lookup is bounded by tenant + Identity + rule set + APPROVED validity.
+
 Approval-plan content is immutable from creation in this slice. Decisions remain append-only evidence; policy revalidation may create successor approval context rather than mutating completed approval evidence.
 
 ### Credential
