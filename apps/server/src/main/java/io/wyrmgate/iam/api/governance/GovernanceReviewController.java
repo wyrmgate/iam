@@ -455,9 +455,8 @@ public final class GovernanceReviewController {
                 ifMatch, correlationId);
         String key = validateIdempotencyKey(
                 idempotencyKey, correlationId);
-        Map<String,Object> parsed = exact(
+        Map<String,Object> parsed = optionalReasonBody(
                 body,
-                Set.of("reason"),
                 correlationId);
         String reason = optionalReason(
                 parsed.get("reason"),
@@ -588,6 +587,21 @@ public final class GovernanceReviewController {
                 "cursor",
                 "invalid_cursor",
                 "cursor is invalid or malformed.");
+    }
+
+    private static Map<String,Object> optionalReasonBody(
+            Map<String,Object> body,
+            UUID correlationId) {
+        if (body == null
+                || !(body.isEmpty()
+                || body.keySet().equals(Set.of("reason")))) {
+            throw GovernanceApiException.validation(
+                    correlationId,
+                    "request",
+                    "unexpected_fields",
+                    "Decision body may contain only the optional reason field.");
+        }
+        return new LinkedHashMap<>(body);
     }
 
     private static Map<String,Object> exact(
