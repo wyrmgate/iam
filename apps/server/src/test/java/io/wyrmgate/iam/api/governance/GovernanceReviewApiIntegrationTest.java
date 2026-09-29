@@ -321,6 +321,41 @@ class GovernanceReviewApiIntegrationTest {
                         jsonPath("$.state")
                                 .value("GENERATING"));
 
+        mvc.perform(
+                        post("/api/v1/governance/review-campaigns/{id}/start",
+                                campaignId)
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        admin)
+                                .header(
+                                        "If-Match",
+                                        "\"rev-1\"")
+                                .header(
+                                        "Idempotency-Key",
+                                        "review-start-0001"))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.state")
+                                .value("GENERATING"));
+
+        mvc.perform(
+                        post("/api/v1/governance/review-campaigns/{id}/start",
+                                campaignId)
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        admin)
+                                .header(
+                                        "If-Match",
+                                        "\"rev-1\"")
+                                .header(
+                                        "Idempotency-Key",
+                                        "review-start-stale"))
+                .andExpect(
+                        status().isPreconditionFailed())
+                .andExpect(
+                        jsonPath("$.code")
+                                .value("stale_revision"));
+
         Instant now = Instant.now();
         ReviewItem item = new ReviewItem(
                 ids.nextId(),
@@ -449,6 +484,28 @@ class GovernanceReviewApiIntegrationTest {
                         jsonPath("$.remediation.id")
                                 .value(
                                         remediationId.toString()));
+
+        mvc.perform(
+                        post("/api/v1/governance/review-items/{id}/revoke",
+                                item.id())
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        reviewer)
+                                .header(
+                                        "If-Match",
+                                        "\"rev-1\"")
+                                .header(
+                                        "Idempotency-Key",
+                                        "review-decision-stale")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"reason\":\"new stale request\"}"))
+                .andExpect(
+                        status().isPreconditionFailed())
+                .andExpect(
+                        jsonPath("$.code")
+                                .value("stale_revision"));
 
         mvc.perform(
                         get("/api/v1/governance/review-campaigns/{id}",
