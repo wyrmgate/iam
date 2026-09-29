@@ -120,9 +120,11 @@ An AUTHORIZED RequestItem carries explicit Role/Entitlement target, ANY/SPECIFIC
 
 ## Review
 
-Campaign state is independent of remediation completion. ReviewItem is a scalable consistency boundary rather than a child collection loaded through ReviewCampaign.
+The first campaign lifecycle is `DRAFT -> GENERATING -> ACTIVE -> COMPLETED`, with `FAILED` reserved for terminal generation failure. `IDENTITY_ACCESS` binds one subject Identity, one distinct explicit reviewer Identity and one fixed `snapshotAt` cutoff. Generation pages Access through the Access-owned semantic review query using deterministic `createdAt + id` continuation; each committed page advances a durable checkpoint and creates independent ReviewItems. Campaign code never loads an unbounded ReviewItem collection.
 
-ReviewDecision is immutable evidence. ReviewRemediation always reads current authoritative state and may finish as APPLIED, NO_ACTION_REQUIRED, FAILED or MANUAL_REQUIRED. A review snapshot can never resurrect access already removed elsewhere.
+ReviewItem lifecycle is `PENDING -> DECIDED`. Only its assigned reviewer may record one immutable `KEEP` or `REVOKE` ReviewDecision, using optimistic item revision. `KEEP` creates no access mutation. `REVOKE` atomically creates one `ReviewRemediation` plus durable remediation work.
+
+Campaign `COMPLETED` means all generated items have decisions. It is independent of remediation completion and provider fulfillment. ReviewRemediation always re-reads current Access authority through an Access-owned semantic command and may finish `APPLIED`, `NO_ACTION_REQUIRED`, `FAILED` or `MANUAL_REQUIRED`. Access application is causally idempotent by ReviewRemediation ID, so retry after an uncertain Governance commit returns the same Access result. A historical review snapshot can never resurrect access or overwrite newer Access state.
 
 ## GovernanceException and finding
 
