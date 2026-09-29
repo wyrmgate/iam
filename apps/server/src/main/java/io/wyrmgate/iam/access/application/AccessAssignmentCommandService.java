@@ -128,11 +128,8 @@ public final class AccessAssignmentCommandService {
         Objects.requireNonNull(principalConstraintKind, "principalConstraintKind");
         Objects.requireNonNull(now, "now");
 
-        if (!identityReferences.identityExists(tenant, identityId)) {
-            throw new AccessAssignmentCommandException(
-                    "identity_not_found",
-                    "The requested Identity was not found in the tenant.");
-        }
+        requireAccessEligibleIdentity(
+                tenant, identityId);
 
         var entitlement = catalogReferences.resolveActiveEntitlement(
                 tenant, entitlementId);
@@ -297,11 +294,8 @@ public final class AccessAssignmentCommandService {
         Objects.requireNonNull(principalConstraintKind, "principalConstraintKind");
         Objects.requireNonNull(now, "now");
 
-        if (!identityReferences.identityExists(tenant, identityId)) {
-            throw new AccessAssignmentCommandException(
-                    "identity_not_found",
-                    "The requested Identity was not found in the tenant.");
-        }
+        requireAccessEligibleIdentity(
+                tenant, identityId);
 
         var expansion = roleExpansion.expandCurrent(tenant, roleId);
         if (expansion.status() != RoleExpansionQuery.Status.AVAILABLE
@@ -550,6 +544,25 @@ public final class AccessAssignmentCommandService {
             facts.projectionInputChanged(tenant, updated);
             return updated;
         });
+    }
+
+    private void requireAccessEligibleIdentity(
+            TenantContext tenant,
+            UUID identityId) {
+        var status = identityReferences.accessStatus(
+                tenant, identityId);
+        if (status.status()
+                == IdentityAccessReferenceQuery.AccessStatus.NOT_FOUND) {
+            throw new AccessAssignmentCommandException(
+                    "identity_not_found",
+                    "The requested Identity was not found in the tenant.");
+        }
+        if (status.status()
+                != IdentityAccessReferenceQuery.AccessStatus.ACCESS_ELIGIBLE) {
+            throw new AccessAssignmentCommandException(
+                    "identity_not_access_eligible",
+                    "The requested Identity is not access-eligible.");
+        }
     }
 
     private AccessAssignment current(
