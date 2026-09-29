@@ -118,12 +118,6 @@ final class GovernanceReviewApiMutationService {
                             existing.id()),
                     now,
                     correlationId);
-            if (existing.state() != CampaignState.DRAFT) {
-                throw GovernanceApiException.conflict(
-                        correlationId,
-                        "review_campaign_not_draft",
-                        "Only a DRAFT ReviewCampaign can start generation.");
-            }
             Registration registration = register(
                     actor,
                     "api.governance.review-campaign.start.v1",
@@ -133,6 +127,12 @@ final class GovernanceReviewApiMutationService {
             if (registration.kind() == RegistrationKind.REPLAY) {
                 return replayCampaign(
                         actor, registration, correlationId);
+            }
+            if (existing.state() != CampaignState.DRAFT) {
+                throw GovernanceApiException.conflict(
+                        correlationId,
+                        "review_campaign_not_draft",
+                        "Only a DRAFT ReviewCampaign can start generation.");
             }
             ReviewCampaign started =
                     reviews.startGeneration(
@@ -173,12 +173,6 @@ final class GovernanceReviewApiMutationService {
                 throw GovernanceApiException.forbidden(
                         correlationId);
             }
-            if (existing.state() != ItemState.PENDING) {
-                throw GovernanceApiException.conflict(
-                        correlationId,
-                        "review_item_already_decided",
-                        "The ReviewItem already has an immutable decision.");
-            }
             Registration registration = register(
                     actor,
                     "api.governance.review-item.decision.v1",
@@ -188,6 +182,12 @@ final class GovernanceReviewApiMutationService {
             if (registration.kind() == RegistrationKind.REPLAY) {
                 return replayItem(
                         actor, registration, correlationId);
+            }
+            if (existing.state() != ItemState.PENDING) {
+                throw GovernanceApiException.conflict(
+                        correlationId,
+                        "review_item_already_decided",
+                        "The ReviewItem already has an immutable decision.");
             }
             reviews.decide(
                     actor.tenant(),
