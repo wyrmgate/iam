@@ -281,11 +281,11 @@ FOR EACH ROW EXECUTE FUNCTION governance.guard_policy_version_update();
 CREATE OR REPLACE FUNCTION governance.reject_policy_version_delete()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $
+AS $$
 BEGIN
     RAISE EXCEPTION 'policy versions are retained; use lifecycle state instead of delete';
 END;
-$;
+$$;
 
 CREATE TRIGGER governance_policy_version_delete_guard
 BEFORE DELETE ON governance.policy_version
