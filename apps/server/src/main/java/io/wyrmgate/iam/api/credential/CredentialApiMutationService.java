@@ -177,11 +177,17 @@ final class CredentialApiMutationService {
                 return replayRotation(
                         actor, registration, correlationId);
             }
-            CredentialRotation created = rotations.plan(
-                    actor.tenant(),
-                    credentialId,
-                    actor.identityId(),
-                    now);
+            CredentialRotation created;
+            try {
+                created = rotations.plan(
+                        actor.tenant(),
+                        credentialId,
+                        actor.identityId(),
+                        now);
+            } catch (IllegalStateException invalidState) {
+                throw invalidState(
+                        correlationId);
+            }
             complete(
                     actor,
                     "api.credential.rotate.v1",
@@ -225,7 +231,13 @@ final class CredentialApiMutationService {
                 return replayCredential(
                         actor, registration, correlationId);
             }
-            Credential updated = action.get();
+            Credential updated;
+            try {
+                updated = action.get();
+            } catch (IllegalStateException invalidState) {
+                throw invalidState(
+                        correlationId);
+            }
             complete(
                     actor,
                     namespace,
@@ -318,6 +330,14 @@ final class CredentialApiMutationService {
             throw new IllegalStateException(
                     "completed Credential idempotency result is invalid");
         }
+    }
+
+    private static CredentialApiException invalidState(
+            UUID correlationId) {
+        return CredentialApiException.conflict(
+                correlationId,
+                "invalid_state",
+                "The Credential operation is not valid in the current state.");
     }
 
     private void require(
