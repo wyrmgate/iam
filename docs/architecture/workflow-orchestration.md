@@ -184,7 +184,7 @@ Initial supported structures remain intentionally constrained:
 
 Do not introduce arbitrary BPM DAGs or script-defined approval semantics.
 
-AccessRequest/RequestItem is the first consumer, but approval persistence contains no access-request target or provisioning semantics. Later administrative elevation, exception or high-risk activation flows may reuse the same ApprovalCase contract while keeping their authoritative state outside the approval process.
+AccessRequest/RequestItem is the first consumer, but approval persistence contains no access-request target or provisioning semantics. GovernanceException now reuses the same ApprovalCase contract while keeping exception authority in its own aggregate. Approval/rejection is consumed through a typed exception result sink; approved exceptions schedule only a technical valid-until boundary. The validity window itself determines authority, so scheduler delay cannot extend exception coverage. Revocation and expiry append a data-minimized `governance.exception-changed` fact for later remediation/review consumers and never directly mutate Access. Later administrative elevation or high-risk activation flows may reuse the same ApprovalCase contract while retaining their own authoritative state.
 
 Public request submission does not expose Governance evaluation as a client-owned workflow step. The transaction that moves each item to `SUBMITTED` appends `governance.request-item-submitted`; a retryable Governance consumer re-reads current state and invokes eligibility evaluation. Mandatory evaluator unavailability leaves the item `EVALUATING` and retains retryable work. This keeps privilege-increase evaluation fail-closed and durable across process restarts.
 
