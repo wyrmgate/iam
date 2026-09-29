@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.credential.persistence;
 
+import io.wyrmgate.iam.credential.application.CredentialQueryModels.CredentialPosition;
+import io.wyrmgate.iam.credential.application.CredentialQueryModels.RotationPosition;
 import io.wyrmgate.iam.credential.application.CredentialRepository;
 import io.wyrmgate.iam.credential.domain.CredentialModels.*;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
@@ -8,6 +10,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -71,6 +74,65 @@ public final class JdbcCredentialRepository
                 credentialId)
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    public List<Credential> listCredentials(
+            TenantContext tenant,
+            UUID principalId,
+            CredentialPosition after,
+            int limit) {
+        if (after == null) {
+            return jdbc.query("""
+                    SELECT id, principal_id, credential_kind,
+                           secret_provider_type, secret_reference_key,
+                           lifecycle_state, valid_from, valid_until,
+                           revision, created_at, updated_at,
+                           compromised_at, revoked_at, expired_at
+                    FROM credential.credential
+                    WHERE tenant_id = ?
+                      AND principal_id = ?
+                    ORDER BY lifecycle_state ASC,
+                             created_at ASC, id ASC
+                    LIMIT ?
+                    """,
+                    (rs,row) -> credential(rs),
+                    tenant.tenantId(),
+                    principalId,
+                    limit);
+        }
+        return jdbc.query("""
+                SELECT id, principal_id, credential_kind,
+                       secret_provider_type, secret_reference_key,
+                       lifecycle_state, valid_from, valid_until,
+                       revision, created_at, updated_at,
+                       compromised_at, revoked_at, expired_at
+                FROM credential.credential
+                WHERE tenant_id = ?
+                  AND principal_id = ?
+                  AND (
+                      lifecycle_state > ?
+                      OR (
+                          lifecycle_state = ?
+                          AND (
+                              created_at > ?
+                              OR (created_at = ? AND id > ?)
+                          )
+                      )
+                  )
+                ORDER BY lifecycle_state ASC,
+                         created_at ASC, id ASC
+                LIMIT ?
+                """,
+                (rs,row) -> credential(rs),
+                tenant.tenantId(),
+                principalId,
+                after.lifecycleState().name(),
+                after.lifecycleState().name(),
+                Timestamp.from(after.createdAt()),
+                Timestamp.from(after.createdAt()),
+                after.id(),
+                limit);
     }
 
     @Override
@@ -166,6 +228,81 @@ public final class JdbcCredentialRepository
                 (rs,row) -> rotation(rs),
                 tenant.tenantId(),
                 rotationId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public List<CredentialRotation> listRotations(
+            TenantContext tenant,
+            UUID oldCredentialId,
+            RotationPosition after,
+            int limit) {
+        if (after == null) {
+            return jdbc.query("""
+                    SELECT id, old_credential_id,
+                           replacement_credential_id,
+                           initiator_identity_id, process_state,
+                           checkpoint, failure_code, revision,
+                           created_at, updated_at, completed_at
+                    FROM credential.credential_rotation
+                    WHERE tenant_id = ?
+                      AND old_credential_id = ?
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (rs,row) -> rotation(rs),
+                    tenant.tenantId(),
+                    oldCredentialId,
+                    limit);
+        }
+        return jdbc.query("""
+                SELECT id, old_credential_id,
+                       replacement_credential_id,
+                       initiator_identity_id, process_state,
+                       checkpoint, failure_code, revision,
+                       created_at, updated_at, completed_at
+                FROM credential.credential_rotation
+                WHERE tenant_id = ?
+                  AND old_credential_id = ?
+                  AND (
+                      created_at < ?
+                      OR (created_at = ? AND id < ?)
+                  )
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (rs,row) -> rotation(rs),
+                tenant.tenantId(),
+                oldCredentialId,
+                Timestamp.from(after.createdAt()),
+                Timestamp.from(after.createdAt()),
+                after.id(),
+                limit);
+    }
+
+    @Override
+    public Optional<CredentialRotation> findOpenRotation(
+            TenantContext tenant,
+            UUID oldCredentialId) {
+        return jdbc.query("""
+                SELECT id, old_credential_id,
+                       replacement_credential_id,
+                       initiator_identity_id, process_state,
+                       checkpoint, failure_code, revision,
+                       created_at, updated_at, completed_at
+                FROM credential.credential_rotation
+                WHERE tenant_id = ?
+                  AND old_credential_id = ?
+                  AND process_state NOT IN (
+                      'COMPLETED','FAILED',
+                      'MANUAL_REQUIRED','FAILED_REMEDIATION')
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (rs,row) -> rotation(rs),
+                tenant.tenantId(),
+                oldCredentialId)
                 .stream()
                 .findFirst();
     }
