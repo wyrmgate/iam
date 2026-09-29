@@ -26,11 +26,8 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0016 Reusable typed approval orchestration within Governance](0016-reusable-typed-approval-orchestration.md)
 - [ADR-0017 Versioned Governance policy, risk and SoD evaluation](0017-versioned-governance-policy-risk-sod-evaluation.md)
 - [ADR-0018 Scoped time-bound GovernanceException lifecycle](0018-scoped-time-bound-governance-exception-lifecycle.md)
-
-Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. An accepted ADR may amend a formal specification between document revisions; the next formal revision must fold the ADR into the specification.
-
 - [ADR-0019 Scalable Identity access review and current-state remediation](0019-scalable-identity-access-review-current-state-remediation.md)
-
 - [ADR-0020 Credential authority, external secret references and durable rotation](0020-credential-authority-external-secret-reference-durable-rotation.md)
-
 - [ADR-0021 Identity lifecycle eligibility and durable Access reduction](0021-identity-lifecycle-eligibility-durable-access-reduction.md)
+
+Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.4, which folds ADR-0017 through ADR-0021 into the formal baseline. A later accepted ADR may again amend that baseline between controlled document revisions and must be folded into the next formal revision.
