@@ -666,7 +666,7 @@ class GovernanceExceptionIntegrationTest {
         assertThat(pending.state())
                 .isEqualTo(ItemState.PENDING_APPROVAL);
         assertThat(pending.evaluationCode())
-                .isEqualTo("policy_approval_required");
+                .isEqualTo("approval_required");
 
         GovernanceException approved = exceptionService.find(
                 tenant, exception.id()).orElseThrow();
