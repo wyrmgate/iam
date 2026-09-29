@@ -17,6 +17,7 @@ import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registration;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
 import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
+import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Instant;
 import java.util.Objects;
@@ -128,6 +129,12 @@ final class GovernanceReviewApiMutationService {
                 return replayCampaign(
                         actor, registration, correlationId);
             }
+            if (existing.revision() != expectedRevision) {
+                throw new StaleWriteException(
+                        "review-campaign",
+                        campaignId,
+                        expectedRevision);
+            }
             if (existing.state() != CampaignState.DRAFT) {
                 throw GovernanceApiException.conflict(
                         correlationId,
@@ -182,6 +189,12 @@ final class GovernanceReviewApiMutationService {
             if (registration.kind() == RegistrationKind.REPLAY) {
                 return replayItem(
                         actor, registration, correlationId);
+            }
+            if (existing.revision() != expectedRevision) {
+                throw new StaleWriteException(
+                        "review-item",
+                        reviewItemId,
+                        expectedRevision);
             }
             if (existing.state() != ItemState.PENDING) {
                 throw GovernanceApiException.conflict(
