@@ -473,6 +473,34 @@ class CredentialPersistenceIntegrationTest {
     }
 
     @Test
+    void onlyOneOpenRoutineRotationMayExistForOldCredential() {
+        UUID principalId = principal();
+        UUID initiator = identity();
+        Credential old = activeCredential(
+                principalId,
+                CredentialKind.API_KEY,
+                "api/concurrent-old");
+
+        CredentialRotation first = rotations.plan(
+                tenant,
+                old.id(),
+                initiator,
+                NOW);
+        assertThat(first.state())
+                .isEqualTo(RotationState.PLANNED);
+
+        assertThatThrownBy(() ->
+                rotations.plan(
+                        tenant,
+                        old.id(),
+                        initiator,
+                        NOW.plusSeconds(1)))
+                .isInstanceOf(
+                        org.springframework.dao
+                                .DataIntegrityViolationException.class);
+    }
+
+    @Test
     void replacementMustBeEffectiveBeforeCutover() {
         UUID principalId = principal();
         UUID initiator = identity();
