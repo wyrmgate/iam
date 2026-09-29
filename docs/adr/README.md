@@ -28,3 +28,5 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0018 Scoped time-bound GovernanceException lifecycle](0018-scoped-time-bound-governance-exception-lifecycle.md)
 
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. An accepted ADR may amend a formal specification between document revisions; the next formal revision must fold the ADR into the specification.
+
+- [ADR-0019 Scalable Identity access review and current-state remediation](0019-scalable-identity-access-review-current-state-remediation.md)
