@@ -9,7 +9,9 @@ import io.wyrmgate.iam.governance.application.ReviewQueryModels.ItemEvidence;
 import io.wyrmgate.iam.governance.application.ReviewQueryService;
 import io.wyrmgate.iam.governance.application.ReviewRepository;
 import io.wyrmgate.iam.governance.application.ReviewService;
+import io.wyrmgate.iam.governance.domain.ReviewModels.CampaignState;
 import io.wyrmgate.iam.governance.domain.ReviewModels.DecisionValue;
+import io.wyrmgate.iam.governance.domain.ReviewModels.ItemState;
 import io.wyrmgate.iam.governance.domain.ReviewModels.ReviewCampaign;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registration;
@@ -116,6 +118,12 @@ final class GovernanceReviewApiMutationService {
                             existing.id()),
                     now,
                     correlationId);
+            if (existing.state() != CampaignState.DRAFT) {
+                throw GovernanceApiException.conflict(
+                        correlationId,
+                        "review_campaign_not_draft",
+                        "Only a DRAFT ReviewCampaign can start generation.");
+            }
             Registration registration = register(
                     actor,
                     "api.governance.review-campaign.start.v1",
@@ -164,6 +172,12 @@ final class GovernanceReviewApiMutationService {
                     .equals(actor.identityId())) {
                 throw GovernanceApiException.forbidden(
                         correlationId);
+            }
+            if (existing.state() != ItemState.PENDING) {
+                throw GovernanceApiException.conflict(
+                        correlationId,
+                        "review_item_already_decided",
+                        "The ReviewItem already has an immutable decision.");
             }
             Registration registration = register(
                     actor,
