@@ -16,12 +16,21 @@ import io.wyrmgate.iam.governance.application.AccessRequestModels.EligibilityRes
 import io.wyrmgate.iam.governance.application.AccessRequestRepository;
 import io.wyrmgate.iam.governance.application.ApprovalCaseStartService;
 import io.wyrmgate.iam.governance.application.ApprovalCommandService;
+import io.wyrmgate.iam.governance.application.CompositeApprovalResultSink;
 import io.wyrmgate.iam.governance.application.ApprovalQueryService;
 import io.wyrmgate.iam.governance.application.ApprovalRepository;
 import io.wyrmgate.iam.governance.application.ApprovalResultQuery;
 import io.wyrmgate.iam.governance.application.ApprovalResultSink;
 import io.wyrmgate.iam.governance.application.AuthorizedAccessIntentSink;
 import io.wyrmgate.iam.governance.application.SubmittedRequestItemSink;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionApprovalResultSink;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionBoundaryScheduler;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionChangeSink;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionExpiryProcessingScheduler;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionExpiryProcessingService;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionQuery;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionRepository;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionService;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
 import io.wyrmgate.iam.governance.application.GovernancePolicyEligibilityEvaluator;
 import io.wyrmgate.iam.governance.application.GovernancePolicyRepository;
@@ -36,9 +45,11 @@ import io.wyrmgate.iam.identity.application.PrincipalResolutionQuery;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
+import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -96,6 +107,7 @@ public class GovernancePersistenceConfiguration {
             CatalogAccessReferenceQuery catalog,
             RoleExpansionQuery roleExpansion,
             EffectiveAccessQuery effectiveAccess,
+            GovernanceExceptionQuery exceptions,
             IdGenerator ids,
             TransactionExecutor transactions) {
         return new GovernancePolicyEligibilityEvaluator(
@@ -105,6 +117,7 @@ public class GovernancePersistenceConfiguration {
                 catalog,
                 roleExpansion,
                 effectiveAccess,
+                exceptions,
                 ids,
                 transactions);
     }
@@ -119,7 +132,70 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
-    ApprovalResultSink approvalResultSink(
+    GovernanceExceptionRepository governanceExceptionRepository(
+            JdbcTemplate jdbc) {
+        return new JdbcGovernanceExceptionRepository(jdbc);
+    }
+
+    @Bean
+    GovernanceExceptionChangeSink governanceExceptionChangeSink(
+            JdbcOutboxRepository outbox,
+            IdGenerator ids) {
+        return new JdbcGovernanceExceptionChangeSink(
+                outbox, ids);
+    }
+
+    @Bean
+    GovernanceExceptionBoundaryScheduler governanceExceptionBoundaryScheduler(
+            JdbcScheduledWorkRepository scheduledWork) {
+        return new JdbcGovernanceExceptionBoundaryScheduler(
+                scheduledWork);
+    }
+
+    @Bean
+    GovernanceExceptionService governanceExceptionService(
+            GovernanceExceptionRepository exceptions,
+            GovernancePolicyRepository policies,
+            IdentityAccessReferenceQuery identities,
+            ApprovalCaseStartService starter,
+            GovernanceExceptionChangeSink changes,
+            GovernanceExceptionBoundaryScheduler boundaries,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new GovernanceExceptionService(
+                exceptions,
+                policies,
+                identities,
+                starter,
+                changes,
+                boundaries,
+                ids,
+                transactions);
+    }
+
+    @Bean
+    GovernanceExceptionQuery governanceExceptionQuery(
+            GovernanceExceptionService service) {
+        return service;
+    }
+
+    @Bean
+    GovernanceExceptionExpiryProcessingService governanceExceptionExpiryProcessingService(
+            JdbcScheduledWorkRepository scheduledWork,
+            GovernanceExceptionService exceptions) {
+        return new GovernanceExceptionExpiryProcessingService(
+                scheduledWork, exceptions);
+    }
+
+    @Bean
+    GovernanceExceptionExpiryProcessingScheduler governanceExceptionExpiryProcessingScheduler(
+            GovernanceExceptionExpiryProcessingService service) {
+        return new GovernanceExceptionExpiryProcessingScheduler(
+                service);
+    }
+
+    @Bean
+    AccessRequestApprovalResultSink accessRequestApprovalResultSink(
             AccessRequestRepository requests,
             AuthorizedAccessIntentSink authorizedAccess,
             AccessRequestEligibilityEvaluator evaluator,
@@ -133,6 +209,24 @@ public class GovernancePersistenceConfiguration {
                 approvals,
                 starter,
                 submittedItems);
+    }
+
+    @Bean
+    GovernanceExceptionApprovalResultSink governanceExceptionApprovalResultSink(
+            GovernanceExceptionService exceptions) {
+        return new GovernanceExceptionApprovalResultSink(
+                exceptions);
+    }
+
+    @Bean
+    @Primary
+    ApprovalResultSink approvalResultSink(
+            AccessRequestApprovalResultSink accessRequests,
+            GovernanceExceptionApprovalResultSink exceptions) {
+        return new CompositeApprovalResultSink(
+                java.util.List.of(
+                        accessRequests,
+                        exceptions));
     }
 
     @Bean
