@@ -31,6 +31,23 @@ public final class JdbcSubmittedRequestItemSink
             throw new IllegalArgumentException(
                     "only SUBMITTED RequestItem can publish evaluation work");
         }
+        append(tenant, item);
+    }
+
+    @Override
+    public void retryEvaluation(
+            TenantContext tenant,
+            RequestItem item) {
+        if (item.state() != ItemState.EVALUATING) {
+            throw new IllegalArgumentException(
+                    "only EVALUATING RequestItem can publish retry work");
+        }
+        append(tenant, item);
+    }
+
+    private void append(
+            TenantContext tenant,
+            RequestItem item) {
         UUID eventId = ids.nextId();
         outbox.append(
                 tenant,
