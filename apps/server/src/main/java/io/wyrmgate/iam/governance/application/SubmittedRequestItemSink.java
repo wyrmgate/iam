@@ -11,5 +11,10 @@ public interface SubmittedRequestItemSink {
 
     void submitted(TenantContext tenant, RequestItem item);
 
-    void retryEvaluation(TenantContext tenant, RequestItem item);
+    default void retryEvaluation(
+            TenantContext tenant,
+            RequestItem item) {
+        throw new UnsupportedOperationException(
+                "evaluation retry is not configured");
+    }
 }
