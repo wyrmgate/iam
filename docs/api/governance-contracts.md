@@ -62,8 +62,11 @@ PolicyEvaluation records are immutable evidence. Successful evaluation may produ
 
 A final approval is revalidated before authorization. Current DENY wins, unavailable
 evaluation returns the item to durable `EVALUATING` retry, and a changed approval-plan
-fingerprint creates a successor ApprovalCase. Completed approval evidence never becomes
-stale mutation authority. Existing authorized-intent processing then continues the chain
+fingerprint creates a successor ApprovalCase. Effective approved GovernanceExceptions are
+also re-read during this evaluation by exact Identity + SoDRule scope; they may waive that
+rule's enforcement action while immutable SoD/risk evidence remains. Expired, revoked or
+old-PolicyVersion exceptions cannot be carried by stale approval evidence. Completed
+approval evidence never becomes stale mutation authority. Existing authorized-intent processing then continues the chain
 toward Access without the HTTP client coordinating internal workflow steps.
 
 ## Reusable approval API
