@@ -358,7 +358,7 @@ credential.credential_rotation
 - completed_at timestamptz NULL
 ```
 
-`secret_provider_type + secret_reference_key` is an opaque external SecretReference only. V32 has no raw password, API-key value, private-key, token or client-secret material column. Credential ownership/kind/reference/validity is immutable in the first slice; lifecycle changes are revision guarded. Rotation subject/initiator and an attached replacement are immutable, and terminal rotation rows cannot be rewritten. CredentialBinding remains a canonical planned concept but no generic binding table is introduced until its provider/consumer semantics are concretely specified.
+`secret_provider_type + secret_reference_key` is an opaque external SecretReference only. V32 has no raw password, API-key value, private-key, token or client-secret material column. Credential ownership/kind/reference/validity is immutable in the first slice; lifecycle changes are revision guarded. Rotation subject/initiator and an attached replacement are immutable, and terminal rotation rows cannot be rewritten. V35 adds a tenant + Principal + immutable `created_at + id` index for deterministic bounded public Credential listing; lifecycle state is intentionally excluded from the public continuation tuple because lifecycle is mutable. CredentialBinding remains a canonical planned concept but no generic binding table is introduced until its provider/consumer semantics are concretely specified.
 
 ### Integration configuration and processes
 

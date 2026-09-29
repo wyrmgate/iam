@@ -71,6 +71,19 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission EFFECTIVE_ACCESS_READ =
             new AdministrativePermission("effective-access", "read");
 
+    public static final AdministrativePermission CREDENTIAL_READ =
+            new AdministrativePermission("credential", "read");
+    public static final AdministrativePermission CREDENTIAL_CREATE =
+            new AdministrativePermission("credential", "create");
+    public static final AdministrativePermission CREDENTIAL_REVOKE =
+            new AdministrativePermission("credential", "revoke");
+    public static final AdministrativePermission CREDENTIAL_COMPROMISE =
+            new AdministrativePermission("credential", "compromise");
+    public static final AdministrativePermission CREDENTIAL_ROTATE =
+            new AdministrativePermission("credential", "rotate");
+    public static final AdministrativePermission CREDENTIAL_ROTATION_READ =
+            new AdministrativePermission("credential-rotation", "read");
+
     public static final AdministrativePermission REVIEW_CAMPAIGN_READ =
             new AdministrativePermission("review-campaign", "read");
     public static final AdministrativePermission REVIEW_CAMPAIGN_CREATE =

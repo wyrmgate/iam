@@ -54,6 +54,11 @@ public final class CredentialRotationService {
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "old Credential does not exist"));
+        if (repository.findOpenRotation(
+                tenant, oldCredentialId).isPresent()) {
+            throw new IllegalStateException(
+                    "routine rotation already exists for Credential");
+        }
         if (!old.effectiveAt(now)) {
             throw new IllegalArgumentException(
                     "routine rotation requires an effective ACTIVE Credential");

@@ -46,11 +46,11 @@ AdministrativeRole is a manageable bundle of stable control-plane permissions. E
 - review campaign administration;
 - governance exception request/approval;
 - connector/source configuration, testing and reconciliation execution;
-- credential rotate/revoke and secret-reference management;
+- credential read/create/revoke/compromise/rotate and credential-rotation read; secret-reference management remains metadata-only and never implies raw secret retrieval;
 - audit read/export;
 - administrative-authorization management.
 
-Raw secret retrieval is not implied by platform administration and is normally unavailable through IAM because secret material is external by default.
+Raw secret retrieval is not implied by platform administration and is unavailable through the Credential public API because secret material is external by default. The implemented Credential surface uses separate semantic permissions `credential:read`, `credential:create`, `credential:revoke`, `credential:compromise`, `credential:rotate`, and `credential-rotation:read`; none is silently added to the initial tenant administrator permission set.
 
 ## Scope
 

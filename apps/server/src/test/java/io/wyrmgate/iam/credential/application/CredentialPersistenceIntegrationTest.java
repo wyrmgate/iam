@@ -102,7 +102,7 @@ class CredentialPersistenceIntegrationTest {
         flyway.validate();
         assertThat(flyway.info().current()
                 .getVersion().getVersion())
-                .isEqualTo("34");
+                .isEqualTo("35");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -495,9 +495,9 @@ class CredentialPersistenceIntegrationTest {
                         old.id(),
                         initiator,
                         NOW.plusSeconds(1)))
-                .isInstanceOf(
-                        org.springframework.dao
-                                .DataIntegrityViolationException.class);
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(
+                        "routine rotation already exists");
     }
 
     @Test

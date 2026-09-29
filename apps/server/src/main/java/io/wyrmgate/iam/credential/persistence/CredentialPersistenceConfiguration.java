@@ -3,6 +3,7 @@ package io.wyrmgate.iam.credential.persistence;
 import io.wyrmgate.iam.credential.application.CredentialBoundaryProcessingScheduler;
 import io.wyrmgate.iam.credential.application.CredentialBoundaryProcessingService;
 import io.wyrmgate.iam.credential.application.CredentialBoundaryScheduler;
+import io.wyrmgate.iam.credential.application.CredentialQueryService;
 import io.wyrmgate.iam.credential.application.CredentialRepository;
 import io.wyrmgate.iam.credential.application.CredentialRotationService;
 import io.wyrmgate.iam.credential.application.CredentialService;
@@ -23,6 +24,12 @@ public class CredentialPersistenceConfiguration {
     CredentialRepository credentialRepository(
             JdbcTemplate jdbc) {
         return new JdbcCredentialRepository(jdbc);
+    }
+
+    @Bean
+    CredentialQueryService credentialQueryService(
+            CredentialRepository credentials) {
+        return new CredentialQueryService(credentials);
     }
 
     @Bean
