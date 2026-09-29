@@ -606,7 +606,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
         assertThat(authorized.approvalCaseId())
                 .isEqualTo(pending.approvalCaseId());
         assertThat(authorized.evaluationCode())
-                .isEqualTo("policy_approval_required");
+                .isEqualTo("approval_required");
     }
 
     @Test
