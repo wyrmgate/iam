@@ -51,6 +51,33 @@ public final class JdbcIdentityFactSink implements IdentityFactSink {
                 causationId);
     }
 
+    @Override
+    public void lifecycleChanged(
+            TenantContext tenant,
+            io.wyrmgate.iam.identity.domain.IdentityLifecycleState previousState,
+            Identity identity,
+            UUID correlationId,
+            UUID causationId) {
+        Objects.requireNonNull(previousState, "previousState");
+        boolean accessEligible =
+                identity.lifecycleState()
+                        == io.wyrmgate.iam.identity.domain
+                                .IdentityLifecycleState.ACTIVE;
+        append(
+                tenant,
+                identity,
+                "identity.identity-lifecycle-changed",
+                "{\"previousLifecycleState\":\""
+                        + previousState.name()
+                        + "\",\"lifecycleState\":\""
+                        + identity.lifecycleState().name()
+                        + "\",\"accessEligible\":"
+                        + accessEligible
+                        + "}",
+                correlationId,
+                causationId);
+    }
+
     private void append(
             TenantContext tenant,
             Identity identity,
