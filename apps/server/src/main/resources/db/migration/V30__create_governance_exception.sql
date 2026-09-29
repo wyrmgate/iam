@@ -84,7 +84,7 @@ CREATE TABLE governance.governance_exception (
 CREATE OR REPLACE FUNCTION governance.guard_governance_exception_update()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $
+AS $$
 BEGIN
     IF NEW.scope_kind IS DISTINCT FROM OLD.scope_kind
        OR NEW.subject_identity_id IS DISTINCT FROM OLD.subject_identity_id
@@ -100,7 +100,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$;
+$$;
 
 CREATE TRIGGER governance_exception_update_guard
 BEFORE UPDATE ON governance.governance_exception
@@ -109,11 +109,11 @@ FOR EACH ROW EXECUTE FUNCTION governance.guard_governance_exception_update();
 CREATE OR REPLACE FUNCTION governance.reject_governance_exception_delete()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $
+AS $$
 BEGIN
     RAISE EXCEPTION 'GovernanceException history is retained; use lifecycle state instead of delete';
 END;
-$;
+$$;
 
 CREATE TRIGGER governance_exception_delete_guard
 BEFORE DELETE ON governance.governance_exception
