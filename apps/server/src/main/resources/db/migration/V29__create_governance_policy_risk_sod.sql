@@ -218,6 +218,10 @@ DECLARE
     target_version uuid;
     version_state varchar(24);
 BEGIN
+    IF TG_OP <> 'INSERT' THEN
+        RAISE EXCEPTION 'policy version content is immutable; create a new version';
+    END IF;
+
     IF TG_TABLE_NAME = 'policy_approval_approver' THEN
         SELECT s.policy_version_id
         INTO target_version
@@ -234,9 +238,6 @@ BEGIN
     WHERE tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id)
       AND id = target_version;
 
-    IF TG_OP <> 'INSERT' THEN
-        RAISE EXCEPTION 'policy version content is immutable; create a new version';
-    END IF;
     IF version_state <> 'DRAFT' THEN
         RAISE EXCEPTION 'policy version content may only be inserted while DRAFT';
     END IF;
@@ -276,6 +277,19 @@ $$;
 CREATE TRIGGER governance_policy_version_update_guard
 BEFORE UPDATE ON governance.policy_version
 FOR EACH ROW EXECUTE FUNCTION governance.guard_policy_version_update();
+
+CREATE OR REPLACE FUNCTION governance.reject_policy_version_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $
+BEGIN
+    RAISE EXCEPTION 'policy versions are retained; use lifecycle state instead of delete';
+END;
+$;
+
+CREATE TRIGGER governance_policy_version_delete_guard
+BEFORE DELETE ON governance.policy_version
+FOR EACH ROW EXECUTE FUNCTION governance.reject_policy_version_delete();
 
 CREATE OR REPLACE FUNCTION governance.reject_governance_evidence_change()
 RETURNS trigger
