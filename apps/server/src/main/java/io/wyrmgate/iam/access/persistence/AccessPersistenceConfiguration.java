@@ -125,14 +125,19 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
-    EffectiveAccessQuery effectiveAccessQuery(EffectiveAccessRepository repository) {
-        return new EffectiveAccessQueryService(repository);
+    EffectiveAccessQuery effectiveAccessQuery(
+            EffectiveAccessRepository repository,
+            IdentityAccessReferenceQuery identities) {
+        return new EffectiveAccessQueryService(
+                repository, identities);
     }
 
     @Bean
     EffectiveAccessReadService effectiveAccessReadService(
-            EffectiveAccessRepository repository) {
-        return new EffectiveAccessReadService(repository);
+            EffectiveAccessRepository repository,
+            IdentityAccessReferenceQuery identities) {
+        return new EffectiveAccessReadService(
+                repository, identities);
     }
 
     @Bean
