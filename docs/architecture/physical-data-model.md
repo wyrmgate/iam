@@ -315,6 +315,8 @@ Migration V29 adds Governance-owned `policy` / `policy_version`, typed symmetric
 
 Migration V30 adds Governance-owned `governance_exception` authoritative lifecycle state. The first scope binds a stable cross-capability Identity ID to one exact same-capability SoDRule, required reason, reusable ApprovalCase, mandatory validity window and optional predecessor exception. Identity IDs intentionally have no database FK. `sod_conflict.governance_exception_id` is immutable evidence of exact coverage and never removes the conflict. The effective lookup is bounded by tenant + Identity + rule set + APPROVED validity.
 
+Migration V31 adds Governance-owned `review_campaign`, `review_item`, immutable `review_decision`, and `review_remediation`, plus Access-owned `review_remediation_application`. ReviewCampaign stores a bounded generation continuation and generated/decided counters; ReviewItem is unique by tenant + campaign + AccessAssignment and its snapshot fields are database-immutable. ReviewDecision update/delete is rejected. AccessAssignment/Identity IDs in review state are stable cross-capability references without database foreign keys. The Access remediation-application row is uniquely keyed by tenant + ReviewRemediation ID so cross-capability retry returns the same authoritative termination/no-op result.
+
 Approval-plan content is immutable from creation in this slice. Decisions remain append-only evidence; policy revalidation may create successor approval context rather than mutating completed approval evidence.
 
 ### Credential
