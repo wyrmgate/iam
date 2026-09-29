@@ -546,7 +546,10 @@ class GovernanceReviewApiIntegrationTest {
                                         ACTOR_ATTRIBUTE,
                                         foreignAdmin)
                                 .param("cursor", cursor))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isBadRequest())
+                .andExpect(
+                        jsonPath("$.code")
+                                .value("validation_failed"));
 
         mvc.perform(
                         get("/api/v1/governance/review-campaigns")
