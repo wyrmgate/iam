@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.api.governance;
 
 import io.wyrmgate.iam.governance.application.ApprovalQueryModels.InboxPosition;
+import io.wyrmgate.iam.governance.application.ReviewQueryModels.Position;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -78,6 +79,117 @@ final class GovernanceCursorCodec {
         validateIssuedAt(parts[4]);
         try {
             return new InboxPosition(
+                    Instant.ofEpochSecond(
+                            Long.parseLong(parts[5]),
+                            Integer.parseInt(parts[6])),
+                    UUID.fromString(parts[7]));
+        } catch (RuntimeException invalid) {
+            throw invalid(invalid);
+        }
+    }
+
+    String encodeReviewCampaigns(
+            TenantContext tenant,
+            Position position) {
+        return encodeReviewPosition(
+                "review-campaigns",
+                tenant,
+                "all",
+                position);
+    }
+
+    Position decodeReviewCampaigns(
+            String cursor,
+            TenantContext tenant) {
+        return decodeReviewPosition(
+                cursor,
+                "review-campaigns",
+                tenant,
+                "all");
+    }
+
+    String encodeReviewCampaignItems(
+            TenantContext tenant,
+            UUID campaignId,
+            Position position) {
+        return encodeReviewPosition(
+                "review-campaign-items",
+                tenant,
+                campaignId.toString(),
+                position);
+    }
+
+    Position decodeReviewCampaignItems(
+            String cursor,
+            TenantContext tenant,
+            UUID campaignId) {
+        return decodeReviewPosition(
+                cursor,
+                "review-campaign-items",
+                tenant,
+                campaignId.toString());
+    }
+
+    String encodeReviewInbox(
+            TenantContext tenant,
+            UUID reviewerIdentityId,
+            Position position) {
+        return encodeReviewPosition(
+                "review-inbox",
+                tenant,
+                reviewerIdentityId.toString(),
+                position);
+    }
+
+    Position decodeReviewInbox(
+            String cursor,
+            TenantContext tenant,
+            UUID reviewerIdentityId) {
+        return decodeReviewPosition(
+                cursor,
+                "review-inbox",
+                tenant,
+                reviewerIdentityId.toString());
+    }
+
+    private String encodeReviewPosition(
+            String type,
+            TenantContext tenant,
+            String context,
+            Position position) {
+        return position == null
+                ? null
+                : sign(payload(
+                        type,
+                        tenant.tenantId().toString(),
+                        context,
+                        clock.instant().toString(),
+                        Long.toString(
+                                position.createdAt()
+                                        .getEpochSecond()),
+                        Integer.toString(
+                                position.createdAt()
+                                        .getNano()),
+                        position.id().toString()));
+    }
+
+    private Position decodeReviewPosition(
+            String cursor,
+            String type,
+            TenantContext tenant,
+            String context) {
+        String[] parts = verifiedPayload(cursor);
+        if (parts.length != 8
+                || !PAYLOAD_VERSION.equals(parts[0])
+                || !type.equals(parts[1])
+                || !tenant.tenantId().toString()
+                        .equals(parts[2])
+                || !context.equals(parts[3])) {
+            throw invalid();
+        }
+        validateIssuedAt(parts[4]);
+        try {
+            return new Position(
                     Instant.ofEpochSecond(
                             Long.parseLong(parts[5]),
                             Integer.parseInt(parts[6])),
