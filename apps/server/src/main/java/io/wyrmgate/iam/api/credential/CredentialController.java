@@ -706,7 +706,6 @@ public class CredentialController {
                 value.replacementCredentialId(),
                 value.initiatorIdentityId(),
                 value.state().name(),
-                value.checkpoint(),
                 value.failureCode(),
                 value.revision(),
                 value.createdAt(),
