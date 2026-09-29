@@ -36,7 +36,6 @@ final class CredentialApiModels {
             UUID replacementCredentialId,
             UUID initiatorIdentityId,
             String processState,
-            String checkpoint,
             String failureCode,
             long revision,
             Instant createdAt,
