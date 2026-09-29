@@ -94,6 +94,17 @@ public final class GovernanceExceptionService
                 throw new IllegalArgumentException(
                         "requester Identity does not exist");
             }
+            for (StageSpec stage : approvalPlan.stages()) {
+                for (UUID approverIdentityId :
+                        stage.approverIdentityIds()) {
+                    if (!identities.identityExists(
+                            tenant,
+                            approverIdentityId)) {
+                        throw new IllegalArgumentException(
+                                "approval approver Identity does not exist");
+                    }
+                }
+            }
 
             var rule = policies.findRule(
                             tenant, sodRuleId)
