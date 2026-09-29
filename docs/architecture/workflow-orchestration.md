@@ -262,6 +262,8 @@ PLANNED
 
 Failure exits include `FAILED`, `MANUAL_REQUIRED` and `FAILED_REMEDIATION` where appropriate.
 
+The first runtime now persists this CredentialRotation state machine with optimistic revisions. Replacement attachment requires the same Principal, cutover requires an effective replacement Credential, and completion requires the old Credential to be semantically ineffective. Future activation/expiry uses Platform scheduled work only to materialize Credential validity boundaries; the validity rules themselves remain semantic. SecretProvider/provider execution is deliberately not simulated by the process-state service and remains a later typed adapter boundary.
+
 The old credential remains usable only according to credential/security policy, not because the rotation process happens to be incomplete. Compromise handling may intentionally choose service interruption over continued use of known-compromised material.
 
 ## Identity merge/split orchestration
