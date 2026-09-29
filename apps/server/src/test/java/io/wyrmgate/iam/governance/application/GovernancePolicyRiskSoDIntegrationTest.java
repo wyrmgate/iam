@@ -346,6 +346,35 @@ class GovernancePolicyRiskSoDIntegrationTest {
     }
 
     @Test
+    void symmetricRuleCanonicalizationMatchesPostgresUuidOrdering() {
+        UUID highBit = UUID.fromString(
+                "80000000-0000-0000-0000-000000000000");
+        UUID lower = UUID.fromString(
+                "7fffffff-ffff-ffff-ffff-ffffffffffff");
+
+        PolicyVersion draft = policyService.createDraft(
+                tenant,
+                PolicyKind.ACCESS_REQUEST,
+                PolicyDecision.AUTHORIZE,
+                List.of(rule(
+                        "uuid-order",
+                        highBit,
+                        lower,
+                        RiskSeverity.LOW,
+                        SoDAction.DENY)),
+                null,
+                NOW);
+
+        SoDRule stored = policies.findRules(
+                        tenant, draft.id())
+                .getFirst();
+        assertThat(stored.leftEntitlementId())
+                .isEqualTo(lower);
+        assertThat(stored.rightEntitlementId())
+                .isEqualTo(highBit);
+    }
+
+    @Test
     void currentEffectiveConflictDeniesAndPersistsImmutableEvidence() {
         UUID existing = entitlement();
         UUID requested = entitlement();
