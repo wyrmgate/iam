@@ -71,6 +71,13 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission EFFECTIVE_ACCESS_READ =
             new AdministrativePermission("effective-access", "read");
 
+    public static final AdministrativePermission REVIEW_CAMPAIGN_READ =
+            new AdministrativePermission("review-campaign", "read");
+    public static final AdministrativePermission REVIEW_CAMPAIGN_CREATE =
+            new AdministrativePermission("review-campaign", "create");
+    public static final AdministrativePermission REVIEW_CAMPAIGN_START =
+            new AdministrativePermission("review-campaign", "start");
+
     public static final AdministrativePermission CONNECTOR_READ =
             new AdministrativePermission("connector", "read");
     public static final AdministrativePermission CONNECTOR_CREATE =
