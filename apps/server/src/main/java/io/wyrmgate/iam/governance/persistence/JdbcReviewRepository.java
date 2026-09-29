@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -76,6 +77,47 @@ public final class JdbcReviewRepository
                 campaignId)
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    public List<ReviewCampaign> findCampaignPage(
+            TenantContext tenant,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        if (limit < 1 || limit > 201) {
+            throw new IllegalArgumentException(
+                    "limit must be between 1 and 201");
+        }
+        if ((afterCreatedAt == null) != (afterId == null)) {
+            throw new IllegalArgumentException(
+                    "campaign continuation must be complete or absent");
+        }
+        return jdbc.query("""
+                SELECT id, campaign_kind, subject_identity_id,
+                       reviewer_identity_id, snapshot_at,
+                       lifecycle_state, generation_after_created_at,
+                       generation_after_id, generated_item_count,
+                       decided_item_count, revision, created_at,
+                       updated_at, activated_at, completed_at,
+                       failure_code
+                FROM governance.review_campaign
+                WHERE tenant_id = ?
+                  AND (
+                        ?::timestamptz IS NULL
+                        OR created_at > ?
+                        OR (created_at = ? AND id > ?)
+                  )
+                ORDER BY created_at, id
+                LIMIT ?
+                """,
+                (rs,row) -> campaign(rs),
+                tenant.tenantId(),
+                timestamp(afterCreatedAt),
+                timestamp(afterCreatedAt),
+                timestamp(afterCreatedAt),
+                afterId,
+                limit);
     }
 
     @Override
@@ -242,6 +284,139 @@ public final class JdbcReviewRepository
                 WHERE tenant_id = ? AND id = ?
                 """,
                 (rs,row) -> item(rs),
+                tenant.tenantId(),
+                reviewItemId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public List<ReviewItem> findCampaignItemPage(
+            TenantContext tenant,
+            UUID campaignId,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        return findItemPage(
+                tenant,
+                "review_campaign_id = ?",
+                campaignId,
+                afterCreatedAt,
+                afterId,
+                limit);
+    }
+
+    @Override
+    public List<ReviewItem> findReviewerPendingPage(
+            TenantContext tenant,
+            UUID reviewerIdentityId,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        return findItemPage(
+                tenant,
+                "reviewer_identity_id = ? AND lifecycle_state = 'PENDING'",
+                reviewerIdentityId,
+                afterCreatedAt,
+                afterId,
+                limit);
+    }
+
+    private List<ReviewItem> findItemPage(
+            TenantContext tenant,
+            String predicate,
+            UUID subjectId,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        if (limit < 1 || limit > 201) {
+            throw new IllegalArgumentException(
+                    "limit must be between 1 and 201");
+        }
+        if ((afterCreatedAt == null) != (afterId == null)) {
+            throw new IllegalArgumentException(
+                    "review item continuation must be complete or absent");
+        }
+        String sql = """
+                SELECT id, review_campaign_id,
+                       reviewer_identity_id, access_assignment_id,
+                       assignment_revision, target_kind,
+                       role_id, entitlement_id,
+                       principal_constraint_kind,
+                       specific_principal_id, provenance_kind,
+                       provenance_ref_id,
+                       snapshot_lifecycle_state,
+                       valid_from, valid_until,
+                       assignment_created_at, snapshot_at,
+                       lifecycle_state, revision,
+                       created_at, updated_at
+                FROM governance.review_item
+                WHERE tenant_id = ?
+                  AND %s
+                  AND (
+                        ?::timestamptz IS NULL
+                        OR created_at > ?
+                        OR (created_at = ? AND id > ?)
+                  )
+                ORDER BY created_at, id
+                LIMIT ?
+                """.formatted(predicate);
+        return jdbc.query(
+                sql,
+                (rs,row) -> item(rs),
+                tenant.tenantId(),
+                subjectId,
+                timestamp(afterCreatedAt),
+                timestamp(afterCreatedAt),
+                timestamp(afterCreatedAt),
+                afterId,
+                limit);
+    }
+
+    @Override
+    public Optional<ReviewDecision> findDecisionByItem(
+            TenantContext tenant,
+            UUID reviewItemId) {
+        return jdbc.query("""
+                SELECT id, review_item_id,
+                       reviewer_identity_id, decision,
+                       reason, decided_at
+                FROM governance.review_decision
+                WHERE tenant_id = ?
+                  AND review_item_id = ?
+                """,
+                (rs,row) -> new ReviewDecision(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject(
+                                "review_item_id", UUID.class),
+                        rs.getObject(
+                                "reviewer_identity_id", UUID.class),
+                        DecisionValue.valueOf(
+                                rs.getString("decision")),
+                        rs.getString("reason"),
+                        rs.getTimestamp(
+                                "decided_at").toInstant()),
+                tenant.tenantId(),
+                reviewItemId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public Optional<ReviewRemediation> findRemediationByItem(
+            TenantContext tenant,
+            UUID reviewItemId) {
+        return jdbc.query("""
+                SELECT id, review_item_id,
+                       access_assignment_id,
+                       lifecycle_state, result_code,
+                       resulting_access_state, revision,
+                       created_at, updated_at, completed_at
+                FROM governance.review_remediation
+                WHERE tenant_id = ?
+                  AND review_item_id = ?
+                """,
+                (rs,row) -> remediation(rs),
                 tenant.tenantId(),
                 reviewItemId)
                 .stream()
