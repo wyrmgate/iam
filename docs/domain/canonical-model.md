@@ -49,7 +49,7 @@ Governance owns requests, approvals, reviews, policy/versioning, SoD/risk evalua
 
 `GovernanceException` is an explicit, scoped, time-bound deviation and never removes the underlying violation. `GovernanceFinding` is the common actionable issue lifecycle for drift, missing ownership, stale access, credential issues and policy violations.
 
-`RiskAssessment` explains risk; policy decides what IAM does about that risk. `SoDViolation` represents a present conflict while GovernanceFinding handles acknowledgment/remediation/acceptance workflow.
+`Policy` is stable Governance authority and `PolicyVersion` is immutable evaluated content after activation. The first runtime purpose is `ACCESS_REQUEST`: a typed default decision, symmetric Entitlement-pair `SoDRule` content and, where required, immutable typed approval stages with resolved governed Identity approvers. `RiskAssessment` explains severity/factors; `PolicyEvaluation` records the decision; `SoDConflict` records immutable matched-rule evidence. Policy decides what IAM does about risk. `GovernanceException` remains a separate explicit deviation lifecycle and never deletes the underlying conflict or finding.
 
 ## Credential
 
