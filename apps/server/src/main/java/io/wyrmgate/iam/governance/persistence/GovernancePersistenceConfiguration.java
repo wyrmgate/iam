@@ -174,12 +174,6 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
-    GovernanceExceptionQuery governanceExceptionQuery(
-            GovernanceExceptionService service) {
-        return service;
-    }
-
-    @Bean
     GovernanceExceptionExpiryProcessingService governanceExceptionExpiryProcessingService(
             JdbcScheduledWorkRepository scheduledWork,
             GovernanceExceptionService exceptions) {
