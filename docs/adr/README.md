@@ -32,3 +32,5 @@ Formal specification documents are versioned separately in the IAM `Formal Speci
 - [ADR-0019 Scalable Identity access review and current-state remediation](0019-scalable-identity-access-review-current-state-remediation.md)
 
 - [ADR-0020 Credential authority, external secret references and durable rotation](0020-credential-authority-external-secret-reference-durable-rotation.md)
+
+- [ADR-0021 Identity lifecycle eligibility and durable Access reduction](0021-identity-lifecycle-eligibility-durable-access-reduction.md)

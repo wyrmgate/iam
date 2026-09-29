@@ -4,6 +4,7 @@ import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveDetail;
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectivePage;
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectivePosition;
 import io.wyrmgate.iam.access.domain.EffectiveAccess;
+import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -15,11 +16,19 @@ import java.util.UUID;
 public final class EffectiveAccessReadService {
 
     private final EffectiveAccessRepository repository;
+    private final IdentityAccessReferenceQuery identities;
 
     public EffectiveAccessReadService(
             EffectiveAccessRepository repository) {
+        this(repository, null);
+    }
+
+    public EffectiveAccessReadService(
+            EffectiveAccessRepository repository,
+            IdentityAccessReferenceQuery identities) {
         this.repository = Objects.requireNonNull(
                 repository, "repository");
+        this.identities = identities;
     }
 
     public EffectivePage list(
@@ -30,6 +39,12 @@ public final class EffectiveAccessReadService {
             Instant at) {
         requireLimit(limit);
         Objects.requireNonNull(at, "at");
+        if (identityId != null
+                && !accessEligible(
+                        tenant, identityId)) {
+            return new EffectivePage(
+                    List.of(), null);
+        }
         List<EffectiveAccess> fetched =
                 repository.findCurrentPage(
                         tenant,
@@ -42,6 +57,10 @@ public final class EffectiveAccessReadService {
                 0, Math.min(limit, fetched.size()));
         List<EffectiveAccess> semantic = new ArrayList<>();
         for (EffectiveAccess value : selected) {
+            if (!accessEligible(
+                    tenant, value.identityId())) {
+                continue;
+            }
             var supports = repository.currentSupportEvidence(
                     tenant, value.id(), at);
             if (!supports.isEmpty()) {
@@ -63,6 +82,8 @@ public final class EffectiveAccessReadService {
         Objects.requireNonNull(at, "at");
         return repository.findCurrentById(
                         tenant, effectiveAccessId, at)
+                .filter(value -> accessEligible(
+                        tenant, value.identityId()))
                 .flatMap(value -> {
                     var supports =
                             repository.currentSupportEvidence(
@@ -77,6 +98,19 @@ public final class EffectiveAccessReadService {
                                     value, supports.size()),
                             supports));
                 });
+    }
+
+    private boolean accessEligible(
+            TenantContext tenant,
+            UUID identityId) {
+        if (identities == null) {
+            return true;
+        }
+        return identities.accessStatus(
+                        tenant, identityId)
+                .status()
+                == IdentityAccessReferenceQuery
+                        .AccessStatus.ACCESS_ELIGIBLE;
     }
 
     private static EffectiveAccess withSupportCount(

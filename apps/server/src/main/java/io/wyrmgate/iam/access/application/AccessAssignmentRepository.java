@@ -43,6 +43,16 @@ public interface AccessAssignmentRepository {
         return List.of();
     }
 
+    default List<AccessAssignment> findIdentityReductionPage(
+            TenantContext tenant,
+            UUID identityId,
+            Instant snapshotAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        return List.of();
+    }
+
     AccessAssignment updateLifecycle(
             TenantContext tenant,
             UUID assignmentId,

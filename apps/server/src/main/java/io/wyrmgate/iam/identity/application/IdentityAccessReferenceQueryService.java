@@ -26,6 +26,27 @@ public final class IdentityAccessReferenceQueryService
     }
 
     @Override
+    public IdentityAccessStatus accessStatus(
+            TenantContext tenant,
+            UUID identityId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
+        return identities.findById(tenant, identityId)
+                .map(identity ->
+                        identity.lifecycleState()
+                                == io.wyrmgate.iam.identity.domain
+                                        .IdentityLifecycleState.ACTIVE
+                                ? IdentityAccessStatus.eligible(
+                                        identity.lifecycleState().name(),
+                                        identity.revision())
+                                : IdentityAccessStatus.ineligible(
+                                        identity.lifecycleState().name(),
+                                        identity.revision()))
+                .orElseGet(
+                        IdentityAccessStatus::notFound);
+    }
+
+    @Override
     public PrincipalSelection selectUniqueActivePrincipal(
             TenantContext tenant,
             UUID identityId,

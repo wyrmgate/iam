@@ -129,6 +129,46 @@ public final class JdbcIdentityRepository implements IdentityRepository {
                 .orElseThrow(() -> new IllegalStateException("updated identity could not be reloaded"));
     }
 
+    @Override
+    public Identity updateLifecycle(
+            TenantContext tenant,
+            UUID identityId,
+            IdentityLifecycleState lifecycleState,
+            long expectedRevision,
+            Instant now) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
+        Objects.requireNonNull(lifecycleState, "lifecycleState");
+        Objects.requireNonNull(now, "now");
+        if (expectedRevision < 1) {
+            throw new IllegalArgumentException(
+                    "expectedRevision must be positive");
+        }
+
+        int affected = jdbcTemplate.update("""
+                UPDATE identity.identity
+                SET lifecycle_state = ?,
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ?
+                  AND id = ?
+                  AND revision = ?
+                """,
+                lifecycleState.name(),
+                Timestamp.from(now),
+                tenant.tenantId(),
+                identityId,
+                expectedRevision);
+        OptimisticUpdate.requireSingleRow(
+                affected,
+                "identity",
+                identityId,
+                expectedRevision);
+        return findById(tenant, identityId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "updated identity could not be reloaded"));
+    }
+
     private static String profileTable(IdentityType type) {
         return switch (type) {
             case PERSON -> "person_profile";

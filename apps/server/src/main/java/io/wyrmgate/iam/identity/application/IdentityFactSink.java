@@ -18,4 +18,13 @@ public interface IdentityFactSink {
             Identity identity,
             UUID correlationId,
             UUID causationId);
+
+    default void lifecycleChanged(
+            TenantContext tenant,
+            io.wyrmgate.iam.identity.domain.IdentityLifecycleState previousState,
+            Identity identity,
+            UUID correlationId,
+            UUID causationId) {
+        // Compatibility default for adapters that do not publish lifecycle facts.
+    }
 }

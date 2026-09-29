@@ -134,6 +134,7 @@ The following is the initial physical table-family contract. Additional subordin
 | `identity` | canonical attribute state and override | Identity | Authoritative resolved state |
 | `catalog` | `application`, `application_target`, `entitlement`, `role`, `role_version`, role composition | Catalog | Authoritative |
 | `access` | `access_assignment` | Access | Authoritative |
+| `access` | `identity_access_reduction` | Access | Authoritative/process |
 | `access` | `effective_access`, support/path, `desired_principal_state`, `desired_grant_state`, `assignment_fulfillment` | Access | Projection |
 | `governance` | request/item/plan, review campaign/item/remediation, policy/version, exception, finding | Governance | Authoritative/process |
 | `governance` | approval/review decision, policy/risk/SoD evaluation result | Governance | Evidence/result |
@@ -913,3 +914,7 @@ Persistence implementation should now proceed in bounded vertical slices rather 
 8. introduce partitioning only when the documented operational thresholds are observed.
 
 OD-003 (concrete OpenAPI/AsyncAPI schemas) is the next unresolved architecture/interface area. It can proceed in parallel with early persistence implementation because public contracts remain semantic and must not expose these tables as APIs.
+
+### IdentityAccessReduction persistence
+
+`access.identity_access_reduction` is the Access-owned durable process record for lifecycle-driven privilege reduction. Its causal uniqueness is `(tenant_id, identity_id, source_identity_revision)`; the Identity ID is a semantic cross-capability reference rather than a database foreign key. The row stores the source lifecycle/revision and snapshot time, `RUNNING|COMPLETED` process state, optimistic revision, processed count, and an optional paired `after_created_at + after_assignment_id` continuation. The supporting AccessAssignment partial index is ordered by tenant, Identity, creation time and ID for bounded deterministic reduction pages over non-terminal assignments.

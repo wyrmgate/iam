@@ -65,6 +65,91 @@ public final class IdentityCommandService {
         });
     }
 
+    public Identity changeLifecycle(
+            TenantContext tenant,
+            UUID identityId,
+            IdentityLifecycleState lifecycleState,
+            long expectedRevision,
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
+        Objects.requireNonNull(lifecycleState, "lifecycleState");
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(correlationId, "correlationId");
+        if (expectedRevision < 1) {
+            throw new IllegalArgumentException(
+                    "expectedRevision must be positive");
+        }
+
+        return transactions.required(() -> {
+            Identity current = repository.findById(
+                            tenant, identityId)
+                    .orElseThrow(() ->
+                            new IllegalArgumentException(
+                                    "Identity does not exist"));
+            if (current.revision() != expectedRevision) {
+                throw new io.wyrmgate.iam.platform.persistence
+                        .StaleWriteException(
+                                "identity",
+                                identityId,
+                                expectedRevision);
+            }
+            if (current.lifecycleState() == lifecycleState) {
+                return current;
+            }
+            requireLifecycleTransition(
+                    current.lifecycleState(),
+                    lifecycleState);
+            Identity updated = repository.updateLifecycle(
+                    tenant,
+                    identityId,
+                    lifecycleState,
+                    expectedRevision,
+                    now);
+            factSink.lifecycleChanged(
+                    tenant,
+                    current.lifecycleState(),
+                    updated,
+                    correlationId,
+                    causationId);
+            return updated;
+        });
+    }
+
+    private static void requireLifecycleTransition(
+            IdentityLifecycleState from,
+            IdentityLifecycleState to) {
+        if (from == IdentityLifecycleState.DECOMMISSIONED) {
+            throw new IllegalStateException(
+                    "DECOMMISSIONED Identity is terminal");
+        }
+        boolean allowed = switch (from) {
+            case PENDING ->
+                    to == IdentityLifecycleState.ACTIVE
+                            || to == IdentityLifecycleState.INACTIVE
+                            || to == IdentityLifecycleState.DECOMMISSIONED;
+            case ACTIVE ->
+                    to == IdentityLifecycleState.SUSPENDED
+                            || to == IdentityLifecycleState.INACTIVE
+                            || to == IdentityLifecycleState.DECOMMISSIONED;
+            case SUSPENDED ->
+                    to == IdentityLifecycleState.ACTIVE
+                            || to == IdentityLifecycleState.INACTIVE
+                            || to == IdentityLifecycleState.DECOMMISSIONED;
+            case INACTIVE ->
+                    to == IdentityLifecycleState.ACTIVE
+                            || to == IdentityLifecycleState.DECOMMISSIONED;
+            case DECOMMISSIONED -> false;
+        };
+        if (!allowed) {
+            throw new IllegalArgumentException(
+                    "invalid Identity lifecycle transition "
+                            + from + " -> " + to);
+        }
+    }
+
     public Identity changeDisplayName(
             TenantContext tenant,
             UUID identityId,
