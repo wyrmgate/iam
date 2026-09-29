@@ -136,6 +136,31 @@ public final class GovernancePolicyService {
         });
     }
 
+    public PolicyVersion cancelDraft(
+            TenantContext tenant,
+            UUID versionId,
+            long expectedRevision,
+            Instant now) {
+        Objects.requireNonNull(now, "now");
+        return transactions.required(() -> {
+            PolicyVersion version = requireVersion(
+                    tenant, versionId);
+            requireRevision(version, expectedRevision);
+            if (version.state() != VersionState.DRAFT) {
+                throw new IllegalArgumentException(
+                        "only DRAFT policy version can be cancelled");
+            }
+            return repository.updateVersionState(
+                    tenant,
+                    version.id(),
+                    VersionState.CANCELLED,
+                    expectedRevision,
+                    now,
+                    null,
+                    null);
+        });
+    }
+
     public PolicyVersion markReady(
             TenantContext tenant,
             UUID versionId,
