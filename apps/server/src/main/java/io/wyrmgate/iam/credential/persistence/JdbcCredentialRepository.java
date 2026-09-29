@@ -92,8 +92,7 @@ public final class JdbcCredentialRepository
                     FROM credential.credential
                     WHERE tenant_id = ?
                       AND principal_id = ?
-                    ORDER BY lifecycle_state ASC,
-                             created_at ASC, id ASC
+                    ORDER BY created_at ASC, id ASC
                     LIMIT ?
                     """,
                     (rs,row) -> credential(rs),
@@ -111,24 +110,15 @@ public final class JdbcCredentialRepository
                 WHERE tenant_id = ?
                   AND principal_id = ?
                   AND (
-                      lifecycle_state > ?
-                      OR (
-                          lifecycle_state = ?
-                          AND (
-                              created_at > ?
-                              OR (created_at = ? AND id > ?)
-                          )
-                      )
+                      created_at > ?
+                      OR (created_at = ? AND id > ?)
                   )
-                ORDER BY lifecycle_state ASC,
-                         created_at ASC, id ASC
+                ORDER BY created_at ASC, id ASC
                 LIMIT ?
                 """,
                 (rs,row) -> credential(rs),
                 tenant.tenantId(),
                 principalId,
-                after.lifecycleState().name(),
-                after.lifecycleState().name(),
                 Timestamp.from(after.createdAt()),
                 Timestamp.from(after.createdAt()),
                 after.id(),
