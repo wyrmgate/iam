@@ -148,7 +148,7 @@ class GovernanceExceptionIntegrationTest {
         flyway.validate();
         assertThat(flyway.info().current()
                 .getVersion().getVersion())
-                .isEqualTo("31");
+                .isEqualTo("32");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
