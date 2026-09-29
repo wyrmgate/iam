@@ -80,6 +80,45 @@ CREATE TABLE governance.governance_exception (
     )
 );
 
+
+CREATE OR REPLACE FUNCTION governance.guard_governance_exception_update()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $
+BEGIN
+    IF NEW.scope_kind IS DISTINCT FROM OLD.scope_kind
+       OR NEW.subject_identity_id IS DISTINCT FROM OLD.subject_identity_id
+       OR NEW.sod_rule_id IS DISTINCT FROM OLD.sod_rule_id
+       OR NEW.requester_identity_id IS DISTINCT FROM OLD.requester_identity_id
+       OR NEW.business_reason IS DISTINCT FROM OLD.business_reason
+       OR NEW.valid_from IS DISTINCT FROM OLD.valid_from
+       OR NEW.valid_until IS DISTINCT FROM OLD.valid_until
+       OR NEW.approval_case_id IS DISTINCT FROM OLD.approval_case_id
+       OR NEW.predecessor_exception_id IS DISTINCT FROM OLD.predecessor_exception_id
+       OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+        RAISE EXCEPTION 'GovernanceException scope/content is immutable; renewal creates a successor';
+    END IF;
+    RETURN NEW;
+END;
+$;
+
+CREATE TRIGGER governance_exception_update_guard
+BEFORE UPDATE ON governance.governance_exception
+FOR EACH ROW EXECUTE FUNCTION governance.guard_governance_exception_update();
+
+CREATE OR REPLACE FUNCTION governance.reject_governance_exception_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $
+BEGIN
+    RAISE EXCEPTION 'GovernanceException history is retained; use lifecycle state instead of delete';
+END;
+$;
+
+CREATE TRIGGER governance_exception_delete_guard
+BEFORE DELETE ON governance.governance_exception
+FOR EACH ROW EXECUTE FUNCTION governance.reject_governance_exception_delete();
+
 CREATE INDEX governance_exception_effective_lookup_idx
     ON governance.governance_exception (
         tenant_id, subject_identity_id, sod_rule_id,
