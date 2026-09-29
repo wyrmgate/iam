@@ -48,7 +48,16 @@ not mean technical remediation or provider fulfillment is complete.
 Governance never reads Access persistence directly.
 
 Access exposes a semantic `AccessReviewSnapshotQuery` that pages authoritative
-AccessAssignments for one Identity at the campaign's fixed snapshot instant.
+AccessAssignments for one Identity using the campaign's fixed `snapshotAt` as a
+creation/validity cutoff.
+
+The current AccessAssignment model is not a temporal-history store, so v1 does not pretend
+to reconstruct an assignment lifecycle state that was changed after `snapshotAt`.
+Instead, each ReviewItem snapshots the authoritative assignment state actually read during
+bounded generation, limited to assignments created by the cutoff and still reviewable when
+read. Concurrent removals may therefore be omitted from later pages; that is safe because
+the campaign cannot resurrect removed authority. Remediation always re-reads current
+Access state.
 
 Paging order is deterministic:
 
@@ -56,8 +65,9 @@ Paging order is deterministic:
 createdAt ASC, id ASC
 ```
 
-The query returns only assignments whose authoritative intent was non-terminal at the
-snapshot instant and whose validity had not ended:
+The query returns only assignments created by `snapshotAt` whose current authoritative
+intent remains non-terminal when the page is read and whose validity had not ended at the
+cutoff:
 
 - ACTIVE;
 - SUSPENDED;
