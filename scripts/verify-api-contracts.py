@@ -17,6 +17,7 @@ OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/identity-v1.j
 ASYNCAPI = ROOT / "apps/server/src/main/resources/contracts/asyncapi/identity-events-v1.json"
 CONNECTOR_WORKER_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/connector-worker-v1.json"
 INTEGRATION_ADMIN_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/integration-admin-v1.json"
+CREDENTIAL_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/credential-v1.json"
 
 
 def load_json(path: Path) -> dict:
@@ -330,11 +331,117 @@ def verify_integration_admin_openapi(document: dict) -> None:
                  "ConnectorWorkerResource", "WorkerPermission"):
         assert schemas[name].get("additionalProperties") is False
 
+
+def verify_credential_openapi(document: dict) -> None:
+    assert document.get("openapi", "").startswith("3.1.")
+    assert document.get("security") == [{"controlPlaneBearer": []}]
+    assert document.get("x-wyrmgate-contract-status") == (
+        "runtime-exposed-authenticated-authorized"
+    )
+
+    paths = document.get("paths", {})
+    expected_paths = {
+        "/credentials",
+        "/credentials/{credentialId}",
+        "/credentials/{credentialId}:revoke",
+        "/credentials/{credentialId}:compromise",
+        "/credentials/{credentialId}:rotate",
+        "/credentials/{credentialId}/rotations",
+        "/credential-rotations/{rotationId}",
+    }
+    assert set(paths) == expected_paths
+
+    list_parameters = ref_names(paths["/credentials"]["get"])
+    assert {"PrincipalIdFilter", "Cursor", "Limit"}.issubset(list_parameters)
+    assert paths["/credentials"]["get"].get(
+        "x-wyrmgate-administrative-permission"
+    ) == "credential:read"
+
+    create = paths["/credentials"]["post"]
+    assert "IdempotencyKey" in ref_names(create)
+    assert create.get("x-wyrmgate-administrative-permission") == (
+        "credential:create"
+    )
+
+    for operation_path, permission in (
+        ("/credentials/{credentialId}:revoke", "credential:revoke"),
+        ("/credentials/{credentialId}:compromise", "credential:compromise"),
+    ):
+        operation = paths[operation_path]["post"]
+        params = ref_names(operation)
+        assert {"IfMatch", "IdempotencyKey"}.issubset(params)
+        assert operation.get("x-wyrmgate-administrative-permission") == permission
+
+    rotate = paths["/credentials/{credentialId}:rotate"]["post"]
+    assert "IdempotencyKey" in ref_names(rotate)
+    assert "IfMatch" not in ref_names(rotate)
+    assert rotate.get("x-wyrmgate-administrative-permission") == (
+        "credential:rotate"
+    )
+
+    schemas = document["components"]["schemas"]
+    create_properties = schemas["CreateCredentialRequest"]["properties"]
+    assert set(create_properties) == {
+        "principalId",
+        "kind",
+        "secretReference",
+        "validFrom",
+        "validUntil",
+    }
+    secret_reference = schemas["SecretReference"]
+    assert secret_reference.get("additionalProperties") is False
+    assert set(secret_reference["properties"]) == {"providerType", "referenceKey"}
+
+    for name in (
+        "CreateCredentialRequest",
+        "SecretReference",
+        "CredentialResource",
+        "CredentialPage",
+        "CredentialRotationResource",
+        "CredentialRotationPage",
+        "FieldError",
+        "ErrorResponse",
+    ):
+        assert schemas[name].get("additionalProperties") is False
+
+    property_names: set[str] = set()
+
+    def collect_property_names(value: object) -> None:
+        if isinstance(value, dict):
+            properties = value.get("properties")
+            if isinstance(properties, dict):
+                property_names.update(str(name).lower() for name in properties)
+            for child in value.values():
+                collect_property_names(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect_property_names(child)
+
+    collect_property_names(schemas)
+    for forbidden in (
+        "password",
+        "passwordvalue",
+        "password_value",
+        "apikey",
+        "api_key",
+        "privatekey",
+        "private_key",
+        "clientsecret",
+        "client_secret",
+        "token",
+        "secretvalue",
+        "secret_value",
+    ):
+        assert forbidden not in property_names, (
+            f"Credential API leaked raw-secret-shaped property: {forbidden}"
+        )
+
 def main() -> None:
     verify_openapi(load_json(OPENAPI))
     verify_asyncapi(load_json(ASYNCAPI))
     verify_connector_worker_openapi(load_json(CONNECTOR_WORKER_OPENAPI))
     verify_integration_admin_openapi(load_json(INTEGRATION_ADMIN_OPENAPI))
+    verify_credential_openapi(load_json(CREDENTIAL_OPENAPI))
     print("API contracts verified")
 
 
