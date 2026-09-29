@@ -19,4 +19,11 @@ public interface IdentityRepository {
             String displayName,
             long expectedRevision,
             Instant now);
+
+    Identity updateLifecycle(
+            TenantContext tenant,
+            UUID identityId,
+            io.wyrmgate.iam.identity.domain.IdentityLifecycleState lifecycleState,
+            long expectedRevision,
+            Instant now);
 }
