@@ -9,10 +9,72 @@ public interface IdentityAccessReferenceQuery {
 
     boolean identityExists(TenantContext tenant, UUID identityId);
 
+    default IdentityAccessStatus accessStatus(
+            TenantContext tenant,
+            UUID identityId) {
+        return identityExists(tenant, identityId)
+                ? IdentityAccessStatus.eligible(
+                        "ACTIVE", 0)
+                : IdentityAccessStatus.notFound();
+    }
+
     PrincipalReference principal(TenantContext tenant, UUID principalId);
 
     PrincipalSelection selectUniqueActivePrincipal(
             TenantContext tenant, UUID identityId, UUID applicationTargetId);
+
+    record IdentityAccessStatus(
+            AccessStatus status,
+            String lifecycleState,
+            long revision) {
+        public IdentityAccessStatus {
+            Objects.requireNonNull(status, "status");
+            if (status == AccessStatus.NOT_FOUND) {
+                if (lifecycleState != null || revision != 0) {
+                    throw new IllegalArgumentException(
+                            "NOT_FOUND access status must not carry lifecycle/revision");
+                }
+            } else {
+                if (lifecycleState == null || lifecycleState.isBlank()) {
+                    throw new IllegalArgumentException(
+                            "identity access status requires lifecycleState");
+                }
+                if (revision < 0) {
+                    throw new IllegalArgumentException(
+                            "revision must not be negative");
+                }
+            }
+        }
+
+        public static IdentityAccessStatus notFound() {
+            return new IdentityAccessStatus(
+                    AccessStatus.NOT_FOUND, null, 0);
+        }
+
+        public static IdentityAccessStatus eligible(
+                String lifecycleState,
+                long revision) {
+            return new IdentityAccessStatus(
+                    AccessStatus.ACCESS_ELIGIBLE,
+                    lifecycleState,
+                    revision);
+        }
+
+        public static IdentityAccessStatus ineligible(
+                String lifecycleState,
+                long revision) {
+            return new IdentityAccessStatus(
+                    AccessStatus.ACCESS_INELIGIBLE,
+                    lifecycleState,
+                    revision);
+        }
+    }
+
+    enum AccessStatus {
+        NOT_FOUND,
+        ACCESS_ELIGIBLE,
+        ACCESS_INELIGIBLE
+    }
 
     record PrincipalSelection(
             PrincipalSelectionStatus status,
