@@ -496,6 +496,27 @@ class GovernanceReviewApiIntegrationTest {
                                         "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
+                                        "review-decision-0001")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"reason\":\"different replay\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(
+                        jsonPath("$.code")
+                                .value("idempotency_conflict"));
+
+        mvc.perform(
+                        post("/api/v1/governance/review-items/{id}/revoke",
+                                item.id())
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        reviewer)
+                                .header(
+                                        "If-Match",
+                                        "\"rev-1\"")
+                                .header(
+                                        "Idempotency-Key",
                                         "review-decision-stale")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
