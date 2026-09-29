@@ -126,24 +126,55 @@ Important codes include:
 Provider errors are not Governance API errors and do not roll back approval.
 
 
-## Access review runtime boundary
+## Access review / certification API
 
-The first `IDENTITY_ACCESS` ReviewCampaign runtime is internal in this slice and has no
-public HTTP surface yet.
+ADR-0019 `IDENTITY_ACCESS` ReviewCampaign is now exposed through the public Governance
+control-plane API without changing review ownership or lifecycle semantics.
 
-Governance owns ReviewCampaign, ReviewItem, immutable ReviewDecision and
-ReviewRemediation. Campaign generation uses the Access-owned semantic
-`AccessReviewSnapshotQuery`; Governance never reads Access persistence. The fixed
-`snapshotAt` is a creation/validity cutoff and each ReviewItem stores the assignment state
-actually read during bounded generation.
+Campaign administration operations:
 
-`KEEP` creates no remediation. `REVOKE` creates durable remediation work. A separate
-worker invokes the Access-owned `AccessReviewRemediationCommand`, which re-reads current
-AccessAssignment authority and returns `APPLIED` or `NO_ACTION_REQUIRED` causally
-idempotently by ReviewRemediation ID.
+- `POST /review-campaigns` — create one typed DRAFT campaign with explicit subject,
+  reviewer and `snapshotAt`;
+- `GET /review-campaigns` — deterministic administratively authorized collection page;
+- `GET /review-campaigns/{campaignId}` — read campaign detail;
+- `POST /review-campaigns/{campaignId}/start` — explicit DRAFT -> GENERATING operation;
+- `GET /review-campaigns/{campaignId}/items` — bounded deterministic ReviewItem page.
 
-ReviewCampaign `COMPLETED` means all generated ReviewItems have immutable decisions. It
-does not mean ReviewRemediation or provider fulfillment is complete.
+Campaign create and start use causal `Idempotency-Key`; start also requires revision
+`ETag` / `If-Match`. Stable Administration permissions are
+`review-campaign:create`, `review-campaign:read` and `review-campaign:start`.
+Collection enumeration requires collection/global read authority; a
+resource-specific campaign grant does not grant enumeration.
 
-Public campaign create/read/start, reviewer inbox/decision, and remediation-status
-operations remain a later OD-003 API slice.
+Reviewer operations:
+
+- `GET /review-inbox` — pending ReviewItems assigned to the authenticated governed
+  Identity;
+- `GET /review-items/{reviewItemId}` — immutable snapshot plus decision/remediation
+  evidence;
+- `POST /review-items/{reviewItemId}/keep`;
+- `POST /review-items/{reviewItemId}/revoke`;
+- `GET /review-remediations/{remediationId}`.
+
+Reviewer decision authority comes from the immutable ReviewItem reviewer assignment,
+not from a generic administrative permission. An administrator who is not the assigned
+reviewer cannot KEEP or REVOKE an item. Decision mutations require ReviewItem
+`If-Match` plus causal idempotency.
+
+Specific campaign/item/remediation reads are allowed to the assigned reviewer or to an
+administrator with `review-campaign:read` authority for that campaign. The subject
+Identity does not gain visibility merely by being the review subject.
+
+Campaign, per-campaign item and reviewer-inbox paging use ADR-0012 signed cursors bound
+to tenant plus the relevant campaign/reviewer context. V34 adds only the indexes needed
+for those bounded query paths; it adds no new review business state.
+
+Governance still owns ReviewCampaign, ReviewItem, immutable ReviewDecision and
+ReviewRemediation. Campaign generation continues to use the Access-owned semantic
+`AccessReviewSnapshotQuery`; Governance never reads Access persistence. `KEEP` creates
+no remediation. `REVOKE` creates durable remediation work whose Access command re-reads
+current authoritative AccessAssignment state.
+
+ReviewCampaign `COMPLETED` still means every generated ReviewItem has an immutable
+decision. ReviewRemediation state and provider fulfillment remain separate dimensions;
+the public API provides no generic remediation-status mutation operation.

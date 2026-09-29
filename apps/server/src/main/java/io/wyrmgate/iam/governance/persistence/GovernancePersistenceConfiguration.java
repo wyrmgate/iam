@@ -47,6 +47,7 @@ import io.wyrmgate.iam.governance.application.ReviewGenerationProcessingService;
 import io.wyrmgate.iam.governance.application.ReviewRemediationProcessingScheduler;
 import io.wyrmgate.iam.governance.application.ReviewRemediationProcessingService;
 import io.wyrmgate.iam.governance.application.ReviewRepository;
+import io.wyrmgate.iam.governance.application.ReviewQueryService;
 import io.wyrmgate.iam.governance.application.ReviewService;
 import io.wyrmgate.iam.governance.application.ReviewWorkSink;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
@@ -306,6 +307,12 @@ public class GovernancePersistenceConfiguration {
     @Bean
     ReviewRepository reviewRepository(JdbcTemplate jdbc) {
         return new JdbcReviewRepository(jdbc);
+    }
+
+    @Bean
+    ReviewQueryService reviewQueryService(
+            ReviewRepository reviews) {
+        return new ReviewQueryService(reviews);
     }
 
     @Bean

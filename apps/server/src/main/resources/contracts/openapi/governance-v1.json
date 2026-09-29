@@ -3,34 +3,64 @@
   "info": {
     "title": "Wyrmgate IAM Governance API",
     "version": "1.0.0",
-    "description": "Public Governance control-plane contract for self-service AccessRequest and reusable approval work."
+    "description": "Public Governance control-plane contract for self-service AccessRequest, reusable approval work, and IDENTITY_ACCESS review/certification."
   },
-  "servers": [{"url": "/api/v1"}],
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
   "paths": {
     "/governance/access-requests": {
       "post": {
         "operationId": "createAccessRequest",
         "summary": "Create a draft access request",
         "parameters": [
-          {"$ref": "#/components/parameters/IdempotencyKey"},
-          {"$ref": "#/components/parameters/CorrelationId"}
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccessRequestCreate"}}}
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessRequestCreate"
+              }
+            }
+          }
         },
         "responses": {
           "201": {
             "description": "Created",
             "headers": {
-              "ETag": {"$ref": "#/components/headers/ETag"},
-              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
             },
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccessRequest"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequest"
+                }
+              }
+            }
           },
-          "400": {"$ref": "#/components/responses/Error"},
-          "403": {"$ref": "#/components/responses/Error"},
-          "409": {"$ref": "#/components/responses/Error"}
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -39,20 +69,38 @@
         "operationId": "getAccessRequest",
         "summary": "Read an access request and item status",
         "parameters": [
-          {"$ref": "#/components/parameters/RequestId"},
-          {"$ref": "#/components/parameters/CorrelationId"}
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Access request",
             "headers": {
-              "ETag": {"$ref": "#/components/headers/ETag"},
-              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
             },
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccessRequest"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequest"
+                }
+              }
+            }
           },
-          "403": {"$ref": "#/components/responses/Error"},
-          "404": {"$ref": "#/components/responses/Error"}
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -61,24 +109,50 @@
         "operationId": "submitAccessRequest",
         "summary": "Submit a draft access request for durable Governance evaluation",
         "parameters": [
-          {"$ref": "#/components/parameters/RequestId"},
-          {"$ref": "#/components/parameters/IfMatch"},
-          {"$ref": "#/components/parameters/IdempotencyKey"},
-          {"$ref": "#/components/parameters/CorrelationId"}
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Submitted",
             "headers": {
-              "ETag": {"$ref": "#/components/headers/ETag"},
-              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
             },
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccessRequest"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequest"
+                }
+              }
+            }
           },
-          "400": {"$ref": "#/components/responses/Error"},
-          "403": {"$ref": "#/components/responses/Error"},
-          "409": {"$ref": "#/components/responses/Error"},
-          "412": {"$ref": "#/components/responses/Error"}
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -87,20 +161,38 @@
         "operationId": "getRequestItem",
         "summary": "Read one request item status",
         "parameters": [
-          {"$ref": "#/components/parameters/ItemId"},
-          {"$ref": "#/components/parameters/CorrelationId"}
+          {
+            "$ref": "#/components/parameters/ItemId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Request item",
             "headers": {
-              "ETag": {"$ref": "#/components/headers/ETag"},
-              "X-Correlation-Id": {"$ref": "#/components/headers/CorrelationId"}
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
             },
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RequestItem"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestItem"
+                }
+              }
+            }
           },
-          "403": {"$ref": "#/components/responses/Error"},
-          "404": {"$ref": "#/components/responses/Error"}
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -109,16 +201,30 @@
         "operationId": "listApprovalInbox",
         "summary": "List pending current-stage approval work for the authenticated governed Identity",
         "parameters": [
-          {"$ref": "#/components/parameters/Cursor"},
-          {"$ref": "#/components/parameters/Limit"},
-          {"$ref": "#/components/parameters/CorrelationId"}
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Approver inbox",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalInboxPage"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalInboxPage"
+                }
+              }
+            }
           },
-          "400": {"$ref": "#/components/responses/Error"}
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -127,17 +233,35 @@
         "operationId": "getApprovalEvidence",
         "summary": "Read reusable approval case and immutable decision evidence",
         "parameters": [
-          {"$ref": "#/components/parameters/ApprovalCaseId"},
-          {"$ref": "#/components/parameters/CorrelationId"}
+          {
+            "$ref": "#/components/parameters/ApprovalCaseId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
         "responses": {
           "200": {
             "description": "Approval evidence",
-            "headers": {"ETag": {"$ref": "#/components/headers/ETag"}},
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Approval"}}}
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
           },
-          "403": {"$ref": "#/components/responses/Error"},
-          "404": {"$ref": "#/components/responses/Error"}
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -146,18 +270,38 @@
         "operationId": "approveApprovalCase",
         "summary": "Approve the current reusable approval stage",
         "parameters": [
-          {"$ref": "#/components/parameters/ApprovalCaseId"},
-          {"$ref": "#/components/parameters/IfMatch"},
-          {"$ref": "#/components/parameters/IdempotencyKey"},
-          {"$ref": "#/components/parameters/CorrelationId"}
+          {
+            "$ref": "#/components/parameters/ApprovalCaseId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
-        "requestBody": {"$ref": "#/components/requestBodies/DecisionRequest"},
+        "requestBody": {
+          "$ref": "#/components/requestBodies/DecisionRequest"
+        },
         "responses": {
-          "200": {"$ref": "#/components/responses/ApprovalDecisionResult"},
-          "400": {"$ref": "#/components/responses/Error"},
-          "403": {"$ref": "#/components/responses/Error"},
-          "409": {"$ref": "#/components/responses/Error"},
-          "412": {"$ref": "#/components/responses/Error"}
+          "200": {
+            "$ref": "#/components/responses/ApprovalDecisionResult"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -166,206 +310,1651 @@
         "operationId": "rejectApprovalCase",
         "summary": "Reject the current reusable approval stage",
         "parameters": [
-          {"$ref": "#/components/parameters/ApprovalCaseId"},
-          {"$ref": "#/components/parameters/IfMatch"},
-          {"$ref": "#/components/parameters/IdempotencyKey"},
-          {"$ref": "#/components/parameters/CorrelationId"}
+          {
+            "$ref": "#/components/parameters/ApprovalCaseId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
         ],
-        "requestBody": {"$ref": "#/components/requestBodies/DecisionRequest"},
+        "requestBody": {
+          "$ref": "#/components/requestBodies/DecisionRequest"
+        },
         "responses": {
-          "200": {"$ref": "#/components/responses/ApprovalDecisionResult"},
-          "400": {"$ref": "#/components/responses/Error"},
-          "403": {"$ref": "#/components/responses/Error"},
-          "409": {"$ref": "#/components/responses/Error"},
-          "412": {"$ref": "#/components/responses/Error"}
+          "200": {
+            "$ref": "#/components/responses/ApprovalDecisionResult"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-campaigns": {
+      "post": {
+        "operationId": "createReviewCampaign",
+        "summary": "Create a draft Identity access review campaign",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewCampaignCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCampaign"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "get": {
+        "operationId": "listReviewCampaigns",
+        "summary": "List review campaigns using administrative collection authority",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review campaigns",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCampaignPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-campaigns/{campaignId}": {
+      "get": {
+        "operationId": "getReviewCampaign",
+        "summary": "Read one review campaign as its assigned reviewer or scoped administrator",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReviewCampaignId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review campaign",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCampaign"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-campaigns/{campaignId}/start": {
+      "post": {
+        "operationId": "startReviewCampaign",
+        "summary": "Start durable review campaign generation",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReviewCampaignId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Generating campaign",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewCampaign"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-campaigns/{campaignId}/items": {
+      "get": {
+        "operationId": "listReviewCampaignItems",
+        "summary": "List bounded review items for one campaign",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReviewCampaignId"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign review items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewItemPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-inbox": {
+      "get": {
+        "operationId": "listReviewInbox",
+        "summary": "List pending ReviewItems assigned to the authenticated governed Identity",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reviewer inbox",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewItemPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-items/{reviewItemId}": {
+      "get": {
+        "operationId": "getReviewItem",
+        "summary": "Read review snapshot plus immutable decision/remediation evidence",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReviewItemId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review item",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewItem"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-items/{reviewItemId}/keep": {
+      "post": {
+        "operationId": "keepReviewItem",
+        "summary": "Record immutable KEEP review decision",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReviewItemId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decided review item",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-items/{reviewItemId}/revoke": {
+      "post": {
+        "operationId": "revokeReviewItem",
+        "summary": "Record immutable REVOKE review decision",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReviewItemId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decided review item",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/review-remediations/{remediationId}": {
+      "get": {
+        "operationId": "getReviewRemediation",
+        "summary": "Read Governance remediation process state for a review decision",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReviewRemediationId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review remediation",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRemediation"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     }
   },
   "components": {
     "parameters": {
-      "RequestId": {"name": "requestId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
-      "ItemId": {"name": "itemId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
-      "ApprovalCaseId": {"name": "approvalCaseId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
-      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 200}},
-      "IfMatch": {"name": "If-Match", "in": "header", "required": true, "schema": {"type": "string", "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"}},
-      "CorrelationId": {"name": "X-Correlation-Id", "in": "header", "required": false, "schema": {"type": "string", "format": "uuid"}},
-      "Cursor": {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string", "maxLength": 4096}},
-      "Limit": {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}}
+      "RequestId": {
+        "name": "requestId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ItemId": {
+        "name": "itemId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ApprovalCaseId": {
+        "name": "approvalCaseId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"
+        }
+      },
+      "CorrelationId": {
+        "name": "X-Correlation-Id",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        }
+      },
+      "ReviewCampaignId": {
+        "name": "campaignId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ReviewItemId": {
+        "name": "reviewItemId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ReviewRemediationId": {
+        "name": "remediationId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
     },
     "headers": {
-      "ETag": {"schema": {"type": "string", "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"}},
-      "CorrelationId": {"schema": {"type": "string", "format": "uuid"}}
+      "ETag": {
+        "schema": {
+          "type": "string",
+          "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"
+        }
+      },
+      "CorrelationId": {
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
     },
     "requestBodies": {
       "DecisionRequest": {
         "required": true,
-        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DecisionRequest"}}}
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DecisionRequest"
+            }
+          }
+        }
       }
     },
     "responses": {
       "Error": {
         "description": "Semantic error",
-        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       },
       "ApprovalDecisionResult": {
         "description": "Updated approval evidence",
-        "headers": {"ETag": {"$ref": "#/components/headers/ETag"}},
-        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Approval"}}}
+        "headers": {
+          "ETag": {
+            "$ref": "#/components/headers/ETag"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Approval"
+            }
+          }
+        }
       }
     },
     "schemas": {
       "AccessRequestCreate": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["beneficiaryIdentityId", "items"],
+        "required": [
+          "beneficiaryIdentityId",
+          "items"
+        ],
         "properties": {
-          "beneficiaryIdentityId": {"type": "string", "format": "uuid", "description": "Initial v1 surface permits only the authenticated governed Identity as beneficiary."},
-          "items": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"$ref": "#/components/schemas/RequestItemInput"}}
+          "beneficiaryIdentityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Initial v1 surface permits only the authenticated governed Identity as beneficiary."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/RequestItemInput"
+            }
+          }
         }
       },
       "RequestItemInput": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["targetKind", "targetId", "principalConstraintKind", "specificPrincipalId", "validFrom", "validUntil"],
+        "required": [
+          "targetKind",
+          "targetId",
+          "principalConstraintKind",
+          "specificPrincipalId",
+          "validFrom",
+          "validUntil"
+        ],
         "properties": {
-          "targetKind": {"type": "string", "enum": ["ROLE", "ENTITLEMENT"]},
-          "targetId": {"type": "string", "format": "uuid"},
-          "principalConstraintKind": {"type": "string", "enum": ["ANY", "SPECIFIC"]},
-          "specificPrincipalId": {"type": ["string", "null"], "format": "uuid"},
-          "validFrom": {"type": ["string", "null"], "format": "date-time"},
-          "validUntil": {"type": ["string", "null"], "format": "date-time"}
+          "targetKind": {
+            "type": "string",
+            "enum": [
+              "ROLE",
+              "ENTITLEMENT"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "principalConstraintKind": {
+            "type": "string",
+            "enum": [
+              "ANY",
+              "SPECIFIC"
+            ]
+          },
+          "specificPrincipalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "validFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
         }
       },
       "AccessRequest": {
         "type": "object",
-        "required": ["id", "requesterIdentityId", "beneficiaryIdentityId", "state", "revision", "createdAt", "updatedAt", "items"],
+        "required": [
+          "id",
+          "requesterIdentityId",
+          "beneficiaryIdentityId",
+          "state",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "items"
+        ],
         "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "requesterIdentityId": {"type": "string", "format": "uuid"},
-          "beneficiaryIdentityId": {"type": "string", "format": "uuid"},
-          "state": {"type": "string", "enum": ["DRAFT", "SUBMITTED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "EXPIRED"]},
-          "revision": {"type": "integer", "format": "int64", "minimum": 1},
-          "createdAt": {"type": "string", "format": "date-time"},
-          "submittedAt": {"type": ["string", "null"], "format": "date-time"},
-          "updatedAt": {"type": "string", "format": "date-time"},
-          "items": {"type": "array", "items": {"$ref": "#/components/schemas/RequestItem"}}
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requesterIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "beneficiaryIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "IN_PROGRESS",
+              "COMPLETED",
+              "CANCELLED",
+              "EXPIRED"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "submittedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestItem"
+            }
+          }
         }
       },
       "RequestItem": {
         "type": "object",
-        "required": ["id", "accessRequestId", "targetKind", "principalConstraintKind", "state", "revision", "createdAt", "updatedAt"],
+        "required": [
+          "id",
+          "accessRequestId",
+          "targetKind",
+          "principalConstraintKind",
+          "state",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
         "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "accessRequestId": {"type": "string", "format": "uuid"},
-          "targetKind": {"type": "string", "enum": ["ROLE", "ENTITLEMENT"]},
-          "roleId": {"type": ["string", "null"], "format": "uuid"},
-          "entitlementId": {"type": ["string", "null"], "format": "uuid"},
-          "principalConstraintKind": {"type": "string", "enum": ["ANY", "SPECIFIC"]},
-          "specificPrincipalId": {"type": ["string", "null"], "format": "uuid"},
-          "validFrom": {"type": ["string", "null"], "format": "date-time"},
-          "validUntil": {"type": ["string", "null"], "format": "date-time"},
-          "state": {"type": "string", "enum": ["DRAFT", "SUBMITTED", "EVALUATING", "PENDING_APPROVAL", "AUTHORIZED", "APPLIED", "DENIED", "REJECTED", "CANCELLED", "EXPIRED"]},
-          "approvalCaseId": {"type": ["string", "null"], "format": "uuid"},
-          "accessAssignmentId": {"type": ["string", "null"], "format": "uuid"},
-          "evaluationCode": {"type": ["string", "null"]},
-          "revision": {"type": "integer", "format": "int64", "minimum": 1},
-          "createdAt": {"type": "string", "format": "date-time"},
-          "updatedAt": {"type": "string", "format": "date-time"}
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accessRequestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetKind": {
+            "type": "string",
+            "enum": [
+              "ROLE",
+              "ENTITLEMENT"
+            ]
+          },
+          "roleId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "entitlementId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "principalConstraintKind": {
+            "type": "string",
+            "enum": [
+              "ANY",
+              "SPECIFIC"
+            ]
+          },
+          "specificPrincipalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "validFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "EVALUATING",
+              "PENDING_APPROVAL",
+              "AUTHORIZED",
+              "APPLIED",
+              "DENIED",
+              "REJECTED",
+              "CANCELLED",
+              "EXPIRED"
+            ]
+          },
+          "approvalCaseId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "accessAssignmentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "evaluationCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ApprovalInboxPage": {
         "type": "object",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
-          "items": {"type": "array", "items": {"$ref": "#/components/schemas/ApprovalSummary"}},
-          "nextCursor": {"type": ["string", "null"]}
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalSummary"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       },
       "ApprovalSummary": {
         "type": "object",
-        "required": ["id", "subjectKind", "subjectId", "state", "currentStageOrdinal", "revision", "createdAt", "updatedAt"],
+        "required": [
+          "id",
+          "subjectKind",
+          "subjectId",
+          "state",
+          "currentStageOrdinal",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
         "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "subjectKind": {"type": "string"},
-          "subjectId": {"type": "string", "format": "uuid"},
-          "state": {"type": "string"},
-          "currentStageOrdinal": {"type": "integer", "minimum": 0},
-          "revision": {"type": "integer", "format": "int64", "minimum": 1},
-          "createdAt": {"type": "string", "format": "date-time"},
-          "updatedAt": {"type": "string", "format": "date-time"}
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectKind": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          },
+          "currentStageOrdinal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "Approval": {
         "type": "object",
-        "required": ["id", "subjectKind", "subjectId", "initiatorIdentityId", "state", "currentStageOrdinal", "revision", "createdAt", "updatedAt", "planId", "planNumber", "planCreatedAt", "stages"],
+        "required": [
+          "id",
+          "subjectKind",
+          "subjectId",
+          "initiatorIdentityId",
+          "state",
+          "currentStageOrdinal",
+          "revision",
+          "createdAt",
+          "updatedAt",
+          "planId",
+          "planNumber",
+          "planCreatedAt",
+          "stages"
+        ],
         "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "subjectKind": {"type": "string"},
-          "subjectId": {"type": "string", "format": "uuid"},
-          "initiatorIdentityId": {"type": "string", "format": "uuid"},
-          "state": {"type": "string", "enum": ["PENDING", "APPROVED", "REJECTED", "CANCELLED", "SUPERSEDED"]},
-          "currentStageOrdinal": {"type": "integer", "minimum": 0},
-          "revision": {"type": "integer", "format": "int64", "minimum": 1},
-          "createdAt": {"type": "string", "format": "date-time"},
-          "updatedAt": {"type": "string", "format": "date-time"},
-          "completedAt": {"type": ["string", "null"], "format": "date-time"},
-          "planId": {"type": "string", "format": "uuid"},
-          "planNumber": {"type": "integer", "format": "int64", "minimum": 1},
-          "planCreatedAt": {"type": "string", "format": "date-time"},
-          "stages": {"type": "array", "items": {"$ref": "#/components/schemas/ApprovalStage"}}
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectKind": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "initiatorIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED",
+              "CANCELLED",
+              "SUPERSEDED"
+            ]
+          },
+          "currentStageOrdinal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planNumber": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "planCreatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalStage"
+            }
+          }
         }
       },
       "ApprovalStage": {
         "type": "object",
-        "required": ["id", "ordinal", "decisionMode", "approvers", "decisions"],
+        "required": [
+          "id",
+          "ordinal",
+          "decisionMode",
+          "approvers",
+          "decisions"
+        ],
         "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "ordinal": {"type": "integer", "minimum": 0},
-          "decisionMode": {"type": "string", "enum": ["ANY_ONE", "ALL"]},
-          "approvers": {"type": "array", "items": {"$ref": "#/components/schemas/ApprovalApprover"}},
-          "decisions": {"type": "array", "items": {"$ref": "#/components/schemas/ApprovalDecision"}}
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "decisionMode": {
+            "type": "string",
+            "enum": [
+              "ANY_ONE",
+              "ALL"
+            ]
+          },
+          "approvers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalApprover"
+            }
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalDecision"
+            }
+          }
         }
       },
       "ApprovalApprover": {
         "type": "object",
-        "required": ["approverIdentityId"],
-        "properties": {"approverIdentityId": {"type": "string", "format": "uuid"}}
+        "required": [
+          "approverIdentityId"
+        ],
+        "properties": {
+          "approverIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
       },
       "ApprovalDecision": {
         "type": "object",
-        "required": ["id", "approverIdentityId", "decision", "decidedAt"],
+        "required": [
+          "id",
+          "approverIdentityId",
+          "decision",
+          "decidedAt"
+        ],
         "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "approverIdentityId": {"type": "string", "format": "uuid"},
-          "decision": {"type": "string", "enum": ["APPROVE", "REJECT"]},
-          "reason": {"type": ["string", "null"], "maxLength": 1000},
-          "decidedAt": {"type": "string", "format": "date-time"}
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approverIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "DecisionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["reason"],
-        "properties": {"reason": {"type": ["string", "null"], "maxLength": 1000}}
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          }
+        }
       },
       "FieldError": {
         "type": "object",
-        "required": ["field", "code", "message"],
+        "required": [
+          "field",
+          "code",
+          "message"
+        ],
         "properties": {
-          "field": {"type": "string"},
-          "code": {"type": "string"},
-          "message": {"type": "string"}
+          "field": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
         }
       },
       "Error": {
         "type": "object",
-        "required": ["code", "message", "correlationId", "fieldErrors"],
+        "required": [
+          "code",
+          "message",
+          "correlationId",
+          "fieldErrors"
+        ],
         "properties": {
-          "code": {"type": "string"},
-          "message": {"type": "string"},
-          "correlationId": {"type": "string", "format": "uuid"},
-          "fieldErrors": {"type": "array", "items": {"$ref": "#/components/schemas/FieldError"}}
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fieldErrors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          }
+        }
+      },
+      "ReviewCampaignCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subjectIdentityId",
+          "reviewerIdentityId",
+          "snapshotAt"
+        ],
+        "properties": {
+          "subjectIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewerIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "snapshotAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReviewCampaign": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "subjectIdentityId",
+          "reviewerIdentityId",
+          "snapshotAt",
+          "state",
+          "generatedItemCount",
+          "decidedItemCount",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "IDENTITY_ACCESS"
+            ]
+          },
+          "subjectIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewerIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "snapshotAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "GENERATING",
+              "ACTIVE",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "generatedItemCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "decidedItemCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "activatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReviewCampaignPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewCampaign"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReviewDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "reviewerIdentityId",
+          "decision",
+          "decidedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewerIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "KEEP",
+              "REVOKE"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReviewRemediation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "reviewItemId",
+          "accessAssignmentId",
+          "state",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewItemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accessAssignmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPLIED",
+              "NO_ACTION_REQUIRED",
+              "FAILED",
+              "MANUAL_REQUIRED"
+            ]
+          },
+          "resultCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resultingAccessState": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ReviewItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "reviewCampaignId",
+          "reviewerIdentityId",
+          "accessAssignmentId",
+          "assignmentRevision",
+          "targetKind",
+          "principalConstraintKind",
+          "provenanceKind",
+          "snapshotLifecycleState",
+          "assignmentCreatedAt",
+          "snapshotAt",
+          "state",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewCampaignId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reviewerIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accessAssignmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "assignmentRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "targetKind": {
+            "type": "string",
+            "enum": [
+              "ROLE",
+              "ENTITLEMENT"
+            ]
+          },
+          "roleId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "entitlementId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "principalConstraintKind": {
+            "type": "string",
+            "enum": [
+              "ANY",
+              "SPECIFIC"
+            ]
+          },
+          "specificPrincipalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "provenanceKind": {
+            "type": "string",
+            "enum": [
+              "MANUAL",
+              "REQUEST_ITEM"
+            ]
+          },
+          "provenanceRefId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "snapshotLifecycleState": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED",
+              "SCHEDULED"
+            ]
+          },
+          "validFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "assignmentCreatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "snapshotAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "DECIDED"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decision": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReviewDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "remediation": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRemediation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ReviewItemPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewItem"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReviewDecisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          }
         }
       }
     }
