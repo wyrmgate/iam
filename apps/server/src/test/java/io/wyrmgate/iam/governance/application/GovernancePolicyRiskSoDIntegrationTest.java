@@ -530,6 +530,57 @@ class GovernancePolicyRiskSoDIntegrationTest {
     }
 
     @Test
+    void finalApprovalAuthorizesWhenCurrentPlanFingerprintIsUnchanged() {
+        UUID requested = entitlement();
+        UUID approver = ids.nextId();
+        UUID requester = ids.nextId();
+
+        activate(
+                PolicyDecision.REQUIRE_APPROVAL,
+                List.of(),
+                plan(approver),
+                NOW);
+
+        AccessRequestCommandService commands =
+                requestCommands();
+        RequestDetail draft = commands.createDraft(
+                tenant,
+                requester,
+                ids.nextId(),
+                List.of(item(requested)),
+                NOW.plusSeconds(1));
+        RequestDetail submitted = commands.submit(
+                tenant,
+                draft.request().id(),
+                1,
+                NOW.plusSeconds(2));
+        RequestItem pending = commands.evaluateItem(
+                tenant,
+                submitted.items().getFirst().id(),
+                2,
+                NOW.plusSeconds(3));
+
+        approvals.decide(
+                tenant,
+                pending.approvalCaseId(),
+                approver,
+                DecisionValue.APPROVE,
+                null,
+                1,
+                NOW.plusSeconds(4));
+
+        RequestItem authorized = requests.findItem(
+                        tenant, pending.id())
+                .orElseThrow();
+        assertThat(authorized.state())
+                .isEqualTo(ItemState.AUTHORIZED);
+        assertThat(authorized.approvalCaseId())
+                .isEqualTo(pending.approvalCaseId());
+        assertThat(authorized.evaluationCode())
+                .isEqualTo("policy_approval_required");
+    }
+
+    @Test
     void finalApprovalRevalidatesChangedPlanThenCurrentDeny() {
         UUID requested = entitlement();
         UUID firstApprover = ids.nextId();
