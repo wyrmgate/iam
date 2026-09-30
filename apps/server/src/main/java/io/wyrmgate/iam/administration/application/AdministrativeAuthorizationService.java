@@ -4,7 +4,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
 
 /** Default-deny Administrative Authorization evaluator for the first direct-grant slice. */
 public final class AdministrativeAuthorizationService {
@@ -48,6 +50,46 @@ public final class AdministrativeAuthorizationService {
             }
         }
         return AdministrativeAuthorizationDecision.deny("no_effective_grant");
+    }
+
+    public Set<String> authorizedClassificationKeys(
+            AuthenticatedAdministrativeActor actor,
+            AdministrativePermission permission,
+            Set<String> requestedClassificationKeys,
+            Instant now) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(permission, "permission");
+        Objects.requireNonNull(requestedClassificationKeys, "requestedClassificationKeys");
+        Objects.requireNonNull(now, "now");
+        if (!governedActorStatusQuery.isAdministrativelyEligible(
+                actor.tenant(), actor.identityId())) {
+            return Set.of();
+        }
+        Set<String> requested = new LinkedHashSet<>();
+        for (String key : requestedClassificationKeys) {
+            if (key == null || key.isBlank()) {
+                throw new IllegalArgumentException("classification key must not be blank");
+            }
+            requested.add(key);
+        }
+        if (requested.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> allowed = new LinkedHashSet<>();
+        for (AdministrativeGrant grant : repository.findCandidateGrants(
+                actor.tenant(), actor.identityId(), permission)) {
+            if (!grant.isEffectiveAt(now)) {
+                continue;
+            }
+            if (grant.scope().type() == AdministrativeScopeType.GLOBAL) {
+                return Set.copyOf(requested);
+            }
+            if (grant.scope().type() == AdministrativeScopeType.CANONICAL_ATTRIBUTE_CLASSIFICATION
+                    && requested.contains(grant.scope().scopeKey())) {
+                allowed.add(grant.scope().scopeKey());
+            }
+        }
+        return Set.copyOf(allowed);
     }
 
     private static boolean matches(AdministrativeGrant grant, AdministrativeResource resource) {
