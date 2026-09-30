@@ -49,11 +49,11 @@ CREATE INDEX audit_record_outcome_time_idx
 CREATE OR REPLACE FUNCTION audit.reject_audit_record_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $
+AS $audit$
 BEGIN
     RAISE EXCEPTION 'AuditRecord is append-only';
 END;
-$;
+$audit$;
 
 CREATE TRIGGER audit_record_append_only_trg
 BEFORE UPDATE OR DELETE ON audit.audit_record
