@@ -95,8 +95,7 @@ public final class LifecycleAccessReconciliationService {
     }
 
     void reconcileEvent(TenantContext tenant, UUID identityId, Instant now) {
-        UUID causalId = UUID.randomUUID();
-        reconcileEvent(tenant, identityId, now, causalId, causalId);
+        reconcileEvent(tenant, identityId, now, identityId, identityId);
     }
 
     void reconcileEvent(
