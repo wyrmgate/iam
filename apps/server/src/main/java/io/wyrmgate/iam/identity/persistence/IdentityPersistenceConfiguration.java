@@ -11,6 +11,8 @@ import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluato
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
+import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
+import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQueryService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.IdentityQueryRepository;
@@ -111,6 +113,17 @@ public class IdentityPersistenceConfiguration {
             PrincipalRepository principalRepository) {
         return new IdentityAccessReferenceQueryService(
                 identityRepository, principalRepository);
+    }
+
+    @Bean
+    IdentityLifecycleAccessQuery identityLifecycleAccessQuery(
+            IdentityRepository identityRepository,
+            CanonicalAttributeRepository canonicalAttributeRepository,
+            CanonicalAttributeReadRepository canonicalAttributeReadRepository) {
+        return new IdentityLifecycleAccessQueryService(
+                identityRepository,
+                canonicalAttributeRepository,
+                canonicalAttributeReadRepository);
     }
 
     @Bean
