@@ -160,6 +160,30 @@ class AuditRecordPersistenceIntegrationTest {
     }
 
     @Test
+    void keysetOrderingUsesDescendingIdAsOccurrenceTimeTiebreaker() {
+        Instant occurredAt = Instant.parse("2026-09-30T14:45:00Z");
+        TenantContext tenant = tenant("Audit Tie", occurredAt);
+        AuditCommandService service = service(occurredAt.plusSeconds(1));
+        UUID lowerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID higherId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+
+        service.append(tenant, new AuditRecordDraft(
+                lowerId, occurredAt, null, "audit:test", "audit-record", null,
+                AuditOutcome.SUCCESS, null, null));
+        service.append(tenant, new AuditRecordDraft(
+                higherId, occurredAt, null, "audit:test", "audit-record", null,
+                AuditOutcome.SUCCESS, null, null));
+
+        AuditQueryService queries = new AuditQueryService(repository);
+        var firstPage = queries.list(tenant, AuditFilter.none(), null, 1);
+        assertThat(firstPage.items()).extracting(record -> record.id()).containsExactly(higherId);
+        assertThat(firstPage.nextPosition()).isNotNull();
+
+        var secondPage = queries.list(tenant, AuditFilter.none(), firstPage.nextPosition(), 1);
+        assertThat(secondPage.items()).extracting(record -> record.id()).containsExactly(lowerId);
+    }
+
+    @Test
     void boundedQueryUsesDeterministicNewestFirstKeysetAndExactFilters() {
         Instant base = Instant.parse("2026-09-30T15:00:00Z");
         TenantContext tenant = tenant("Audit Query", base);
