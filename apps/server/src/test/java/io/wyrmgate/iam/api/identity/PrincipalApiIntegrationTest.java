@@ -89,6 +89,7 @@ class PrincipalApiIntegrationTest {
     private TenantContext tenant;
     private Identity actorIdentity;
     private AuthenticatedAdministrativeActor actor;
+    private IdentityCursorCodec cursors;
     private MockMvc authorized;
 
     @BeforeAll
@@ -171,6 +172,7 @@ class PrincipalApiIntegrationTest {
                 tenant, "Principal Administrator");
         actor = new AuthenticatedAdministrativeActor(
                 tenant, actorIdentity.id());
+        cursors = newCursorCodec();
         authorized = mockMvc(authorization(true));
     }
 
@@ -190,7 +192,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0001")
+                                        "idempotency-00000001")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content(body))
@@ -198,7 +200,8 @@ class PrincipalApiIntegrationTest {
                 .andExpect(header().string(
                         "ETag", "\"rev-1\""))
                 .andExpect(jsonPath(
-                        "$.identityId").doesNotExist())
+                        "$.identityId")
+                        .value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath(
                         "$.applicationTargetId")
                         .value(target.toString()))
@@ -222,7 +225,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0001")
+                                        "idempotency-00000002")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content(body))
@@ -301,7 +304,7 @@ class PrincipalApiIntegrationTest {
                                         "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0002")
+                                        "idempotency-00000003")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content(correlateBody))
@@ -326,7 +329,7 @@ class PrincipalApiIntegrationTest {
                                         "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0002")
+                                        "idempotency-00000004")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content(correlateBody))
@@ -393,7 +396,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0101")
+                                        "idempotency-00000005")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content(body))
@@ -406,7 +409,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0102")
+                                        "idempotency-00000006")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content(body))
@@ -421,7 +424,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0101")
+                                        "idempotency-00000007")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -439,7 +442,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0103")
+                                        "idempotency-00000008")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -465,7 +468,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0104")
+                                        "idempotency-00000009")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -483,7 +486,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0105")
+                                        "idempotency-00000010")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -502,7 +505,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0106")
+                                        "idempotency-00000011")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -542,7 +545,7 @@ class PrincipalApiIntegrationTest {
                                         "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0201")
+                                        "idempotency-00000012")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -563,7 +566,7 @@ class PrincipalApiIntegrationTest {
                                         "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0202")
+                                        "idempotency-00000013")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -584,7 +587,7 @@ class PrincipalApiIntegrationTest {
                                         "\"rev-2\"")
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0203")
+                                        "idempotency-00000014")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -640,7 +643,7 @@ class PrincipalApiIntegrationTest {
                                         "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0204")
+                                        "idempotency-00000015")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -696,7 +699,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0301")
+                                        "idempotency-00000016")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -766,7 +769,7 @@ class PrincipalApiIntegrationTest {
                                         "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-principal-0302")
+                                        "idempotency-00000017")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
@@ -791,7 +794,7 @@ class PrincipalApiIntegrationTest {
                         mutations,
                         authorization,
                         ids,
-                        cursorCodec());
+                        cursors);
         return MockMvcBuilders
                 .standaloneSetup(controller)
                 .setControllerAdvice(
@@ -799,7 +802,7 @@ class PrincipalApiIntegrationTest {
                 .build();
     }
 
-    private IdentityCursorCodec cursorCodec() {
+    private IdentityCursorCodec newCursorCodec() {
         try {
             KeyPairGenerator generator =
                     KeyPairGenerator.getInstance("RSA");
