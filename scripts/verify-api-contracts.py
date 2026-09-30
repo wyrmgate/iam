@@ -100,6 +100,28 @@ def verify_openapi(document: dict) -> None:
             f"{path} must not accept arbitrary lifecycle mutation payload"
         )
 
+    assert {"/principals", "/principals/{principalId}", "/principals/{principalId}:correlate"}.issubset(paths)
+
+    principal_list = paths["/principals"]["get"]
+    assert {"Cursor", "Limit"}.issubset(ref_names(principal_list)), (
+        "Principal list must use deterministic cursor pagination"
+    )
+    assert principal_list.get("x-wyrmgate-administrative-permission") == "principal:read"
+
+    principal_register = paths["/principals"]["post"]
+    assert "IdempotencyKey" in ref_names(principal_register), (
+        "Principal registration must require causal idempotency"
+    )
+    assert principal_register.get("x-wyrmgate-administrative-permission") == "principal:register"
+    register_schema = principal_register["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+    assert register_schema.endswith("/RegisterPrincipalRequest")
+
+    correlate = paths["/principals/{principalId}:correlate"]["post"]
+    assert {"IfMatch", "IdempotencyKey"}.issubset(ref_names(correlate)), (
+        "Principal correlation must require revision concurrency and causal idempotency"
+    )
+    assert correlate.get("x-wyrmgate-administrative-permission") == "principal:correlate"
+
     serialized = json.dumps(document, sort_keys=True).lower()
     for forbidden in (
         "password",
@@ -113,6 +135,26 @@ def verify_openapi(document: dict) -> None:
         assert forbidden not in serialized, f"secret-shaped field leaked into OpenAPI: {forbidden}"
 
     schemas = document["components"]["schemas"]
+    principal_registration = schemas["RegisterPrincipalRequest"]
+    assert set(principal_registration["properties"]) == {
+        "applicationTargetId",
+        "nativePrincipalKey",
+    }, "Principal registration must not accept identity, lifecycle, provider or arbitrary kind fields"
+    assert principal_registration.get("additionalProperties") is False
+
+    principal_resource = json.dumps(schemas["PrincipalResource"], sort_keys=True).lower()
+    for forbidden_principal_field in (
+        "providerpayload",
+        "connectorid",
+        "desiredstate",
+        "fulfillment",
+        "credential",
+        "outbox",
+    ):
+        assert forbidden_principal_field not in principal_resource, (
+            f"Principal API leaked non-authoritative/internal field: {forbidden_principal_field}"
+        )
+
     metadata_properties = schemas["UpdateIdentityMetadataRequest"]["properties"]
     assert set(metadata_properties) == {"displayName"}, (
         "lifecycle/status changes must not be smuggled through generic PATCH"
