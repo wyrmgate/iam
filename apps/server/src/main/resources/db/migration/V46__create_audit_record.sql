@@ -40,6 +40,25 @@ CREATE INDEX audit_record_correlation_time_idx
     ON audit.audit_record (tenant_id, correlation_id, occurred_at DESC, id DESC)
     WHERE correlation_id IS NOT NULL;
 
+CREATE INDEX audit_record_action_time_idx
+    ON audit.audit_record (tenant_id, action_type, occurred_at DESC, id DESC);
+
+CREATE INDEX audit_record_outcome_time_idx
+    ON audit.audit_record (tenant_id, outcome, occurred_at DESC, id DESC);
+
+CREATE OR REPLACE FUNCTION audit.reject_audit_record_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $
+BEGIN
+    RAISE EXCEPTION 'AuditRecord is append-only';
+END;
+$;
+
+CREATE TRIGGER audit_record_append_only_trg
+BEFORE UPDATE OR DELETE ON audit.audit_record
+FOR EACH ROW EXECUTE FUNCTION audit.reject_audit_record_mutation();
+
 COMMENT ON TABLE audit.audit_record IS
     'Append-only Audit-owned security/governance evidence. Domain facts, evidence snapshots and operational logs remain separate.';
 COMMENT ON COLUMN audit.audit_record.material_snapshot IS
