@@ -22,6 +22,13 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission IDENTITY_DECOMMISSION =
             new AdministrativePermission("identity", "decommission");
 
+    public static final AdministrativePermission PRINCIPAL_READ =
+            new AdministrativePermission("principal", "read");
+    public static final AdministrativePermission PRINCIPAL_REGISTER =
+            new AdministrativePermission("principal", "register");
+    public static final AdministrativePermission PRINCIPAL_CORRELATE =
+            new AdministrativePermission("principal", "correlate");
+
 
     public static final AdministrativePermission APPLICATION_READ =
             new AdministrativePermission("application", "read");
