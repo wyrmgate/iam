@@ -66,6 +66,10 @@ The first Role runtime slice keeps the accepted shallow graph explicit. An APPLI
 RoleVersion membership is immutable after activation and after supersession. RoleVersion lifecycle is an authoritative concurrency boundary with its own positive revision: validation and activation are revision-guarded, and superseding the prior ACTIVE version advances that prior version's revision as part of the same activation transaction. Activation revalidates current member state and atomically supersedes the prior ACTIVE version so there is at most one ACTIVE RoleVersion per Role. A Role with no valid current expansion is not assignable for new access and contributes no role-derived EffectiveAccess until the expansion becomes valid again.
 
 
+### Source-driven Identity lifecycle policy
+
+An active Identity-owned SourceLifecyclePolicyVersion may map one bounded explicit source field to typed lifecycle intent for currently correlated SourceRecords. The first policy permits automatic PENDING -> ACTIVE, but a mapped ACTIVE value cannot restore SUSPENDED or INACTIVE authority. Explicit mapped reductions use only the normal Identity lifecycle command, so ACTIVE eligibility loss reuses ADR-0021 and Access-owned durable reduction. Missing/unmapped values are no-op. Positive explicit termination/suspension facts do not require COMPLETE import coverage; inferred absence remains separately COMPLETE-gated and is not implemented by this policy.
+
 ### Identity lifecycle eligibility and Leaver reduction
 
 Identity lifecycle is authoritative in Identity and is distinct from AccessAssignment lifecycle. In the first lifecycle policy only `ACTIVE` is access-eligible; `PENDING`, `SUSPENDED`, `INACTIVE` and `DECOMMISSIONED` are access-ineligible. EffectiveAccess semantic reads must therefore re-check Identity access eligibility and return no authority for an ineligible Identity even while derived rows or non-terminal AccessAssignments still exist.
