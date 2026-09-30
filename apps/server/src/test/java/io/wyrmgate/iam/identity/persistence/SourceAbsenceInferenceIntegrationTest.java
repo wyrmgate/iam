@@ -7,6 +7,8 @@ import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.SourceAbsenceInferenceService;
 import io.wyrmgate.iam.identity.application.SourceAbsencePolicyService;
 import io.wyrmgate.iam.identity.application.SourceCorrelationService;
+import io.wyrmgate.iam.identity.application.SourceLifecyclePolicyService;
+import io.wyrmgate.iam.identity.application.SourceMappedValueExtractor;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
@@ -49,6 +51,7 @@ class SourceAbsenceInferenceIntegrationTest {
     private static IdentityCommandService identities;
     private static SourceCorrelationService sources;
     private static SourceAbsencePolicyService policies;
+    private static SourceLifecyclePolicyService lifecyclePolicies;
     private static SourceAbsenceInferenceService processor;
     private static TransactionExecutor transactions;
 
@@ -77,6 +80,13 @@ class SourceAbsenceInferenceIntegrationTest {
                 ids,
                 transactions);
         policies = new SourceAbsencePolicyService(sourceRepository, ids, transactions);
+        lifecyclePolicies = new SourceLifecyclePolicyService(
+                sourceRepository,
+                identityRepository,
+                identities,
+                new SourceMappedValueExtractor(new ObjectMapper()),
+                ids,
+                transactions);
         processor = new SourceAbsenceInferenceService(
                 outbox,
                 sourceRepository,
@@ -87,7 +97,7 @@ class SourceAbsenceInferenceIntegrationTest {
                 transactions,
                 new ObjectMapper());
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("41");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("42");
     }
 
     @AfterAll
@@ -162,6 +172,78 @@ class SourceAbsenceInferenceIntegrationTest {
                 tenant.tenantId(),
                 absent.id());
         assertThat(eligibilityFacts).isEqualTo(1);
+    }
+
+    @Test
+    void returningPositiveObservationRestoresOnlyTheExactAbsenceInferredRevision() {
+        TenantContext tenant = tenant("Absence restoration");
+        SourceSystem source = source(tenant, "hr");
+        policies.activate(tenant, source.id(), 10, NOW.plusSeconds(1));
+        lifecyclePolicies.activate(
+                tenant,
+                source.id(),
+                "$.employmentStatus",
+                java.util.Map.of("ACTIVE", IdentityLifecycleState.ACTIVE),
+                NOW.plusSeconds(2));
+
+        Identity identity = activeIdentity(tenant, "Returning Person", NOW.plusSeconds(3));
+        SourceImportRun baseline = sources.startImport(tenant, source.id(), NOW.plusSeconds(4));
+        SourceRecord record = sources.observe(
+                tenant,
+                baseline.id(),
+                "returning",
+                "{\"employmentStatus\":\"ACTIVE\"}",
+                null,
+                NOW.plusSeconds(5),
+                ids.nextId(),
+                null);
+        link(tenant, record, identity, NOW.plusSeconds(6));
+        sources.completeImport(
+                tenant, baseline.id(), SourceImportCompleteness.COMPLETE,
+                null, null, NOW.plusSeconds(7), ids.nextId(), null);
+
+        SourceImportRun absent = sources.startImport(tenant, source.id(), NOW.plusSeconds(8));
+        sources.completeTrustedImport(
+                tenant,
+                absent.id(),
+                "healthy empty full snapshot",
+                null,
+                NOW.plusSeconds(9),
+                ids.nextId(),
+                null);
+        drainAbsence();
+
+        Identity inferred = identityRepository.findById(tenant, identity.id()).orElseThrow();
+        assertThat(inferred.lifecycleState()).isEqualTo(IdentityLifecycleState.INACTIVE);
+        Long evidence = jdbc.queryForObject(
+                """
+                SELECT count(*) FROM identity.source_absence_transition_evidence
+                WHERE tenant_id = ? AND source_record_id = ? AND identity_id = ?
+                  AND post_identity_revision = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                record.id(),
+                identity.id(),
+                inferred.revision());
+        assertThat(evidence).isEqualTo(1L);
+
+        SourceImportRun returning = sources.startImport(tenant, source.id(), NOW.plusSeconds(10));
+        SourceRecord observedAgain = sources.observe(
+                tenant,
+                returning.id(),
+                "returning",
+                "{\"employmentStatus\":\"ACTIVE\"}",
+                null,
+                NOW.plusSeconds(11),
+                ids.nextId(),
+                null);
+        lifecyclePolicies.applyCurrentObservation(
+                tenant, observedAgain.id(), NOW.plusSeconds(12), ids.nextId(), ids.nextId());
+
+        Identity restored = identityRepository.findById(tenant, identity.id()).orElseThrow();
+        assertThat(restored.lifecycleState()).isEqualTo(IdentityLifecycleState.ACTIVE);
+        assertThat(restored.revision()).isEqualTo(inferred.revision() + 1);
     }
 
     @Test

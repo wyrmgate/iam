@@ -135,6 +135,26 @@ public interface SourceCorrelationRepository {
             long expectedRevision,
             Instant now);
 
+    void recordAbsenceTransitionEvidence(
+            TenantContext tenant,
+            UUID evidenceId,
+            UUID sourceSystemId,
+            UUID sourceRecordId,
+            UUID identityLinkId,
+            UUID identityId,
+            UUID importRunId,
+            UUID inferenceId,
+            long preIdentityRevision,
+            long postIdentityRevision,
+            Instant transitionedAt);
+
+    boolean hasCurrentAbsenceTransitionEvidence(
+            TenantContext tenant,
+            UUID sourceRecordId,
+            UUID identityLinkId,
+            UUID identityId,
+            long currentIdentityRevision);
+
     record LinkReplacement(IdentityLink link, boolean changed, UUID previousIdentityId) {
     }
 }

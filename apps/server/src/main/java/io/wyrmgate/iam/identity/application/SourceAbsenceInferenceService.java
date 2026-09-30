@@ -316,7 +316,7 @@ public final class SourceAbsenceInferenceService {
                         }
                         Instant transitionTime =
                                 now.isBefore(identity.updatedAt()) ? identity.updatedAt() : now;
-                        identityCommands.changeLifecycle(
+                        Identity updated = identityCommands.changeLifecycle(
                                 tenant,
                                 identity.id(),
                                 IdentityLifecycleState.INACTIVE,
@@ -324,6 +324,18 @@ public final class SourceAbsenceInferenceService {
                                 transitionTime,
                                 correlationId,
                                 causationId);
+                        sources.recordAbsenceTransitionEvidence(
+                                tenant,
+                                ids.nextId(),
+                                current.sourceSystemId(),
+                                latest.id(),
+                                link.get().id(),
+                                identity.id(),
+                                current.importRunId(),
+                                current.id(),
+                                identity.revision(),
+                                updated.revision(),
+                                transitionTime);
                         transitionDelta = 1;
                     }
                 }

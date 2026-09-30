@@ -104,7 +104,15 @@ public final class SourceLifecyclePolicyService {
 
             Identity current = identities.findById(tenant, link.get().identityId())
                     .orElseThrow(() -> new IllegalArgumentException("linked identity does not exist"));
-            if (!shouldApply(current.lifecycleState(), target)) {
+            boolean inferredAbsenceRestoration = target == IdentityLifecycleState.ACTIVE
+                    && current.lifecycleState() == IdentityLifecycleState.INACTIVE
+                    && sources.hasCurrentAbsenceTransitionEvidence(
+                            tenant,
+                            record.id(),
+                            link.get().id(),
+                            current.id(),
+                            current.revision());
+            if (!shouldApply(current.lifecycleState(), target) && !inferredAbsenceRestoration) {
                 return null;
             }
             Instant transitionTime = now.isBefore(current.updatedAt()) ? current.updatedAt() : now;
