@@ -131,6 +131,35 @@ class AuditRecordPersistenceIntegrationTest {
     }
 
     @Test
+    void persistedAuditRowsRejectUpdateAndDelete() {
+        Instant occurredAt = Instant.parse("2026-09-30T14:30:00Z");
+        TenantContext tenant = tenant("Audit Immutable", occurredAt);
+        var record = service(occurredAt.plusSeconds(1)).append(
+                tenant,
+                draft(
+                        occurredAt,
+                        ids.nextId(),
+                        "identity:update",
+                        "identity",
+                        ids.nextId(),
+                        AuditOutcome.SUCCESS,
+                        ids.nextId()));
+
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE audit.audit_record SET outcome = 'FAILURE' WHERE tenant_id = ? AND id = ?",
+                        tenant.tenantId(),
+                        record.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                        "DELETE FROM audit.audit_record WHERE tenant_id = ? AND id = ?",
+                        tenant.tenantId(),
+                        record.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+
+        assertThat(repository.findById(tenant, record.id())).contains(record);
+    }
+
+    @Test
     void boundedQueryUsesDeterministicNewestFirstKeysetAndExactFilters() {
         Instant base = Instant.parse("2026-09-30T15:00:00Z");
         TenantContext tenant = tenant("Audit Query", base);
