@@ -2,6 +2,7 @@ package io.wyrmgate.iam.identity.application;
 
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository.LinkReplacement;
 import io.wyrmgate.iam.identity.domain.IdentityLink;
+import io.wyrmgate.iam.identity.domain.SourceAbsenceTrust;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
 import io.wyrmgate.iam.identity.domain.SourceImportRun;
 import io.wyrmgate.iam.identity.domain.SourceImportRunState;
@@ -128,9 +129,76 @@ public final class SourceCorrelationService {
         if (completeness == SourceImportCompleteness.UNKNOWN) {
             throw new IllegalArgumentException("completed import completeness must be COMPLETE or PARTIAL");
         }
+        return completeImportInternal(
+                tenant,
+                runId,
+                completeness,
+                SourceAbsenceTrust.UNTRUSTED,
+                null,
+                checkpointToken,
+                partialReason,
+                completedAt,
+                correlationId,
+                causationId);
+    }
+
+    public SourceImportRun completeTrustedImport(
+            TenantContext tenant,
+            UUID runId,
+            String absenceTrustReason,
+            String checkpointToken,
+            Instant completedAt,
+            UUID correlationId,
+            UUID causationId) {
+        if (absenceTrustReason == null || absenceTrustReason.isBlank()) {
+            throw new IllegalArgumentException("trusted source absence requires a reason");
+        }
+        return completeImportInternal(
+                tenant,
+                runId,
+                SourceImportCompleteness.COMPLETE,
+                SourceAbsenceTrust.TRUSTED,
+                absenceTrustReason,
+                checkpointToken,
+                null,
+                completedAt,
+                correlationId,
+                causationId);
+    }
+
+    private SourceImportRun completeImportInternal(
+            TenantContext tenant,
+            UUID runId,
+            SourceImportCompleteness completeness,
+            SourceAbsenceTrust absenceTrust,
+            String absenceTrustReason,
+            String checkpointToken,
+            String partialReason,
+            Instant completedAt,
+            UUID correlationId,
+            UUID causationId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(completeness, "completeness");
+        Objects.requireNonNull(absenceTrust, "absenceTrust");
+        Objects.requireNonNull(completedAt, "completedAt");
+        Objects.requireNonNull(correlationId, "correlationId");
+        if (completeness == SourceImportCompleteness.UNKNOWN) {
+            throw new IllegalArgumentException("completed import completeness must be COMPLETE or PARTIAL");
+        }
+        if (absenceTrust == SourceAbsenceTrust.TRUSTED
+                && completeness != SourceImportCompleteness.COMPLETE) {
+            throw new IllegalArgumentException("trusted absence requires COMPLETE coverage");
+        }
         return transactions.required(() -> {
             SourceImportRun run = repository.completeImportRun(
-                    tenant, runId, completeness, checkpointToken, partialReason, completedAt);
+                    tenant,
+                    runId,
+                    completeness,
+                    absenceTrust,
+                    absenceTrustReason,
+                    checkpointToken,
+                    partialReason,
+                    completedAt);
             facts.importCompleted(tenant, run, correlationId, causationId);
             return run;
         });
