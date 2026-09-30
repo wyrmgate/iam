@@ -120,7 +120,7 @@ public final class LifecycleAccessReconciliationService {
 
         Set<String> keys=new LinkedHashSet<>();
         for(var rule:policy.rules()){
-            if(rule.predicateKind()==LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_STRING_EQUALS){
+            if(rule.predicateKind()!=LifecycleAccessPolicyVersion.PredicateKind.ALWAYS){
                 keys.add(rule.canonicalKey());
             }
         }
@@ -234,9 +234,23 @@ public final class LifecycleAccessReconciliationService {
         if(rule.predicateKind()==LifecycleAccessPolicyVersion.PredicateKind.ALWAYS){
             return true;
         }
-        var value=context.canonicalStrings().get(rule.canonicalKey());
-        return value!=null && value.trusted()
-                && Objects.equals(value.value(),rule.expectedString());
+        var value=context.canonicalScalars().get(rule.canonicalKey());
+        if(value==null || !value.trusted()) return false;
+        return switch(rule.predicateKind()){
+            case CANONICAL_STRING_EQUALS ->
+                    value.type()==IdentityLifecycleAccessQuery.ScalarType.STRING
+                            && Objects.equals(value.value(),rule.expectedString());
+            case CANONICAL_BOOLEAN_EQUALS ->
+                    value.type()==IdentityLifecycleAccessQuery.ScalarType.BOOLEAN
+                            && Objects.equals(value.value(),rule.expectedBoolean());
+            case CANONICAL_INTEGER_EQUALS ->
+                    value.type()==IdentityLifecycleAccessQuery.ScalarType.INTEGER
+                            && Objects.equals(value.value(),rule.expectedInteger());
+            case CANONICAL_ENUM_EQUALS ->
+                    value.type()==IdentityLifecycleAccessQuery.ScalarType.ENUM
+                            && Objects.equals(value.value(),rule.expectedEnum());
+            case ALWAYS -> true;
+        };
     }
 
     private static boolean sameTarget(
