@@ -915,6 +915,14 @@ Persistence implementation should now proceed in bounded vertical slices rather 
 
 OD-003 (concrete OpenAPI/AsyncAPI schemas) is the next unresolved architecture/interface area. It can proceed in parallel with early persistence implementation because public contracts remain semantic and must not expose these tables as APIs.
 
+### Source absence inference persistence
+
+Migration V38 extends the Identity-owned source import model with an explicit run-scoped `absence_trust` gate. Existing and ordinary completed imports default to `UNTRUSTED`; `TRUSTED` is valid only with COMPLETE coverage and a non-blank trust reason/evidence summary. This keeps coverage completeness separate from the stronger authority required for destructive absence inference.
+
+`identity.source_absence_policy_version` stores immutable versioned SourceSystem-scoped absence policy. The first policy owns only the positive per-import `max_inferred_transitions` safety ceiling; inferred absence is fixed by ADR-0024 to the reversible Identity `INACTIVE` target rather than storing arbitrary lifecycle expressions.
+
+`identity.source_absence_inference` is the Identity-owned durable process record keyed uniquely by tenant + SourceImportRun. It stores the selected policy version, frozen transition ceiling, `RUNNING|COMPLETED|SUPERSEDED|MANUAL_REQUIRED` process state, optimistic revision, candidate/transition counters and the paired `after_first_observed_at + after_source_record_id` keyset checkpoint. SourceRecord candidate scans use `(tenant_id, source_system_id, first_observed_at, id)`, are bounded, and re-read the current SourceRecord/link/Identity before destructive action. Lifecycle transition and process checkpoint/count update commit atomically so retry cannot undercount transitions and bypass the configured mass-Leaver ceiling.
+
 ### IdentityAccessReduction persistence
 
 `access.identity_access_reduction` is the Access-owned durable process record for lifecycle-driven privilege reduction. Its causal uniqueness is `(tenant_id, identity_id, source_identity_revision)`; the Identity ID is a semantic cross-capability reference rather than a database foreign key. The row stores the source lifecycle/revision and snapshot time, `RUNNING|COMPLETED` process state, optimistic revision, processed count, and an optional paired `after_created_at + after_assignment_id` continuation. The supporting AccessAssignment partial index is ordered by tenant, Identity, creation time and ID for bounded deterministic reduction pages over non-terminal assignments.
