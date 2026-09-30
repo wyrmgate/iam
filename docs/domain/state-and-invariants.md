@@ -44,6 +44,12 @@ Canonical `valueRevision` changes only when the effective resolution outcome, se
 
 Activated canonical schema content is immutable. A replacement schema creates new definition versions; mappings, authority rules, candidates and overrides tied to an older definition version do not silently become compatible with the new version.
 
+### Source-driven correlation and positive construction
+
+ADR-0022 makes positive source automation explicit and fail-safe. An activated source-correlation policy references the exact active mapping for one `STRING`/`SINGLE` canonical key and requires active authority for that source/key. Zero, one and multiple current `RESOLVED`/`OVERRIDDEN` canonical matches mean no-match, unique match and ambiguity respectively; ambiguity never guesses. Existing accepted links are sticky for automation. Policy-authorized no-match creation begins as `PENDING` and materializes the correlation key under a short creation fence before the fence is released, so concurrent positive imports converge on the same governed key rather than creating duplicate Identities.
+
+Canonical candidates are applicable only while their SourceRecord has a current accepted link to the candidate Identity. Explicit link replacement retains candidate/link history as provenance but removes the old candidate from current authority and triggers affected canonical re-resolution. Positive observation processing is independent from destructive absence: COMPLETE/PARTIAL/UNKNOWN import semantics are not used to infer termination in this slice.
+
 ## Role and policy versions
 
 Recommended lifecycle:

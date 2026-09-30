@@ -63,7 +63,8 @@ public final class JdbcSourceCorrelationFactSink implements SourceCorrelationFac
                         sourceRecord.lastObservedAt(),
                         correlationId,
                         causationId,
-                        "{\"sourceRecordId\":\"" + sourceRecord.id() + "\"}"),
+                        "{\"sourceRecordId\":\"" + sourceRecord.id()
+                                + "\",\"observedAt\":\"" + sourceRecord.lastObservedAt() + "\"}"),
                 sourceRecord.lastObservedAt());
     }
 
@@ -91,7 +92,7 @@ public final class JdbcSourceCorrelationFactSink implements SourceCorrelationFac
     }
 
     @Override
-    public void identityLinkAccepted(TenantContext tenant, IdentityLink link) {
+    public void identityLinkAccepted(TenantContext tenant, IdentityLink link, UUID previousIdentityId) {
         outboxRepository.append(
                 tenant,
                 new OutboxEvent(
@@ -104,8 +105,13 @@ public final class JdbcSourceCorrelationFactSink implements SourceCorrelationFac
                         link.linkedAt(),
                         link.correlationId(),
                         link.causationId(),
-                        "{\"identityLinkId\":\"" + link.id() + "\",\"sourceRecordId\":\""
-                                + link.sourceRecordId() + "\",\"identityId\":\"" + link.identityId() + "\"}"),
+                        "{\"identityLinkId\":\"" + link.id()
+                                + "\",\"sourceRecordId\":\"" + link.sourceRecordId()
+                                + "\",\"identityId\":\"" + link.identityId()
+                                + (previousIdentityId == null
+                                        ? ""
+                                        : "\",\"previousIdentityId\":\"" + previousIdentityId)
+                                + "\"}"),
                 link.linkedAt());
     }
 }

@@ -22,6 +22,7 @@ import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
@@ -76,7 +77,7 @@ class SourceCorrelationPersistenceIntegrationTest {
                 ids,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("35");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("36");
     }
 
     @AfterAll
@@ -163,6 +164,47 @@ class SourceCorrelationPersistenceIntegrationTest {
                 .isEqualTo(secondRun.id());
         assertThat(sources.findSourceRecord(tenant, second.id()).orElseThrow().lastCompleteImportRunId())
                 .isEqualTo(firstRun.id());
+    }
+
+    @Test
+    void olderProviderTimestampDoesNotRegressCurrentObservation() {
+        Instant now = Instant.now();
+        TenantContext tenant = tenant("Out Of Order Source Tenant", now);
+        SourceSystem source = sourceCommands.createSourceSystem(
+                tenant, "ordered", "Ordered Source", now, ids.nextId(), null);
+
+        SourceImportRun firstRun = sourceCommands.startImport(
+                tenant, source.id(), now.plusSeconds(1));
+        SourceRecord first = sourceCommands.observe(
+                tenant,
+                firstRun.id(),
+                "employee-1",
+                "{\"name\":\"Newest\"}",
+                now.plusSeconds(20),
+                now.plusSeconds(2),
+                ids.nextId(),
+                null);
+
+        SourceImportRun secondRun = sourceCommands.startImport(
+                tenant, source.id(), now.plusSeconds(3));
+        SourceRecord lateOld = sourceCommands.observe(
+                tenant,
+                secondRun.id(),
+                "employee-1",
+                "{\"name\":\"Older Provider Value\"}",
+                now.plusSeconds(10),
+                now.plusSeconds(4),
+                ids.nextId(),
+                null);
+
+        assertThat(lateOld.id()).isEqualTo(first.id());
+        assertThat(lateOld.observedAttributesJson()).contains("Newest");
+        assertThat(lateOld.observedAttributesJson()).doesNotContain("Older Provider Value");
+        assertThat(lateOld.sourceUpdatedAt())
+                .isCloseTo(now.plusSeconds(20), org.assertj.core.api.Assertions.within(1, ChronoUnit.MICROS));
+        assertThat(lateOld.lastObservedAt())
+                .isCloseTo(now.plusSeconds(4), org.assertj.core.api.Assertions.within(1, ChronoUnit.MICROS));
+        assertThat(lateOld.lastImportRunId()).isEqualTo(secondRun.id());
     }
 
     @Test

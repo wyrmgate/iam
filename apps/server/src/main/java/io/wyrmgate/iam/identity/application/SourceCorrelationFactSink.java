@@ -15,5 +15,5 @@ public interface SourceCorrelationFactSink {
 
     void importCompleted(TenantContext tenant, SourceImportRun run, UUID correlationId, UUID causationId);
 
-    void identityLinkAccepted(TenantContext tenant, IdentityLink link);
+    void identityLinkAccepted(TenantContext tenant, IdentityLink link, UUID previousIdentityId);
 }
