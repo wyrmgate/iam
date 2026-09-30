@@ -19,6 +19,7 @@ import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluator;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
+import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
@@ -27,8 +28,12 @@ import io.wyrmgate.iam.identity.domain.IdentityType;
 import io.wyrmgate.iam.identity.persistence.JdbcCanonicalAttributeReadRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcCanonicalAttributeRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcIdentityMergeSplitRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityQueryRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
+import io.wyrmgate.iam.identity.persistence.JdbcPrincipalFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcSourceCorrelationFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcSourceCorrelationRepository;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -488,7 +493,33 @@ class IdentityApiIntegrationTest {
     private MockMvc mockMvc(AdministrativeAuthorizationService authorization) {
         IdentityApiMutationService mutations = new IdentityApiMutationService(
                 authorization, commands, identities, idempotency, transactions);
-        IdentityController controller = new IdentityController(queries, mutations, authorization, ids, testCursorCodec());
+        var outbox = new JdbcOutboxRepository(jdbc);
+        var sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
+        var sourceFacts = new JdbcSourceCorrelationFactSink(outbox, ids);
+        var principalFacts = new JdbcPrincipalFactSink(outbox, ids);
+        var mergeSplitRepository = new JdbcIdentityMergeSplitRepository(jdbc, identities);
+        var mergeSplitService = new IdentityMergeSplitService(
+                mergeSplitRepository,
+                identities,
+                sourceRepository,
+                sourceFacts,
+                principalFacts,
+                commands,
+                ids,
+                transactions);
+        var mergeSplitMutations = new IdentityMergeSplitApiMutationService(
+                authorization,
+                mergeSplitService,
+                mergeSplitRepository,
+                idempotency,
+                transactions);
+        IdentityController controller = new IdentityController(
+                queries,
+                mutations,
+                mergeSplitMutations,
+                authorization,
+                ids,
+                testCursorCodec());
         return MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new IdentityApiErrorHandler(ids))
                 .build();
