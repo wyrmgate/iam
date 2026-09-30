@@ -111,5 +111,4 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
             default -> CanonicalScalar.unavailable();
         };
     }
-    }
 }
