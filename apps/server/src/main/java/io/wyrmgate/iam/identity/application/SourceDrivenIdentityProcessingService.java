@@ -41,6 +41,7 @@ public final class SourceDrivenIdentityProcessingService {
     private final SourceCorrelationService correlations;
     private final IdentityCommandService identities;
     private final CanonicalAttributeResolutionService resolution;
+    private final SourceLifecyclePolicyService lifecyclePolicies;
     private final SourceMappedValueExtractor extractor;
     private final TransactionExecutor transactions;
     private final ObjectMapper json;
@@ -53,6 +54,7 @@ public final class SourceDrivenIdentityProcessingService {
             SourceCorrelationService correlations,
             IdentityCommandService identities,
             CanonicalAttributeResolutionService resolution,
+            SourceLifecyclePolicyService lifecyclePolicies,
             SourceMappedValueExtractor extractor,
             TransactionExecutor transactions,
             ObjectMapper json) {
@@ -63,6 +65,7 @@ public final class SourceDrivenIdentityProcessingService {
                 correlations,
                 identities,
                 resolution,
+                lifecyclePolicies,
                 extractor,
                 transactions,
                 json,
@@ -76,6 +79,7 @@ public final class SourceDrivenIdentityProcessingService {
             SourceCorrelationService correlations,
             IdentityCommandService identities,
             CanonicalAttributeResolutionService resolution,
+            SourceLifecyclePolicyService lifecyclePolicies,
             SourceMappedValueExtractor extractor,
             TransactionExecutor transactions,
             ObjectMapper json,
@@ -86,6 +90,7 @@ public final class SourceDrivenIdentityProcessingService {
         this.correlations = Objects.requireNonNull(correlations, "correlations");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.resolution = Objects.requireNonNull(resolution, "resolution");
+        this.lifecyclePolicies = Objects.requireNonNull(lifecyclePolicies, "lifecyclePolicies");
         this.extractor = Objects.requireNonNull(extractor, "extractor");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
         this.json = Objects.requireNonNull(json, "json");
@@ -167,6 +172,12 @@ public final class SourceDrivenIdentityProcessingService {
                         correlationId,
                         event.eventId(),
                         processingTime);
+                lifecyclePolicies.applyCurrentObservation(
+                        item.tenant(),
+                        sourceRecordId,
+                        processingTime,
+                        correlationId,
+                        event.eventId());
             }
             return;
         }
@@ -180,6 +191,12 @@ public final class SourceDrivenIdentityProcessingService {
                     correlationId,
                     event.eventId(),
                     processingTime);
+            lifecyclePolicies.applyCurrentObservation(
+                    item.tenant(),
+                    sourceRecordId,
+                    processingTime,
+                    correlationId,
+                    event.eventId());
             if (previousIdentityId != null) {
                 reresolvePreviousIdentity(
                         item.tenant(),
