@@ -39,6 +39,7 @@ Default decision is DENY.
 AdministrativeRole is a manageable bundle of stable control-plane permissions. Example permission families include:
 
 - identity read/create/update/activate/suspend/deactivate/decommission/merge/split/correlation;
+- Principal read/register/correlate;
 - application/target/catalog governance;
 - Role/Entitlement draft and activation actions;
 - policy creation/version activation;
@@ -51,6 +52,8 @@ AdministrativeRole is a manageable bundle of stable control-plane permissions. E
 - administrative-authorization management.
 
 The implemented Identity lifecycle surface separates `identity:activate`, `identity:suspend`, `identity:deactivate`, and `identity:decommission` from generic `identity:update`. Possession of metadata-update authority therefore does not authorize lifecycle changes. These lifecycle permissions are default-deny and are not silently added to the initial tenant administrator permission set.
+
+The implemented Principal administration surface likewise separates `principal:read`, `principal:register`, and `principal:correlate` from `identity:update` and from connector/provider administration. Registration authority cannot assign an Identity or mutate provider lifecycle; correlation authority performs only the explicit one-way Identity-owned relationship change. These Principal permissions are default-deny and are not silently added to the initial tenant administrator permission set.
 
 Raw secret retrieval is not implied by platform administration and is unavailable through the Credential public API because secret material is external by default. The implemented Credential surface uses separate semantic permissions `credential:read`, `credential:create`, `credential:revoke`, `credential:compromise`, `credential:rotate`, and `credential-rotation:read`; none is silently added to the initial tenant administrator permission set.
 
