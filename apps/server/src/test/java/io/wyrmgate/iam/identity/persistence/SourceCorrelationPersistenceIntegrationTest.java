@@ -166,6 +166,45 @@ class SourceCorrelationPersistenceIntegrationTest {
     }
 
     @Test
+    void olderProviderTimestampDoesNotRegressCurrentObservation() {
+        Instant now = Instant.now();
+        TenantContext tenant = tenant("Out Of Order Source Tenant", now);
+        SourceSystem source = sourceCommands.createSourceSystem(
+                tenant, "ordered", "Ordered Source", now, ids.nextId(), null);
+
+        SourceImportRun firstRun = sourceCommands.startImport(
+                tenant, source.id(), now.plusSeconds(1));
+        SourceRecord first = sourceCommands.observe(
+                tenant,
+                firstRun.id(),
+                "employee-1",
+                "{\"name\":\"Newest\"}",
+                now.plusSeconds(20),
+                now.plusSeconds(2),
+                ids.nextId(),
+                null);
+
+        SourceImportRun secondRun = sourceCommands.startImport(
+                tenant, source.id(), now.plusSeconds(3));
+        SourceRecord lateOld = sourceCommands.observe(
+                tenant,
+                secondRun.id(),
+                "employee-1",
+                "{\"name\":\"Older Provider Value\"}",
+                now.plusSeconds(10),
+                now.plusSeconds(4),
+                ids.nextId(),
+                null);
+
+        assertThat(lateOld.id()).isEqualTo(first.id());
+        assertThat(lateOld.observedAttributesJson()).contains("Newest");
+        assertThat(lateOld.observedAttributesJson()).doesNotContain("Older Provider Value");
+        assertThat(lateOld.sourceUpdatedAt()).isEqualTo(now.plusSeconds(20));
+        assertThat(lateOld.lastObservedAt()).isEqualTo(now.plusSeconds(4));
+        assertThat(lateOld.lastImportRunId()).isEqualTo(secondRun.id());
+    }
+
+    @Test
     void completedImportRejectsFurtherObservation() {
         Instant now = Instant.now();
         TenantContext tenant = tenant("Closed Import Tenant", now);
