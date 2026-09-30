@@ -28,12 +28,20 @@ public final class AuditQueryModels {
         public AuditFilter {
             if (actionType != null) {
                 if (actionType.isBlank()) throw new IllegalArgumentException("actionType must not be blank");
-                actionType = actionType.trim();
+                actionType = boundedType(actionType, "actionType");
             }
             if (resourceType != null) {
                 if (resourceType.isBlank()) throw new IllegalArgumentException("resourceType must not be blank");
-                resourceType = resourceType.trim();
+                resourceType = boundedType(resourceType, "resourceType");
             }
+        }
+
+        private static String boundedType(String value, String field) {
+            String normalized = value.trim();
+            if (normalized.length() > 128) {
+                throw new IllegalArgumentException(field + " must not exceed 128 characters");
+            }
+            return normalized;
         }
 
         public static AuditFilter none() {
