@@ -17,6 +17,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeConfigurationService;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluator;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
@@ -735,8 +738,19 @@ class IdentityApiIntegrationTest {
     }
 
     private MockMvc mockMvc(AdministrativeAuthorizationService authorization) {
+        return mockMvc(
+                authorization,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
+    }
+
+    private MockMvc mockMvc(
+            AdministrativeAuthorizationService authorization,
+            SecurityAuditPort audit) {
         IdentityApiMutationService mutations = new IdentityApiMutationService(
-                authorization, commands, identities, idempotency, transactions);
+                authorization, commands, identities, idempotency, transactions, audit, ids);
         var outbox = new JdbcOutboxRepository(jdbc);
         var sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
         var sourceFacts = new JdbcSourceCorrelationFactSink(outbox, ids);
