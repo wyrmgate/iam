@@ -21,14 +21,8 @@ public record AuditRecordDraft(
     public AuditRecordDraft {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(occurredAt, "occurredAt");
-        if (actionType == null || actionType.isBlank()) {
-            throw new IllegalArgumentException("actionType must not be blank");
-        }
-        if (resourceType == null || resourceType.isBlank()) {
-            throw new IllegalArgumentException("resourceType must not be blank");
-        }
-        actionType = actionType.trim();
-        resourceType = resourceType.trim();
+        actionType = boundedType(actionType, "actionType");
+        resourceType = boundedType(resourceType, "resourceType");
         if (actionType.length() > 128) {
             throw new IllegalArgumentException("actionType must contain at most 128 characters");
         }
@@ -36,5 +30,16 @@ public record AuditRecordDraft(
             throw new IllegalArgumentException("resourceType must contain at most 128 characters");
         }
         Objects.requireNonNull(outcome, "outcome");
+    }
+
+    private static String boundedType(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " must not be blank");
+        }
+        String normalized = value.trim();
+        if (normalized.length() > 128) {
+            throw new IllegalArgumentException(field + " must not exceed 128 characters");
+        }
+        return normalized;
     }
 }
