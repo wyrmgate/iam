@@ -4,12 +4,16 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationSer
 import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
+import io.wyrmgate.iam.audit.application.AuditRecordDraft;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
 import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
 import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
@@ -17,9 +21,13 @@ import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** HTTP-adapter orchestration for authorization + causal idempotency + Identity commands. */
 final class IdentityApiMutationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(IdentityApiMutationService.class);
 
     private static final String CREATE_NAMESPACE = "api.identity.create.v1";
     private static final String UPDATE_NAMESPACE = "api.identity.update-metadata.v1";
@@ -33,18 +41,24 @@ final class IdentityApiMutationService {
     private final IdentityRepository identities;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
+    private final SecurityAuditPort audit;
+    private final IdGenerator ids;
 
     IdentityApiMutationService(
             AdministrativeAuthorizationService authorization,
             IdentityCommandService commands,
             IdentityRepository identities,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         this.authorization = Objects.requireNonNull(authorization, "authorization");
         this.commands = Objects.requireNonNull(commands, "commands");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.idempotency = Objects.requireNonNull(idempotency, "idempotency");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     Identity create(
@@ -110,8 +124,9 @@ final class IdentityApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            var operation = lifecycleOperation(targetState);
+        var operation = lifecycleOperation(targetState);
+        try {
+            Identity result = transactions.required(() -> {
             requireAllowed(
                     actor,
                     operation.permission(),
@@ -157,8 +172,48 @@ final class IdentityApiMutationService {
                     "identity",
                     updated.id(),
                     now);
-            return updated;
-        });
+                return updated;
+            });
+            recordLifecycleOutcome(
+                    actor, identityId, operation.auditAction(), AuditOutcome.SUCCESS, now, correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            AuditOutcome outcome = failure instanceof IdentityApiException api
+                            && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                    ? AuditOutcome.DENIED
+                    : AuditOutcome.FAILURE;
+            recordLifecycleOutcome(actor, identityId, operation.auditAction(), outcome, now, correlationId);
+            throw failure;
+        }
+    }
+
+    private void recordLifecycleOutcome(
+            AuthenticatedAdministrativeActor actor,
+            UUID identityId,
+            String actionType,
+            AuditOutcome outcome,
+            Instant occurredAt,
+            UUID correlationId) {
+        try {
+            audit.append(
+                    actor.tenant(),
+                    new AuditRecordDraft(
+                            ids.nextId(),
+                            occurredAt,
+                            actor.identityId(),
+                            actionType,
+                            "identity",
+                            identityId,
+                            outcome,
+                            correlationId,
+                            null));
+        } catch (RuntimeException auditFailure) {
+            LOG.warn(
+                    "Identity lifecycle AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    correlationId,
+                    actionType,
+                    outcome);
+        }
     }
 
     private static LifecycleOperation lifecycleOperation(
@@ -166,16 +221,20 @@ final class IdentityApiMutationService {
         return switch (targetState) {
             case ACTIVE -> new LifecycleOperation(
                     ACTIVATE_NAMESPACE,
-                    AdministrativePermissions.IDENTITY_ACTIVATE);
+                    AdministrativePermissions.IDENTITY_ACTIVATE,
+                    "identity:activate");
             case SUSPENDED -> new LifecycleOperation(
                     SUSPEND_NAMESPACE,
-                    AdministrativePermissions.IDENTITY_SUSPEND);
+                    AdministrativePermissions.IDENTITY_SUSPEND,
+                    "identity:suspend");
             case INACTIVE -> new LifecycleOperation(
                     DEACTIVATE_NAMESPACE,
-                    AdministrativePermissions.IDENTITY_DEACTIVATE);
+                    AdministrativePermissions.IDENTITY_DEACTIVATE,
+                    "identity:deactivate");
             case DECOMMISSIONED -> new LifecycleOperation(
                     DECOMMISSION_NAMESPACE,
-                    AdministrativePermissions.IDENTITY_DECOMMISSION);
+                    AdministrativePermissions.IDENTITY_DECOMMISSION,
+                    "identity:decommission");
             case PENDING -> throw new IllegalArgumentException(
                     "PENDING is not a public lifecycle command target");
         };
@@ -204,7 +263,8 @@ final class IdentityApiMutationService {
 
     private record LifecycleOperation(
             String namespace,
-            io.wyrmgate.iam.administration.domain.AdministrativePermission permission) {
+            io.wyrmgate.iam.administration.domain.AdministrativePermission permission,
+            String auditAction) {
     }
 
     private Identity replay(

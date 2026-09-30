@@ -17,6 +17,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeConfigurationService;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluator;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
@@ -498,6 +501,41 @@ class IdentityApiIntegrationTest {
                 .contains("\"previousLifecycleState\": \"ACTIVE\"")
                 .contains("\"lifecycleState\": \"DECOMMISSIONED\"")
                 .contains("\"accessEligible\": false");
+
+        String decommissionAudit = jdbc.queryForObject(
+                """
+                SELECT outcome
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:decommission'
+                  AND resource_type = 'identity'
+                  AND resource_id = ?
+                  AND correlation_id = ?
+                """,
+                String.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                target.id(),
+                correlationId);
+        assertThat(decommissionAudit).isEqualTo("SUCCESS");
+
+        Integer failedActivateAudit = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:activate'
+                  AND resource_type = 'identity'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                target.id());
+        assertThat(failedActivateAudit).isEqualTo(1);
     }
 
     @Test
@@ -520,6 +558,23 @@ class IdentityApiIntegrationTest {
                         .header("Idempotency-Key", "idempotency-00000008"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("forbidden"));
+
+        Integer deniedAudit = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:suspend'
+                  AND resource_type = 'identity'
+                  AND resource_id = ?
+                  AND outcome = 'DENIED'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                target.id());
+        assertThat(deniedAudit).isEqualTo(1);
 
         MockMvc suspendOnly = mockMvc(authorizationOnly(AdministrativePermissions.IDENTITY_SUSPEND));
         suspendOnly.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
@@ -554,6 +609,39 @@ class IdentityApiIntegrationTest {
                         .header("If-Match", "\"rev-2\""))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("validation_failed"));
+    }
+
+    @Test
+    void lifecycleAuditFailureDoesNotRewriteSuccessfulIdentityOutcome() throws Exception {
+        Instant now = Instant.parse("2026-09-16T11:45:00Z");
+        Identity target = commands.create(
+                tenant,
+                IdentityType.SERVICE,
+                new IdentityProfile.ServiceProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Audit Failure Target",
+                now,
+                ids.nextId(),
+                null);
+        SecurityAuditPort unavailableAudit = (requestedTenant, draft) -> {
+            throw new IllegalStateException("audit unavailable");
+        };
+        MockMvc suspendOnly = mockMvc(
+                authorizationOnly(AdministrativePermissions.IDENTITY_SUSPEND),
+                unavailableAudit);
+
+        suspendOnly.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "audit-failure-0001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lifecycleState").value("SUSPENDED"))
+                .andExpect(jsonPath("$.revision").value(2));
+
+        assertThat(identities.findById(tenant, target.id()))
+                .get()
+                .extracting(Identity::lifecycleState)
+                .isEqualTo(IdentityLifecycleState.SUSPENDED);
     }
 
     @Test
@@ -735,8 +823,19 @@ class IdentityApiIntegrationTest {
     }
 
     private MockMvc mockMvc(AdministrativeAuthorizationService authorization) {
+        return mockMvc(
+                authorization,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
+    }
+
+    private MockMvc mockMvc(
+            AdministrativeAuthorizationService authorization,
+            SecurityAuditPort audit) {
         IdentityApiMutationService mutations = new IdentityApiMutationService(
-                authorization, commands, identities, idempotency, transactions);
+                authorization, commands, identities, idempotency, transactions, audit, ids);
         var outbox = new JdbcOutboxRepository(jdbc);
         var sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
         var sourceFacts = new JdbcSourceCorrelationFactSink(outbox, ids);

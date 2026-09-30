@@ -2,6 +2,7 @@ package io.wyrmgate.iam.api.identity;
 
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitRepository;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
@@ -9,6 +10,7 @@ import io.wyrmgate.iam.identity.application.IdentityRepository;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalRepository;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
@@ -27,9 +29,11 @@ class IdentityApiConfiguration {
             IdentityCommandService commands,
             IdentityRepository identities,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new IdentityApiMutationService(
-                authorization, commands, identities, idempotency, transactions);
+                authorization, commands, identities, idempotency, transactions, audit, ids);
     }
 
     @Bean
