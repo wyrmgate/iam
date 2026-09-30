@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.identity.persistence;
 
 import io.wyrmgate.iam.identity.application.CanonicalAttributeRepository;
+import io.wyrmgate.iam.identity.application.CanonicalAttributeRepository.ActiveSourceMapping;
 import io.wyrmgate.iam.identity.domain.AttributeAuthorityRuleVersion;
 import io.wyrmgate.iam.identity.domain.AttributeDefinition;
 import io.wyrmgate.iam.identity.domain.AttributeDefinitionVersion;
@@ -160,6 +161,113 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
                 WHERE tenant_id = ? AND source_system_id = ? AND attribute_definition_version_id = ? AND state = 'ACTIVE'
                 """, (rs, rowNum) -> mapping(rs), tenant.tenantId(), sourceSystemId, definitionVersionId)
                 .stream().findFirst();
+    }
+
+    @Override
+    public List<ActiveSourceMapping> findActiveMappingsForSource(
+            TenantContext tenant, UUID sourceSystemId) {
+        return jdbc.query("""
+                SELECT d.canonical_key,
+                       dv.id AS dv_id,
+                       dv.schema_version_id,
+                       dv.attribute_definition_id,
+                       dv.data_type,
+                       dv.cardinality,
+                       dv.classification,
+                       dv.queryable,
+                       dv.searchable,
+                       dv.policy_addressable,
+                       dv.created_at AS dv_created_at,
+                       m.id AS mapping_id,
+                       m.source_system_id,
+                       m.attribute_definition_version_id,
+                       m.version_number,
+                       m.source_path,
+                       m.state AS mapping_state,
+                       m.created_at AS mapping_created_at,
+                       m.activated_at,
+                       m.superseded_at
+                FROM identity.attribute_mapping_version m
+                JOIN identity.attribute_definition_version dv
+                  ON dv.tenant_id = m.tenant_id
+                 AND dv.id = m.attribute_definition_version_id
+                JOIN identity.attribute_definition d
+                  ON d.tenant_id = dv.tenant_id
+                 AND d.id = dv.attribute_definition_id
+                JOIN identity.canonical_schema_version schema
+                  ON schema.tenant_id = dv.tenant_id
+                 AND schema.id = dv.schema_version_id
+                 AND schema.state = 'ACTIVE'
+                WHERE m.tenant_id = ?
+                  AND m.source_system_id = ?
+                  AND m.state = 'ACTIVE'
+                  AND d.lifecycle_state = 'ACTIVE'
+                ORDER BY d.canonical_key, m.id
+                """,
+                (rs, rowNum) -> {
+                    AttributeDefinitionVersion definition = new AttributeDefinitionVersion(
+                            rs.getObject("dv_id", UUID.class),
+                            rs.getObject("schema_version_id", UUID.class),
+                            rs.getObject("attribute_definition_id", UUID.class),
+                            CanonicalAttributeType.valueOf(rs.getString("data_type")),
+                            CanonicalAttributeCardinality.valueOf(rs.getString("cardinality")),
+                            rs.getString("classification"),
+                            rs.getBoolean("queryable"),
+                            rs.getBoolean("searchable"),
+                            rs.getBoolean("policy_addressable"),
+                            rs.getTimestamp("dv_created_at").toInstant());
+                    AttributeMappingVersion mapping = new AttributeMappingVersion(
+                            rs.getObject("mapping_id", UUID.class),
+                            rs.getObject("source_system_id", UUID.class),
+                            rs.getObject("attribute_definition_version_id", UUID.class),
+                            rs.getLong("version_number"),
+                            rs.getString("source_path"),
+                            AttributeMappingVersion.State.valueOf(rs.getString("mapping_state")),
+                            rs.getTimestamp("mapping_created_at").toInstant(),
+                            rs.getTimestamp("activated_at").toInstant(),
+                            instant(rs.getTimestamp("superseded_at")));
+                    return new ActiveSourceMapping(
+                            rs.getString("canonical_key"), definition, mapping);
+                },
+                tenant.tenantId(),
+                sourceSystemId);
+    }
+
+    @Override
+    public List<UUID> findIdentityIdsByResolvedSingleStringValue(
+            TenantContext tenant,
+            UUID attributeDefinitionVersionId,
+            String value,
+            int limit) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(attributeDefinitionVersionId, "attributeDefinitionVersionId");
+        Objects.requireNonNull(value, "value");
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("limit must be between 1 and 100");
+        }
+        return jdbc.query("""
+                SELECT state.identity_id
+                FROM identity.canonical_attribute_state state
+                JOIN identity.canonical_attribute_state_value value
+                  ON value.tenant_id = state.tenant_id
+                 AND value.state_id = state.id
+                 AND value.attribute_definition_version_id =
+                     state.attribute_definition_version_id
+                WHERE state.tenant_id = ?
+                  AND state.attribute_definition_version_id = ?
+                  AND state.resolution_status IN ('RESOLVED', 'OVERRIDDEN')
+                  AND value.data_type = 'STRING'
+                  AND value.cardinality = 'SINGLE'
+                  AND value.value_ordinal = 0
+                  AND value.value_string = ?
+                ORDER BY state.identity_id
+                LIMIT ?
+                """,
+                (rs, rowNum) -> rs.getObject("identity_id", UUID.class),
+                tenant.tenantId(),
+                attributeDefinitionVersionId,
+                value,
+                limit);
     }
 
     @Override
