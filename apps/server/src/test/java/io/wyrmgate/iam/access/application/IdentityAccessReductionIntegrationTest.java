@@ -80,7 +80,7 @@ class IdentityAccessReductionIntegrationTest {
         flyway.validate();
         assertThat(flyway.info().current()
                 .getVersion().getVersion())
-                .isEqualTo("37");
+                .isEqualTo("38");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();

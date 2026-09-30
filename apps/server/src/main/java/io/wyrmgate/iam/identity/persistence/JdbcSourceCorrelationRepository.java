@@ -4,6 +4,9 @@ import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository.LinkReplacement;
 import io.wyrmgate.iam.identity.domain.IdentityLink;
 import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.domain.SourceAbsenceInference;
+import io.wyrmgate.iam.identity.domain.SourceAbsencePolicyVersion;
+import io.wyrmgate.iam.identity.domain.SourceAbsenceTrust;
 import io.wyrmgate.iam.identity.domain.SourceCorrelationPolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
 import io.wyrmgate.iam.identity.domain.SourceImportRun;
@@ -12,6 +15,7 @@ import io.wyrmgate.iam.identity.domain.SourceLifecyclePolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceRecord;
 import io.wyrmgate.iam.identity.domain.SourceSystem;
 import io.wyrmgate.iam.platform.id.IdGenerator;
+import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -96,22 +100,71 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
             TenantContext tenant,
             UUID runId,
             SourceImportCompleteness completeness,
+            SourceAbsenceTrust absenceTrust,
+            String absenceTrustReason,
             String checkpointToken,
             String partialReason,
             Instant completedAt) {
+        Objects.requireNonNull(absenceTrust, "absenceTrust");
         if (completeness == SourceImportCompleteness.PARTIAL
                 && (partialReason == null || partialReason.isBlank())) {
             throw new IllegalArgumentException("partial import requires a reason");
         }
+        if (absenceTrust == SourceAbsenceTrust.TRUSTED) {
+            if (completeness != SourceImportCompleteness.COMPLETE) {
+                throw new IllegalArgumentException("trusted absence requires COMPLETE import");
+            }
+            if (absenceTrustReason == null || absenceTrustReason.isBlank()) {
+                throw new IllegalArgumentException("trusted absence requires a reason");
+            }
+            List<ImportAuthority> authority = jdbcTemplate.query(
+                    """
+                    SELECT source_system_id, started_at
+                    FROM identity.source_import_run
+                    WHERE tenant_id = ? AND id = ? AND run_state = 'RUNNING'
+                    FOR UPDATE
+                    """,
+                    (rs, rowNum) -> new ImportAuthority(
+                            rs.getObject("source_system_id", UUID.class),
+                            rs.getTimestamp("started_at").toInstant()),
+                    tenant.tenantId(),
+                    runId);
+            if (authority.isEmpty()) {
+                throw new IllegalStateException("source import run is not active or does not exist");
+            }
+            ImportAuthority current = authority.getFirst();
+            Long conflicting = jdbcTemplate.queryForObject(
+                    """
+                    SELECT count(*)
+                    FROM identity.source_import_run
+                    WHERE tenant_id = ?
+                      AND source_system_id = ?
+                      AND id <> ?
+                      AND (run_state = 'RUNNING' OR started_at > ?)
+                    """,
+                    Long.class,
+                    tenant.tenantId(),
+                    current.sourceSystemId(),
+                    runId,
+                    Timestamp.from(current.startedAt()));
+            if (conflicting != null && conflicting > 0) {
+                throw new IllegalStateException(
+                        "trusted absence requires an isolated latest source import");
+            }
+        }
+
         int affected = jdbcTemplate.update(
                 """
                 UPDATE identity.source_import_run
                 SET run_state = 'COMPLETED', completeness = ?, completed_at = ?,
+                    absence_trust = ?, absence_trust_reason = ?,
                     checkpoint_token = ?, partial_reason = ?
                 WHERE tenant_id = ? AND id = ? AND run_state = 'RUNNING'
                 """,
                 completeness.name(),
                 Timestamp.from(completedAt),
+                absenceTrust.name(),
+                absenceTrustReason,
                 checkpointToken,
                 partialReason,
                 tenant.tenantId(),
@@ -132,6 +185,38 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
         }
         return findImportRun(tenant, runId)
                 .orElseThrow(() -> new IllegalStateException("completed source import run could not be reloaded"));
+    }
+
+    @Override
+    public SourceAbsenceTrust findImportAbsenceTrust(TenantContext tenant, UUID runId) {
+        return jdbcTemplate.query(
+                """
+                SELECT absence_trust
+                FROM identity.source_import_run
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs, rowNum) -> SourceAbsenceTrust.valueOf(rs.getString("absence_trust")),
+                tenant.tenantId(),
+                runId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("source import run does not exist"));
+    }
+
+    @Override
+    public boolean hasImportStartedAfter(
+            TenantContext tenant, UUID sourceSystemId, Instant startedAt) {
+        Long count = jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM identity.source_import_run
+                WHERE tenant_id = ? AND source_system_id = ? AND started_at > ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                sourceSystemId,
+                Timestamp.from(startedAt));
+        return count != null && count > 0;
     }
 
     @Override
@@ -574,6 +659,261 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
         return policies.stream().findFirst();
     }
 
+    @Override
+    public SourceAbsencePolicyVersion replaceActiveAbsencePolicy(
+            TenantContext tenant,
+            UUID sourceSystemId,
+            int maxInferredTransitions,
+            Instant activatedAt,
+            UUID newPolicyId) {
+        if (maxInferredTransitions < 1) {
+            throw new IllegalArgumentException("maxInferredTransitions must be positive");
+        }
+        List<UUID> sourceRows = jdbcTemplate.query(
+                "SELECT id FROM identity.source_system WHERE tenant_id = ? AND id = ? FOR UPDATE",
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                tenant.tenantId(),
+                sourceSystemId);
+        if (sourceRows.isEmpty()) {
+            throw new IllegalArgumentException("source system does not exist");
+        }
+        Long nextVersion = jdbcTemplate.queryForObject(
+                """
+                SELECT COALESCE(max(version_number), 0) + 1
+                FROM identity.source_absence_policy_version
+                WHERE tenant_id = ? AND source_system_id = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                sourceSystemId);
+        jdbcTemplate.update(
+                """
+                UPDATE identity.source_absence_policy_version
+                SET state = 'SUPERSEDED', superseded_at = ?
+                WHERE tenant_id = ? AND source_system_id = ? AND state = 'ACTIVE'
+                """,
+                Timestamp.from(activatedAt),
+                tenant.tenantId(),
+                sourceSystemId);
+        jdbcTemplate.update(
+                """
+                INSERT INTO identity.source_absence_policy_version (
+                    id, tenant_id, source_system_id, version_number,
+                    max_inferred_transitions, state, created_at, activated_at)
+                VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+                """,
+                newPolicyId,
+                tenant.tenantId(),
+                sourceSystemId,
+                nextVersion,
+                maxInferredTransitions,
+                Timestamp.from(activatedAt),
+                Timestamp.from(activatedAt));
+        return findActiveAbsencePolicy(tenant, sourceSystemId)
+                .orElseThrow(() -> new IllegalStateException("absence policy could not be reloaded"));
+    }
+
+    @Override
+    public Optional<SourceAbsencePolicyVersion> findActiveAbsencePolicy(
+            TenantContext tenant, UUID sourceSystemId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, version_number, max_inferred_transitions,
+                       state, created_at, activated_at, superseded_at
+                FROM identity.source_absence_policy_version
+                WHERE tenant_id = ? AND source_system_id = ? AND state = 'ACTIVE'
+                """,
+                (rs, rowNum) -> new SourceAbsencePolicyVersion(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("source_system_id", UUID.class),
+                        rs.getLong("version_number"),
+                        rs.getInt("max_inferred_transitions"),
+                        SourceAbsencePolicyVersion.State.valueOf(rs.getString("state")),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("activated_at").toInstant(),
+                        instant(rs.getTimestamp("superseded_at"))),
+                tenant.tenantId(),
+                sourceSystemId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public SourceAbsenceInference startAbsenceInferenceIfAbsent(
+            TenantContext tenant, SourceAbsenceInference candidate) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO identity.source_absence_inference (
+                    id, tenant_id, source_system_id, import_run_id, policy_version_id,
+                    max_inferred_transitions, process_state,
+                    after_first_observed_at, after_source_record_id,
+                    processed_candidate_count, inferred_transition_count,
+                    revision, created_at, updated_at, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (tenant_id, import_run_id) DO NOTHING
+                """,
+                candidate.id(),
+                tenant.tenantId(),
+                candidate.sourceSystemId(),
+                candidate.importRunId(),
+                candidate.policyVersionId(),
+                candidate.maxInferredTransitions(),
+                candidate.state().name(),
+                timestamp(candidate.afterFirstObservedAt()),
+                candidate.afterSourceRecordId(),
+                candidate.processedCandidateCount(),
+                candidate.inferredTransitionCount(),
+                candidate.revision(),
+                Timestamp.from(candidate.createdAt()),
+                Timestamp.from(candidate.updatedAt()),
+                timestamp(candidate.completedAt()));
+        return findAbsenceInferenceByRun(tenant, candidate.importRunId())
+                .orElseThrow(() -> new IllegalStateException("absence inference could not be reloaded"));
+    }
+
+    @Override
+    public Optional<SourceAbsenceInference> findAbsenceInferenceById(
+            TenantContext tenant, UUID inferenceId) {
+        return queryAbsenceInference(
+                "WHERE tenant_id = ? AND id = ?",
+                tenant.tenantId(),
+                inferenceId);
+    }
+
+    private Optional<SourceAbsenceInference> findAbsenceInferenceByRun(
+            TenantContext tenant, UUID importRunId) {
+        return queryAbsenceInference(
+                "WHERE tenant_id = ? AND import_run_id = ?",
+                tenant.tenantId(),
+                importRunId);
+    }
+
+    @Override
+    public List<SourceRecord> findAbsentSourceRecordPage(
+            TenantContext tenant,
+            UUID sourceSystemId,
+            UUID importRunId,
+            Instant runStartedAt,
+            Instant afterFirstObservedAt,
+            UUID afterSourceRecordId,
+            int limit) {
+        if (limit < 1) {
+            throw new IllegalArgumentException("limit must be positive");
+        }
+        String checkpoint = afterFirstObservedAt == null
+                ? ""
+                : " AND (first_observed_at, id) > (?, ?)";
+        java.util.ArrayList<Object> args = new java.util.ArrayList<>();
+        args.add(tenant.tenantId());
+        args.add(sourceSystemId);
+        args.add(importRunId);
+        args.add(Timestamp.from(runStartedAt));
+        if (afterFirstObservedAt != null) {
+            args.add(Timestamp.from(afterFirstObservedAt));
+            args.add(afterSourceRecordId);
+        }
+        args.add(limit);
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, native_key,
+                       observed_attributes::text AS observed_attributes,
+                       source_updated_at, first_observed_at, last_observed_at,
+                       last_import_run_id, last_complete_import_run_id
+                FROM identity.source_record
+                WHERE tenant_id = ?
+                  AND source_system_id = ?
+                  AND last_import_run_id <> ?
+                  AND first_observed_at < ?
+                """ + checkpoint + """
+                ORDER BY first_observed_at, id
+                LIMIT ?
+                """,
+                (rs, rowNum) -> sourceRecord(rs),
+                args.toArray());
+    }
+
+    @Override
+    public SourceAbsenceInference recordAbsenceInferenceProgress(
+            TenantContext tenant,
+            UUID inferenceId,
+            Instant afterFirstObservedAt,
+            UUID afterSourceRecordId,
+            long processedDelta,
+            long transitionDelta,
+            SourceAbsenceInference.State state,
+            long expectedRevision,
+            Instant now) {
+        if ((afterFirstObservedAt == null) != (afterSourceRecordId == null)) {
+            throw new IllegalArgumentException("checkpoint fields must be both present or both absent");
+        }
+        if (processedDelta < 0 || transitionDelta < 0) {
+            throw new IllegalArgumentException("progress deltas must not be negative");
+        }
+        int affected = jdbcTemplate.update(
+                """
+                UPDATE identity.source_absence_inference
+                SET process_state = ?,
+                    after_first_observed_at = ?,
+                    after_source_record_id = ?,
+                    processed_candidate_count = processed_candidate_count + ?,
+                    inferred_transition_count = inferred_transition_count + ?,
+                    revision = revision + 1,
+                    updated_at = ?,
+                    completed_at = ?
+                WHERE tenant_id = ? AND id = ? AND process_state = 'RUNNING' AND revision = ?
+                """,
+                state.name(),
+                timestamp(afterFirstObservedAt),
+                afterSourceRecordId,
+                processedDelta,
+                transitionDelta,
+                Timestamp.from(now),
+                state == SourceAbsenceInference.State.RUNNING ? null : Timestamp.from(now),
+                tenant.tenantId(),
+                inferenceId,
+                expectedRevision);
+        if (affected != 1) {
+            SourceAbsenceInference current = findAbsenceInferenceById(tenant, inferenceId)
+                    .orElseThrow(() -> new IllegalArgumentException("absence inference does not exist"));
+            if (current.revision() != expectedRevision) {
+                throw new StaleWriteException("source-absence-inference", inferenceId, expectedRevision);
+            }
+            return current;
+        }
+        return findAbsenceInferenceById(tenant, inferenceId).orElseThrow();
+    }
+
+    private Optional<SourceAbsenceInference> queryAbsenceInference(
+            String whereClause, Object... args) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, import_run_id, policy_version_id,
+                       max_inferred_transitions, process_state,
+                       after_first_observed_at, after_source_record_id,
+                       processed_candidate_count, inferred_transition_count,
+                       revision, created_at, updated_at, completed_at
+                FROM identity.source_absence_inference
+                """ + whereClause,
+                (rs, rowNum) -> new SourceAbsenceInference(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("source_system_id", UUID.class),
+                        rs.getObject("import_run_id", UUID.class),
+                        rs.getObject("policy_version_id", UUID.class),
+                        rs.getInt("max_inferred_transitions"),
+                        SourceAbsenceInference.State.valueOf(rs.getString("process_state")),
+                        instant(rs.getTimestamp("after_first_observed_at")),
+                        rs.getObject("after_source_record_id", UUID.class),
+                        rs.getLong("processed_candidate_count"),
+                        rs.getLong("inferred_transition_count"),
+                        rs.getLong("revision"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant(),
+                        instant(rs.getTimestamp("completed_at"))),
+                args)
+                .stream()
+                .findFirst();
+    }
+
     private Optional<SourceRecord> querySourceRecord(String whereClause, Object... args) {
         List<SourceRecord> rows = jdbcTemplate.query(
                 """
@@ -583,18 +923,25 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                        last_import_run_id, last_complete_import_run_id
                 FROM identity.source_record
                 """ + whereClause,
-                (rs, rowNum) -> new SourceRecord(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("source_system_id", UUID.class),
-                        rs.getString("native_key"),
-                        rs.getString("observed_attributes"),
-                        instant(rs.getTimestamp("source_updated_at")),
-                        rs.getTimestamp("first_observed_at").toInstant(),
-                        rs.getTimestamp("last_observed_at").toInstant(),
-                        rs.getObject("last_import_run_id", UUID.class),
-                        rs.getObject("last_complete_import_run_id", UUID.class)),
+                (rs, rowNum) -> sourceRecord(rs),
                 args);
         return rows.stream().findFirst();
+    }
+
+    private static SourceRecord sourceRecord(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new SourceRecord(
+                rs.getObject("id", UUID.class),
+                rs.getObject("source_system_id", UUID.class),
+                rs.getString("native_key"),
+                rs.getString("observed_attributes"),
+                instant(rs.getTimestamp("source_updated_at")),
+                rs.getTimestamp("first_observed_at").toInstant(),
+                rs.getTimestamp("last_observed_at").toInstant(),
+                rs.getObject("last_import_run_id", UUID.class),
+                rs.getObject("last_complete_import_run_id", UUID.class));
+    }
+
+    private record ImportAuthority(UUID sourceSystemId, Instant startedAt) {
     }
 
     private static Timestamp timestamp(Instant value) {
