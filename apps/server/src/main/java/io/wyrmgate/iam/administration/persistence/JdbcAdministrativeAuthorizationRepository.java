@@ -35,7 +35,7 @@ public final class JdbcAdministrativeAuthorizationRepository
         return jdbcTemplate.query(
                 """
                 SELECT g.id, g.actor_identity_id, g.role_id,
-                       g.scope_type, g.scope_resource_type, g.scope_ref_id,
+                       g.scope_type, g.scope_resource_type, g.scope_ref_id, g.scope_key,
                        g.state, g.valid_from, g.valid_until,
                        g.revision, g.created_at, g.updated_at
                 FROM administration.administrative_grant g
@@ -56,7 +56,8 @@ public final class JdbcAdministrativeAuthorizationRepository
                         new AdministrativeScope(
                                 AdministrativeScopeType.valueOf(rs.getString("scope_type")),
                                 rs.getString("scope_resource_type"),
-                                rs.getObject("scope_ref_id", UUID.class)),
+                                rs.getObject("scope_ref_id", UUID.class),
+                                rs.getString("scope_key")),
                         AdministrativeGrantState.valueOf(rs.getString("state")),
                         nullableInstant(rs.getTimestamp("valid_from")),
                         nullableInstant(rs.getTimestamp("valid_until")),
