@@ -44,6 +44,8 @@ public interface SourceCorrelationRepository {
 
     Optional<SourceRecord> findSourceRecordForUpdate(TenantContext tenant, UUID sourceRecordId);
 
+    void lockTenantForCorrelation(TenantContext tenant);
+
     Optional<SourceRecord> findSourceRecordByNativeKey(
             TenantContext tenant,
             UUID sourceSystemId,
