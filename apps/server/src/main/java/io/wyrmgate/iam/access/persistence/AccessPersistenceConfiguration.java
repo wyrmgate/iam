@@ -23,6 +23,10 @@ import io.wyrmgate.iam.access.application.IdentityAccessReductionIntakeService;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionProcessingService;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionRepository;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionWorkSink;
+import io.wyrmgate.iam.access.application.LifecycleAccessPolicyRepository;
+import io.wyrmgate.iam.access.application.LifecycleAccessPolicyService;
+import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
+import io.wyrmgate.iam.access.application.LifecycleAccessReconciliationService;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredGrantFactSink;
 import io.wyrmgate.iam.access.application.DesiredPrincipalFactSink;
@@ -34,6 +38,7 @@ import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
+import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
@@ -75,6 +80,42 @@ public class AccessPersistenceConfiguration {
                 boundaries,
                 idGenerator,
                 transactionExecutor);
+    }
+
+    @Bean
+    LifecycleAccessPolicyRepository lifecycleAccessPolicyRepository(
+            JdbcTemplate jdbcTemplate) {
+        return new JdbcLifecycleAccessPolicyRepository(jdbcTemplate);
+    }
+
+    @Bean
+    LifecycleAccessPolicyService lifecycleAccessPolicyService(
+            LifecycleAccessPolicyRepository policies,
+            IdentityLifecycleAccessQuery identities,
+            CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roles,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new LifecycleAccessPolicyService(
+                policies, identities, catalog, roles, ids, transactions);
+    }
+
+    @Bean
+    LifecycleAccessReconciliationService lifecycleAccessReconciliationService(
+            JdbcOutboxRepository outbox,
+            LifecycleAccessPolicyRepository policies,
+            AccessAssignmentRepository assignments,
+            AccessAssignmentCommandService commands,
+            IdentityLifecycleAccessQuery identities,
+            LifecycleAccessPrivilegeGuard guard) {
+        return new LifecycleAccessReconciliationService(
+                outbox, policies, assignments, commands, identities, guard);
+    }
+
+    @Bean
+    LifecycleAccessReconciliationScheduler lifecycleAccessReconciliationScheduler(
+            LifecycleAccessReconciliationService service) {
+        return new LifecycleAccessReconciliationScheduler(service);
     }
 
     @Bean
