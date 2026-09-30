@@ -77,6 +77,6 @@ public interface SourceCorrelationRepository {
     Optional<SourceCorrelationPolicyVersion> findActiveCorrelationPolicy(
             TenantContext tenant, UUID sourceSystemId);
 
-    record LinkReplacement(IdentityLink link, boolean changed) {
+    record LinkReplacement(IdentityLink link, boolean changed, UUID previousIdentityId) {
     }
 }
