@@ -29,7 +29,7 @@ The OpenAPI contract defines:
 
 Generic lifecycle/status PATCH remains prohibited. ADR-0021 lifecycle changes are exposed only as explicit semantic operations. A same-state command is a no-op only with the current revision, and DECOMMISSIONED remains terminal. Identity merge/split remains a later durable operation under FR-IDM-004.
 
-The Principal foundation is implemented as an internal Identity capability contract but is not added to the public Identity HTTP v1 surface in this slice. Principal authority is created explicitly against an active Catalog ApplicationTarget, may be temporarily uncorrelated, and supports one-way correlation to a canonical Identity. Cross-capability consumers use `PrincipalResolutionQuery` by ApplicationTarget + native principal key; provider observations do not become Principal authority automatically. A later public Principal administration API requires its own governed operations and authorization contract rather than exposing persistence rows.
+The Principal foundation is now exposed through a bounded public administration surface without changing its Identity-owned authority. `GET /api/v1/principals` and `GET /api/v1/principals/{principalId}` read authoritative Principal state; `POST /api/v1/principals` explicitly registers one known uncorrelated ACCOUNT Principal against an active Catalog ApplicationTarget; and `POST /api/v1/principals/{principalId}:correlate` performs one-way correlation to one canonical Identity. Provider observations do not become Principal authority automatically, and provider-driven ACTIVE/DISABLED realization remains an internal provisioning-result path rather than a public lifecycle operation.
 
 The contract does not expose persistence entities such as canonical candidate rows, mapping tables, authority tables, outbox rows, or provider-native source payloads.
 
@@ -115,11 +115,24 @@ The OpenAPI document models bearer transport authentication as the first impleme
 - `identity:activate`;
 - `identity:suspend`;
 - `identity:deactivate`;
-- `identity:decommission`.
+- `identity:decommission`;
+- `principal:read`;
+- `principal:register`;
+- `principal:correlate`.
 
 The first Administration persistence/evaluator slice now supplies operation-time default-deny matching for semantic permissions plus tenant-scoped `GLOBAL` and exact `SPECIFIC_RESOURCE` grants. It also revalidates the governed actor's current Identity state and temporal grant validity for every decision. Other canonical scope types remain deliberately fail-closed until their hierarchy/population semantics exist.
 
 The authentication, trusted actor/tenant resolution, burn-once bootstrap, direct-grant evaluator, and Identity HTTP adapters now form one enforced chain. Collection operations require a grant that can authorize the collection; exact resource operations evaluate that resource ID. Relationship/ownership context, policy/assurance requirements and sensitive authorization-decision audit hooks are added as corresponding governed operations require them.
+
+## Principal administration boundary
+
+Principal is Identity-owned technical authority, not a provider observation record and not a synonym for Identity. Public registration accepts only `applicationTargetId` and `nativePrincipalKey`; the server fixes the initial public shape to uncorrelated `ACCOUNT` + `ACTIVE`. The API therefore cannot use registration to choose an Identity, force a lifecycle value, inject provider payload, or invent an arbitrary Principal kind.
+
+Principal listing is deterministic by stable Principal ID and uses the same ADR-0012 signed, time-bounded, tenant-bound cursor transport as other high-cardinality collections. Principal IDs remain opaque; their UUID representation is not a client-visible creation-time contract.
+
+Correlation requires the target Principal and Identity to exist in the same tenant, a strong `If-Match` revision and causal `Idempotency-Key`. Correlation is one-way in this slice: after `identityId` is set, the public API cannot reassign or clear it. A successful correlation emits the existing minimized `identity.principal-correlated` and `identity.principal-access-projection-input-changed` internal facts so Access can re-evaluate Principal-dependent projections without transferring ownership.
+
+The Principal API does not expose provider observations, connector identities, desired state, fulfillment state, credentials, outbox state, or a public ACTIVE/DISABLED mutation. Provider provisioning and provider-result lifecycle realization remain behind the existing Integration/Identity collaboration boundary.
 
 ## Lifecycle command boundary
 
@@ -185,6 +198,6 @@ The lightweight verifier does not pretend to be a complete OpenAPI/AsyncAPI stan
 
 ## OD-003 completion boundary
 
-The Identity surface now includes governed create/read/list, non-lifecycle metadata update, canonical attribute reads, and explicit ADR-0021 lifecycle operations with revision/idempotency controls. The AsyncAPI/publication pipeline remains limited to the existing created/metadata-changed v1 events. OD-003 therefore remains partially implemented for broader JML/policy orchestration, Principal administration and other deferred public capability surfaces; later multi-subscriber/broker evolution remains demand-driven.
+The Identity surface now includes governed Identity create/read/list, non-lifecycle metadata update, canonical attribute reads, explicit ADR-0021 lifecycle operations, plus authoritative Principal list/register/read/one-way-correlation administration with signed pagination, optimistic revision where correlation depends on current state, and causal idempotency. The AsyncAPI/publication pipeline remains limited to the existing Identity created/metadata-changed v1 events; Principal correlation remains an internal fact only. OD-003 therefore remains partially implemented for broader JML/policy orchestration, merge/split and other deferred public capability surfaces; later multi-subscriber/broker evolution remains demand-driven.
 
 A later formal-specification checkpoint should fold the accepted ADR amendments and completed OD-003 slices into the Integration/SAD/RTM package rather than updating v0.2 for every incremental contract commit.
