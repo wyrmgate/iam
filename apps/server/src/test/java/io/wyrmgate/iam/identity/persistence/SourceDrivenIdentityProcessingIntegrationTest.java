@@ -58,6 +58,7 @@ class SourceDrivenIdentityProcessingIntegrationTest {
     private static CanonicalAttributeConfigurationService configuration;
     private static CanonicalAttributeResolutionService resolution;
     private static SourceCorrelationPolicyService policies;
+    private static SourceLifecyclePolicyService lifecyclePolicies;
     private static SourceDrivenIdentityProcessingService processor;
     private static TransactionExecutor transactions;
 
@@ -110,7 +111,7 @@ class SourceDrivenIdentityProcessingIntegrationTest {
                 transactions);
         ObjectMapper json = new ObjectMapper();
         SourceMappedValueExtractor extractor = new SourceMappedValueExtractor(json);
-        SourceLifecyclePolicyService lifecyclePolicies = new SourceLifecyclePolicyService(
+        lifecyclePolicies = new SourceLifecyclePolicyService(
                 sourceRepository, identityRepository, identities, extractor, ids, transactions);
         processor = new SourceDrivenIdentityProcessingService(
                 outbox,
@@ -243,6 +244,37 @@ class SourceDrivenIdentityProcessingIntegrationTest {
         assertThat(created.displayName()).isEqualTo("New Joiner");
         assertThat(canonicalString(tenant, created.id(), "employeeId"))
                 .contains("E-200");
+    }
+
+    @Test
+    void sourceCreatedPendingIdentityAdvancesToActiveThroughProcessorPolicy() {
+        Instant now = Instant.now();
+        TenantContext tenant = tenant("Lifecycle Joiner Processor", now);
+        SourceSystem incoming = source(tenant, "hr", now);
+        activateSchema(tenant, now.plusSeconds(1));
+        mapAndAuthorize(tenant, incoming, "employeeId", "$.employeeId", 1, now.plusSeconds(2));
+        policies.activate(
+                tenant, incoming.id(), "employeeId",
+                true, IdentityType.PERSON, "$.displayName", now.plusSeconds(3));
+        lifecyclePolicies.activate(
+                tenant,
+                incoming.id(),
+                "$.employmentStatus",
+                java.util.Map.of("ACTIVE", IdentityLifecycleState.ACTIVE),
+                now.plusSeconds(4));
+
+        SourceRecord record = observe(
+                tenant,
+                incoming,
+                "employee-joiner-active",
+                "{\"employeeId\":\"E-201\",\"displayName\":\"Active Joiner\",\"employmentStatus\":\"ACTIVE\"}",
+                now.plusSeconds(5));
+
+        drain();
+
+        var link = sourceRepository.findActiveAcceptedLink(tenant, record.id()).orElseThrow();
+        Identity created = identityRepository.findById(tenant, link.identityId()).orElseThrow();
+        assertThat(created.lifecycleState()).isEqualTo(IdentityLifecycleState.ACTIVE);
     }
 
     @Test
