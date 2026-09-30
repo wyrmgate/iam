@@ -238,9 +238,9 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
         assertThat(currentPolicyAssignmentCount(tenant, identityId)).isEqualTo(3);
 
-        identityPolicy.setScalar(identityId, "employee", ScalarType.BOOLEAN, false, 2);
-        identityPolicy.setScalar(identityId, "level", ScalarType.INTEGER, 8L, 2);
-        identityPolicy.setScalar(identityId, "workerClass", ScalarType.ENUM, "CONTRACTOR", 2);
+        identityPolicy.setScalar(identityId, "employee", IdentityLifecycleAccessQuery.ScalarType.BOOLEAN, false, 2);
+        identityPolicy.setScalar(identityId, "level", IdentityLifecycleAccessQuery.ScalarType.INTEGER, 8L, 2);
+        identityPolicy.setScalar(identityId, "workerClass", IdentityLifecycleAccessQuery.ScalarType.ENUM, "CONTRACTOR", 2);
         reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
 
         assertThat(currentPolicyAssignmentCount(tenant, identityId)).isZero();
