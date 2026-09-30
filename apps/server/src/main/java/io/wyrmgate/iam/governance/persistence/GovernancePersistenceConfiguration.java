@@ -3,6 +3,7 @@ package io.wyrmgate.iam.governance.persistence;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
+import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
 import io.wyrmgate.iam.access.application.AccessReviewSnapshotQuery;
 import io.wyrmgate.iam.access.application.AccessReviewRemediationCommand;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
@@ -34,6 +35,8 @@ import io.wyrmgate.iam.governance.application.GovernanceExceptionQuery;
 import io.wyrmgate.iam.governance.application.GovernanceExceptionRepository;
 import io.wyrmgate.iam.governance.application.GovernanceExceptionService;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
+import io.wyrmgate.iam.governance.application.GovernanceLifecycleAccessPrivilegeGuard;
+import io.wyrmgate.iam.governance.application.LifecycleAccessEvaluationEvidenceSink;
 import io.wyrmgate.iam.governance.application.GovernancePolicyEligibilityEvaluator;
 import io.wyrmgate.iam.governance.application.GovernancePolicyRepository;
 import io.wyrmgate.iam.governance.application.GovernancePolicyService;
@@ -107,6 +110,31 @@ public class GovernancePersistenceConfiguration {
             TransactionExecutor transactions) {
         return new GovernancePolicyService(
                 policies, catalog, identities, ids, transactions);
+    }
+
+    @Bean
+    LifecycleAccessEvaluationEvidenceSink lifecycleAccessEvaluationEvidenceSink(
+            JdbcTemplate jdbc) {
+        return new JdbcLifecycleAccessEvaluationEvidenceSink(jdbc);
+    }
+
+    @Bean
+    LifecycleAccessPrivilegeGuard lifecycleAccessPrivilegeGuard(
+            GovernancePolicyService policyService,
+            CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roleExpansion,
+            EffectiveAccessQuery effectiveAccess,
+            GovernanceExceptionQuery exceptions,
+            LifecycleAccessEvaluationEvidenceSink evidence,
+            IdGenerator ids) {
+        return new GovernanceLifecycleAccessPrivilegeGuard(
+                policyService,
+                catalog,
+                roleExpansion,
+                effectiveAccess,
+                exceptions,
+                evidence,
+                ids);
     }
 
     @Bean

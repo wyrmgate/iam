@@ -52,11 +52,16 @@ public final class JdbcAccessAssignmentRepository
                     Timestamp.from(assignment.createdAt()),
                     Timestamp.from(assignment.updatedAt()));
         } catch (DataIntegrityViolationException conflict) {
-            if (assignment.provenanceKind()
+            if ((assignment.provenanceKind()
                             == AccessAssignment.ProvenanceKind.REQUEST_ITEM
                     && causedByConstraint(
                             conflict,
-                            "access_assignment_request_item_provenance_uq")) {
+                            "access_assignment_request_item_provenance_uq"))
+                    || (assignment.provenanceKind()
+                            == AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE
+                    && causedByConstraint(
+                            conflict,
+                            "access_assignment_lifecycle_policy_rule_active_uq"))) {
                 throw new io.wyrmgate.iam.access.application
                         .AccessAssignmentProvenanceConflictException();
             }
@@ -118,6 +123,52 @@ public final class JdbcAccessAssignmentRepository
                 provenanceRefId)
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    public Optional<AccessAssignment> findCurrentLifecyclePolicyAssignment(
+            TenantContext tenant,
+            UUID identityId,
+            UUID ruleId) {
+        return jdbc.query("""
+                SELECT id, identity_id, target_kind, role_id, entitlement_id,
+                       principal_constraint_kind, specific_principal_id,
+                       provenance_kind, provenance_ref_id, lifecycle_state,
+                       valid_from, valid_until, revision, created_at, updated_at
+                FROM access.access_assignment
+                WHERE tenant_id = ?
+                  AND identity_id = ?
+                  AND provenance_kind = 'LIFECYCLE_POLICY_RULE'
+                  AND provenance_ref_id = ?
+                  AND lifecycle_state IN ('SCHEDULED','ACTIVE','SUSPENDED')
+                """,
+                (rs,row) -> assignment(rs),
+                tenant.tenantId(),
+                identityId,
+                ruleId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public List<AccessAssignment> findCurrentLifecyclePolicyAssignments(
+            TenantContext tenant,
+            UUID identityId) {
+        return jdbc.query("""
+                SELECT id, identity_id, target_kind, role_id, entitlement_id,
+                       principal_constraint_kind, specific_principal_id,
+                       provenance_kind, provenance_ref_id, lifecycle_state,
+                       valid_from, valid_until, revision, created_at, updated_at
+                FROM access.access_assignment
+                WHERE tenant_id = ?
+                  AND identity_id = ?
+                  AND provenance_kind = 'LIFECYCLE_POLICY_RULE'
+                  AND lifecycle_state IN ('SCHEDULED','ACTIVE','SUSPENDED')
+                ORDER BY provenance_ref_id, created_at, id
+                """,
+                (rs,row) -> assignment(rs),
+                tenant.tenantId(),
+                identityId);
     }
 
     @Override

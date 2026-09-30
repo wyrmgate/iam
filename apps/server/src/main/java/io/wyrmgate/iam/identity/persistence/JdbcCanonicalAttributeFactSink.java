@@ -42,6 +42,11 @@ public final class JdbcCanonicalAttributeFactSink implements CanonicalAttributeF
                 correlationId, causationId,
                 "{\"canonicalKey\":\"" + escape(canonicalKey) + "\",\"resolutionStatus\":\""
                         + state.resolutionStatus().name() + "\"}"), state.updatedAt());
+        outbox.append(tenant, new OutboxEvent(
+                ids.nextId(), "identity.lifecycle-access-input-changed", 1,
+                "lifecycle-access-input", state.identityId(), state.valueRevision(), state.updatedAt(),
+                correlationId, causationId,
+                "{\"canonicalKey\":\"" + escape(canonicalKey) + "\"}"), state.updatedAt());
     }
 
     @Override

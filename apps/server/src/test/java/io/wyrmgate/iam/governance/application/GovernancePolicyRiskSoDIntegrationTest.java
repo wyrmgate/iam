@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
+import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
+import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.*;
@@ -12,6 +14,7 @@ import io.wyrmgate.iam.governance.domain.GovernancePolicyModels.*;
 import io.wyrmgate.iam.governance.persistence.JdbcAccessRequestRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcApprovalRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcGovernancePolicyRepository;
+import io.wyrmgate.iam.governance.persistence.JdbcLifecycleAccessEvaluationEvidenceSink;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
@@ -169,7 +172,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
         flyway.validate();
         assertThat(flyway.info().current()
                 .getVersion().getVersion())
-                .isEqualTo("38");
+                .isEqualTo("40");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -372,6 +375,98 @@ class GovernancePolicyRiskSoDIntegrationTest {
                 .isEqualTo(lower);
         assertThat(stored.rightEntitlementId())
                 .isEqualTo(highBit);
+    }
+
+    @Test
+    void lifecycleAccessGuardPersistsDecisionAndSodEvidence() {
+        UUID existing = entitlement();
+        UUID requested = entitlement();
+        UUID identityId = ids.nextId();
+        UUID lifecycleRuleId = ids.nextId();
+        UUID correlationId = ids.nextId();
+        UUID causationId = ids.nextId();
+        currentEffective.add(existing);
+        PolicyVersion active = activate(
+                PolicyDecision.AUTHORIZE,
+                List.of(rule(
+                        "lifecycle-toxic-pair",
+                        existing,
+                        requested,
+                        RiskSeverity.HIGH,
+                        SoDAction.DENY)),
+                null,
+                NOW);
+
+        LifecycleAccessPrivilegeGuard guard =
+                new GovernanceLifecycleAccessPrivilegeGuard(
+                        policyService,
+                        catalog,
+                        roles,
+                        effectiveAccess,
+                        (requestedTenant, subjectIdentityId, ruleIds, at) -> Map.of(),
+                        new JdbcLifecycleAccessEvaluationEvidenceSink(jdbc),
+                        ids);
+
+        LifecycleAccessPrivilegeGuard.Result result = guard.evaluate(
+                tenant,
+                identityId,
+                lifecycleRuleId,
+                AccessAssignment.TargetKind.ENTITLEMENT,
+                requested,
+                NOW.plusSeconds(1),
+                correlationId,
+                causationId);
+
+        assertThat(result.decision())
+                .isEqualTo(LifecycleAccessPrivilegeGuard.Decision.DENY);
+
+        Map<String,Object> evaluation = jdbc.queryForMap(
+                """
+                SELECT identity_id, lifecycle_rule_id,
+                       governance_policy_version_id,
+                       target_kind, target_id, decision,
+                       conflict_count, correlation_id, causation_id
+                FROM governance.lifecycle_access_evaluation
+                WHERE tenant_id = ? AND lifecycle_rule_id = ?
+                """,
+                tenant.tenantId(),
+                lifecycleRuleId);
+        assertThat(evaluation.get("identity_id")).isEqualTo(identityId);
+        assertThat(evaluation.get("governance_policy_version_id")).isEqualTo(active.id());
+        assertThat(evaluation.get("target_kind")).isEqualTo("ENTITLEMENT");
+        assertThat(evaluation.get("target_id")).isEqualTo(requested);
+        assertThat(evaluation.get("decision")).isEqualTo("DENY");
+        assertThat(evaluation.get("conflict_count")).isEqualTo(1);
+        assertThat(evaluation.get("correlation_id")).isEqualTo(correlationId);
+        assertThat(evaluation.get("causation_id")).isEqualTo(causationId);
+
+        Integer conflicts = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM governance.lifecycle_access_sod_conflict c
+                JOIN governance.lifecycle_access_evaluation e
+                  ON e.tenant_id = c.tenant_id AND e.id = c.evaluation_id
+                WHERE e.tenant_id = ? AND e.lifecycle_rule_id = ?
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                lifecycleRuleId);
+        assertThat(conflicts).isEqualTo(1);
+
+        UUID evaluationId = jdbc.queryForObject(
+                """
+                SELECT id FROM governance.lifecycle_access_evaluation
+                WHERE tenant_id = ? AND lifecycle_rule_id = ?
+                """,
+                UUID.class,
+                tenant.tenantId(),
+                lifecycleRuleId);
+        assertThatThrownBy(() -> jdbc.update(
+                "UPDATE governance.lifecycle_access_evaluation SET evaluation_code = 'changed' WHERE tenant_id = ? AND id = ?",
+                tenant.tenantId(),
+                evaluationId))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("governance evaluation evidence is immutable");
     }
 
     @Test

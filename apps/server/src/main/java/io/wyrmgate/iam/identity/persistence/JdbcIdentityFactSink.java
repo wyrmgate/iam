@@ -91,6 +91,29 @@ public final class JdbcIdentityFactSink implements IdentityFactSink {
                     correlationId,
                     causationId);
         }
+        appendLifecycleAccessInput(tenant, identity, correlationId, causationId);
+    }
+
+    private void appendLifecycleAccessInput(
+            TenantContext tenant,
+            Identity identity,
+            UUID correlationId,
+            UUID causationId) {
+        UUID eventId = idGenerator.nextId();
+        outboxRepository.append(
+                tenant,
+                new OutboxEvent(
+                        eventId,
+                        "identity.lifecycle-access-input-changed",
+                        1,
+                        "lifecycle-access-input",
+                        identity.id(),
+                        identity.revision(),
+                        identity.updatedAt(),
+                        correlationId,
+                        causationId,
+                        "{}"),
+                identity.updatedAt());
     }
 
     private void append(

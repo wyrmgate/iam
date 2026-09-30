@@ -25,6 +25,19 @@ public interface AccessAssignmentRepository {
         return List.of();
     }
 
+    default Optional<AccessAssignment> findCurrentLifecyclePolicyAssignment(
+            TenantContext tenant,
+            UUID identityId,
+            UUID ruleId) {
+        return Optional.empty();
+    }
+
+    default List<AccessAssignment> findCurrentLifecyclePolicyAssignments(
+            TenantContext tenant,
+            UUID identityId) {
+        return List.of();
+    }
+
     default List<AccessAssignment> findPage(
             TenantContext tenant,
             Instant afterCreatedAt,
