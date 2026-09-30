@@ -29,6 +29,12 @@ public record AuditRecordDraft(
         }
         actionType = actionType.trim();
         resourceType = resourceType.trim();
+        if (actionType.length() > 128) {
+            throw new IllegalArgumentException("actionType must contain at most 128 characters");
+        }
+        if (resourceType.length() > 128) {
+            throw new IllegalArgumentException("resourceType must contain at most 128 characters");
+        }
         Objects.requireNonNull(outcome, "outcome");
     }
 }
