@@ -111,6 +111,26 @@ public final class AccessAssignmentCommandService {
                 now);
     }
 
+    public AccessAssignment createLifecyclePolicyEntitlementAssignment(
+            TenantContext tenant,
+            UUID ruleId,
+            UUID identityId,
+            UUID entitlementId,
+            Instant now) {
+        Objects.requireNonNull(ruleId, "ruleId");
+        return createEntitlementAssignmentInternal(
+                tenant,
+                identityId,
+                entitlementId,
+                AccessAssignment.PrincipalConstraintKind.ANY,
+                null,
+                null,
+                null,
+                AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE,
+                ruleId,
+                now);
+    }
+
     private AccessAssignment createEntitlementAssignmentInternal(
             TenantContext tenant,
             UUID identityId,
@@ -274,6 +294,26 @@ public final class AccessAssignmentCommandService {
                 validUntil,
                 AccessAssignment.ProvenanceKind.REQUEST_ITEM,
                 requestItemId,
+                now);
+    }
+
+    public AccessAssignment createLifecyclePolicyRoleAssignment(
+            TenantContext tenant,
+            UUID ruleId,
+            UUID identityId,
+            UUID roleId,
+            Instant now) {
+        Objects.requireNonNull(ruleId, "ruleId");
+        return createRoleAssignmentInternal(
+                tenant,
+                identityId,
+                roleId,
+                AccessAssignment.PrincipalConstraintKind.ANY,
+                null,
+                null,
+                null,
+                AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE,
+                ruleId,
                 now);
     }
 
