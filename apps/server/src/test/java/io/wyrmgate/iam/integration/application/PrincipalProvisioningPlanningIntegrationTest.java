@@ -56,7 +56,7 @@ class PrincipalProvisioningPlanningIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("42");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("43");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();

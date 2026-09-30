@@ -21,6 +21,7 @@ import java.util.UUID;
 public final class LifecycleAccessReconciliationService {
 
     public static final String INPUT_CHANGED = "identity.lifecycle-access-input-changed";
+    public static final String APPROVAL_APPROVED = "governance.lifecycle-access-approval-approved";
 
     private static final Duration CLAIM_LEASE = Duration.ofSeconds(30);
     private static final Duration RETRY_DELAY = Duration.ofSeconds(5);
@@ -32,6 +33,7 @@ public final class LifecycleAccessReconciliationService {
     private final AccessAssignmentCommandService commands;
     private final IdentityLifecycleAccessQuery identities;
     private final LifecycleAccessPrivilegeGuard guard;
+    private final LifecycleAccessApprovalCommand approvals;
     private final Clock clock;
 
     public LifecycleAccessReconciliationService(
@@ -40,8 +42,9 @@ public final class LifecycleAccessReconciliationService {
             AccessAssignmentRepository assignments,
             AccessAssignmentCommandService commands,
             IdentityLifecycleAccessQuery identities,
-            LifecycleAccessPrivilegeGuard guard) {
-        this(outbox,policies,assignments,commands,identities,guard,Clock.systemUTC());
+            LifecycleAccessPrivilegeGuard guard,
+            LifecycleAccessApprovalCommand approvals) {
+        this(outbox,policies,assignments,commands,identities,guard,approvals,Clock.systemUTC());
     }
 
     LifecycleAccessReconciliationService(
@@ -51,6 +54,7 @@ public final class LifecycleAccessReconciliationService {
             AccessAssignmentCommandService commands,
             IdentityLifecycleAccessQuery identities,
             LifecycleAccessPrivilegeGuard guard,
+            LifecycleAccessApprovalCommand approvals,
             Clock clock) {
         this.outbox=Objects.requireNonNull(outbox);
         this.policies=Objects.requireNonNull(policies);
@@ -58,12 +62,13 @@ public final class LifecycleAccessReconciliationService {
         this.commands=Objects.requireNonNull(commands);
         this.identities=Objects.requireNonNull(identities);
         this.guard=Objects.requireNonNull(guard);
+        this.approvals=Objects.requireNonNull(approvals);
         this.clock=Objects.requireNonNull(clock);
     }
 
     public BatchResult processAvailable() {
         List<ClaimedOutboxEvent> claimed=outbox.claimPending(
-                Set.of(INPUT_CHANGED),clock.instant(),CLAIM_LEASE,CLAIM_BATCH);
+                Set.of(INPUT_CHANGED,APPROVAL_APPROVED),clock.instant(),CLAIM_LEASE,CLAIM_BATCH);
         int processed=0;
         int failed=0;
         for(var item:claimed){
@@ -166,7 +171,15 @@ public final class LifecycleAccessReconciliationService {
             if(decision.decision()==LifecycleAccessPrivilegeGuard.Decision.UNAVAILABLE){
                 throw new IllegalStateException(decision.code());
             }
-            if(decision.decision()!=LifecycleAccessPrivilegeGuard.Decision.AUTHORIZE){
+            if(decision.decision()==LifecycleAccessPrivilegeGuard.Decision.REQUIRE_APPROVAL){
+                if(!approvals.currentApprovalSatisfied(
+                        tenant,identityId,rule.ruleId(),rule.targetKind(),rule.targetId())){
+                    approvals.requestApproval(
+                            tenant,identityId,rule.ruleId(),rule.targetKind(),rule.targetId(),
+                            now,correlationId,causationId);
+                    continue;
+                }
+            }else if(decision.decision()!=LifecycleAccessPrivilegeGuard.Decision.AUTHORIZE){
                 continue;
             }
 

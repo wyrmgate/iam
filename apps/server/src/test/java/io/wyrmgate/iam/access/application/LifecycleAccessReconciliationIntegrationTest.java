@@ -52,6 +52,7 @@ class LifecycleAccessReconciliationIntegrationTest {
     private static LifecycleAccessReconciliationService reconciler;
     private static MutableIdentityPolicyQuery identityPolicy;
     private static MutableGuard guard;
+    private static MutableApprovalCommand approval;
     private static UUID applicationTargetId;
     private static UUID roleVersionId;
 
@@ -74,6 +75,7 @@ class LifecycleAccessReconciliationIntegrationTest {
                 new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         identityPolicy = new MutableIdentityPolicyQuery();
         guard = new MutableGuard();
+        approval = new MutableApprovalCommand();
         applicationTargetId = ids.nextId();
         roleVersionId = ids.nextId();
 
@@ -125,9 +127,9 @@ class LifecycleAccessReconciliationIntegrationTest {
         policyService = new LifecycleAccessPolicyService(
                 policies, identityPolicy, catalog, roles, ids, transactions);
         reconciler = new LifecycleAccessReconciliationService(
-                outbox, policies, assignments, commands, identityPolicy, guard);
+                outbox, policies, assignments, commands, identityPolicy, guard, approval);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("42");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("43");
     }
 
     @AfterAll
@@ -149,6 +151,8 @@ class LifecycleAccessReconciliationIntegrationTest {
         identityPolicy.contexts.clear();
         guard.decision = LifecycleAccessPrivilegeGuard.Result.authorize();
         guard.calls = 0;
+        approval.satisfied = false;
+        approval.requests = 0;
     }
 
     @Test
@@ -275,6 +279,33 @@ class LifecycleAccessReconciliationIntegrationTest {
     }
 
     @Test
+    void approvalRequiredStaysAbsentUntilCurrentApprovalIsSatisfied() {
+        TenantContext tenant = tenant("Approval gate");
+        UUID identityId = activeIdentity();
+        UUID entitlementId = ids.nextId();
+        UUID ruleId = ids.nextId();
+        policyService.activate(
+                tenant,
+                java.util.List.of(alwaysEntitlement(ruleId, entitlementId)),
+                NOW.plusSeconds(1));
+
+        guard.decision = LifecycleAccessPrivilegeGuard.Result.requireApproval();
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
+
+        assertThat(assignments.findCurrentLifecyclePolicyAssignment(
+                tenant, identityId, ruleId)).isEmpty();
+        assertThat(approval.requests).isEqualTo(1);
+
+        approval.satisfied = true;
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
+
+        AccessAssignment granted = assignments.findCurrentLifecyclePolicyAssignment(
+                tenant, identityId, ruleId).orElseThrow();
+        assertThat(granted.entitlementId()).isEqualTo(entitlementId);
+        assertThat(approval.requests).isEqualTo(1);
+    }
+
+    @Test
     void roleTargetIsSupportedAndManualAssignmentIsUntouched() {
         TenantContext tenant = tenant("Role and manual");
         UUID identityId = activeIdentity();
@@ -363,6 +394,26 @@ class LifecycleAccessReconciliationIntegrationTest {
                 tenant.tenantId(),
                 identityId);
         return count == null ? 0 : count;
+    }
+
+    private static final class MutableApprovalCommand implements LifecycleAccessApprovalCommand {
+        private boolean satisfied;
+        private int requests;
+
+        @Override
+        public boolean currentApprovalSatisfied(
+                TenantContext tenant, UUID identityId, UUID lifecycleRuleId,
+                AccessAssignment.TargetKind targetKind, UUID targetId) {
+            return satisfied;
+        }
+
+        @Override
+        public void requestApproval(
+                TenantContext tenant, UUID identityId, UUID lifecycleRuleId,
+                AccessAssignment.TargetKind targetKind, UUID targetId, Instant at,
+                UUID correlationId, UUID causationId) {
+            requests++;
+        }
     }
 
     private static final class MutableGuard implements LifecycleAccessPrivilegeGuard {

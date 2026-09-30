@@ -104,7 +104,7 @@ class GovernanceReviewApiIntegrationTest {
         flyway.validate();
         assertThat(flyway.info().current()
                 .getVersion().getVersion())
-                .isEqualTo("42");
+                .isEqualTo("43");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();

@@ -26,6 +26,7 @@ import io.wyrmgate.iam.access.application.IdentityAccessReductionWorkSink;
 import io.wyrmgate.iam.access.application.LifecycleAccessPolicyRepository;
 import io.wyrmgate.iam.access.application.LifecycleAccessPolicyService;
 import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
+import io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand;
 import io.wyrmgate.iam.access.application.LifecycleAccessReconciliationService;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredGrantFactSink;
@@ -107,9 +108,10 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentRepository assignments,
             AccessAssignmentCommandService commands,
             IdentityLifecycleAccessQuery identities,
-            LifecycleAccessPrivilegeGuard guard) {
+            LifecycleAccessPrivilegeGuard guard,
+            LifecycleAccessApprovalCommand approvals) {
         return new LifecycleAccessReconciliationService(
-                outbox, policies, assignments, commands, identities, guard);
+                outbox, policies, assignments, commands, identities, guard, approvals);
     }
 
     @Bean

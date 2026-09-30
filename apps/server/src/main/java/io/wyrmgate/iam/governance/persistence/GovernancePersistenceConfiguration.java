@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
+import io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand;
 import io.wyrmgate.iam.access.application.AccessReviewSnapshotQuery;
 import io.wyrmgate.iam.access.application.AccessReviewRemediationCommand;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
@@ -36,6 +37,9 @@ import io.wyrmgate.iam.governance.application.GovernanceExceptionRepository;
 import io.wyrmgate.iam.governance.application.GovernanceExceptionService;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
 import io.wyrmgate.iam.governance.application.GovernanceLifecycleAccessPrivilegeGuard;
+import io.wyrmgate.iam.governance.application.GovernanceLifecycleAccessApprovalService;
+import io.wyrmgate.iam.governance.application.LifecycleAccessApprovalCandidateRepository;
+import io.wyrmgate.iam.governance.application.LifecycleAccessApprovalResultSink;
 import io.wyrmgate.iam.governance.application.LifecycleAccessEvaluationEvidenceSink;
 import io.wyrmgate.iam.governance.application.GovernancePolicyEligibilityEvaluator;
 import io.wyrmgate.iam.governance.application.GovernancePolicyRepository;
@@ -116,6 +120,32 @@ public class GovernancePersistenceConfiguration {
     LifecycleAccessEvaluationEvidenceSink lifecycleAccessEvaluationEvidenceSink(
             JdbcTemplate jdbc) {
         return new JdbcLifecycleAccessEvaluationEvidenceSink(jdbc);
+    }
+
+    @Bean
+    LifecycleAccessApprovalCandidateRepository lifecycleAccessApprovalCandidateRepository(
+            JdbcTemplate jdbc) {
+        return new JdbcLifecycleAccessApprovalCandidateRepository(jdbc);
+    }
+
+    @Bean
+    LifecycleAccessApprovalCommand lifecycleAccessApprovalCommand(
+            GovernancePolicyService policies,
+            LifecycleAccessApprovalCandidateRepository candidates,
+            ApprovalCaseStartService approvals,
+            ApprovalRepository approvalRepository,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new GovernanceLifecycleAccessApprovalService(
+                policies, candidates, approvals, approvalRepository, ids, transactions);
+    }
+
+    @Bean
+    LifecycleAccessApprovalResultSink lifecycleAccessApprovalResultSink(
+            LifecycleAccessApprovalCandidateRepository candidates,
+            JdbcOutboxRepository outbox,
+            IdGenerator ids) {
+        return new LifecycleAccessApprovalResultSink(candidates, outbox, ids);
     }
 
     @Bean
@@ -254,11 +284,13 @@ public class GovernancePersistenceConfiguration {
     @Primary
     ApprovalResultSink approvalResultSink(
             AccessRequestApprovalResultSink accessRequests,
-            GovernanceExceptionApprovalResultSink exceptions) {
+            GovernanceExceptionApprovalResultSink exceptions,
+            LifecycleAccessApprovalResultSink lifecycleAccess) {
         return new CompositeApprovalResultSink(
                 java.util.List.of(
                         accessRequests,
-                        exceptions));
+                        exceptions,
+                        lifecycleAccess));
     }
 
     @Bean
