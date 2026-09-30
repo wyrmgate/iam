@@ -3,6 +3,8 @@ package io.wyrmgate.iam.identity.persistence;
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository.LinkReplacement;
 import io.wyrmgate.iam.identity.domain.IdentityLink;
+import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.domain.SourceCorrelationPolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
 import io.wyrmgate.iam.identity.domain.SourceImportRun;
 import io.wyrmgate.iam.identity.domain.SourceImportRunState;
@@ -221,6 +223,15 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     }
 
     @Override
+    public Optional<SourceRecord> findSourceRecordForUpdate(
+            TenantContext tenant, UUID sourceRecordId) {
+        return querySourceRecord(
+                "WHERE tenant_id = ? AND id = ? FOR UPDATE",
+                tenant.tenantId(),
+                sourceRecordId);
+    }
+
+    @Override
     public Optional<SourceRecord> findSourceRecordByNativeKey(
             TenantContext tenant,
             UUID sourceSystemId,
@@ -309,6 +320,114 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                 tenant.tenantId(),
                 sourceRecordId);
         return rows.stream().findFirst();
+    }
+
+    @Override
+    public SourceCorrelationPolicyVersion replaceActiveCorrelationPolicy(
+            TenantContext tenant,
+            UUID sourceSystemId,
+            UUID matchAttributeDefinitionVersionId,
+            UUID matchMappingVersionId,
+            boolean createIdentityOnNoMatch,
+            IdentityType createdIdentityType,
+            String displayNameSourcePath,
+            Instant activatedAt,
+            UUID newPolicyId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(sourceSystemId, "sourceSystemId");
+        Objects.requireNonNull(matchAttributeDefinitionVersionId, "matchAttributeDefinitionVersionId");
+        Objects.requireNonNull(matchMappingVersionId, "matchMappingVersionId");
+        Objects.requireNonNull(activatedAt, "activatedAt");
+        Objects.requireNonNull(newPolicyId, "newPolicyId");
+
+        List<UUID> sourceRows = jdbcTemplate.query(
+                "SELECT id FROM identity.source_system WHERE tenant_id = ? AND id = ? FOR UPDATE",
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                tenant.tenantId(),
+                sourceSystemId);
+        if (sourceRows.isEmpty()) {
+            throw new IllegalArgumentException("source system does not exist");
+        }
+
+        Long nextVersion = jdbcTemplate.queryForObject(
+                """
+                SELECT COALESCE(max(version_number), 0) + 1
+                FROM identity.source_correlation_policy_version
+                WHERE tenant_id = ? AND source_system_id = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                sourceSystemId);
+
+        jdbcTemplate.update(
+                """
+                UPDATE identity.source_correlation_policy_version
+                SET state = 'SUPERSEDED', superseded_at = ?
+                WHERE tenant_id = ? AND source_system_id = ? AND state = 'ACTIVE'
+                """,
+                Timestamp.from(activatedAt),
+                tenant.tenantId(),
+                sourceSystemId);
+
+        jdbcTemplate.update(
+                """
+                INSERT INTO identity.source_correlation_policy_version (
+                    id, tenant_id, source_system_id,
+                    match_attribute_definition_version_id, match_mapping_version_id,
+                    version_number, create_identity_on_no_match,
+                    created_identity_type, display_name_source_path,
+                    state, created_at, activated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+                """,
+                newPolicyId,
+                tenant.tenantId(),
+                sourceSystemId,
+                matchAttributeDefinitionVersionId,
+                matchMappingVersionId,
+                nextVersion,
+                createIdentityOnNoMatch,
+                createdIdentityType == null ? null : createdIdentityType.name(),
+                displayNameSourcePath,
+                Timestamp.from(activatedAt),
+                Timestamp.from(activatedAt));
+
+        return findActiveCorrelationPolicy(tenant, sourceSystemId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "activated source correlation policy could not be reloaded"));
+    }
+
+    @Override
+    public Optional<SourceCorrelationPolicyVersion> findActiveCorrelationPolicy(
+            TenantContext tenant, UUID sourceSystemId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, match_attribute_definition_version_id,
+                       match_mapping_version_id, version_number,
+                       create_identity_on_no_match, created_identity_type,
+                       display_name_source_path, state, created_at,
+                       activated_at, superseded_at
+                FROM identity.source_correlation_policy_version
+                WHERE tenant_id = ? AND source_system_id = ? AND state = 'ACTIVE'
+                """,
+                (rs, rowNum) -> new SourceCorrelationPolicyVersion(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("source_system_id", UUID.class),
+                        rs.getObject("match_attribute_definition_version_id", UUID.class),
+                        rs.getObject("match_mapping_version_id", UUID.class),
+                        rs.getLong("version_number"),
+                        rs.getBoolean("create_identity_on_no_match"),
+                        rs.getString("created_identity_type") == null
+                                ? null
+                                : IdentityType.valueOf(rs.getString("created_identity_type")),
+                        rs.getString("display_name_source_path"),
+                        SourceCorrelationPolicyVersion.State.valueOf(rs.getString("state")),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("activated_at").toInstant(),
+                        instant(rs.getTimestamp("superseded_at"))),
+                tenant.tenantId(),
+                sourceSystemId)
+                .stream()
+                .findFirst();
     }
 
     private Optional<SourceRecord> querySourceRecord(String whereClause, Object... args) {
