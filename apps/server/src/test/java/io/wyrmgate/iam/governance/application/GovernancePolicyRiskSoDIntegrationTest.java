@@ -515,8 +515,8 @@ class GovernancePolicyRiskSoDIntegrationTest {
                 "SELECT id FROM governance.approval_case WHERE tenant_id = ? AND subject_kind = 'LIFECYCLE_ACCESS_CANDIDATE'",
                 UUID.class, tenant.tenantId());
         approvals.decide(
-                tenant, caseId, approverId, Decision.APPROVE,
-                NOW.plusSeconds(3));
+                tenant, caseId, approverId, DecisionValue.APPROVE,
+                "approved lifecycle access", 1, NOW.plusSeconds(3));
 
         assertThat(service.currentApprovalSatisfied(
                 tenant, identityId, lifecycleRuleId,
