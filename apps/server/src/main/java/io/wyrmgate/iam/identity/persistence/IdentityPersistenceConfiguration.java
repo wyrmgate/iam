@@ -31,6 +31,7 @@ import io.wyrmgate.iam.identity.application.SourceCorrelationService;
 import io.wyrmgate.iam.identity.application.SourceCorrelationPolicyService;
 import io.wyrmgate.iam.identity.application.SourceDrivenIdentityProcessingService;
 import io.wyrmgate.iam.identity.application.SourceMappedValueExtractor;
+import io.wyrmgate.iam.identity.application.SourceLifecyclePolicyService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -206,6 +207,23 @@ public class IdentityPersistenceConfiguration {
     }
 
     @Bean
+    SourceLifecyclePolicyService sourceLifecyclePolicyService(
+            SourceCorrelationRepository sourceCorrelationRepository,
+            IdentityRepository identityRepository,
+            IdentityCommandService identityCommandService,
+            SourceMappedValueExtractor sourceMappedValueExtractor,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new SourceLifecyclePolicyService(
+                sourceCorrelationRepository,
+                identityRepository,
+                identityCommandService,
+                sourceMappedValueExtractor,
+                idGenerator,
+                transactionExecutor);
+    }
+
+    @Bean
     SourceDrivenIdentityProcessingService sourceDrivenIdentityProcessingService(
             JdbcOutboxRepository outboxRepository,
             SourceCorrelationRepository sourceCorrelationRepository,
@@ -213,6 +231,7 @@ public class IdentityPersistenceConfiguration {
             SourceCorrelationService sourceCorrelationService,
             IdentityCommandService identityCommandService,
             CanonicalAttributeResolutionService canonicalAttributeResolutionService,
+            SourceLifecyclePolicyService sourceLifecyclePolicyService,
             SourceMappedValueExtractor sourceMappedValueExtractor,
             TransactionExecutor transactionExecutor,
             ObjectMapper objectMapper) {
@@ -223,6 +242,7 @@ public class IdentityPersistenceConfiguration {
                 sourceCorrelationService,
                 identityCommandService,
                 canonicalAttributeResolutionService,
+                sourceLifecyclePolicyService,
                 sourceMappedValueExtractor,
                 transactionExecutor,
                 objectMapper);
