@@ -21,6 +21,7 @@ import java.util.UUID;
 public final class LifecycleAccessReconciliationService {
 
     public static final String INPUT_CHANGED = "identity.lifecycle-access-input-changed";
+    public static final String APPROVAL_APPROVED = "governance.lifecycle-access-approval-approved";
 
     private static final Duration CLAIM_LEASE = Duration.ofSeconds(30);
     private static final Duration RETRY_DELAY = Duration.ofSeconds(5);
@@ -67,7 +68,7 @@ public final class LifecycleAccessReconciliationService {
 
     public BatchResult processAvailable() {
         List<ClaimedOutboxEvent> claimed=outbox.claimPending(
-                Set.of(INPUT_CHANGED),clock.instant(),CLAIM_LEASE,CLAIM_BATCH);
+                Set.of(INPUT_CHANGED,APPROVAL_APPROVED),clock.instant(),CLAIM_LEASE,CLAIM_BATCH);
         int processed=0;
         int failed=0;
         for(var item:claimed){
