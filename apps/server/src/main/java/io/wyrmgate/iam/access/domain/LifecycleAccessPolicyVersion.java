@@ -22,7 +22,10 @@ public record LifecycleAccessPolicyVersion(
 
     public enum PredicateKind {
         ALWAYS,
-        CANONICAL_STRING_EQUALS
+        CANONICAL_STRING_EQUALS,
+        CANONICAL_BOOLEAN_EQUALS,
+        CANONICAL_INTEGER_EQUALS,
+        CANONICAL_ENUM_EQUALS
     }
 
     public record Rule(
@@ -30,6 +33,9 @@ public record LifecycleAccessPolicyVersion(
             PredicateKind predicateKind,
             String canonicalKey,
             String expectedString,
+            Boolean expectedBoolean,
+            Long expectedInteger,
+            String expectedEnum,
             AccessAssignment.TargetKind targetKind,
             UUID targetId) {
         public Rule {
@@ -38,15 +44,27 @@ public record LifecycleAccessPolicyVersion(
             Objects.requireNonNull(targetKind, "targetKind");
             Objects.requireNonNull(targetId, "targetId");
             if (predicateKind == PredicateKind.ALWAYS) {
-                if (canonicalKey != null || expectedString != null) {
+                if (canonicalKey != null || expectedString != null || expectedBoolean != null
+                        || expectedInteger != null || expectedEnum != null) {
                     throw new IllegalArgumentException("ALWAYS rule must not carry canonical predicate data");
                 }
             } else {
                 if (canonicalKey == null || canonicalKey.isBlank()) {
                     throw new IllegalArgumentException("canonicalKey is required");
                 }
-                if (expectedString == null) {
-                    throw new IllegalArgumentException("expectedString is required");
+                int expectedValues = (expectedString == null ? 0 : 1)
+                        + (expectedBoolean == null ? 0 : 1)
+                        + (expectedInteger == null ? 0 : 1)
+                        + (expectedEnum == null ? 0 : 1);
+                if (expectedValues != 1
+                        || (predicateKind == PredicateKind.CANONICAL_STRING_EQUALS) != (expectedString != null)
+                        || (predicateKind == PredicateKind.CANONICAL_BOOLEAN_EQUALS) != (expectedBoolean != null)
+                        || (predicateKind == PredicateKind.CANONICAL_INTEGER_EQUALS) != (expectedInteger != null)
+                        || (predicateKind == PredicateKind.CANONICAL_ENUM_EQUALS) != (expectedEnum != null)) {
+                    throw new IllegalArgumentException("predicate kind must carry exactly its matching typed expected value");
+                }
+                if (expectedEnum != null && expectedEnum.isBlank()) {
+                    throw new IllegalArgumentException("expectedEnum must not be blank");
                 }
             }
         }

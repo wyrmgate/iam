@@ -9,8 +9,8 @@ import java.util.UUID;
 /** Narrow Identity semantic query for Access lifecycle policy evaluation. */
 public interface IdentityLifecycleAccessQuery {
 
-    boolean supportsPolicySingleStringAttribute(
-            TenantContext tenant, String canonicalKey);
+    boolean supportsPolicyScalarAttribute(
+            TenantContext tenant, String canonicalKey, ScalarType type);
 
     Context currentContext(
             TenantContext tenant,
@@ -22,27 +22,41 @@ public interface IdentityLifecycleAccessQuery {
         AVAILABLE
     }
 
-    record CanonicalString(
+    enum ScalarType {
+        STRING,
+        BOOLEAN,
+        INTEGER,
+        ENUM
+    }
+
+    record CanonicalScalar(
             boolean trusted,
-            String value,
+            ScalarType type,
+            Object value,
             long valueRevision) {
-        public CanonicalString {
+        public CanonicalScalar {
             if (trusted) {
+                Objects.requireNonNull(type, "type");
                 Objects.requireNonNull(value, "value");
-                if (valueRevision < 1) {
-                    throw new IllegalArgumentException("trusted value requires positive revision");
+                boolean valid = switch (type) {
+                    case STRING, ENUM -> value instanceof String;
+                    case BOOLEAN -> value instanceof Boolean;
+                    case INTEGER -> value instanceof Long;
+                };
+                if (!valid || valueRevision < 1) {
+                    throw new IllegalArgumentException("trusted scalar requires matching typed value/revision");
                 }
-            } else if (value != null || valueRevision != 0) {
-                throw new IllegalArgumentException("untrusted value must not carry value/revision");
+            } else if (type != null || value != null || valueRevision != 0) {
+                throw new IllegalArgumentException("untrusted scalar must not carry type/value/revision");
             }
         }
 
-        public static CanonicalString trusted(String value, long revision) {
-            return new CanonicalString(true, value, revision);
+        public static CanonicalScalar trusted(ScalarType type, Object value, long revision) {
+            return new CanonicalScalar(true, type, value, revision);
         }
 
-        public static CanonicalString unavailable() {
-            return new CanonicalString(false, null, 0);
+        public static CanonicalScalar unavailable() {
+            return new CanonicalScalar(false, null, null, 0);
         }
     }
 
@@ -50,15 +64,15 @@ public interface IdentityLifecycleAccessQuery {
             Status status,
             String lifecycleState,
             long identityRevision,
-            Map<String, CanonicalString> canonicalStrings) {
+            Map<String, CanonicalScalar> canonicalScalars) {
         public Context {
             Objects.requireNonNull(status, "status");
-            canonicalStrings = Map.copyOf(Objects.requireNonNull(canonicalStrings, "canonicalStrings"));
+            canonicalScalars = Map.copyOf(Objects.requireNonNull(canonicalScalars, "canonicalScalars"));
             if (status == Status.AVAILABLE) {
                 if (lifecycleState == null || lifecycleState.isBlank() || identityRevision < 1) {
                     throw new IllegalArgumentException("available Identity context requires lifecycle/revision");
                 }
-            } else if (lifecycleState != null || identityRevision != 0 || !canonicalStrings.isEmpty()) {
+            } else if (lifecycleState != null || identityRevision != 0 || !canonicalScalars.isEmpty()) {
                 throw new IllegalArgumentException("NOT_FOUND context must not carry state");
             }
         }

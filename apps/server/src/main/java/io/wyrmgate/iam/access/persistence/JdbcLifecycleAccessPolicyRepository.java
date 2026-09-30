@@ -43,11 +43,12 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
             jdbc.update("""
                     INSERT INTO access.lifecycle_access_policy_rule
                         (policy_version_id,tenant_id,rule_id,predicate_kind,
-                         canonical_key,expected_string,target_kind,target_id)
-                    VALUES (?,?,?,?,?,?,?,?)
+                         canonical_key,expected_string,expected_boolean,expected_integer,expected_enum,target_kind,target_id)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     policyVersionId, tenant.tenantId(), rule.ruleId(), rule.predicateKind().name(),
-                    rule.canonicalKey(), rule.expectedString(), rule.targetKind().name(), rule.targetId());
+                    rule.canonicalKey(), rule.expectedString(), rule.expectedBoolean(),
+                    rule.expectedInteger(), rule.expectedEnum(), rule.targetKind().name(), rule.targetId());
         }
         return findActive(tenant).orElseThrow();
     }
@@ -62,7 +63,8 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
                 (rs,row) -> {
                     UUID id=rs.getObject("id",UUID.class);
                     List<LifecycleAccessPolicyVersion.Rule> rules=jdbc.query("""
-                            SELECT rule_id,predicate_kind,canonical_key,expected_string,target_kind,target_id
+                            SELECT rule_id,predicate_kind,canonical_key,expected_string,
+                                   expected_boolean,expected_integer,expected_enum,target_kind,target_id
                             FROM access.lifecycle_access_policy_rule
                             WHERE tenant_id=? AND policy_version_id=?
                             ORDER BY rule_id
@@ -72,6 +74,9 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
                                     LifecycleAccessPolicyVersion.PredicateKind.valueOf(rr.getString("predicate_kind")),
                                     rr.getString("canonical_key"),
                                     rr.getString("expected_string"),
+                                    rr.getObject("expected_boolean", Boolean.class),
+                                    rr.getObject("expected_integer", Long.class),
+                                    rr.getString("expected_enum"),
                                     AccessAssignment.TargetKind.valueOf(rr.getString("target_kind")),
                                     rr.getObject("target_id",UUID.class)),
                             tenant.tenantId(),id);

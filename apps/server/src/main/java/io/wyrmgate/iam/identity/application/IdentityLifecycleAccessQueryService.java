@@ -28,8 +28,8 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
     }
 
     @Override
-    public boolean supportsPolicySingleStringAttribute(
-            TenantContext tenant, String canonicalKey) {
+    public boolean supportsPolicyScalarAttribute(
+            TenantContext tenant, String canonicalKey, ScalarType type) {
         Objects.requireNonNull(tenant, "tenant");
         if (canonicalKey == null || canonicalKey.isBlank()) {
             return false;
@@ -42,7 +42,7 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
         var version = canonical.findAttributeDefinitionVersion(
                 tenant, schema.id(), definition.id()).orElse(null);
         return version != null
-                && version.dataType() == CanonicalAttributeType.STRING
+                && version.dataType().name().equals(type.name())
                 && version.cardinality() == CanonicalAttributeCardinality.SINGLE
                 && version.policyAddressable();
     }
@@ -61,17 +61,17 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
             return Context.notFound();
         }
 
-        Map<String, CanonicalString> values = new LinkedHashMap<>();
+        Map<String, CanonicalScalar> values = new LinkedHashMap<>();
         var schema = canonical.findActiveSchemaVersion(tenant).orElse(null);
         for (String key : canonicalKeys) {
-            CanonicalString value = CanonicalString.unavailable();
+            CanonicalScalar value = CanonicalScalar.unavailable();
             if (schema != null) {
                 var definition = canonical.findAttributeDefinitionByKey(tenant, key).orElse(null);
                 if (definition != null) {
                     var version = canonical.findAttributeDefinitionVersion(
                             tenant, schema.id(), definition.id()).orElse(null);
                     if (version != null
-                            && version.dataType() == CanonicalAttributeType.STRING
+                            && supported(version.dataType())
                             && version.cardinality() == CanonicalAttributeCardinality.SINGLE
                             && version.policyAddressable()) {
                         CanonicalAttributeState state = reads.findState(
@@ -79,10 +79,8 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
                         if (state != null
                                 && (state.resolutionStatus() == CanonicalAttributeState.ResolutionStatus.RESOLVED
                                     || state.resolutionStatus() == CanonicalAttributeState.ResolutionStatus.OVERRIDDEN)
-                                && state.values().size() == 1
-                                && state.values().getFirst() instanceof CanonicalValue.StringValue stringValue) {
-                            value = CanonicalString.trusted(
-                                    stringValue.value(), state.valueRevision());
+                                && state.values().size() == 1) {
+                            value = scalar(state.values().getFirst(), state.valueRevision());
                         }
                     }
                 }
@@ -95,5 +93,22 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
                 identity.lifecycleState().name(),
                 identity.revision(),
                 values);
+    }
+
+    private static boolean supported(CanonicalAttributeType type) {
+        return type == CanonicalAttributeType.STRING
+                || type == CanonicalAttributeType.BOOLEAN
+                || type == CanonicalAttributeType.INTEGER
+                || type == CanonicalAttributeType.ENUM;
+    }
+
+    private static CanonicalScalar scalar(CanonicalValue value, long revision) {
+        return switch (value) {
+            case CanonicalValue.StringValue v -> CanonicalScalar.trusted(ScalarType.STRING, v.value(), revision);
+            case CanonicalValue.BooleanValue v -> CanonicalScalar.trusted(ScalarType.BOOLEAN, v.value(), revision);
+            case CanonicalValue.IntegerValue v -> CanonicalScalar.trusted(ScalarType.INTEGER, v.value(), revision);
+            case CanonicalValue.EnumValue v -> CanonicalScalar.trusted(ScalarType.ENUM, v.key(), revision);
+            default -> CanonicalScalar.unavailable();
+        };
     }
 }

@@ -129,7 +129,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler = new LifecycleAccessReconciliationService(
                 outbox, policies, assignments, commands, identityPolicy, guard, approval);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("43");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("44");
     }
 
     @AfterAll
@@ -208,6 +208,42 @@ class LifecycleAccessReconciliationIntegrationTest {
         assertThat(assignments.findById(tenant, created.id()).orElseThrow().lifecycleState())
                 .isEqualTo(AccessAssignment.LifecycleState.REVOKED);
         assertThat(guard.calls).isEqualTo(1);
+    }
+
+    @Test
+    void typedScalarMoverPredicatesAddAndRemoveAccess() {
+        TenantContext tenant = tenant("Typed mover");
+        UUID identityId = activeIdentity();
+        UUID booleanEntitlement = ids.nextId();
+        UUID integerEntitlement = ids.nextId();
+        UUID enumEntitlement = ids.nextId();
+        UUID booleanRule = ids.nextId();
+        UUID integerRule = ids.nextId();
+        UUID enumRule = ids.nextId();
+
+        identityPolicy.setScalar(identityId, "employee", IdentityLifecycleAccessQuery.ScalarType.BOOLEAN, true, 1);
+        identityPolicy.setScalar(identityId, "level", IdentityLifecycleAccessQuery.ScalarType.INTEGER, 7L, 1);
+        identityPolicy.setScalar(identityId, "workerClass", IdentityLifecycleAccessQuery.ScalarType.ENUM, "EMPLOYEE", 1);
+        policyService.activate(
+                tenant,
+                java.util.List.of(
+                        typedEntitlement(booleanRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_BOOLEAN_EQUALS,
+                                "employee", null, true, null, null, booleanEntitlement),
+                        typedEntitlement(integerRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_INTEGER_EQUALS,
+                                "level", null, null, 7L, null, integerEntitlement),
+                        typedEntitlement(enumRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_ENUM_EQUALS,
+                                "workerClass", null, null, null, "EMPLOYEE", enumEntitlement)),
+                NOW.plusSeconds(1));
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isEqualTo(3);
+
+        identityPolicy.setScalar(identityId, "employee", IdentityLifecycleAccessQuery.ScalarType.BOOLEAN, false, 2);
+        identityPolicy.setScalar(identityId, "level", IdentityLifecycleAccessQuery.ScalarType.INTEGER, 8L, 2);
+        identityPolicy.setScalar(identityId, "workerClass", IdentityLifecycleAccessQuery.ScalarType.ENUM, "CONTRACTOR", 2);
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
+
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isZero();
     }
 
     @Test
@@ -329,6 +365,9 @@ class LifecycleAccessReconciliationIntegrationTest {
                         LifecycleAccessPolicyVersion.PredicateKind.ALWAYS,
                         null,
                         null,
+                        null,
+                        null,
+                        null,
                         AccessAssignment.TargetKind.ROLE,
                         roleId)),
                 NOW.plusSeconds(2));
@@ -365,6 +404,9 @@ class LifecycleAccessReconciliationIntegrationTest {
                 LifecycleAccessPolicyVersion.PredicateKind.ALWAYS,
                 null,
                 null,
+                null,
+                null,
+                null,
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 entitlementId);
     }
@@ -376,8 +418,25 @@ class LifecycleAccessReconciliationIntegrationTest {
                 LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_STRING_EQUALS,
                 key,
                 value,
+                null,
+                null,
+                null,
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 entitlementId);
+    }
+
+    private static LifecycleAccessPolicyVersion.Rule typedEntitlement(
+            UUID ruleId,
+            LifecycleAccessPolicyVersion.PredicateKind kind,
+            String key,
+            String stringValue,
+            Boolean booleanValue,
+            Long integerValue,
+            String enumValue,
+            UUID entitlementId) {
+        return new LifecycleAccessPolicyVersion.Rule(
+                ruleId, kind, key, stringValue, booleanValue, integerValue, enumValue,
+                AccessAssignment.TargetKind.ENTITLEMENT, entitlementId);
     }
 
     private static long currentPolicyAssignmentCount(
@@ -440,8 +499,8 @@ class LifecycleAccessReconciliationIntegrationTest {
         private final Map<UUID, Context> contexts = new LinkedHashMap<>();
 
         @Override
-        public boolean supportsPolicySingleStringAttribute(
-                TenantContext tenant, String canonicalKey) {
+        public boolean supportsPolicyScalarAttribute(
+                TenantContext tenant, String canonicalKey, ScalarType type) {
             return canonicalKey != null && !canonicalKey.isBlank();
         }
 
@@ -452,10 +511,10 @@ class LifecycleAccessReconciliationIntegrationTest {
                 Set<String> canonicalKeys) {
             Context base = contexts.get(identityId);
             if (base == null) return Context.notFound();
-            Map<String, CanonicalString> values = new LinkedHashMap<>();
+            Map<String, CanonicalScalar> values = new LinkedHashMap<>();
             for (String key : canonicalKeys) {
-                values.put(key, base.canonicalStrings().getOrDefault(
-                        key, CanonicalString.unavailable()));
+                values.put(key, base.canonicalScalars().getOrDefault(
+                        key, CanonicalScalar.unavailable()));
             }
             return new Context(
                     base.status(),
@@ -472,17 +531,21 @@ class LifecycleAccessReconciliationIntegrationTest {
                             Status.AVAILABLE,
                             lifecycleState,
                             revision,
-                            current == null ? Map.of() : current.canonicalStrings()));
+                            current == null ? Map.of() : current.canonicalScalars()));
         }
 
         void setString(UUID identityId, String key, String value, long revision) {
+            setScalar(identityId, key, ScalarType.STRING, value, revision);
+        }
+
+        void setScalar(UUID identityId, String key, ScalarType type, Object value, long revision) {
             Context current = contexts.get(identityId);
             if (current == null) {
                 current = new Context(Status.AVAILABLE, "ACTIVE", 1, Map.of());
             }
-            Map<String, CanonicalString> values = new LinkedHashMap<>(
-                    current.canonicalStrings());
-            values.put(key, CanonicalString.trusted(value, revision));
+            Map<String, CanonicalScalar> values = new LinkedHashMap<>(
+                    current.canonicalScalars());
+            values.put(key, CanonicalScalar.trusted(type, value, revision));
             contexts.put(
                     identityId,
                     new Context(

@@ -45,9 +45,11 @@ public final class LifecycleAccessPolicyService {
             throw new IllegalArgumentException("policy requires between 1 and 100 rules");
         }
         for (var rule:rules) {
-            if (rule.predicateKind()==LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_STRING_EQUALS
-                    && !identities.supportsPolicySingleStringAttribute(tenant,rule.canonicalKey())) {
-                throw new IllegalArgumentException("canonical predicate must reference active policy-addressable STRING/SINGLE attribute");
+            if (rule.predicateKind()!=LifecycleAccessPolicyVersion.PredicateKind.ALWAYS
+                    && !identities.supportsPolicyScalarAttribute(
+                            tenant, rule.canonicalKey(), scalarType(rule.predicateKind()))) {
+                throw new IllegalArgumentException(
+                        "canonical predicate must reference matching active policy-addressable supported SINGLE attribute");
             }
             if (rule.targetKind()==AccessAssignment.TargetKind.ENTITLEMENT) {
                 if (catalog.resolveActiveEntitlement(tenant,rule.targetId()).status()
@@ -64,5 +66,15 @@ public final class LifecycleAccessPolicyService {
         var immutable=rules;
         return transactions.required(() -> policies.replaceActive(
                 tenant,immutable,now,ids.nextId()));
+    }
+    private static IdentityLifecycleAccessQuery.ScalarType scalarType(
+            LifecycleAccessPolicyVersion.PredicateKind kind) {
+        return switch (kind) {
+            case CANONICAL_STRING_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.STRING;
+            case CANONICAL_BOOLEAN_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.BOOLEAN;
+            case CANONICAL_INTEGER_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.INTEGER;
+            case CANONICAL_ENUM_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.ENUM;
+            case ALWAYS -> throw new IllegalArgumentException("ALWAYS has no scalar type");
+        };
     }
 }

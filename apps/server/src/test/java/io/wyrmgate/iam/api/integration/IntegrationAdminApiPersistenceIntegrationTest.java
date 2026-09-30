@@ -112,7 +112,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 authorization, commands, integration,
                 mappingCommands, observationMappings,
                 idempotency, transactions);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("43");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("44");
     }
 
     @AfterAll
