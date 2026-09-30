@@ -2,6 +2,9 @@ package io.wyrmgate.iam.identity.application;
 
 import io.wyrmgate.iam.identity.domain.IdentityLink;
 import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.domain.SourceAbsenceInference;
+import io.wyrmgate.iam.identity.domain.SourceAbsencePolicyVersion;
+import io.wyrmgate.iam.identity.domain.SourceAbsenceTrust;
 import io.wyrmgate.iam.identity.domain.SourceCorrelationPolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
 import io.wyrmgate.iam.identity.domain.SourceLifecyclePolicyVersion;
@@ -26,9 +29,16 @@ public interface SourceCorrelationRepository {
             TenantContext tenant,
             UUID runId,
             SourceImportCompleteness completeness,
+            SourceAbsenceTrust absenceTrust,
+            String absenceTrustReason,
             String checkpointToken,
             String partialReason,
             Instant completedAt);
+
+    SourceAbsenceTrust findImportAbsenceTrust(TenantContext tenant, UUID runId);
+
+    boolean hasImportStartedAfter(
+            TenantContext tenant, UUID sourceSystemId, Instant startedAt);
 
     Optional<SourceImportRun> findImportRun(TenantContext tenant, UUID runId);
 
@@ -88,6 +98,42 @@ public interface SourceCorrelationRepository {
 
     Optional<SourceLifecyclePolicyVersion> findActiveLifecyclePolicy(
             TenantContext tenant, UUID sourceSystemId);
+
+    SourceAbsencePolicyVersion replaceActiveAbsencePolicy(
+            TenantContext tenant,
+            UUID sourceSystemId,
+            int maxInferredTransitions,
+            Instant activatedAt,
+            UUID newPolicyId);
+
+    Optional<SourceAbsencePolicyVersion> findActiveAbsencePolicy(
+            TenantContext tenant, UUID sourceSystemId);
+
+    SourceAbsenceInference startAbsenceInferenceIfAbsent(
+            TenantContext tenant, SourceAbsenceInference candidate);
+
+    Optional<SourceAbsenceInference> findAbsenceInferenceById(
+            TenantContext tenant, UUID inferenceId);
+
+    java.util.List<SourceRecord> findAbsentSourceRecordPage(
+            TenantContext tenant,
+            UUID sourceSystemId,
+            UUID importRunId,
+            Instant runStartedAt,
+            Instant afterFirstObservedAt,
+            UUID afterSourceRecordId,
+            int limit);
+
+    SourceAbsenceInference recordAbsenceInferenceProgress(
+            TenantContext tenant,
+            UUID inferenceId,
+            Instant afterFirstObservedAt,
+            UUID afterSourceRecordId,
+            long processedDelta,
+            long transitionDelta,
+            SourceAbsenceInference.State state,
+            long expectedRevision,
+            Instant now);
 
     record LinkReplacement(IdentityLink link, boolean changed, UUID previousIdentityId) {
     }
