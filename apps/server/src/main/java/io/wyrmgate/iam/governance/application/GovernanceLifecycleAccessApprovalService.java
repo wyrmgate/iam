@@ -82,7 +82,7 @@ public final class GovernanceLifecycleAccessApprovalService
         });
     }
 
-    static PlanSpec plan(GovernancePolicyService.PolicySnapshot snapshot) {
+    static PlanSpec plan(io.wyrmgate.iam.governance.domain.GovernancePolicyModels.PolicySnapshot snapshot) {
         if(snapshot.approvalStages().isEmpty()) {
             throw new IllegalStateException("governance approval plan unavailable");
         }
