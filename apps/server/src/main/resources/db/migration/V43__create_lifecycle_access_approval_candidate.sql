@@ -1,3 +1,15 @@
+ALTER TABLE governance.approval_case
+    DROP CONSTRAINT approval_case_subject_kind_ck;
+
+ALTER TABLE governance.approval_case
+    ADD CONSTRAINT approval_case_subject_kind_ck CHECK (
+        subject_kind IN (
+            'ACCESS_REQUEST_ITEM',
+            'ADMINISTRATIVE_ELEVATION',
+            'ROLE_VERSION_ACTIVATION',
+            'GOVERNANCE_EXCEPTION',
+            'LIFECYCLE_ACCESS_CANDIDATE'));
+
 CREATE TABLE governance.lifecycle_access_approval_candidate (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
