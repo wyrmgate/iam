@@ -1,6 +1,8 @@
 package io.wyrmgate.iam.identity.application;
 
 import io.wyrmgate.iam.identity.domain.IdentityLink;
+import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.domain.SourceCorrelationPolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
 import io.wyrmgate.iam.identity.domain.SourceImportRun;
 import io.wyrmgate.iam.identity.domain.SourceRecord;
@@ -40,6 +42,8 @@ public interface SourceCorrelationRepository {
 
     Optional<SourceRecord> findSourceRecord(TenantContext tenant, UUID sourceRecordId);
 
+    Optional<SourceRecord> findSourceRecordForUpdate(TenantContext tenant, UUID sourceRecordId);
+
     Optional<SourceRecord> findSourceRecordByNativeKey(
             TenantContext tenant,
             UUID sourceSystemId,
@@ -56,6 +60,20 @@ public interface SourceCorrelationRepository {
             UUID newLinkId);
 
     Optional<IdentityLink> findActiveAcceptedLink(TenantContext tenant, UUID sourceRecordId);
+
+    SourceCorrelationPolicyVersion replaceActiveCorrelationPolicy(
+            TenantContext tenant,
+            UUID sourceSystemId,
+            UUID matchAttributeDefinitionVersionId,
+            UUID matchMappingVersionId,
+            boolean createIdentityOnNoMatch,
+            IdentityType createdIdentityType,
+            String displayNameSourcePath,
+            Instant activatedAt,
+            UUID newPolicyId);
+
+    Optional<SourceCorrelationPolicyVersion> findActiveCorrelationPolicy(
+            TenantContext tenant, UUID sourceSystemId);
 
     record LinkReplacement(IdentityLink link, boolean changed) {
     }
