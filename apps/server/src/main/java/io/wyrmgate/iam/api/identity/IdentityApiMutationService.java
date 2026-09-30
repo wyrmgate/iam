@@ -23,6 +23,10 @@ final class IdentityApiMutationService {
 
     private static final String CREATE_NAMESPACE = "api.identity.create.v1";
     private static final String UPDATE_NAMESPACE = "api.identity.update-metadata.v1";
+    private static final String ACTIVATE_NAMESPACE = "api.identity.activate.v1";
+    private static final String SUSPEND_NAMESPACE = "api.identity.suspend.v1";
+    private static final String DEACTIVATE_NAMESPACE = "api.identity.deactivate.v1";
+    private static final String DECOMMISSION_NAMESPACE = "api.identity.decommission.v1";
 
     private final AdministrativeAuthorizationService authorization;
     private final IdentityCommandService commands;
@@ -97,6 +101,86 @@ final class IdentityApiMutationService {
         });
     }
 
+    Identity changeLifecycle(
+            AuthenticatedAdministrativeActor actor,
+            UUID identityId,
+            IdentityLifecycleState targetState,
+            long expectedRevision,
+            String idempotencyKey,
+            RequestFingerprint fingerprint,
+            Instant now,
+            UUID correlationId) {
+        return transactions.required(() -> {
+            var operation = lifecycleOperation(targetState);
+            requireAllowed(
+                    actor,
+                    operation.permission(),
+                    new AdministrativeResource("identity", identityId),
+                    now,
+                    correlationId);
+            if (identities.findById(actor.tenant(), identityId).isEmpty()) {
+                throw IdentityApiException.notFound(correlationId);
+            }
+            var registration = idempotency.register(
+                    actor.tenant(),
+                    operation.namespace(),
+                    idempotencyKey,
+                    fingerprint,
+                    now,
+                    null);
+            if (registration.kind() == RegistrationKind.REPLAY) {
+                return replay(actor, registration, correlationId);
+            }
+
+            Identity updated;
+            try {
+                updated = commands.changeLifecycle(
+                        actor.tenant(),
+                        identityId,
+                        targetState,
+                        expectedRevision,
+                        now,
+                        correlationId,
+                        null);
+            } catch (IllegalArgumentException | IllegalStateException invalidTransition) {
+                throw IdentityApiException.conflict(
+                        correlationId,
+                        "invalid_lifecycle_transition",
+                        "The requested Identity lifecycle transition is not permitted.");
+            }
+
+            idempotency.complete(
+                    actor.tenant(),
+                    operation.namespace(),
+                    idempotencyKey,
+                    fingerprint,
+                    "identity",
+                    updated.id(),
+                    now);
+            return updated;
+        });
+    }
+
+    private static LifecycleOperation lifecycleOperation(
+            IdentityLifecycleState targetState) {
+        return switch (targetState) {
+            case ACTIVE -> new LifecycleOperation(
+                    ACTIVATE_NAMESPACE,
+                    AdministrativePermissions.IDENTITY_ACTIVATE);
+            case SUSPENDED -> new LifecycleOperation(
+                    SUSPEND_NAMESPACE,
+                    AdministrativePermissions.IDENTITY_SUSPEND);
+            case INACTIVE -> new LifecycleOperation(
+                    DEACTIVATE_NAMESPACE,
+                    AdministrativePermissions.IDENTITY_DEACTIVATE);
+            case DECOMMISSIONED -> new LifecycleOperation(
+                    DECOMMISSION_NAMESPACE,
+                    AdministrativePermissions.IDENTITY_DECOMMISSION);
+            case PENDING -> throw new IllegalArgumentException(
+                    "PENDING is not a public lifecycle command target");
+        };
+    }
+
     private void requireAllowed(
             AuthenticatedAdministrativeActor actor,
             AdministrativeResource resource,
@@ -104,9 +188,23 @@ final class IdentityApiMutationService {
             Instant now,
             UUID correlationId) {
         var permission = create ? AdministrativePermissions.IDENTITY_CREATE : AdministrativePermissions.IDENTITY_UPDATE;
+        requireAllowed(actor, permission, resource, now, correlationId);
+    }
+
+    private void requireAllowed(
+            AuthenticatedAdministrativeActor actor,
+            io.wyrmgate.iam.administration.domain.AdministrativePermission permission,
+            AdministrativeResource resource,
+            Instant now,
+            UUID correlationId) {
         if (!authorization.authorize(actor, permission, resource, now).allowed()) {
             throw IdentityApiException.forbidden(correlationId);
         }
+    }
+
+    private record LifecycleOperation(
+            String namespace,
+            io.wyrmgate.iam.administration.domain.AdministrativePermission permission) {
     }
 
     private Identity replay(

@@ -21,9 +21,13 @@ The OpenAPI contract defines:
 - `POST /api/v1/identities` — typed PERSON/SERVICE/WORKLOAD Identity creation;
 - `GET /api/v1/identities/{identityId}` — authoritative Identity read;
 - `PATCH /api/v1/identities/{identityId}` — non-lifecycle metadata maintenance, initially `displayName` only;
+- `POST /api/v1/identities/{identityId}:activate` — PENDING/SUSPENDED/INACTIVE -> ACTIVE;
+- `POST /api/v1/identities/{identityId}:suspend` — ACTIVE -> SUSPENDED;
+- `POST /api/v1/identities/{identityId}:deactivate` — PENDING/ACTIVE/SUSPENDED -> INACTIVE;
+- `POST /api/v1/identities/{identityId}:decommission` — PENDING/ACTIVE/SUSPENDED/INACTIVE -> terminal DECOMMISSIONED;
 - `GET /api/v1/identities/{identityId}/canonical-attributes` — governed canonical resolution state/provenance view.
 
-The first slice intentionally does **not** define generic lifecycle/status PATCH. Lifecycle changes remain explicit business operations and will be added when their application commands and transition invariants are implemented. Identity merge/split remains a later durable operation under FR-IDM-004.
+Generic lifecycle/status PATCH remains prohibited. ADR-0021 lifecycle changes are exposed only as explicit semantic operations. A same-state command is a no-op only with the current revision, and DECOMMISSIONED remains terminal. Identity merge/split remains a later durable operation under FR-IDM-004.
 
 The Principal foundation is implemented as an internal Identity capability contract but is not added to the public Identity HTTP v1 surface in this slice. Principal authority is created explicitly against an active Catalog ApplicationTarget, may be temporarily uncorrelated, and supports one-way correlation to a canonical Identity. Cross-capability consumers use `PrincipalResolutionQuery` by ApplicationTarget + native principal key; provider observations do not become Principal authority automatically. A later public Principal administration API requires its own governed operations and authorization contract rather than exposing persistence rows.
 
@@ -107,11 +111,23 @@ The OpenAPI document models bearer transport authentication as the first impleme
 
 - `identity:read`;
 - `identity:create`;
-- `identity:update`.
+- `identity:update`;
+- `identity:activate`;
+- `identity:suspend`;
+- `identity:deactivate`;
+- `identity:decommission`.
 
 The first Administration persistence/evaluator slice now supplies operation-time default-deny matching for semantic permissions plus tenant-scoped `GLOBAL` and exact `SPECIFIC_RESOURCE` grants. It also revalidates the governed actor's current Identity state and temporal grant validity for every decision. Other canonical scope types remain deliberately fail-closed until their hierarchy/population semantics exist.
 
 The authentication, trusted actor/tenant resolution, burn-once bootstrap, direct-grant evaluator, and Identity HTTP adapters now form one enforced chain. Collection operations require a grant that can authorize the collection; exact resource operations evaluate that resource ID. Relationship/ownership context, policy/assurance requirements and sensitive authorization-decision audit hooks are added as corresponding governed operations require them.
+
+## Lifecycle command boundary
+
+Every public lifecycle command requires a strong revision ETag through `If-Match` and a causal `Idempotency-Key`. Retry replay uses the same durable platform idempotency record pattern as other control-plane mutations. Reusing a key with a different normalized identity/target-state/revision fingerprint is a conflict.
+
+Identity alone mutates authoritative lifecycle. The HTTP adapter invokes the existing Identity-owned lifecycle command; it does not update Access state directly. When access eligibility changes, the existing internal `identity.access-eligibility-changed` fact is still emitted atomically with the Identity revision. EffectiveAccess semantic reads become empty immediately for an ineligible Identity, while Access owns the durable bounded reduction of non-terminal AccessAssignments.
+
+The public API does not expose internal reduction state as Identity lifecycle state, does not wait for provider revocation, and does not add lifecycle-specific public integration events in this slice. Existing public Identity event v1 compatibility is unchanged.
 
 ## Public Identity integration events
 
@@ -169,6 +185,6 @@ The lightweight verifier does not pretend to be a complete OpenAPI/AsyncAPI stan
 
 ## OD-003 completion boundary
 
-This first slice materially advances OD-003 but does not close it globally. The Identity surface now has concrete OpenAPI/AsyncAPI contracts, a controlled outbox publication pipeline, an ADR-governed signed HTTPS webhook adapter, and an explicit exact-version compatibility/deprecation policy. OD-003 remains open for broader implemented public capability coverage and later multi-subscriber/broker evolution when concrete demand requires it.
+The Identity surface now includes governed create/read/list, non-lifecycle metadata update, canonical attribute reads, and explicit ADR-0021 lifecycle operations with revision/idempotency controls. The AsyncAPI/publication pipeline remains limited to the existing created/metadata-changed v1 events. OD-003 therefore remains partially implemented for broader JML/policy orchestration, Principal administration and other deferred public capability surfaces; later multi-subscriber/broker evolution remains demand-driven.
 
 A later formal-specification checkpoint should fold the accepted ADR amendments and completed OD-003 slices into the Integration/SAD/RTM package rather than updating v0.2 for every incremental contract commit.

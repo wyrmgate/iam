@@ -12,6 +12,8 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationSer
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
+import io.wyrmgate.iam.administration.domain.AdministrativePermission;
+import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
@@ -264,6 +266,209 @@ class IdentityApiIntegrationTest {
     }
 
     @Test
+    void lifecycleOperationsPreserveTransitionSemanticsAndEmitFacts() throws Exception {
+        Instant now = Instant.parse("2026-09-16T11:00:00Z");
+        Identity target = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.PENDING,
+                "Lifecycle Target",
+                now,
+                ids.nextId(),
+                null);
+
+        authorized.perform(post("/api/v1/identities/{identityId}:activate", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "idempotency-00000001"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "\"rev-2\""))
+                .andExpect(jsonPath("$.lifecycleState").value("ACTIVE"))
+                .andExpect(jsonPath("$.revision").value(2));
+
+        authorized.perform(post("/api/v1/identities/{identityId}:activate", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-2\"")
+                        .header("Idempotency-Key", "idempotency-00000002"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "\"rev-2\""))
+                .andExpect(jsonPath("$.revision").value(2));
+
+        authorized.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-2\"")
+                        .header("Idempotency-Key", "idempotency-00000003"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lifecycleState").value("SUSPENDED"))
+                .andExpect(jsonPath("$.revision").value(3));
+
+        authorized.perform(post("/api/v1/identities/{identityId}:deactivate", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-3\"")
+                        .header("Idempotency-Key", "deidempotency-00000001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lifecycleState").value("INACTIVE"))
+                .andExpect(jsonPath("$.revision").value(4));
+
+        authorized.perform(post("/api/v1/identities/{identityId}:activate", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-4\"")
+                        .header("Idempotency-Key", "reidempotency-00000001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lifecycleState").value("ACTIVE"))
+                .andExpect(jsonPath("$.revision").value(5));
+
+        UUID correlationId = ids.nextId();
+        authorized.perform(post("/api/v1/identities/{identityId}:decommission", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("X-Correlation-Id", correlationId)
+                        .header("If-Match", "\"rev-5\"")
+                        .header("Idempotency-Key", "idempotency-00000006"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lifecycleState").value("DECOMMISSIONED"))
+                .andExpect(jsonPath("$.revision").value(6));
+
+        authorized.perform(post("/api/v1/identities/{identityId}:activate", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-6\"")
+                        .header("Idempotency-Key", "idempotency-00000007"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("invalid_lifecycle_transition"));
+
+        Integer lifecycleFactCount = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM platform.outbox_event
+                WHERE tenant_id = ?
+                  AND aggregate_id = ?
+                  AND event_type = 'identity.identity-lifecycle-changed'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                target.id());
+        assertThat(lifecycleFactCount).isEqualTo(5);
+
+        Integer eligibilityFactCount = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM platform.outbox_event
+                WHERE tenant_id = ?
+                  AND aggregate_id = ?
+                  AND event_type = 'identity.access-eligibility-changed'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                target.id());
+        assertThat(eligibilityFactCount).isEqualTo(4);
+
+        String payload = jdbc.queryForObject(
+                """
+                SELECT payload::text
+                FROM platform.outbox_event
+                WHERE tenant_id = ?
+                  AND aggregate_id = ?
+                  AND event_type = 'identity.identity-lifecycle-changed'
+                  AND aggregate_revision = 6
+                """,
+                String.class,
+                tenant.tenantId(),
+                target.id());
+        assertThat(payload)
+                .contains("\"previousLifecycleState\": \"ACTIVE\"")
+                .contains("\"lifecycleState\": \"DECOMMISSIONED\"")
+                .contains("\"accessEligible\": false");
+    }
+
+    @Test
+    void lifecycleOperationsRequireRevisionIdempotencyAndSpecificPermission() throws Exception {
+        Instant now = Instant.parse("2026-09-16T11:30:00Z");
+        Identity target = commands.create(
+                tenant,
+                IdentityType.SERVICE,
+                new IdentityProfile.ServiceProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Permission Target",
+                now,
+                ids.nextId(),
+                null);
+
+        MockMvc updateOnly = mockMvc(authorizationOnly(AdministrativePermissions.IDENTITY_UPDATE));
+        updateOnly.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "idempotency-00000008"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("forbidden"));
+
+        MockMvc suspendOnly = mockMvc(authorizationOnly(AdministrativePermissions.IDENTITY_SUSPEND));
+        suspendOnly.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "idempotency-00000009"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(2));
+
+        suspendOnly.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "idempotency-00000010"))
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.code").value("stale_revision"));
+
+        suspendOnly.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-2\"")
+                        .header("Idempotency-Key", "idempotency-00000009"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("idempotency_conflict"));
+
+        suspendOnly.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "idempotency-00000011"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_failed"));
+
+        suspendOnly.perform(post("/api/v1/identities/{identityId}:suspend", target.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-2\""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_failed"));
+    }
+
+    @Test
+    void lifecycleOperationsRespectTenantIsolationAndRejectGenericPatch() throws Exception {
+        Instant now = Instant.parse("2026-09-16T12:00:00Z");
+        TenantContext otherTenant = new TenantContext(
+                tenants.create("Other HTTP Tenant", now).id());
+        Identity foreign = commands.create(
+                otherTenant,
+                IdentityType.WORKLOAD,
+                new IdentityProfile.WorkloadProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Foreign Target",
+                now,
+                ids.nextId(),
+                null);
+
+        authorized.perform(post("/api/v1/identities/{identityId}:suspend", foreign.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "idempotency-00000012"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("not_found"));
+
+        authorized.perform(patch("/api/v1/identities/{identityId}", actorIdentity.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "idempotency-00000013")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lifecycleState\":\"SUSPENDED\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_failed"));
+    }
+
+    @Test
     void canonicalReadIsAuthorizedAndFailsClosedOnValueVisibility() throws Exception {
         authorized.perform(get("/api/v1/identities/{identityId}/canonical-attributes", actorIdentity.id())
                         .requestAttr(ACTOR_ATTRIBUTE, actor))
@@ -323,6 +528,42 @@ class IdentityApiIntegrationTest {
         } catch (Exception exception) {
             throw new IllegalStateException(exception);
         }
+    }
+
+    private AdministrativeAuthorizationService authorizationOnly(
+            AdministrativePermission allowedPermission) {
+        Instant grantTime = Instant.parse("2026-01-01T00:00:00Z");
+        AdministrativeGrant grant = new AdministrativeGrant(
+                ids.nextId(),
+                actorIdentity.id(),
+                ids.nextId(),
+                new AdministrativeScope(
+                        AdministrativeScopeType.GLOBAL,
+                        null,
+                        null),
+                AdministrativeGrantState.ACTIVE,
+                grantTime,
+                null,
+                1,
+                grantTime,
+                grantTime);
+        return new AdministrativeAuthorizationService(
+                (requestedTenant, actorIdentityId, permission) ->
+                        requestedTenant.equals(tenant)
+                                && actorIdentityId.equals(actorIdentity.id())
+                                && permission.equals(allowedPermission)
+                                ? List.of(grant)
+                                : List.of(),
+                (requestedTenant, actorIdentityId) ->
+                        requestedTenant.equals(tenant)
+                                && actorIdentityId.equals(actorIdentity.id())
+                                && identities.findById(
+                                                requestedTenant,
+                                                actorIdentityId)
+                                        .map(identity ->
+                                                identity.lifecycleState()
+                                                        == IdentityLifecycleState.ACTIVE)
+                                        .orElse(false));
     }
 
     private AdministrativeAuthorizationService authorization(boolean allow) {

@@ -158,6 +158,71 @@ public class IdentityController {
                 .body(resource(updated));
     }
 
+
+    @PostMapping("/{identityId}:activate")
+    public ResponseEntity<IdentityResource> activate(
+            @PathVariable UUID identityId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody(required = false) Map<String, Object> body,
+            HttpServletRequest request) {
+        return lifecycle(
+                identityId,
+                IdentityLifecycleState.ACTIVE,
+                ifMatch,
+                idempotencyKey,
+                body,
+                request);
+    }
+
+    @PostMapping("/{identityId}:suspend")
+    public ResponseEntity<IdentityResource> suspend(
+            @PathVariable UUID identityId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody(required = false) Map<String, Object> body,
+            HttpServletRequest request) {
+        return lifecycle(
+                identityId,
+                IdentityLifecycleState.SUSPENDED,
+                ifMatch,
+                idempotencyKey,
+                body,
+                request);
+    }
+
+    @PostMapping("/{identityId}:deactivate")
+    public ResponseEntity<IdentityResource> deactivate(
+            @PathVariable UUID identityId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody(required = false) Map<String, Object> body,
+            HttpServletRequest request) {
+        return lifecycle(
+                identityId,
+                IdentityLifecycleState.INACTIVE,
+                ifMatch,
+                idempotencyKey,
+                body,
+                request);
+    }
+
+    @PostMapping("/{identityId}:decommission")
+    public ResponseEntity<IdentityResource> decommission(
+            @PathVariable UUID identityId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody(required = false) Map<String, Object> body,
+            HttpServletRequest request) {
+        return lifecycle(
+                identityId,
+                IdentityLifecycleState.DECOMMISSIONED,
+                ifMatch,
+                idempotencyKey,
+                body,
+                request);
+    }
+
     @GetMapping("/{identityId}/canonical-attributes")
     public ResponseEntity<CanonicalAttributePage> canonicalAttributes(
             @PathVariable UUID identityId,
@@ -191,6 +256,56 @@ public class IdentityController {
                                         item.hasTrustedValue()))
                                 .toList(),
                         cursors.encodeCanonical(actor.tenant(), identityId, page.nextPosition())));
+    }
+
+
+    private ResponseEntity<IdentityResource> lifecycle(
+            UUID identityId,
+            IdentityLifecycleState targetState,
+            String ifMatch,
+            String idempotencyKey,
+            Map<String, Object> body,
+            HttpServletRequest request) {
+        UUID correlationId =
+                IdentityApiRequestContext.resolveCorrelationId(request, ids);
+        long expectedRevision = parseIfMatch(ifMatch, correlationId);
+        String causalKey = validateIdempotencyKey(idempotencyKey, correlationId);
+        validateEmptyOperationBody(body, correlationId);
+        AuthenticatedAdministrativeActor actor =
+                ControlPlaneActorRequestContext.require(request);
+        Instant now = Instant.now();
+        RequestFingerprint fingerprint = RequestFingerprint.sha256(
+                lifecycleFingerprint(
+                                identityId,
+                                targetState,
+                                expectedRevision)
+                        .getBytes(StandardCharsets.UTF_8));
+        Identity updated = mutations.changeLifecycle(
+                actor,
+                identityId,
+                targetState,
+                expectedRevision,
+                causalKey,
+                fingerprint,
+                now,
+                correlationId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, etag(updated.revision()))
+                .header("X-Correlation-Id", correlationId.toString())
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(resource(updated));
+    }
+
+    private static void validateEmptyOperationBody(
+            Map<String, Object> body,
+            UUID correlationId) {
+        if (body != null && !body.isEmpty()) {
+            throw IdentityApiException.validation(
+                    correlationId,
+                    "request",
+                    "unexpected_fields",
+                    "This lifecycle operation does not accept request fields.");
+        }
     }
 
     private void requireRead(
@@ -400,6 +515,16 @@ public class IdentityController {
 
     private static String updateFingerprint(UUID identityId, long expectedRevision, String displayName) {
         return "v1|" + part(identityId.toString()) + part(Long.toString(expectedRevision)) + part(displayName);
+    }
+
+    private static String lifecycleFingerprint(
+            UUID identityId,
+            IdentityLifecycleState targetState,
+            long expectedRevision) {
+        return "v1|"
+                + part(identityId.toString())
+                + part(targetState.name())
+                + part(Long.toString(expectedRevision));
     }
 
     private static String part(String value) {
