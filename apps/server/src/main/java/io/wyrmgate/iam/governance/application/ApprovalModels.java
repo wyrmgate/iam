@@ -12,7 +12,8 @@ public final class ApprovalModels {
         ACCESS_REQUEST_ITEM,
         ADMINISTRATIVE_ELEVATION,
         ROLE_VERSION_ACTIVATION,
-        GOVERNANCE_EXCEPTION
+        GOVERNANCE_EXCEPTION,
+        LIFECYCLE_ACCESS_CANDIDATE
     }
 
     public enum CaseState {
