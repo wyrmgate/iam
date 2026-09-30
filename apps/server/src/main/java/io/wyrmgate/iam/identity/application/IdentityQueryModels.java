@@ -5,6 +5,7 @@ import io.wyrmgate.iam.identity.domain.AttributeDefinitionVersion;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeCardinality;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeState;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeType;
+import io.wyrmgate.iam.identity.domain.CanonicalValue;
 import io.wyrmgate.iam.identity.domain.Identity;
 import java.time.Instant;
 import java.util.List;
@@ -60,7 +61,7 @@ public final class IdentityQueryModels {
             CanonicalAttributeCardinality cardinality,
             CanonicalAttributeState.ResolutionStatus resolutionStatus,
             long valueRevision,
-            boolean hasTrustedValue) {
+            List<CanonicalValue> values) {
         public CanonicalAttributeReadView {
             Objects.requireNonNull(definitionId, "definitionId");
             Objects.requireNonNull(definitionVersionId, "definitionVersionId");
@@ -76,6 +77,11 @@ public final class IdentityQueryModels {
             if (valueRevision < 1) {
                 throw new IllegalArgumentException("valueRevision must be positive");
             }
+            values = List.copyOf(Objects.requireNonNull(values, "values"));
+        }
+
+        public boolean hasTrustedValue() {
+            return !values.isEmpty();
         }
     }
 
