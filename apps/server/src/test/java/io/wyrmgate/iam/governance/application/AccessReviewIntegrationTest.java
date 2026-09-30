@@ -94,7 +94,7 @@ class AccessReviewIntegrationTest {
         flyway.validate();
         assertThat(flyway.info().current()
                 .getVersion().getVersion())
-                .isEqualTo("35");
+                .isEqualTo("36");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
