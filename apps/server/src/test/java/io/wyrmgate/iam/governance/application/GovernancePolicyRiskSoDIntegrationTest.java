@@ -15,6 +15,7 @@ import io.wyrmgate.iam.governance.persistence.JdbcAccessRequestRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcApprovalRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcGovernancePolicyRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcLifecycleAccessEvaluationEvidenceSink;
+import io.wyrmgate.iam.governance.persistence.JdbcLifecycleAccessApprovalCandidateRepository;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
@@ -467,6 +468,62 @@ class GovernancePolicyRiskSoDIntegrationTest {
                 evaluationId))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("governance evaluation evidence is immutable");
+    }
+
+    @Test
+    void lifecycleApprovalCandidateReusesCaseAndRequiresCompletedCurrentApproval() {
+        UUID requested = entitlement();
+        UUID identityId = ids.nextId();
+        UUID lifecycleRuleId = ids.nextId();
+        UUID approverId = ids.nextId();
+        PolicyVersion active = activate(
+                PolicyDecision.REQUIRE_APPROVAL,
+                List.of(),
+                plan(approverId),
+                NOW);
+
+        var candidateRepository =
+                new JdbcLifecycleAccessApprovalCandidateRepository(jdbc);
+        var service = new GovernanceLifecycleAccessApprovalService(
+                policyService,
+                candidateRepository,
+                starter,
+                approvalRepository,
+                ids,
+                transactions);
+
+        service.requestApproval(
+                tenant, identityId, lifecycleRuleId,
+                AccessAssignment.TargetKind.ENTITLEMENT, requested,
+                NOW.plusSeconds(1), ids.nextId(), ids.nextId());
+        service.requestApproval(
+                tenant, identityId, lifecycleRuleId,
+                AccessAssignment.TargetKind.ENTITLEMENT, requested,
+                NOW.plusSeconds(2), ids.nextId(), ids.nextId());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM governance.lifecycle_access_approval_candidate WHERE tenant_id = ?",
+                Integer.class, tenant.tenantId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM governance.approval_case WHERE tenant_id = ? AND subject_kind = 'LIFECYCLE_ACCESS_CANDIDATE'",
+                Integer.class, tenant.tenantId())).isEqualTo(1);
+        assertThat(service.currentApprovalSatisfied(
+                tenant, identityId, lifecycleRuleId,
+                AccessAssignment.TargetKind.ENTITLEMENT, requested)).isFalse();
+
+        UUID caseId = jdbc.queryForObject(
+                "SELECT id FROM governance.approval_case WHERE tenant_id = ? AND subject_kind = 'LIFECYCLE_ACCESS_CANDIDATE'",
+                UUID.class, tenant.tenantId());
+        approvals.decide(
+                tenant, caseId, approverId, Decision.APPROVE,
+                NOW.plusSeconds(3));
+
+        assertThat(service.currentApprovalSatisfied(
+                tenant, identityId, lifecycleRuleId,
+                AccessAssignment.TargetKind.ENTITLEMENT, requested)).isTrue();
+        assertThat(jdbc.queryForObject(
+                "SELECT policy_version_id FROM governance.lifecycle_access_approval_candidate WHERE tenant_id = ?",
+                UUID.class, tenant.tenantId())).isEqualTo(active.id());
     }
 
     @Test
