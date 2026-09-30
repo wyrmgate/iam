@@ -2,6 +2,7 @@ package io.wyrmgate.iam.api.identity;
 
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributePagePosition;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.IdentityPagePosition;
+import io.wyrmgate.iam.identity.application.PrincipalQueryModels.PrincipalPosition;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -21,6 +22,7 @@ final class IdentityCursorCodec {
     private static final String PAYLOAD_VERSION = "p1";
     private static final String IDENTITY_KIND = "identity";
     private static final String CANONICAL_KIND = "canonical-attribute";
+    private static final String PRINCIPAL_KIND = "principal";
     private static final int MAX_CURSOR_LENGTH = 4096;
 
     private final SigningKeyProvider signingKeys;
@@ -60,6 +62,35 @@ final class IdentityCursorCodec {
             return new IdentityPagePosition(
                     Instant.ofEpochSecond(Long.parseLong(parts[4]), Integer.parseInt(parts[5])),
                     UUID.fromString(parts[6]));
+        } catch (RuntimeException invalid) {
+            throw invalid(invalid);
+        }
+    }
+
+    String encodePrincipal(
+            TenantContext tenant,
+            PrincipalPosition position) {
+        if (position == null) return null;
+        return sign(payload(
+                PRINCIPAL_KIND,
+                tenant.tenantId().toString(),
+                clock.instant().toString(),
+                position.id().toString()));
+    }
+
+    PrincipalPosition decodePrincipal(
+            String cursor,
+            TenantContext tenant) {
+        String[] parts = verifiedPayload(cursor);
+        if (parts.length != 5
+                || !PAYLOAD_VERSION.equals(parts[0])
+                || !PRINCIPAL_KIND.equals(parts[1])
+                || !tenant.tenantId().toString().equals(parts[2])) {
+            throw invalid();
+        }
+        validateIssuedAt(parts[3]);
+        try {
+            return new PrincipalPosition(UUID.fromString(parts[4]));
         } catch (RuntimeException invalid) {
             throw invalid(invalid);
         }
