@@ -74,6 +74,13 @@ public final class SourceCorrelationPolicyService {
                     .orElseThrow(() -> new IllegalStateException(
                             "source correlation key requires an active source mapping"));
             requireSourcePath(mapping.sourcePath(), "correlation mapping sourcePath");
+            boolean authoritative = attributes.findActiveAuthorityRules(tenant, version.id())
+                    .stream()
+                    .anyMatch(rule -> rule.sourceSystemId().equals(sourceSystemId));
+            if (!authoritative) {
+                throw new IllegalStateException(
+                        "source correlation key requires active source authority");
+            }
 
             return sources.replaceActiveCorrelationPolicy(
                     tenant,
