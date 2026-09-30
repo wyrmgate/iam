@@ -534,6 +534,231 @@
         "x-wyrmgate-administrative-permission": "identity:decommission",
         "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
       }
+    },
+    "/principals": {
+      "get": {
+        "operationId": "listPrincipals",
+        "summary": "List authoritative Principals",
+        "description": "Lists Identity-owned Principal authority. Provider observations are not returned by this resource.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Principal page",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrincipalPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative Principal state",
+        "x-wyrmgate-administrative-permission": "principal:read",
+        "x-wyrmgate-pagination": "Signed tenant-bound cursor ordered by stable Principal ID"
+      },
+      "post": {
+        "operationId": "registerPrincipal",
+        "summary": "Register a known technical Principal",
+        "description": "Explicitly creates one uncorrelated ACCOUNT Principal in ACTIVE technical lifecycle state on an active ApplicationTarget. This is not provider provisioning and does not promote provider observation into authority.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPrincipalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Principal registered",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrincipalResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative Principal state",
+        "x-wyrmgate-administrative-permission": "principal:register",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
+    },
+    "/principals/{principalId}": {
+      "get": {
+        "operationId": "getPrincipal",
+        "summary": "Read an authoritative Principal",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PrincipalId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Principal",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrincipalResource"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative Principal state",
+        "x-wyrmgate-administrative-permission": "principal:read"
+      }
+    },
+    "/principals/{principalId}:correlate": {
+      "post": {
+        "operationId": "correlatePrincipal",
+        "summary": "Correlate a Principal to one Identity",
+        "description": "Performs one-way explicit Principal correlation. An already correlated Principal cannot be reassigned through this operation.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PrincipalId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrelatePrincipalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Principal correlated",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/RevisionEtag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrincipalResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/StaleRevision"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative Principal correlation",
+        "x-wyrmgate-administrative-permission": "principal:correlate",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
     }
   },
   "components": {
@@ -606,6 +831,16 @@
           "type": "string",
           "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"
         }
+      },
+      "PrincipalId": {
+        "name": "principalId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Stable opaque Principal identifier."
       }
     },
     "headers": {
@@ -1203,10 +1438,130 @@
             }
           }
         }
+      },
+      "PrincipalKind": {
+        "type": "string",
+        "enum": [
+          "ACCOUNT"
+        ]
+      },
+      "PrincipalLifecycleState": {
+        "type": "string",
+        "enum": [
+          "ACTIVE",
+          "DISABLED"
+        ]
+      },
+      "RegisterPrincipalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "applicationTargetId",
+          "nativePrincipalKey"
+        ],
+        "properties": {
+          "applicationTargetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nativePrincipalKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      },
+      "CorrelatePrincipalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identityId"
+        ],
+        "properties": {
+          "identityId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "PrincipalResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "applicationTargetId",
+          "kind",
+          "nativePrincipalKey",
+          "lifecycleState",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "identityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "applicationTargetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PrincipalKind"
+          },
+          "nativePrincipalKey": {
+            "type": "string"
+          },
+          "lifecycleState": {
+            "$ref": "#/components/schemas/PrincipalLifecycleState"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PrincipalPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PrincipalResource"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       }
     }
   },
   "x-wyrmgate-contract-status": "runtime-exposed-authenticated-authorized",
   "x-wyrmgate-tenant-resolution": "Tenant/isolation boundary is derived from authenticated control-plane context, not writable resource fields.",
-  "x-wyrmgate-lifecycle-boundary": "Identity lifecycle uses explicit semantic operations under ADR-0021; generic PATCH lifecycle/status mutation remains prohibited."
+  "x-wyrmgate-lifecycle-boundary": "Identity lifecycle uses explicit semantic operations under ADR-0021; generic PATCH lifecycle/status mutation remains prohibited.",
+  "x-wyrmgate-principal-boundary": "Principal is Identity-owned technical authority. Public registration is explicit and uncorrelated; provider observations never create Principal authority automatically, correlation is one-way, and provider-driven ACTIVE/DISABLED realization remains internal."
 }
