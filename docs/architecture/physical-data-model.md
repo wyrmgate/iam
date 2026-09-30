@@ -439,7 +439,7 @@ audit.audit_record
 - UNIQUE (tenant_id, id)
 ```
 
-Audit rows are append-only. Material snapshots are used only where needed to preserve historical explainability after rename/retirement; they are data-minimized and secret-filtered.
+Audit rows are append-only. V46 implements `audit.audit_record` with normalized `SUCCESS`/`DENIED`/`FAILURE` outcomes, stable replay identity and bounded indexes for time/actor/resource/correlation queries. `material_snapshot` and `integrity_metadata` remain nullable and unused until their later governed contracts are implemented. Material snapshots are used only where needed to preserve historical explainability after rename/retirement; they are data-minimized and secret-filtered.
 
 ## 7. Dynamic/custom attribute physical model
 
