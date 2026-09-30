@@ -84,6 +84,8 @@ public final class AccessAssignmentCommandService {
                 validUntil,
                 AccessAssignment.ProvenanceKind.MANUAL,
                 null,
+                null,
+                null,
                 now);
     }
 
@@ -108,6 +110,8 @@ public final class AccessAssignmentCommandService {
                 validUntil,
                 AccessAssignment.ProvenanceKind.REQUEST_ITEM,
                 requestItemId,
+                null,
+                null,
                 now);
     }
 
@@ -116,7 +120,9 @@ public final class AccessAssignmentCommandService {
             UUID ruleId,
             UUID identityId,
             UUID entitlementId,
-            Instant now) {
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
         Objects.requireNonNull(ruleId, "ruleId");
         return createEntitlementAssignmentInternal(
                 tenant,
@@ -128,6 +134,8 @@ public final class AccessAssignmentCommandService {
                 null,
                 AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE,
                 ruleId,
+                correlationId,
+                causationId,
                 now);
     }
 
@@ -141,6 +149,8 @@ public final class AccessAssignmentCommandService {
             Instant validUntil,
             AccessAssignment.ProvenanceKind provenanceKind,
             UUID provenanceRefId,
+            UUID correlationId,
+            UUID causationId,
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(identityId, "identityId");
@@ -243,7 +253,8 @@ public final class AccessAssignmentCommandService {
 
         return transactions.required(() -> {
             assignments.insert(tenant, assignment);
-            facts.projectionInputChanged(tenant, assignment);
+            facts.projectionInputChanged(
+                    tenant, assignment, correlationId, causationId);
             boundaries.scheduleBoundaries(tenant, assignment, now);
             return assignments.findById(tenant, assignment.id())
                     .orElseThrow(() -> new IllegalStateException(
@@ -270,6 +281,8 @@ public final class AccessAssignmentCommandService {
                 validUntil,
                 AccessAssignment.ProvenanceKind.MANUAL,
                 null,
+                null,
+                null,
                 now);
     }
 
@@ -294,6 +307,8 @@ public final class AccessAssignmentCommandService {
                 validUntil,
                 AccessAssignment.ProvenanceKind.REQUEST_ITEM,
                 requestItemId,
+                null,
+                null,
                 now);
     }
 
@@ -302,7 +317,9 @@ public final class AccessAssignmentCommandService {
             UUID ruleId,
             UUID identityId,
             UUID roleId,
-            Instant now) {
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
         Objects.requireNonNull(ruleId, "ruleId");
         return createRoleAssignmentInternal(
                 tenant,
@@ -314,6 +331,8 @@ public final class AccessAssignmentCommandService {
                 null,
                 AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE,
                 ruleId,
+                correlationId,
+                causationId,
                 now);
     }
 
@@ -327,6 +346,8 @@ public final class AccessAssignmentCommandService {
             Instant validUntil,
             AccessAssignment.ProvenanceKind provenanceKind,
             UUID provenanceRefId,
+            UUID correlationId,
+            UUID causationId,
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(identityId, "identityId");
@@ -428,7 +449,8 @@ public final class AccessAssignmentCommandService {
 
         return transactions.required(() -> {
             assignments.insert(tenant, assignment);
-            facts.projectionInputChanged(tenant, assignment);
+            facts.projectionInputChanged(
+                    tenant, assignment, correlationId, causationId);
             boundaries.scheduleBoundaries(tenant, assignment, now);
             return assignments.findById(tenant, assignment.id())
                     .orElseThrow(() -> new IllegalStateException(
@@ -632,6 +654,33 @@ public final class AccessAssignmentCommandService {
             UUID assignmentId,
             long expectedRevision,
             Instant now) {
+        return terminateInternal(
+                tenant, assignmentId, expectedRevision, now, null, null);
+    }
+
+    public AccessAssignment terminateLifecyclePolicyAssignment(
+            TenantContext tenant,
+            UUID assignmentId,
+            long expectedRevision,
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
+        return terminateInternal(
+                tenant,
+                assignmentId,
+                expectedRevision,
+                now,
+                correlationId,
+                causationId);
+    }
+
+    private AccessAssignment terminateInternal(
+            TenantContext tenant,
+            UUID assignmentId,
+            long expectedRevision,
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(assignmentId, "assignmentId");
         Objects.requireNonNull(now, "now");
@@ -655,9 +704,9 @@ public final class AccessAssignmentCommandService {
             if (current.lifecycleState()
                     == AccessAssignment.LifecycleState.REVOKED
                     || current.lifecycleState()
-                    == AccessAssignment.LifecycleState.EXPIRED
+                            == AccessAssignment.LifecycleState.EXPIRED
                     || current.lifecycleState()
-                    == AccessAssignment.LifecycleState.CANCELLED) {
+                            == AccessAssignment.LifecycleState.CANCELLED) {
                 throw new AccessAssignmentCommandException(
                         "access_assignment_terminal",
                         "The AccessAssignment is already terminal.");
@@ -682,8 +731,10 @@ public final class AccessAssignmentCommandService {
                     terminalState,
                     expectedRevision,
                     now);
-            facts.projectionInputChanged(tenant, updated);
+            facts.projectionInputChanged(
+                    tenant, updated, correlationId, causationId);
             return updated;
         });
     }
+
 }
