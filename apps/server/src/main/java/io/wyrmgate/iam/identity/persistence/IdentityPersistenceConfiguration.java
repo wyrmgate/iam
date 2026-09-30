@@ -28,6 +28,9 @@ import io.wyrmgate.iam.identity.application.PrincipalRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationFactSink;
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationService;
+import io.wyrmgate.iam.identity.application.SourceCorrelationPolicyService;
+import io.wyrmgate.iam.identity.application.SourceDrivenIdentityProcessingService;
+import io.wyrmgate.iam.identity.application.SourceMappedValueExtractor;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -182,6 +185,53 @@ public class IdentityPersistenceConfiguration {
         return new SourceCorrelationService(
                 sourceCorrelationRepository, identityRepository, sourceCorrelationFactSink,
                 idGenerator, transactionExecutor);
+    }
+
+    @Bean
+    SourceCorrelationPolicyService sourceCorrelationPolicyService(
+            SourceCorrelationRepository sourceCorrelationRepository,
+            CanonicalAttributeRepository canonicalAttributeRepository,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new SourceCorrelationPolicyService(
+                sourceCorrelationRepository,
+                canonicalAttributeRepository,
+                idGenerator,
+                transactionExecutor);
+    }
+
+    @Bean
+    SourceMappedValueExtractor sourceMappedValueExtractor(ObjectMapper objectMapper) {
+        return new SourceMappedValueExtractor(objectMapper);
+    }
+
+    @Bean
+    SourceDrivenIdentityProcessingService sourceDrivenIdentityProcessingService(
+            JdbcOutboxRepository outboxRepository,
+            SourceCorrelationRepository sourceCorrelationRepository,
+            CanonicalAttributeRepository canonicalAttributeRepository,
+            SourceCorrelationService sourceCorrelationService,
+            IdentityCommandService identityCommandService,
+            CanonicalAttributeResolutionService canonicalAttributeResolutionService,
+            SourceMappedValueExtractor sourceMappedValueExtractor,
+            TransactionExecutor transactionExecutor,
+            ObjectMapper objectMapper) {
+        return new SourceDrivenIdentityProcessingService(
+                outboxRepository,
+                sourceCorrelationRepository,
+                canonicalAttributeRepository,
+                sourceCorrelationService,
+                identityCommandService,
+                canonicalAttributeResolutionService,
+                sourceMappedValueExtractor,
+                transactionExecutor,
+                objectMapper);
+    }
+
+    @Bean
+    SourceDrivenIdentityProcessingScheduler sourceDrivenIdentityProcessingScheduler(
+            SourceDrivenIdentityProcessingService service) {
+        return new SourceDrivenIdentityProcessingScheduler(service);
     }
 
     @Bean
