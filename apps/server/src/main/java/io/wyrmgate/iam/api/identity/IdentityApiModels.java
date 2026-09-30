@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.api.identity;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +45,37 @@ final class IdentityApiModels {
             Instant completedAt) {
     }
 
+    sealed interface CanonicalValueResource permits
+            StringCanonicalValueResource,
+            BooleanCanonicalValueResource,
+            IntegerCanonicalValueResource,
+            DecimalCanonicalValueResource,
+            DateCanonicalValueResource,
+            DateTimeCanonicalValueResource,
+            EnumCanonicalValueResource {
+    }
+
+    record StringCanonicalValueResource(String type, String value) implements CanonicalValueResource {
+    }
+
+    record BooleanCanonicalValueResource(String type, boolean value) implements CanonicalValueResource {
+    }
+
+    record IntegerCanonicalValueResource(String type, long value) implements CanonicalValueResource {
+    }
+
+    record DecimalCanonicalValueResource(String type, String value) implements CanonicalValueResource {
+    }
+
+    record DateCanonicalValueResource(String type, String value) implements CanonicalValueResource {
+    }
+
+    record DateTimeCanonicalValueResource(String type, String value) implements CanonicalValueResource {
+    }
+
+    record EnumCanonicalValueResource(String type, String key) implements CanonicalValueResource {
+    }
+
     record CanonicalAttributeResource(
             UUID definitionId,
             UUID definitionVersionId,
@@ -54,7 +86,8 @@ final class IdentityApiModels {
             String resolutionStatus,
             long valueRevision,
             String visibility,
-            boolean hasTrustedValue) {
+            boolean hasTrustedValue,
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<CanonicalValueResource> values) {
     }
 
     record CanonicalAttributePage(List<CanonicalAttributeResource> items, String nextCursor) {
