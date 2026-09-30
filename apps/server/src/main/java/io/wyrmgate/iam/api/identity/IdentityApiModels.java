@@ -26,6 +26,24 @@ final class IdentityApiModels {
     record IdentityPage(List<IdentityResource> items, String nextCursor) {
     }
 
+    record IdentityMergeOperationResource(
+            UUID id,
+            UUID survivorIdentityId,
+            UUID absorbedIdentityId,
+            int movedLinkCount,
+            int movedPrincipalCount,
+            Instant completedAt) {
+    }
+
+    record IdentitySplitOperationResource(
+            UUID id,
+            UUID sourceIdentityId,
+            UUID newIdentityId,
+            List<UUID> movedSourceRecordIds,
+            List<UUID> movedPrincipalIds,
+            Instant completedAt) {
+    }
+
     record CanonicalAttributeResource(
             UUID definitionId,
             UUID definitionVersionId,
