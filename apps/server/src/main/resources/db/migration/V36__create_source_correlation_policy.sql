@@ -62,5 +62,12 @@ CREATE UNIQUE INDEX identity_source_correlation_policy_one_active_idx
     ON identity.source_correlation_policy_version (tenant_id, source_system_id)
     WHERE state = 'ACTIVE';
 
+CREATE INDEX identity_state_single_string_correlation_lookup_idx
+    ON identity.canonical_attribute_state_value
+        (tenant_id, attribute_definition_version_id, value_string, state_id)
+    WHERE data_type = 'STRING'
+      AND cardinality = 'SINGLE'
+      AND value_ordinal = 0;
+
 COMMENT ON TABLE identity.source_correlation_policy_version IS
     'Immutable activated Identity-owned policy for deterministic source correlation. The first version uses one exact STRING/SINGLE canonical key; optional no-match creation produces a PENDING Identity.';
