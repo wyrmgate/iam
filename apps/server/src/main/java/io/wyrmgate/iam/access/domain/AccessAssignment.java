@@ -53,8 +53,10 @@ public record AccessAssignment(
         if (provenanceKind == ProvenanceKind.MANUAL && provenanceRefId != null) {
             throw new IllegalArgumentException("MANUAL provenance must not carry provenanceRefId");
         }
-        if (provenanceKind == ProvenanceKind.REQUEST_ITEM && provenanceRefId == null) {
-            throw new IllegalArgumentException("REQUEST_ITEM provenance requires provenanceRefId");
+        if ((provenanceKind == ProvenanceKind.REQUEST_ITEM
+                || provenanceKind == ProvenanceKind.LIFECYCLE_POLICY_RULE)
+                && provenanceRefId == null) {
+            throw new IllegalArgumentException(provenanceKind + " provenance requires provenanceRefId");
         }
 
         if (lifecycleState == LifecycleState.SCHEDULED && validFrom == null) {
@@ -99,7 +101,8 @@ public record AccessAssignment(
 
     public enum ProvenanceKind {
         MANUAL,
-        REQUEST_ITEM
+        REQUEST_ITEM,
+        LIFECYCLE_POLICY_RULE
     }
 
     public enum LifecycleState {
