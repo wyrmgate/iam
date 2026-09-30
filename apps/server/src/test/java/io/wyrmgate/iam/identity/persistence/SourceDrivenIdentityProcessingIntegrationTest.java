@@ -302,6 +302,25 @@ class SourceDrivenIdentityProcessingIntegrationTest {
                 tenant, record.id(), second.id(), "explicit corrected link",
                 now.plusSeconds(9), ids.nextId(), null);
 
+        UUID employeeIdVersion = jdbc.queryForObject(
+                """
+                SELECT version.id
+                FROM identity.attribute_definition_version version
+                JOIN identity.attribute_definition definition
+                  ON definition.tenant_id = version.tenant_id
+                 AND definition.id = version.attribute_definition_id
+                JOIN identity.canonical_schema_version schema
+                  ON schema.tenant_id = version.tenant_id
+                 AND schema.id = version.schema_version_id
+                WHERE version.tenant_id = ?
+                  AND definition.canonical_key = 'employeeId'
+                  AND schema.state = 'ACTIVE'
+                """,
+                UUID.class,
+                tenant.tenantId());
+        assertThat(attributeRepository.findCandidates(
+                tenant, first.id(), employeeIdVersion)).isEmpty();
+
         drain();
 
         assertThat(canonicalStatus(tenant, first.id(), "employeeId"))
@@ -342,6 +361,20 @@ class SourceDrivenIdentityProcessingIntegrationTest {
     private static void drain() {
         for (int i = 0; i < 4; i++) {
             var result = processor.processAvailable();
+            assertThat(result.failed())
+                    .describedAs("source processor failures: %s",
+                            jdbc.queryForList(
+                                    """
+                                    SELECT event_type, publication_state, last_error_code
+                                    FROM platform.outbox_event
+                                    WHERE event_type IN (
+                                        'identity.source-record-observed',
+                                        'identity.identity-link-accepted')
+                                      AND (publication_state = 'FAILED'
+                                           OR last_error_code IS NOT NULL)
+                                    ORDER BY occurred_at, id
+                                    """))
+                    .isZero();
             if (result.claimed() == 0) {
                 return;
             }
