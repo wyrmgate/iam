@@ -7,6 +7,13 @@ import java.util.UUID;
 
 /** Access-consumer-defined command for Governance-owned lifecycle privilege approval. */
 public interface LifecycleAccessApprovalCommand {
+    boolean currentApprovalSatisfied(
+            TenantContext tenant,
+            UUID identityId,
+            UUID lifecycleRuleId,
+            AccessAssignment.TargetKind targetKind,
+            UUID targetId);
+
     void requestApproval(
             TenantContext tenant,
             UUID identityId,
