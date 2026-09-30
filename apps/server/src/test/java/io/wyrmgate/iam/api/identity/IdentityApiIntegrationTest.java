@@ -375,9 +375,9 @@ class IdentityApiIntegrationTest {
                 tenant.tenantId(),
                 target.id());
         assertThat(payload)
-                .contains("\"previousLifecycleState\":\"ACTIVE\"")
-                .contains("\"lifecycleState\":\"DECOMMISSIONED\"")
-                .contains("\"accessEligible\":false");
+                .contains("\"previousLifecycleState\": \"ACTIVE\"")
+                .contains("\"lifecycleState\": \"DECOMMISSIONED\"")
+                .contains("\"accessEligible\": false");
     }
 
     @Test
