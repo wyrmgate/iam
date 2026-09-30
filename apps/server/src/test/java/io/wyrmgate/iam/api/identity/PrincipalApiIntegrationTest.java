@@ -225,7 +225,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-00000002")
+                                        "idempotency-00000001")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content(body))
@@ -329,7 +329,7 @@ class PrincipalApiIntegrationTest {
                                         "\"rev-1\"")
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-00000004")
+                                        "idempotency-00000003")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content(correlateBody))
@@ -424,7 +424,7 @@ class PrincipalApiIntegrationTest {
                                         actor)
                                 .header(
                                         "Idempotency-Key",
-                                        "idempotency-00000007")
+                                        "idempotency-00000005")
                                 .contentType(
                                         MediaType.APPLICATION_JSON)
                                 .content("""
