@@ -41,6 +41,10 @@ public record AdministrativeScope(
         }
     }
 
+    public AdministrativeScope(AdministrativeScopeType type, String resourceType, UUID resourceId) {
+        this(type, resourceType, resourceId, null);
+    }
+
     public static AdministrativeScope global() {
         return new AdministrativeScope(AdministrativeScopeType.GLOBAL, null, null, null);
     }
