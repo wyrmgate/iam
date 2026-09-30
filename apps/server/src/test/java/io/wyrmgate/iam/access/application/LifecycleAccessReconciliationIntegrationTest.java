@@ -211,6 +211,42 @@ class LifecycleAccessReconciliationIntegrationTest {
     }
 
     @Test
+    void typedScalarMoverPredicatesAddAndRemoveAccess() {
+        TenantContext tenant = tenant("Typed mover");
+        UUID identityId = activeIdentity();
+        UUID booleanEntitlement = ids.nextId();
+        UUID integerEntitlement = ids.nextId();
+        UUID enumEntitlement = ids.nextId();
+        UUID booleanRule = ids.nextId();
+        UUID integerRule = ids.nextId();
+        UUID enumRule = ids.nextId();
+
+        identityPolicy.setScalar(identityId, "employee", ScalarType.BOOLEAN, true, 1);
+        identityPolicy.setScalar(identityId, "level", ScalarType.INTEGER, 7L, 1);
+        identityPolicy.setScalar(identityId, "workerClass", ScalarType.ENUM, "EMPLOYEE", 1);
+        policyService.activate(
+                tenant,
+                java.util.List.of(
+                        typedEntitlement(booleanRule, PredicateKind.CANONICAL_BOOLEAN_EQUALS,
+                                "employee", null, true, null, null, booleanEntitlement),
+                        typedEntitlement(integerRule, PredicateKind.CANONICAL_INTEGER_EQUALS,
+                                "level", null, null, 7L, null, integerEntitlement),
+                        typedEntitlement(enumRule, PredicateKind.CANONICAL_ENUM_EQUALS,
+                                "workerClass", null, null, null, "EMPLOYEE", enumEntitlement)),
+                NOW.plusSeconds(1));
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isEqualTo(3);
+
+        identityPolicy.setScalar(identityId, "employee", ScalarType.BOOLEAN, false, 2);
+        identityPolicy.setScalar(identityId, "level", ScalarType.INTEGER, 8L, 2);
+        identityPolicy.setScalar(identityId, "workerClass", ScalarType.ENUM, "CONTRACTOR", 2);
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
+
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isZero();
+    }
+
+    @Test
     void sameLogicalRuleTargetChangeRemovesOldBeforeFailClosedIncrease() {
         TenantContext tenant = tenant("Target change");
         UUID identityId = activeIdentity();
@@ -384,6 +420,20 @@ class LifecycleAccessReconciliationIntegrationTest {
                 null,
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 entitlementId);
+    }
+
+    private static LifecycleAccessPolicyVersion.Rule typedEntitlement(
+            UUID ruleId,
+            LifecycleAccessPolicyVersion.PredicateKind kind,
+            String key,
+            String stringValue,
+            Boolean booleanValue,
+            Long integerValue,
+            String enumValue,
+            UUID entitlementId) {
+        return new LifecycleAccessPolicyVersion.Rule(
+                ruleId, kind, key, stringValue, booleanValue, integerValue, enumValue,
+                AccessAssignment.TargetKind.ENTITLEMENT, entitlementId);
     }
 
     private static long currentPolicyAssignmentCount(
