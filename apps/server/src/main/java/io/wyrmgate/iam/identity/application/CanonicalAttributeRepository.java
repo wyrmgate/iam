@@ -39,6 +39,15 @@ public interface CanonicalAttributeRepository {
     Optional<AttributeMappingVersion> findActiveMapping(
             TenantContext tenant, UUID sourceSystemId, UUID attributeDefinitionVersionId);
 
+    List<ActiveSourceMapping> findActiveMappingsForSource(
+            TenantContext tenant, UUID sourceSystemId);
+
+    List<UUID> findIdentityIdsByResolvedSingleStringValue(
+            TenantContext tenant,
+            UUID attributeDefinitionVersionId,
+            String value,
+            int limit);
+
     AttributeAuthorityRuleVersion replaceActiveAuthorityRule(
             TenantContext tenant,
             UUID attributeDefinitionVersionId,
@@ -75,4 +84,16 @@ public interface CanonicalAttributeRepository {
             CanonicalAttributeState desired,
             Long expectedValueRevision,
             AttributeDefinitionVersion definitionVersion);
+    record ActiveSourceMapping(
+            String canonicalKey,
+            AttributeDefinitionVersion definitionVersion,
+            AttributeMappingVersion mapping) {
+        public ActiveSourceMapping {
+            if (canonicalKey == null || canonicalKey.isBlank()) {
+                throw new IllegalArgumentException("canonicalKey must not be blank");
+            }
+            java.util.Objects.requireNonNull(definitionVersion, "definitionVersion");
+            java.util.Objects.requireNonNull(mapping, "mapping");
+        }
+    }
 }
