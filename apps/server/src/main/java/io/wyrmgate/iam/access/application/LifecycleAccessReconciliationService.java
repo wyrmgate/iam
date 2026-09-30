@@ -68,7 +68,15 @@ public final class LifecycleAccessReconciliationService {
         int failed=0;
         for(var item:claimed){
             try{
-                reconcileEvent(item.tenant(),item.event().aggregateId(),clock.instant());
+                UUID correlationId = item.event().correlationId() == null
+                        ? item.event().eventId()
+                        : item.event().correlationId();
+                reconcileEvent(
+                        item.tenant(),
+                        item.event().aggregateId(),
+                        clock.instant(),
+                        correlationId,
+                        item.event().eventId());
                 outbox.markPublished(item.tenant(),item.event().eventId(),clock.instant());
                 processed++;
             }catch(IllegalArgumentException invalid){
@@ -87,10 +95,22 @@ public final class LifecycleAccessReconciliationService {
     }
 
     void reconcileEvent(TenantContext tenant, UUID identityId, Instant now) {
+        UUID causalId = UUID.randomUUID();
+        reconcileEvent(tenant, identityId, now, causalId, causalId);
+    }
+
+    void reconcileEvent(
+            TenantContext tenant,
+            UUID identityId,
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
         Objects.requireNonNull(identityId,"identityId");
+        Objects.requireNonNull(correlationId,"correlationId");
         LifecycleAccessPolicyVersion policy=policies.findActive(tenant).orElse(null);
         if(policy==null){
-            removeAllPolicyAssignments(tenant,identityId,now);
+            removeAllPolicyAssignments(
+                    tenant,identityId,now,correlationId,causationId);
             return;
         }
 
@@ -118,7 +138,13 @@ public final class LifecycleAccessReconciliationService {
         for(AccessAssignment existing:assignments.findCurrentLifecyclePolicyAssignments(tenant,identityId)){
             var rule=desired.get(existing.provenanceRefId());
             if(rule==null || !sameTarget(existing,rule)){
-                commands.terminate(tenant,existing.id(),existing.revision(),now);
+                commands.terminateLifecyclePolicyAssignment(
+                        tenant,
+                        existing.id(),
+                        existing.revision(),
+                        now,
+                        correlationId,
+                        causationId);
             }
         }
 
@@ -130,7 +156,14 @@ public final class LifecycleAccessReconciliationService {
             }
 
             var decision=guard.evaluate(
-                    tenant,identityId,rule.targetKind(),rule.targetId(),now);
+                    tenant,
+                    identityId,
+                    rule.ruleId(),
+                    rule.targetKind(),
+                    rule.targetId(),
+                    now,
+                    correlationId,
+                    causationId);
             if(decision.decision()==LifecycleAccessPrivilegeGuard.Decision.UNAVAILABLE){
                 throw new IllegalStateException(decision.code());
             }
@@ -141,10 +174,22 @@ public final class LifecycleAccessReconciliationService {
             try{
                 if(rule.targetKind()==AccessAssignment.TargetKind.ENTITLEMENT){
                     commands.createLifecyclePolicyEntitlementAssignment(
-                            tenant,rule.ruleId(),identityId,rule.targetId(),now);
+                            tenant,
+                            rule.ruleId(),
+                            identityId,
+                            rule.targetId(),
+                            now,
+                            correlationId,
+                            causationId);
                 }else{
                     commands.createLifecyclePolicyRoleAssignment(
-                            tenant,rule.ruleId(),identityId,rule.targetId(),now);
+                            tenant,
+                            rule.ruleId(),
+                            identityId,
+                            rule.targetId(),
+                            now,
+                            correlationId,
+                            causationId);
                 }
             }catch(AccessAssignmentProvenanceConflictException race){
                 AccessAssignment replay=assignments.findCurrentLifecyclePolicyAssignment(
@@ -155,9 +200,19 @@ public final class LifecycleAccessReconciliationService {
     }
 
     private void removeAllPolicyAssignments(
-            TenantContext tenant, UUID identityId, Instant now) {
+            TenantContext tenant,
+            UUID identityId,
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
         for(AccessAssignment existing:assignments.findCurrentLifecyclePolicyAssignments(tenant,identityId)){
-            commands.terminate(tenant,existing.id(),existing.revision(),now);
+            commands.terminateLifecyclePolicyAssignment(
+                    tenant,
+                    existing.id(),
+                    existing.revision(),
+                    now,
+                    correlationId,
+                    causationId);
         }
     }
 
