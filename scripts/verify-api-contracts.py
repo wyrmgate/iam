@@ -82,6 +82,24 @@ def verify_openapi(document: dict) -> None:
     )
     assert update_schema.endswith("/UpdateIdentityMetadataRequest")
 
+    lifecycle_operations = {
+        "/identities/{identityId}:activate": "identity:activate",
+        "/identities/{identityId}:suspend": "identity:suspend",
+        "/identities/{identityId}:deactivate": "identity:deactivate",
+        "/identities/{identityId}:decommission": "identity:decommission",
+    }
+    for path, permission in lifecycle_operations.items():
+        assert path in paths, f"missing Identity lifecycle operation {path}"
+        operation = paths[path]["post"]
+        params = ref_names(operation)
+        assert {"IfMatch", "IdempotencyKey"}.issubset(params), (
+            f"{path} must require revision concurrency and causal idempotency"
+        )
+        assert operation.get("x-wyrmgate-administrative-permission") == permission
+        assert "requestBody" not in operation, (
+            f"{path} must not accept arbitrary lifecycle mutation payload"
+        )
+
     serialized = json.dumps(document, sort_keys=True).lower()
     for forbidden in (
         "password",

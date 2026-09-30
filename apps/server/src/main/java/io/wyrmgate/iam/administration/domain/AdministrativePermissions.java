@@ -13,6 +13,14 @@ public final class AdministrativePermissions {
             new AdministrativePermission("identity", "create");
     public static final AdministrativePermission IDENTITY_UPDATE =
             new AdministrativePermission("identity", "update");
+    public static final AdministrativePermission IDENTITY_ACTIVATE =
+            new AdministrativePermission("identity", "activate");
+    public static final AdministrativePermission IDENTITY_SUSPEND =
+            new AdministrativePermission("identity", "suspend");
+    public static final AdministrativePermission IDENTITY_DEACTIVATE =
+            new AdministrativePermission("identity", "deactivate");
+    public static final AdministrativePermission IDENTITY_DECOMMISSION =
+            new AdministrativePermission("identity", "decommission");
 
 
     public static final AdministrativePermission APPLICATION_READ =
