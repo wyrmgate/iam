@@ -127,7 +127,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler = new LifecycleAccessReconciliationService(
                 outbox, policies, assignments, commands, identityPolicy, guard);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("39");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("40");
     }
 
     @AfterAll
@@ -373,9 +373,12 @@ class LifecycleAccessReconciliationIntegrationTest {
         public Result evaluate(
                 TenantContext tenant,
                 UUID identityId,
+                UUID lifecycleRuleId,
                 AccessAssignment.TargetKind targetKind,
                 UUID targetId,
-                Instant at) {
+                Instant at,
+                UUID correlationId,
+                UUID causationId) {
             calls++;
             return decision;
         }
