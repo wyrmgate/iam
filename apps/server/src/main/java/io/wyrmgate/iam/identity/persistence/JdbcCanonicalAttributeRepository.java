@@ -341,9 +341,17 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
         return jdbc.query("""
                 SELECT id, identity_id, attribute_definition_version_id, source_system_id, source_record_id,
                        mapping_version_id, source_path, candidate_revision, source_updated_at, observed_at, updated_at
-                FROM identity.canonical_attribute_candidate
-                WHERE tenant_id = ? AND identity_id = ? AND attribute_definition_version_id = ?
-                ORDER BY id
+                FROM identity.canonical_attribute_candidate candidate
+                JOIN identity.identity_link link
+                  ON link.tenant_id = candidate.tenant_id
+                 AND link.source_record_id = candidate.source_record_id
+                 AND link.identity_id = candidate.identity_id
+                 AND link.link_state = 'ACCEPTED'
+                 AND link.ended_at IS NULL
+                WHERE candidate.tenant_id = ?
+                  AND candidate.identity_id = ?
+                  AND candidate.attribute_definition_version_id = ?
+                ORDER BY candidate.id
                 """, (rs, rowNum) -> candidate(tenant, rs), tenant.tenantId(), identityId, definitionVersionId);
     }
 
