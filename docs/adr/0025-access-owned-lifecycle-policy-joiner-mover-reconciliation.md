@@ -129,6 +129,11 @@ The guard returns:
 
 Only AUTHORIZE creates an automatic assignment.
 
+Every completed guard attempt records immutable Governance lifecycle-access evaluation evidence:
+the candidate Identity/rule/target, current Governance PolicyVersion when available, decision/code,
+matched SoD rules, exact GovernanceException coverage, evaluated time and end-to-end
+correlation/causation. Evaluation evidence is not AccessAssignment authority.
+
 REQUIRE_APPROVAL does not create an approval case in this first slice; it leaves the automatic
 assignment absent. UNAVAILABLE fails closed and the Access trigger is retried.
 
