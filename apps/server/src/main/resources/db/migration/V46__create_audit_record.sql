@@ -40,6 +40,10 @@ CREATE INDEX audit_record_correlation_time_idx
     ON audit.audit_record (tenant_id, correlation_id, occurred_at DESC, id DESC)
     WHERE correlation_id IS NOT NULL;
 
+CREATE INDEX audit_record_resource_id_time_idx
+    ON audit.audit_record (tenant_id, resource_id, occurred_at DESC, id DESC)
+    WHERE resource_id IS NOT NULL;
+
 CREATE INDEX audit_record_action_time_idx
     ON audit.audit_record (tenant_id, action_type, occurred_at DESC, id DESC);
 
