@@ -67,12 +67,12 @@ public interface IdentityLifecycleAccessQuery {
             Map<String, CanonicalScalar> canonicalScalars) {
         public Context {
             Objects.requireNonNull(status, "status");
-            canonicalStrings = Map.copyOf(Objects.requireNonNull(canonicalStrings, "canonicalStrings"));
+            canonicalScalars = Map.copyOf(Objects.requireNonNull(canonicalScalars, "canonicalScalars"));
             if (status == Status.AVAILABLE) {
                 if (lifecycleState == null || lifecycleState.isBlank() || identityRevision < 1) {
                     throw new IllegalArgumentException("available Identity context requires lifecycle/revision");
                 }
-            } else if (lifecycleState != null || identityRevision != 0 || !canonicalStrings.isEmpty()) {
+            } else if (lifecycleState != null || identityRevision != 0 || !canonicalScalars.isEmpty()) {
                 throw new IllegalArgumentException("NOT_FOUND context must not carry state");
             }
         }
