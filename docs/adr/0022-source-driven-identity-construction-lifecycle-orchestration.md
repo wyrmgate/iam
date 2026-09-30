@@ -57,7 +57,12 @@ link because a later correlation query points elsewhere.
 
 Replacing an accepted IdentityLink remains an explicit Identity-owned action. Replacement preserves
 the superseded link as history and causes subsequent source-driven candidate materialization to use
-the newly accepted Identity. Automated positive processing does not perform replacement.
+the newly accepted Identity. Historical CanonicalAttributeCandidate rows are retained as provenance,
+but a candidate is eligible for current resolution only while its SourceRecord has an active accepted
+link to that candidate's Identity. Replacement therefore removes the old candidate from current
+authority without deleting history, carries the prior Identity in the minimized internal link fact,
+and re-resolves affected attributes for both sides. Automated positive processing does not perform
+replacement.
 
 ### Deterministic match outcomes
 
@@ -116,7 +121,10 @@ Processing assumes at-least-once delivery.
 - an already accepted link is idempotent and sticky;
 - canonical resolution suppresses no-op state churn;
 - a stale observation fact re-reads the current SourceRecord and must not overwrite newer source state;
-- correlation/create/link mutation is serialized on the SourceRecord and re-checks current link state before creation, preventing duplicate source-driven Identity creation.
+- correlation/create/link mutation is serialized on the SourceRecord and re-checks current link state;
+- policy-authorized no-match creation takes a short tenant-scoped creation fence and re-runs the
+  canonical match before creating, preventing concurrent sources from manufacturing duplicate
+  Identities for the same exact governed key in this first bounded implementation.
 
 A source observation fact preserves the originating correlationId. Downstream Identity mutations
 and canonical-resolution facts use the source event ID as immediate causationId while retaining
