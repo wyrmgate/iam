@@ -178,7 +178,7 @@ class IdentityMergeSplitIntegrationTest {
 
         String reassignmentPayload = jdbc.queryForObject(
                 """
-                SELECT payload_json::text FROM platform.outbox_event
+                SELECT payload::text FROM platform.outbox_event
                 WHERE tenant_id = ? AND aggregate_id = ?
                   AND event_type = 'identity.principal-access-projection-input-changed'
                 ORDER BY occurred_at DESC, event_id DESC
