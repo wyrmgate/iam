@@ -276,7 +276,7 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
 
         Optional<IdentityLink> existing = findActiveAcceptedLink(tenant, sourceRecordId);
         if (existing.isPresent() && existing.get().identityId().equals(identityId)) {
-            return new LinkReplacement(existing.get(), false);
+            return new LinkReplacement(existing.get(), false, null);
         }
         existing.ifPresent(link -> jdbcTemplate.update(
                 """
@@ -305,7 +305,7 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                 causationId);
         IdentityLink accepted = findActiveAcceptedLink(tenant, sourceRecordId)
                 .orElseThrow(() -> new IllegalStateException("accepted identity link could not be reloaded"));
-        return new LinkReplacement(accepted, true);
+        return new LinkReplacement(accepted, true, existing.map(IdentityLink::identityId).orElse(null));
     }
 
     @Override
