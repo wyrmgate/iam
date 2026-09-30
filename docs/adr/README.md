@@ -34,5 +34,6 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0024 Trusted COMPLETE source absence inference](0024-trusted-complete-source-absence-inference.md)
 - [ADR-0025 Access-owned lifecycle policy and governed Joiner/Mover reconciliation](0025-access-owned-lifecycle-policy-joiner-mover-reconciliation.md)
 - [ADR-0026 Explicit Identity merge/split with historical reference preservation](0026-explicit-identity-merge-split-history-preservation.md)
+- [ADR-0027 Provenance-fenced source reactivation after trusted absence inference](0027-provenance-fenced-source-reactivation.md)
 
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.4, which folds ADR-0017 through ADR-0021 into the formal baseline. A later accepted ADR may again amend that baseline between controlled document revisions and must be folded into the next formal revision.
