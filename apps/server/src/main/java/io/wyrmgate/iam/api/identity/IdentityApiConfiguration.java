@@ -4,6 +4,8 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationSer
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
+import io.wyrmgate.iam.identity.application.PrincipalCommandService;
+import io.wyrmgate.iam.identity.application.PrincipalRepository;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -26,6 +28,21 @@ class IdentityApiConfiguration {
             TransactionExecutor transactions) {
         return new IdentityApiMutationService(
                 authorization, commands, identities, idempotency, transactions);
+    }
+
+    @Bean
+    PrincipalApiMutationService principalApiMutationService(
+            AdministrativeAuthorizationService authorization,
+            PrincipalCommandService commands,
+            PrincipalRepository principals,
+            JdbcIdempotencyRepository idempotency,
+            TransactionExecutor transactions) {
+        return new PrincipalApiMutationService(
+                authorization,
+                commands,
+                principals,
+                idempotency,
+                transactions);
     }
 
     @Bean
