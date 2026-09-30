@@ -221,17 +221,17 @@ class LifecycleAccessReconciliationIntegrationTest {
         UUID integerRule = ids.nextId();
         UUID enumRule = ids.nextId();
 
-        identityPolicy.setScalar(identityId, "employee", ScalarType.BOOLEAN, true, 1);
-        identityPolicy.setScalar(identityId, "level", ScalarType.INTEGER, 7L, 1);
-        identityPolicy.setScalar(identityId, "workerClass", ScalarType.ENUM, "EMPLOYEE", 1);
+        identityPolicy.setScalar(identityId, "employee", IdentityLifecycleAccessQuery.ScalarType.BOOLEAN, true, 1);
+        identityPolicy.setScalar(identityId, "level", IdentityLifecycleAccessQuery.ScalarType.INTEGER, 7L, 1);
+        identityPolicy.setScalar(identityId, "workerClass", IdentityLifecycleAccessQuery.ScalarType.ENUM, "EMPLOYEE", 1);
         policyService.activate(
                 tenant,
                 java.util.List.of(
-                        typedEntitlement(booleanRule, PredicateKind.CANONICAL_BOOLEAN_EQUALS,
+                        typedEntitlement(booleanRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_BOOLEAN_EQUALS,
                                 "employee", null, true, null, null, booleanEntitlement),
-                        typedEntitlement(integerRule, PredicateKind.CANONICAL_INTEGER_EQUALS,
+                        typedEntitlement(integerRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_INTEGER_EQUALS,
                                 "level", null, null, 7L, null, integerEntitlement),
-                        typedEntitlement(enumRule, PredicateKind.CANONICAL_ENUM_EQUALS,
+                        typedEntitlement(enumRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_ENUM_EQUALS,
                                 "workerClass", null, null, null, "EMPLOYEE", enumEntitlement)),
                 NOW.plusSeconds(1));
 
@@ -363,6 +363,9 @@ class LifecycleAccessReconciliationIntegrationTest {
                 java.util.List.of(new LifecycleAccessPolicyVersion.Rule(
                         ruleId,
                         LifecycleAccessPolicyVersion.PredicateKind.ALWAYS,
+                        null,
+                        null,
+                        null,
                         null,
                         null,
                         AccessAssignment.TargetKind.ROLE,
@@ -538,7 +541,7 @@ class LifecycleAccessReconciliationIntegrationTest {
             }
             Map<String, CanonicalScalar> values = new LinkedHashMap<>(
                     current.canonicalStrings());
-            values.put(key, CanonicalScalar.trusted(ScalarType.STRING, value, revision));
+            values.put(key, CanonicalScalar.trusted(IdentityLifecycleAccessQuery.ScalarType.STRING, value, revision));
             contexts.put(
                     identityId,
                     new Context(
