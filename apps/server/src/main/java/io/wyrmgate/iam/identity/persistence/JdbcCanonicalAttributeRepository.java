@@ -194,10 +194,10 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
                 JOIN identity.attribute_definition d
                   ON d.tenant_id = dv.tenant_id
                  AND d.id = dv.attribute_definition_id
-                JOIN identity.canonical_schema_version schema
-                  ON schema.tenant_id = dv.tenant_id
-                 AND schema.id = dv.schema_version_id
-                 AND schema.state = 'ACTIVE'
+                JOIN identity.canonical_schema_version sv
+                  ON sv.tenant_id = dv.tenant_id
+                 AND sv.id = dv.schema_version_id
+                 AND sv.state = 'ACTIVE'
                 WHERE m.tenant_id = ?
                   AND m.source_system_id = ?
                   AND m.state = 'ACTIVE'
@@ -248,18 +248,18 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
         return jdbc.query("""
                 SELECT state.identity_id
                 FROM identity.canonical_attribute_state state
-                JOIN identity.canonical_attribute_state_value value
-                  ON value.tenant_id = state.tenant_id
-                 AND value.state_id = state.id
-                 AND value.attribute_definition_version_id =
+                JOIN identity.canonical_attribute_state_value v
+                  ON v.tenant_id = state.tenant_id
+                 AND v.state_id = state.id
+                 AND v.attribute_definition_version_id =
                      state.attribute_definition_version_id
                 WHERE state.tenant_id = ?
                   AND state.attribute_definition_version_id = ?
                   AND state.resolution_status IN ('RESOLVED', 'OVERRIDDEN')
-                  AND value.data_type = 'STRING'
-                  AND value.cardinality = 'SINGLE'
-                  AND value.value_ordinal = 0
-                  AND value.value_string = ?
+                  AND v.data_type = 'STRING'
+                  AND v.cardinality = 'SINGLE'
+                  AND v.value_ordinal = 0
+                  AND v.value_string = ?
                 ORDER BY state.identity_id
                 LIMIT ?
                 """,
