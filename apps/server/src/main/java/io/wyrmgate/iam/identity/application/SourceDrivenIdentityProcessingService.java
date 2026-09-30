@@ -132,6 +132,9 @@ public final class SourceDrivenIdentityProcessingService {
         UUID correlationId = event.correlationId() == null
                 ? event.eventId()
                 : event.correlationId();
+        Instant processingTime = clock.instant().isBefore(event.occurredAt())
+                ? event.occurredAt()
+                : clock.instant();
         JsonNode payload = payload(event.payloadJson());
 
         if (SOURCE_RECORD_OBSERVED.equals(event.eventType())) {
@@ -156,14 +159,14 @@ public final class SourceDrivenIdentityProcessingService {
                     sourceRecordId,
                     correlationId,
                     event.eventId(),
-                    clock.instant());
+                    processingTime);
             if (identityId != null) {
                 materializeCurrentMappingCandidates(
                         item.tenant(),
                         sourceRecordId,
                         correlationId,
                         event.eventId(),
-                        clock.instant());
+                        processingTime);
             }
             return;
         }
@@ -176,7 +179,7 @@ public final class SourceDrivenIdentityProcessingService {
                     sourceRecordId,
                     correlationId,
                     event.eventId(),
-                    clock.instant());
+                    processingTime);
             if (previousIdentityId != null) {
                 reresolvePreviousIdentity(
                         item.tenant(),
@@ -184,7 +187,7 @@ public final class SourceDrivenIdentityProcessingService {
                         previousIdentityId,
                         correlationId,
                         event.eventId(),
-                        clock.instant());
+                        processingTime);
             }
             return;
         }
