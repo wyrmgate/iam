@@ -133,23 +133,23 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                 throw new IllegalStateException("source import run is not active or does not exist");
             }
             ImportAuthority current = authority.getFirst();
-            Long newer = jdbcTemplate.queryForObject(
+            Long conflicting = jdbcTemplate.queryForObject(
                     """
                     SELECT count(*)
                     FROM identity.source_import_run
                     WHERE tenant_id = ?
                       AND source_system_id = ?
                       AND id <> ?
-                      AND started_at > ?
+                      AND (run_state = 'RUNNING' OR started_at > ?)
                     """,
                     Long.class,
                     tenant.tenantId(),
                     current.sourceSystemId(),
                     runId,
                     Timestamp.from(current.startedAt()));
-            if (newer != null && newer > 0) {
+            if (conflicting != null && conflicting > 0) {
                 throw new IllegalStateException(
-                        "trusted absence requires the latest non-overlapped source import");
+                        "trusted absence requires an isolated latest source import");
             }
         }
 
