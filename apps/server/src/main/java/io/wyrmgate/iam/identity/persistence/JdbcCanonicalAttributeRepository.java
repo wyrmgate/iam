@@ -339,8 +339,17 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
     @Override
     public List<CanonicalAttributeCandidate> findCandidates(TenantContext tenant, UUID identityId, UUID definitionVersionId) {
         return jdbc.query("""
-                SELECT id, identity_id, attribute_definition_version_id, source_system_id, source_record_id,
-                       mapping_version_id, source_path, candidate_revision, source_updated_at, observed_at, updated_at
+                SELECT candidate.id,
+                       candidate.identity_id,
+                       candidate.attribute_definition_version_id,
+                       candidate.source_system_id,
+                       candidate.source_record_id,
+                       candidate.mapping_version_id,
+                       candidate.source_path,
+                       candidate.candidate_revision,
+                       candidate.source_updated_at,
+                       candidate.observed_at,
+                       candidate.updated_at
                 FROM identity.canonical_attribute_candidate candidate
                 JOIN identity.identity_link link
                   ON link.tenant_id = candidate.tenant_id
