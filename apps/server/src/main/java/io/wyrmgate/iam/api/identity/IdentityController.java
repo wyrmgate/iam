@@ -5,7 +5,15 @@ import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.CanonicalAttributePage;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.BooleanCanonicalValueResource;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.CanonicalAttributeResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.CanonicalValueResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.DateCanonicalValueResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.DateTimeCanonicalValueResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.DecimalCanonicalValueResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.EnumCanonicalValueResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.IntegerCanonicalValueResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.StringCanonicalValueResource;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.IdentityMergeOperationResource;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.IdentityPage;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.IdentityResource;
@@ -15,6 +23,7 @@ import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributePagePosition;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.IdentityPagePosition;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
+import io.wyrmgate.iam.identity.domain.CanonicalValue;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
@@ -340,21 +349,34 @@ public class IdentityController {
         int effectiveLimit = validateLimit(limit, correlationId);
         CanonicalAttributePagePosition position = decodeCanonicalCursor(cursor, actor, identityId, correlationId);
         var page = queries.listCanonicalAttributes(actor.tenant(), identityId, position, effectiveLimit, now);
+        Set<String> readableClassifications = authorization.authorizedClassificationKeys(
+                actor,
+                AdministrativePermissions.CANONICAL_ATTRIBUTE_VALUE_READ,
+                page.items().stream().map(item -> item.classification()).collect(java.util.stream.Collectors.toSet()),
+                now);
         return ResponseEntity.ok()
                 .header("X-Correlation-Id", correlationId.toString())
                 .body(new CanonicalAttributePage(
                         page.items().stream()
-                                .map(item -> new CanonicalAttributeResource(
-                                        item.definitionId(),
-                                        item.definitionVersionId(),
-                                        item.key(),
-                                        item.classification(),
-                                        item.type().name(),
-                                        item.cardinality().name(),
-                                        item.resolutionStatus().name(),
-                                        item.valueRevision(),
-                                        "REDACTED",
-                                        item.hasTrustedValue()))
+                                .map(item -> {
+                                    boolean readable = readableClassifications.contains(item.classification());
+                                    return new CanonicalAttributeResource(
+                                            item.definitionId(),
+                                            item.definitionVersionId(),
+                                            item.key(),
+                                            item.classification(),
+                                            item.type().name(),
+                                            item.cardinality().name(),
+                                            item.resolutionStatus().name(),
+                                            item.valueRevision(),
+                                            readable ? "VALUE" : "REDACTED",
+                                            item.hasTrustedValue(),
+                                            readable && item.hasTrustedValue()
+                                                    ? item.values().stream()
+                                                            .map(IdentityController::canonicalValue)
+                                                            .toList()
+                                                    : null);
+                                })
                                 .toList(),
                         cursors.encodeCanonical(actor.tenant(), identityId, page.nextPosition())));
     }
@@ -417,6 +439,18 @@ public class IdentityController {
         if (!authorization.authorize(actor, AdministrativePermissions.IDENTITY_READ, resource, now).allowed()) {
             throw IdentityApiException.forbidden(correlationId);
         }
+    }
+
+    private static CanonicalValueResource canonicalValue(CanonicalValue value) {
+        return switch (value) {
+            case CanonicalValue.StringValue v -> new StringCanonicalValueResource("STRING", v.value());
+            case CanonicalValue.BooleanValue v -> new BooleanCanonicalValueResource("BOOLEAN", v.value());
+            case CanonicalValue.IntegerValue v -> new IntegerCanonicalValueResource("INTEGER", v.value());
+            case CanonicalValue.DecimalValue v -> new DecimalCanonicalValueResource("DECIMAL", v.value().toPlainString());
+            case CanonicalValue.DateValue v -> new DateCanonicalValueResource("DATE", v.value().toString());
+            case CanonicalValue.DateTimeValue v -> new DateTimeCanonicalValueResource("DATETIME", v.value().toString());
+            case CanonicalValue.EnumValue v -> new EnumCanonicalValueResource("ENUM", v.key());
+        };
     }
 
     private static IdentityResource resource(Identity identity) {

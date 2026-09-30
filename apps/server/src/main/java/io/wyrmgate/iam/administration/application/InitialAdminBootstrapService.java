@@ -123,7 +123,7 @@ public final class InitialAdminBootstrapService {
                 grantId,
                 actorIdentityId,
                 roleId,
-                new AdministrativeScope(AdministrativeScopeType.GLOBAL, null, null),
+                new AdministrativeScope(AdministrativeScopeType.GLOBAL, null, null, null),
                 AdministrativeGrantState.ACTIVE,
                 now,
                 null,

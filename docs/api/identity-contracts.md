@@ -90,7 +90,7 @@ Each canonical attribute view exposes governed semantic metadata:
 
 Values are strongly typed rather than arbitrary JSON. `MULTI` values are arrays of typed scalar values. Provider-native raw payloads and internal candidate/mapping rows are never substituted for canonical state.
 
-A `CONFLICT` or `UNRESOLVED` state may still expose a compatible prior trusted value where the domain resolution rules permit it; the degraded resolution outcome remains explicit. A classified value can be redacted while its governed metadata remains visible. In this first runtime slice, canonical values and provenance are deliberately returned as `REDACTED` metadata-only views until a classification-aware value-visibility policy is implemented; `identity:read` alone does not imply permission to read every classified canonical value. Effective read evaluation honors override validity and current authority/candidate state without turning GET into a mutating resolution command.
+A `CONFLICT` or `UNRESOLVED` state may still expose a compatible prior trusted value where the domain resolution rules permit it; the degraded resolution outcome remains explicit. A classified value can be redacted while its governed metadata remains visible. ADR-0030 now implements classification-aware value visibility: `identity:read` authorizes the metadata row, while typed canonical values require the separate `canonical-attribute-value:read` permission with either GLOBAL scope or an exact `CANONICAL_ATTRIBUTE_CLASSIFICATION` scope matching the active definition version's classification key. Classification keys are opaque tenant-local strings with no ordering or wildcard semantics. Missing, expired, revoked or mismatched value-read authority returns `visibility=REDACTED` and omits `values`. Effective read evaluation honors override validity and current authority/candidate state without turning GET into a mutating resolution command. Detailed provenance remains redacted/deferred.
 
 ## Error contract
 
@@ -118,7 +118,8 @@ The OpenAPI document models bearer transport authentication as the first impleme
 - `identity:decommission`;
 - `principal:read`;
 - `principal:register`;
-- `principal:correlate`.
+- `principal:correlate`;
+- `canonical-attribute-value:read` for classification-authorized canonical values in addition to `identity:read` metadata authority.
 
 The first Administration persistence/evaluator slice now supplies operation-time default-deny matching for semantic permissions plus tenant-scoped `GLOBAL` and exact `SPECIFIC_RESOURCE` grants. It also revalidates the governed actor's current Identity state and temporal grant validity for every decision. Other canonical scope types remain deliberately fail-closed until their hierarchy/population semantics exist.
 

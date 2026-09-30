@@ -96,7 +96,7 @@ public final class IdentityQueryService {
                     entry.version().cardinality(),
                     effective.resolutionStatus(),
                     evaluator.effectiveValueRevision(current, effective),
-                    !effective.values().isEmpty()));
+                    effective.values()));
         }
 
         CanonicalAttributePagePosition next = hasMore

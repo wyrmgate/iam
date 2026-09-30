@@ -125,10 +125,10 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
                 """
                 INSERT INTO administration.administrative_grant (
                     id, tenant_id, actor_identity_id, role_id,
-                    scope_type, scope_resource_type, scope_ref_id,
+                    scope_type, scope_resource_type, scope_ref_id, scope_key,
                     state, valid_from, valid_until,
                     revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 grant.id(),
                 tenant.tenantId(),
@@ -137,6 +137,7 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
                 grant.scope().type().name(),
                 grant.scope().resourceType(),
                 grant.scope().resourceId(),
+                grant.scope().scopeKey(),
                 grant.state().name(),
                 grant.validFrom() == null ? null : Timestamp.from(grant.validFrom()),
                 grant.validUntil() == null ? null : Timestamp.from(grant.validUntil()),

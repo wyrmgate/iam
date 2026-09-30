@@ -68,7 +68,8 @@ Initial scope types include:
 - SOURCE_SYSTEM;
 - CONNECTOR_INSTANCE;
 - IDENTITY_POPULATION;
-- SPECIFIC_RESOURCE.
+- SPECIFIC_RESOURCE;
+- CANONICAL_ATTRIBUTE_CLASSIFICATION — exact governed canonical classification key for the dedicated `canonical-attribute-value:read` permission.
 
 Hierarchy traversal is explicit. An Organization scope does not automatically include descendants unless the grant says so.
 
@@ -128,7 +129,7 @@ All canonical scope types are structurally modeled. The first evaluator intentio
 - `GLOBAL`, which applies to a matching semantic permission in the tenant; and
 - `SPECIFIC_RESOURCE`, which requires an exact semantic resource type and stable resource ID match.
 
-`ORGANIZATION`, `APPLICATION`, `APPLICATION_TARGET`, `SOURCE_SYSTEM`, `CONNECTOR_INSTANCE` and `IDENTITY_POPULATION` remain fail-closed until their concrete hierarchy/population semantics and owning-capability queries are implemented. A resource-specific grant never authorizes a collection query.
+`CANONICAL_ATTRIBUTE_CLASSIFICATION` is now implemented only for exact classification-key matching with `canonical-attribute-value:read`; it has no hierarchy, wildcard or sensitivity ordering semantics. `ORGANIZATION`, `APPLICATION`, `APPLICATION_TARGET`, `SOURCE_SYSTEM`, `CONNECTOR_INSTANCE` and `IDENTITY_POPULATION` remain fail-closed until their concrete hierarchy/population semantics and owning-capability queries are implemented. A resource-specific grant never authorizes a collection query.
 
 A fresh installation contains no administrative roles or grants and therefore denies protected control-plane operations. Initial-administrator bootstrap/provisioning, role/grant management commands, delegation/elevation, assurance-aware policy, security-audit emission for sensitive authorization decisions, and transport authentication/actor resolution are separate implementation slices. Public Identity runtime endpoints remain gated until the required authentication/actor-resolution and safe administration provisioning path exist.
 

@@ -67,7 +67,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("44");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("45");
     }
 
     @AfterAll
@@ -186,6 +186,50 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
 
         assertThat(decision.allowed()).isFalse();
         assertThat(decision.code()).isEqualTo("no_effective_grant");
+    }
+
+    @Test
+    void canonicalClassificationScopeMatchesExactKeyAndGlobalAlsoAuthorizes() {
+        Instant now = Instant.parse("2026-09-30T12:00:00Z");
+        TenantContext tenant = tenant("Classification Scope", now);
+        Identity actor = actor(tenant, IdentityLifecycleState.ACTIVE, now);
+        UUID roleId = roleWithPermission(tenant, "canonical-attribute-value", "read", now);
+
+        UUID exactGrantId = ids.nextId();
+        jdbc.update(
+                """
+                INSERT INTO administration.administrative_grant (
+                    id, tenant_id, actor_identity_id, role_id,
+                    scope_type, scope_resource_type, scope_ref_id, scope_key,
+                    state, valid_from, valid_until, revision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'CANONICAL_ATTRIBUTE_CLASSIFICATION', NULL, NULL, ?,
+                        'ACTIVE', NULL, NULL, 1, ?, ?)
+                """,
+                exactGrantId,
+                tenant.tenantId(),
+                actor.id(),
+                roleId,
+                "HR-SENSITIVE",
+                Timestamp.from(now),
+                Timestamp.from(now));
+
+        var administrativeActor = new AuthenticatedAdministrativeActor(tenant, actor.id());
+        var permission = new AdministrativePermission("canonical-attribute-value", "read");
+        assertThat(authorization.authorizedClassificationKeys(
+                        administrativeActor,
+                        permission,
+                        java.util.Set.of("HR-SENSITIVE", "FINANCE"),
+                        now))
+                .containsExactly("HR-SENSITIVE");
+
+        grant(tenant, actor.id(), roleId, "GLOBAL", null, null,
+                "ACTIVE", null, null, now.plusMillis(1));
+        assertThat(authorization.authorizedClassificationKeys(
+                        administrativeActor,
+                        permission,
+                        java.util.Set.of("HR-SENSITIVE", "FINANCE"),
+                        now.plusMillis(2)))
+                .containsExactlyInAnyOrder("HR-SENSITIVE", "FINANCE");
     }
 
     @Test
