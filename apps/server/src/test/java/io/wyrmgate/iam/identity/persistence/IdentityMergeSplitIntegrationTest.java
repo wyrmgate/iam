@@ -181,7 +181,7 @@ class IdentityMergeSplitIntegrationTest {
                 SELECT payload::text FROM platform.outbox_event
                 WHERE tenant_id = ? AND aggregate_id = ?
                   AND event_type = 'identity.principal-access-projection-input-changed'
-                ORDER BY occurred_at DESC, event_id DESC
+                ORDER BY occurred_at DESC, id DESC
                 LIMIT 1
                 """,
                 String.class,
