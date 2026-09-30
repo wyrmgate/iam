@@ -81,6 +81,44 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
     }
 
     @Override
+    public List<Principal> listAfterId(
+            TenantContext tenant,
+            UUID afterId,
+            int limit) {
+        if (limit < 1 || limit > 201) {
+            throw new IllegalArgumentException(
+                    "limit must be between 1 and 201");
+        }
+        if (afterId == null) {
+            return jdbc.query("""
+                    SELECT id, identity_id, application_target_id, principal_kind,
+                           native_principal_key, lifecycle_state, revision,
+                           created_at, updated_at
+                    FROM identity.principal
+                    WHERE tenant_id = ?
+                    ORDER BY id
+                    LIMIT ?
+                    """,
+                    (rs,row) -> principal(rs),
+                    tenant.tenantId(),
+                    limit);
+        }
+        return jdbc.query("""
+                SELECT id, identity_id, application_target_id, principal_kind,
+                       native_principal_key, lifecycle_state, revision,
+                       created_at, updated_at
+                FROM identity.principal
+                WHERE tenant_id = ? AND id > ?
+                ORDER BY id
+                LIMIT ?
+                """,
+                (rs,row) -> principal(rs),
+                tenant.tenantId(),
+                afterId,
+                limit);
+    }
+
+    @Override
     public List<Principal> findActiveByIdentityAndTarget(
             TenantContext tenant,
             UUID identityId,
