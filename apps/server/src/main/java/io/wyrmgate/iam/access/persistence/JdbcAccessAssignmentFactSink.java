@@ -25,6 +25,30 @@ public final class JdbcAccessAssignmentFactSink implements AccessAssignmentFactS
     public void projectionInputChanged(
             TenantContext tenant, AccessAssignment assignment) {
         UUID eventId = ids.nextId();
+        append(tenant, assignment, eventId, eventId, null);
+    }
+
+    @Override
+    public void projectionInputChanged(
+            TenantContext tenant,
+            AccessAssignment assignment,
+            UUID correlationId,
+            UUID causationId) {
+        UUID eventId = ids.nextId();
+        append(
+                tenant,
+                assignment,
+                eventId,
+                correlationId == null ? eventId : correlationId,
+                causationId);
+    }
+
+    private void append(
+            TenantContext tenant,
+            AccessAssignment assignment,
+            UUID eventId,
+            UUID correlationId,
+            UUID causationId) {
         outbox.append(
                 tenant,
                 new OutboxEvent(
@@ -35,8 +59,8 @@ public final class JdbcAccessAssignmentFactSink implements AccessAssignmentFactS
                         assignment.id(),
                         assignment.revision(),
                         assignment.updatedAt(),
-                        eventId,
-                        null,
+                        correlationId,
+                        causationId,
                         "{}"),
                 assignment.updatedAt());
     }
