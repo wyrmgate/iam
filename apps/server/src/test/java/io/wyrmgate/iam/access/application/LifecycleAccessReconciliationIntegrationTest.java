@@ -129,7 +129,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler = new LifecycleAccessReconciliationService(
                 outbox, policies, assignments, commands, identityPolicy, guard, approval);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("43");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("44");
     }
 
     @AfterAll
@@ -365,6 +365,9 @@ class LifecycleAccessReconciliationIntegrationTest {
                 LifecycleAccessPolicyVersion.PredicateKind.ALWAYS,
                 null,
                 null,
+                null,
+                null,
+                null,
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 entitlementId);
     }
@@ -376,6 +379,9 @@ class LifecycleAccessReconciliationIntegrationTest {
                 LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_STRING_EQUALS,
                 key,
                 value,
+                null,
+                null,
+                null,
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 entitlementId);
     }
@@ -440,8 +446,8 @@ class LifecycleAccessReconciliationIntegrationTest {
         private final Map<UUID, Context> contexts = new LinkedHashMap<>();
 
         @Override
-        public boolean supportsPolicySingleStringAttribute(
-                TenantContext tenant, String canonicalKey) {
+        public boolean supportsPolicyScalarAttribute(
+                TenantContext tenant, String canonicalKey, ScalarType type) {
             return canonicalKey != null && !canonicalKey.isBlank();
         }
 
@@ -452,10 +458,10 @@ class LifecycleAccessReconciliationIntegrationTest {
                 Set<String> canonicalKeys) {
             Context base = contexts.get(identityId);
             if (base == null) return Context.notFound();
-            Map<String, CanonicalString> values = new LinkedHashMap<>();
+            Map<String, CanonicalScalar> values = new LinkedHashMap<>();
             for (String key : canonicalKeys) {
                 values.put(key, base.canonicalStrings().getOrDefault(
-                        key, CanonicalString.unavailable()));
+                        key, CanonicalScalar.unavailable()));
             }
             return new Context(
                     base.status(),
@@ -480,9 +486,9 @@ class LifecycleAccessReconciliationIntegrationTest {
             if (current == null) {
                 current = new Context(Status.AVAILABLE, "ACTIVE", 1, Map.of());
             }
-            Map<String, CanonicalString> values = new LinkedHashMap<>(
+            Map<String, CanonicalScalar> values = new LinkedHashMap<>(
                     current.canonicalStrings());
-            values.put(key, CanonicalString.trusted(value, revision));
+            values.put(key, CanonicalScalar.trusted(ScalarType.STRING, value, revision));
             contexts.put(
                     identityId,
                     new Context(
