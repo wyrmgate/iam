@@ -63,7 +63,8 @@ public final class JdbcSourceCorrelationFactSink implements SourceCorrelationFac
                         sourceRecord.lastObservedAt(),
                         correlationId,
                         causationId,
-                        "{\"sourceRecordId\":\"" + sourceRecord.id() + "\"}"),
+                        "{\"sourceRecordId\":\"" + sourceRecord.id()
+                                + "\",\"observedAt\":\"" + sourceRecord.lastObservedAt() + "\"}"),
                 sourceRecord.lastObservedAt());
     }
 
