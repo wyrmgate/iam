@@ -17,6 +17,9 @@ public interface PrincipalRepository {
     Optional<Principal> findByTargetAndNativeKey(
             TenantContext tenant, UUID applicationTargetId, String nativePrincipalKey);
 
+    List<Principal> listAfterId(
+            TenantContext tenant, UUID afterId, int limit);
+
     List<Principal> findActiveByIdentityAndTarget(
             TenantContext tenant, UUID identityId, UUID applicationTargetId);
 
