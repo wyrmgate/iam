@@ -127,7 +127,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler = new LifecycleAccessReconciliationService(
                 outbox, policies, assignments, commands, identityPolicy, guard);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("41");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("42");
     }
 
     @AfterAll
