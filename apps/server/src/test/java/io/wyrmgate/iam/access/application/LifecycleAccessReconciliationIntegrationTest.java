@@ -279,6 +279,33 @@ class LifecycleAccessReconciliationIntegrationTest {
     }
 
     @Test
+    void approvalRequiredStaysAbsentUntilCurrentApprovalIsSatisfied() {
+        TenantContext tenant = tenant("Approval gate");
+        UUID identityId = activeIdentity();
+        UUID entitlementId = ids.nextId();
+        UUID ruleId = ids.nextId();
+        policyService.activate(
+                tenant,
+                java.util.List.of(alwaysEntitlement(ruleId, entitlementId)),
+                NOW.plusSeconds(1));
+
+        guard.decision = LifecycleAccessPrivilegeGuard.Result.requireApproval();
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
+
+        assertThat(assignments.findCurrentLifecyclePolicyAssignment(
+                tenant, identityId, ruleId)).isEmpty();
+        assertThat(approval.requests).isEqualTo(1);
+
+        approval.satisfied = true;
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
+
+        AccessAssignment granted = assignments.findCurrentLifecyclePolicyAssignment(
+                tenant, identityId, ruleId).orElseThrow();
+        assertThat(granted.entitlementId()).isEqualTo(entitlementId);
+        assertThat(approval.requests).isEqualTo(1);
+    }
+
+    @Test
     void roleTargetIsSupportedAndManualAssignmentIsUntouched() {
         TenantContext tenant = tenant("Role and manual");
         UUID identityId = activeIdentity();
