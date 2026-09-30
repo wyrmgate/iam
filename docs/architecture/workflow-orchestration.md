@@ -30,6 +30,7 @@ A generic workflow engine may be added later as an adapter for selected operatio
 | reconciliation | Integration | ReconciliationRun and observation staging/checkpoint state |
 | source import | Identity + Integration adapter boundary | SourceImportRun / staging observations / correlation work |
 | trusted source absence inference | Identity | SourceAbsenceInference / SourceAbsencePolicyVersion |
+| Joiner/Mover lifecycle access reconciliation | Access | LifecycleAccessPolicyVersion + AccessAssignment rule provenance |
 | application or target retirement | Catalog coordinating semantic commands | retirement operation/process record when cross-capability work is required |
 | tenant decommissioning | Platform/Administration coordination | explicit durable decommissioning operation |
 
