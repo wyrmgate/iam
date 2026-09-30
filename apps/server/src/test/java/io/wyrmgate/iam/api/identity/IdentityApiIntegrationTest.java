@@ -271,6 +271,104 @@ class IdentityApiIntegrationTest {
     }
 
     @Test
+    void mergeApiIsIdempotentAndMergeSplitPermissionsAreDefaultDeny() throws Exception {
+        Instant now = Instant.parse("2026-09-16T10:45:00Z");
+        Identity survivor = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Survivor",
+                now,
+                ids.nextId(),
+                null);
+        Identity absorbed = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Absorbed",
+                now.plusSeconds(1),
+                ids.nextId(),
+                null);
+
+        String body = "{\"absorbedIdentityId\":\"" + absorbed.id()
+                + "\",\"absorbedRevision\":1,\"reason\":\"duplicate confirmed\"}";
+
+        String operationId = authorized.perform(
+                        post("/api/v1/identities/{identityId}:merge", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "merge-identity-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.survivorIdentityId").value(survivor.id().toString()))
+                .andExpect(jsonPath("$.absorbedIdentityId").value(absorbed.id().toString()))
+                .andExpect(jsonPath("$.movedLinkCount").value(0))
+                .andExpect(jsonPath("$.movedPrincipalCount").value(0))
+                .andReturn().getResponse().getContentAsString();
+
+        authorized.perform(
+                        post("/api/v1/identities/{identityId}:merge", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "merge-identity-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.survivorIdentityId").value(survivor.id().toString()));
+
+        assertThat(identities.findById(tenant, absorbed.id()).orElseThrow().lifecycleState())
+                .isEqualTo(IdentityLifecycleState.DECOMMISSIONED);
+        assertThat(operationId).contains(survivor.id().toString());
+
+        MockMvc updateOnly = mockMvc(
+                authorizationOnly(AdministrativePermissions.IDENTITY_UPDATE));
+        Identity other = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Other",
+                now.plusSeconds(2),
+                ids.nextId(),
+                null);
+        updateOnly.perform(
+                        post("/api/v1/identities/{identityId}:merge", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "merge-identity-0002")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"absorbedIdentityId\":\"" + other.id()
+                                        + "\",\"absorbedRevision\":1,\"reason\":\"test\"}"))
+                .andExpect(status().isForbidden());
+
+        updateOnly.perform(
+                        post("/api/v1/identities/{identityId}:split", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "split-identity-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"newDisplayName\":\"Split\","
+                                        + "\"sourceRecordIds\":[\"" + ids.nextId() + "\"],"
+                                        + "\"principalIds\":[],\"reason\":\"test\"}"))
+                .andExpect(status().isForbidden());
+
+        authorized.perform(
+                        post("/api/v1/identities/{identityId}:split", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "split-identity-0002")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"newDisplayName\":\"Split\","
+                                        + "\"sourceRecordIds\":[],\"principalIds\":[],"
+                                        + "\"reason\":\"test\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_failed"));
+    }
+
+    @Test
     void lifecycleOperationsPreserveTransitionSemanticsAndEmitFacts() throws Exception {
         Instant now = Instant.parse("2026-09-16T11:00:00Z");
         Identity target = commands.create(
