@@ -23,12 +23,6 @@ public record AuditRecord(
         Objects.requireNonNull(recordedAt, "recordedAt");
         actionType = boundedType(actionType, "actionType");
         resourceType = boundedType(resourceType, "resourceType");
-        if (actionType.length() > 128) {
-            throw new IllegalArgumentException("actionType must contain at most 128 characters");
-        }
-        if (resourceType.length() > 128) {
-            throw new IllegalArgumentException("resourceType must contain at most 128 characters");
-        }
         Objects.requireNonNull(outcome, "outcome");
     }
 
