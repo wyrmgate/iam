@@ -262,6 +262,71 @@ class SourceAbsenceInferenceIntegrationTest {
     }
 
     @Test
+    void inferencePagesBeyondFiftyAndReplayIsIdempotent() {
+        TenantContext tenant = tenant("Paged absence");
+        SourceSystem source = source(tenant, "hr");
+        policies.activate(tenant, source.id(), 100, NOW.plusSeconds(1));
+
+        SourceImportRun baseline = sources.startImport(tenant, source.id(), NOW.plusSeconds(2));
+        java.util.ArrayList<UUID> identityIds = new java.util.ArrayList<>();
+        for (int i = 0; i < 55; i++) {
+            Identity identity = activeIdentity(
+                    tenant, "Person " + i, NOW.plusSeconds(3).plusNanos(i));
+            SourceRecord record = sources.observe(
+                    tenant,
+                    baseline.id(),
+                    "employee-" + i,
+                    "{\"name\":\"employee-" + i + "\"}",
+                    null,
+                    NOW.plusSeconds(4).plusNanos(i),
+                    ids.nextId(),
+                    null);
+            link(tenant, record, identity, NOW.plusSeconds(5).plusNanos(i));
+            identityIds.add(identity.id());
+        }
+        sources.completeImport(
+                tenant, baseline.id(), SourceImportCompleteness.COMPLETE,
+                null, null, NOW.plusSeconds(6), ids.nextId(), null);
+
+        SourceImportRun trusted = sources.startImport(tenant, source.id(), NOW.plusSeconds(7));
+        sources.completeTrustedImport(
+                tenant, trusted.id(), "healthy empty full snapshot",
+                null, NOW.plusSeconds(8), ids.nextId(), null);
+
+        drainAbsence();
+        processor.processAvailable();
+
+        Long processed = jdbc.queryForObject(
+                """
+                SELECT processed_candidate_count
+                FROM identity.source_absence_inference
+                WHERE tenant_id = ? AND import_run_id = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                trusted.id());
+        Long transitions = jdbc.queryForObject(
+                """
+                SELECT inferred_transition_count
+                FROM identity.source_absence_inference
+                WHERE tenant_id = ? AND import_run_id = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                trusted.id());
+        long inactive = identityIds.stream()
+                .map(id -> identityRepository.findById(tenant, id).orElseThrow())
+                .filter(identity -> identity.lifecycleState() == IdentityLifecycleState.INACTIVE)
+                .count();
+
+        assertThat(processed).isEqualTo(55L);
+        assertThat(transitions).isEqualTo(55L);
+        assertThat(inactive).isEqualTo(55L);
+        assertThat(inferenceState(tenant, trusted.id())).isEqualTo("COMPLETED");
+        assertThat(inferenceCount(tenant, trusted.id())).isEqualTo(1);
+    }
+
+    @Test
     void massLeaverCeilingStopsBeforeSecondTransition() {
         TenantContext tenant = tenant("Mass leaver ceiling");
         SourceSystem source = source(tenant, "hr");
