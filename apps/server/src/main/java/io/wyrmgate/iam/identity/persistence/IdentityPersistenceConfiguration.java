@@ -25,6 +25,9 @@ import io.wyrmgate.iam.identity.application.PrincipalProvisioningResultProcessor
 import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery;
 import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQueryService;
 import io.wyrmgate.iam.identity.application.PrincipalRepository;
+import io.wyrmgate.iam.identity.application.SourceAbsenceInferenceService;
+import io.wyrmgate.iam.identity.application.SourceAbsenceInferenceWorkSink;
+import io.wyrmgate.iam.identity.application.SourceAbsencePolicyService;
 import io.wyrmgate.iam.identity.application.SourceCorrelationFactSink;
 import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
 import io.wyrmgate.iam.identity.application.SourceCorrelationService;
@@ -186,6 +189,48 @@ public class IdentityPersistenceConfiguration {
         return new SourceCorrelationService(
                 sourceCorrelationRepository, identityRepository, sourceCorrelationFactSink,
                 idGenerator, transactionExecutor);
+    }
+
+    @Bean
+    SourceAbsenceInferenceWorkSink sourceAbsenceInferenceWorkSink(
+            JdbcOutboxRepository outboxRepository, IdGenerator idGenerator) {
+        return new JdbcSourceAbsenceInferenceWorkSink(outboxRepository, idGenerator);
+    }
+
+    @Bean
+    SourceAbsencePolicyService sourceAbsencePolicyService(
+            SourceCorrelationRepository sourceCorrelationRepository,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new SourceAbsencePolicyService(
+                sourceCorrelationRepository, idGenerator, transactionExecutor);
+    }
+
+    @Bean
+    SourceAbsenceInferenceService sourceAbsenceInferenceService(
+            JdbcOutboxRepository outboxRepository,
+            SourceCorrelationRepository sourceCorrelationRepository,
+            IdentityRepository identityRepository,
+            IdentityCommandService identityCommandService,
+            SourceAbsenceInferenceWorkSink sourceAbsenceInferenceWorkSink,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor,
+            ObjectMapper objectMapper) {
+        return new SourceAbsenceInferenceService(
+                outboxRepository,
+                sourceCorrelationRepository,
+                identityRepository,
+                identityCommandService,
+                sourceAbsenceInferenceWorkSink,
+                idGenerator,
+                transactionExecutor,
+                objectMapper);
+    }
+
+    @Bean
+    SourceAbsenceInferenceScheduler sourceAbsenceInferenceScheduler(
+            SourceAbsenceInferenceService service) {
+        return new SourceAbsenceInferenceScheduler(service);
     }
 
     @Bean
