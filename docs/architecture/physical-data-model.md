@@ -929,6 +929,8 @@ Migration V39 adds Access-owned immutable `access.lifecycle_access_policy_versio
 
 `access.access_assignment` adds provenance kind `LIFECYCLE_POLICY_RULE`. Its provenance reference is the stable logical rule UUID. A partial unique index on tenant + Identity + rule UUID applies only to non-terminal policy assignments, allowing one current rule-owned intent while retaining terminal assignment history and permitting a later new assignment after a prior policy assignment becomes terminal.
 
+Migration V40 adds immutable Governance-owned `governance.lifecycle_access_evaluation` and `governance.lifecycle_access_sod_conflict` evidence. Each automatic privilege-increase guard attempt records the lifecycle rule/Identity/target, active Governance PolicyVersion when available, decision/code, matched SoD rules, exact exception coverage and causal correlation metadata. These rows are evidence only and never become Access authority.
+
 ### IdentityAccessReduction persistence
 
 `access.identity_access_reduction` is the Access-owned durable process record for lifecycle-driven privilege reduction. Its causal uniqueness is `(tenant_id, identity_id, source_identity_revision)`; the Identity ID is a semantic cross-capability reference rather than a database foreign key. The row stores the source lifecycle/revision and snapshot time, `RUNNING|COMPLETED` process state, optimistic revision, processed count, and an optional paired `after_created_at + after_assignment_id` continuation. The supporting AccessAssignment partial index is ordered by tenant, Identity, creation time and ID for bounded deterministic reduction pages over non-terminal assignments.
