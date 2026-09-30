@@ -23,11 +23,11 @@ import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributePagePosition;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.IdentityPagePosition;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
-import io.wyrmgate.iam.identity.domain.CanonicalValue;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
 import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.domain.CanonicalValue;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
 import jakarta.servlet.http.HttpServletRequest;
@@ -349,17 +349,18 @@ public class IdentityController {
         int effectiveLimit = validateLimit(limit, correlationId);
         CanonicalAttributePagePosition position = decodeCanonicalCursor(cursor, actor, identityId, correlationId);
         var page = queries.listCanonicalAttributes(actor.tenant(), identityId, position, effectiveLimit, now);
-        Set<String> readableClassifications = authorization.authorizedClassificationKeys(
-                actor,
-                AdministrativePermissions.CANONICAL_ATTRIBUTE_VALUE_READ,
-                page.items().stream().map(item -> item.classification()).collect(java.util.stream.Collectors.toSet()),
-                now);
         return ResponseEntity.ok()
                 .header("X-Correlation-Id", correlationId.toString())
                 .body(new CanonicalAttributePage(
                         page.items().stream()
                                 .map(item -> {
-                                    boolean readable = readableClassifications.contains(item.classification());
+                                    boolean valueAllowed = authorization.authorize(
+                                            actor,
+                                            AdministrativePermissions.CANONICAL_ATTRIBUTE_VALUE_READ,
+                                            AdministrativeResource.classification(
+                                                "canonical-attribute-value", item.classification()),
+                                            now).allowed();
+                                    boolean visible = valueAllowed && item.hasTrustedValue();
                                     return new CanonicalAttributeResource(
                                             item.definitionId(),
                                             item.definitionVersionId(),
@@ -369,13 +370,13 @@ public class IdentityController {
                                             item.cardinality().name(),
                                             item.resolutionStatus().name(),
                                             item.valueRevision(),
-                                            readable ? "VALUE" : "REDACTED",
+                                            visible ? "VALUE" : "REDACTED",
                                             item.hasTrustedValue(),
-                                            readable && item.hasTrustedValue()
-                                                    ? item.values().stream()
-                                                            .map(IdentityController::canonicalValue)
-                                                            .toList()
-                                                    : null);
+                                            visible
+                                                ? item.values().stream()
+                                                    .map(IdentityController::canonicalValue)
+                                                    .toList()
+                                                : List.of());
                                 })
                                 .toList(),
                         cursors.encodeCanonical(actor.tenant(), identityId, page.nextPosition())));
@@ -443,13 +444,20 @@ public class IdentityController {
 
     private static CanonicalValueResource canonicalValue(CanonicalValue value) {
         return switch (value) {
-            case CanonicalValue.StringValue v -> new StringCanonicalValueResource("STRING", v.value());
-            case CanonicalValue.BooleanValue v -> new BooleanCanonicalValueResource("BOOLEAN", v.value());
-            case CanonicalValue.IntegerValue v -> new IntegerCanonicalValueResource("INTEGER", v.value());
-            case CanonicalValue.DecimalValue v -> new DecimalCanonicalValueResource("DECIMAL", v.value().toPlainString());
-            case CanonicalValue.DateValue v -> new DateCanonicalValueResource("DATE", v.value().toString());
-            case CanonicalValue.DateTimeValue v -> new DateTimeCanonicalValueResource("DATETIME", v.value().toString());
-            case CanonicalValue.EnumValue v -> new EnumCanonicalValueResource("ENUM", v.key());
+            case CanonicalValue.StringValue v ->
+                    new StringCanonicalValueResource("STRING", v.value());
+            case CanonicalValue.BooleanValue v ->
+                    new BooleanCanonicalValueResource("BOOLEAN", v.value());
+            case CanonicalValue.IntegerValue v ->
+                    new IntegerCanonicalValueResource("INTEGER", v.value());
+            case CanonicalValue.DecimalValue v ->
+                    new DecimalCanonicalValueResource("DECIMAL", v.value().toPlainString());
+            case CanonicalValue.DateValue v ->
+                    new DateCanonicalValueResource("DATE", v.value().toString());
+            case CanonicalValue.DateTimeValue v ->
+                    new DateTimeCanonicalValueResource("DATETIME", v.value().toString());
+            case CanonicalValue.EnumValue v ->
+                    new EnumCanonicalValueResource("ENUM", v.key());
         };
     }
 

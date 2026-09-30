@@ -242,7 +242,7 @@
       "get": {
         "operationId": "listIdentityCanonicalAttributes",
         "summary": "List governed canonical attribute state",
-        "description": "Returns governed canonical resolution state. Provider-native observations, mapping rows, candidate rows, and raw source payloads are not exposed. Attribute values may be redacted according to classification and administrative authorization.",
+        "description": "Returns governed canonical resolution metadata under identity:read. Canonical values are disclosed per row only when canonical-attribute-value:read is authorized by GLOBAL or the exact attribute classification scope. Provider-native observations, raw source payloads, candidate rows and detailed provenance are not exposed.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdentityId"
@@ -285,7 +285,7 @@
         },
         "x-wyrmgate-authority": "Identity canonical authoritative state with provenance summary",
         "x-wyrmgate-administrative-permission": "identity:read",
-        "x-wyrmgate-value-administrative-permission": "canonical-attribute-value:read scoped GLOBAL or to the exact canonical classification"
+        "x-wyrmgate-value-administrative-permission": "canonical-attribute-value:read"
       }
     },
     "/identities/{identityId}:activate": {
@@ -1454,7 +1454,8 @@
           "resolutionStatus",
           "valueRevision",
           "visibility",
-          "hasTrustedValue"
+          "hasTrustedValue",
+          "values"
         ],
         "properties": {
           "definitionId": {
@@ -1501,13 +1502,11 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CanonicalValue"
-            }
-          },
-          "provenance": {
-            "$ref": "#/components/schemas/CanonicalAttributeProvenance"
+            },
+            "description": "Current effective typed canonical values when visibility is VALUE; otherwise an empty array."
           }
         },
-        "description": "values is omitted when visibility is REDACTED or when no readable trusted value exists. CONFLICT/UNRESOLVED may still expose a compatible prior trusted value while the degraded resolutionStatus remains visible."
+        "description": "Metadata is always returned after identity:read authorization. values is an empty array when visibility is REDACTED or no readable trusted value exists. VALUE contains only current effective typed canonical values. Detailed provenance remains omitted."
       },
       "CanonicalAttributePage": {
         "type": "object",

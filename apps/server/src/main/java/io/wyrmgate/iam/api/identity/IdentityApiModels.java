@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.api.identity;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -55,25 +54,32 @@ final class IdentityApiModels {
             EnumCanonicalValueResource {
     }
 
-    record StringCanonicalValueResource(String type, String value) implements CanonicalValueResource {
+    record StringCanonicalValueResource(String type, String value)
+            implements CanonicalValueResource {
     }
 
-    record BooleanCanonicalValueResource(String type, boolean value) implements CanonicalValueResource {
+    record BooleanCanonicalValueResource(String type, boolean value)
+            implements CanonicalValueResource {
     }
 
-    record IntegerCanonicalValueResource(String type, long value) implements CanonicalValueResource {
+    record IntegerCanonicalValueResource(String type, long value)
+            implements CanonicalValueResource {
     }
 
-    record DecimalCanonicalValueResource(String type, String value) implements CanonicalValueResource {
+    record DecimalCanonicalValueResource(String type, String value)
+            implements CanonicalValueResource {
     }
 
-    record DateCanonicalValueResource(String type, String value) implements CanonicalValueResource {
+    record DateCanonicalValueResource(String type, String value)
+            implements CanonicalValueResource {
     }
 
-    record DateTimeCanonicalValueResource(String type, String value) implements CanonicalValueResource {
+    record DateTimeCanonicalValueResource(String type, String value)
+            implements CanonicalValueResource {
     }
 
-    record EnumCanonicalValueResource(String type, String key) implements CanonicalValueResource {
+    record EnumCanonicalValueResource(String type, String key)
+            implements CanonicalValueResource {
     }
 
     record CanonicalAttributeResource(
@@ -87,7 +93,7 @@ final class IdentityApiModels {
             long valueRevision,
             String visibility,
             boolean hasTrustedValue,
-            @JsonInclude(JsonInclude.Include.NON_NULL) List<CanonicalValueResource> values) {
+            List<CanonicalValueResource> values) {
     }
 
     record CanonicalAttributePage(List<CanonicalAttributeResource> items, String nextCursor) {

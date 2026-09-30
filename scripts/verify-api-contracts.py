@@ -160,7 +160,15 @@ def verify_openapi(document: dict) -> None:
         "lifecycle/status changes must not be smuggled through generic PATCH"
     )
     assert "CanonicalAttributeView" in schemas
-    canonical = json.dumps(schemas["CanonicalAttributeView"], sort_keys=True)
+    canonical_operation = paths["/identities/{identityId}/canonical-attributes"]["get"]
+    assert canonical_operation.get("x-wyrmgate-administrative-permission") == "identity:read"
+    assert canonical_operation.get("x-wyrmgate-value-administrative-permission") == (
+        "canonical-attribute-value:read"
+    )
+    canonical_schema = schemas["CanonicalAttributeView"]
+    assert "values" in set(canonical_schema.get("required", []))
+    assert canonical_schema["properties"]["values"]["items"]["$ref"].endswith("/CanonicalValue")
+    canonical = json.dumps(canonical_schema, sort_keys=True)
     for persistence_name in ("candidateId", "sourcePayload", "rawPayload"):
         assert persistence_name not in canonical, (
             "canonical attribute API must not expose persistence/observation internals"

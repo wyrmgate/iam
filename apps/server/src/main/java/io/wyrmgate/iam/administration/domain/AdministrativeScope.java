@@ -10,6 +10,10 @@ public record AdministrativeScope(
         UUID resourceId,
         String scopeKey) {
 
+    public AdministrativeScope(AdministrativeScopeType type, String resourceType, UUID resourceId) {
+        this(type, resourceType, resourceId, null);
+    }
+
     public AdministrativeScope {
         Objects.requireNonNull(type, "type");
         switch (type) {
@@ -28,7 +32,7 @@ public record AdministrativeScope(
             case CANONICAL_ATTRIBUTE_CLASSIFICATION -> {
                 if (resourceType != null || resourceId != null || scopeKey == null || scopeKey.isBlank()) {
                     throw new IllegalArgumentException(
-                            "CANONICAL_ATTRIBUTE_CLASSIFICATION scope requires scopeKey only");
+                            "CANONICAL_ATTRIBUTE_CLASSIFICATION scope requires one non-blank scopeKey only");
                 }
                 scopeKey = scopeKey.trim();
             }
@@ -41,10 +45,6 @@ public record AdministrativeScope(
         }
     }
 
-    public AdministrativeScope(AdministrativeScopeType type, String resourceType, UUID resourceId) {
-        this(type, resourceType, resourceId, null);
-    }
-
     public static AdministrativeScope global() {
         return new AdministrativeScope(AdministrativeScopeType.GLOBAL, null, null, null);
     }
@@ -54,11 +54,8 @@ public record AdministrativeScope(
                 AdministrativeScopeType.SPECIFIC_RESOURCE, resourceType, resourceId, null);
     }
 
-    public static AdministrativeScope canonicalAttributeClassification(String classificationKey) {
+    public static AdministrativeScope classification(String classification) {
         return new AdministrativeScope(
-                AdministrativeScopeType.CANONICAL_ATTRIBUTE_CLASSIFICATION,
-                null,
-                null,
-                classificationKey);
+                AdministrativeScopeType.CANONICAL_ATTRIBUTE_CLASSIFICATION, null, null, classification);
     }
 }
