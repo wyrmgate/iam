@@ -759,6 +759,150 @@
         "x-wyrmgate-administrative-permission": "principal:correlate",
         "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
       }
+    },
+    "/identities/{identityId}:merge": {
+      "post": {
+        "operationId": "mergeIdentity",
+        "summary": "Merge another Identity into the survivor Identity",
+        "description": "Explicitly re-homes Identity-owned current source links and Principals to the path Identity, preserves historical references, and decommissions the absorbed Identity. Foreign-capability authority such as AccessAssignments is not moved.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdentityId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeIdentityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identity merge completed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityMergeOperation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/StaleRevision"
+          }
+        },
+        "x-wyrmgate-authority": "Identity-owned merge operation and relationship history",
+        "x-wyrmgate-administrative-permission": "identity:merge",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
+    },
+    "/identities/{identityId}:split": {
+      "post": {
+        "operationId": "splitIdentity",
+        "summary": "Split selected Identity-owned relationships into a new Identity",
+        "description": "Creates a same-type PENDING Identity and explicitly re-homes only selected current source links and Principals. AccessAssignments and other foreign-capability authority are not copied or moved.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdentityId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitIdentityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Identity split completed and new PENDING Identity created",
+            "headers": {
+              "Location": {
+                "description": "URI of the newly created Identity",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentitySplitOperation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/StaleRevision"
+          }
+        },
+        "x-wyrmgate-authority": "Identity-owned split operation and relationship history",
+        "x-wyrmgate-administrative-permission": "identity:split",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
     }
   },
   "components": {
@@ -1557,11 +1701,160 @@
             ]
           }
         }
+      },
+      "MergeIdentityRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "absorbedIdentityId",
+          "absorbedRevision",
+          "reason"
+        ],
+        "properties": {
+          "absorbedIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "absorbedRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        }
+      },
+      "SplitIdentityRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "newDisplayName",
+          "sourceRecordIds",
+          "principalIds",
+          "reason"
+        ],
+        "properties": {
+          "newDisplayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "sourceRecordIds": {
+            "type": "array",
+            "maxItems": 200,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "principalIds": {
+            "type": "array",
+            "maxItems": 200,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "description": "At least one sourceRecordIds or principalIds entry is required."
+      },
+      "IdentityMergeOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "survivorIdentityId",
+          "absorbedIdentityId",
+          "movedLinkCount",
+          "movedPrincipalCount",
+          "completedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "survivorIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "absorbedIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "movedLinkCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "movedPrincipalCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "IdentitySplitOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sourceIdentityId",
+          "newIdentityId",
+          "movedSourceRecordIds",
+          "movedPrincipalIds",
+          "completedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "newIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "movedSourceRecordIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "movedPrincipalIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     }
   },
   "x-wyrmgate-contract-status": "runtime-exposed-authenticated-authorized",
   "x-wyrmgate-tenant-resolution": "Tenant/isolation boundary is derived from authenticated control-plane context, not writable resource fields.",
   "x-wyrmgate-lifecycle-boundary": "Identity lifecycle uses explicit semantic operations under ADR-0021; generic PATCH lifecycle/status mutation remains prohibited.",
-  "x-wyrmgate-principal-boundary": "Principal is Identity-owned technical authority. Public registration is explicit and uncorrelated; provider observations never create Principal authority automatically, correlation is one-way, and provider-driven ACTIVE/DISABLED realization remains internal."
+  "x-wyrmgate-principal-boundary": "Principal is Identity-owned technical authority. Public registration is explicit and uncorrelated; provider observations never create Principal authority automatically, correlation is one-way, and provider-driven ACTIVE/DISABLED realization remains internal.",
+  "x-wyrmgate-merge-split-boundary": "Merge/split are explicit Identity-owned operations under ADR-0026. They preserve Identity-owned relationship history and never move foreign-capability Access/Governance authority."
 }
