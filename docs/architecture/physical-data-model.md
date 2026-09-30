@@ -931,6 +931,12 @@ Migration V39 adds Access-owned immutable `access.lifecycle_access_policy_versio
 
 Migration V40 adds immutable Governance-owned `governance.lifecycle_access_evaluation` and `governance.lifecycle_access_sod_conflict` evidence. Each automatic privilege-increase guard attempt records the lifecycle rule/Identity/target, active Governance PolicyVersion when available, decision/code, matched SoD rules, exact exception coverage and causal correlation metadata. These rows are evidence only and never become Access authority.
 
+### Identity merge/split persistence
+
+Migration V41 adds immutable Identity-owned identity_merge_operation and identity_split_operation evidence. Merge evidence preserves survivor/absorbed stable Identity IDs, both pre-operation revisions, moved relationship counts, reason and causal metadata; absorbed Identity IDs are unique as completed merge subjects. Split evidence preserves source/new Identity IDs, source pre-operation revision and the exact selected SourceRecord/Principal IDs in normalized immutable child tables.
+
+Merge/split never rewrites foreign-capability references. Current accepted IdentityLinks are replaced through normal correlation history, Principals retain stable IDs while identity_id changes under merge/split-only semantics, and historical canonical candidate/state/override rows retain their original Identity references. The new Identity produced by split is an ordinary same-type PENDING Identity row with its typed profile.
+
 ### IdentityAccessReduction persistence
 
 `access.identity_access_reduction` is the Access-owned durable process record for lifecycle-driven privilege reduction. Its causal uniqueness is `(tenant_id, identity_id, source_identity_revision)`; the Identity ID is a semantic cross-capability reference rather than a database foreign key. The row stores the source lifecycle/revision and snapshot time, `RUNNING|COMPLETED` process state, optimistic revision, processed count, and an optional paired `after_created_at + after_assignment_id` continuation. The supporting AccessAssignment partial index is ordered by tenant, Identity, creation time and ID for bounded deterministic reduction pages over non-terminal assignments.
