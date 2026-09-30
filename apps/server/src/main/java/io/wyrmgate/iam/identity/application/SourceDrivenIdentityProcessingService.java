@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
 import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.domain.CanonicalValue;
 import io.wyrmgate.iam.identity.domain.SourceCorrelationPolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceRecord;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
@@ -299,6 +300,23 @@ public final class SourceDrivenIdentityProcessingService {
                     sourceRecordId,
                     created.id(),
                     "policy-authorized source no-match creation policy " + policy.id(),
+                    now,
+                    correlationId,
+                    causationId);
+
+            // Publish the exact governed correlation key into canonical state before releasing
+            // the tenant-scoped no-match fence. A racing source can then deterministically match
+            // this Identity instead of creating a duplicate.
+            resolution.recordCandidate(
+                    tenant,
+                    sourceRecordId,
+                    matchMapping.canonicalKey(),
+                    List.of(new CanonicalValue.StringValue(matchValue)),
+                    record.lastObservedAt());
+            resolution.resolve(
+                    tenant,
+                    created.id(),
+                    matchMapping.canonicalKey(),
                     now,
                     correlationId,
                     causationId);
