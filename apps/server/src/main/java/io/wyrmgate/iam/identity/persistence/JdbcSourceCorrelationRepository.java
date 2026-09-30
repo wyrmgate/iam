@@ -232,6 +232,17 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     }
 
     @Override
+    public void lockTenantForCorrelation(TenantContext tenant) {
+        List<UUID> rows = jdbcTemplate.query(
+                "SELECT id FROM platform.tenant WHERE id = ? FOR UPDATE",
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                tenant.tenantId());
+        if (rows.isEmpty()) {
+            throw new IllegalArgumentException("tenant does not exist");
+        }
+    }
+
+    @Override
     public Optional<SourceRecord> findSourceRecordByNativeKey(
             TenantContext tenant,
             UUID sourceSystemId,
