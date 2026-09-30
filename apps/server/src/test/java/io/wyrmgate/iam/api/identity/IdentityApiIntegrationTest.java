@@ -116,7 +116,7 @@ class IdentityApiIntegrationTest {
                 new JdbcCanonicalAttributeReadRepository(jdbc),
                 evaluator);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("43");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("44");
     }
 
     @AfterAll
