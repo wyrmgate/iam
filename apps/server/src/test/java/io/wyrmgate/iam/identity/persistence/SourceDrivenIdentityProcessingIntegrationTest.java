@@ -10,6 +10,7 @@ import io.wyrmgate.iam.identity.application.SourceCorrelationPolicyService;
 import io.wyrmgate.iam.identity.application.SourceCorrelationService;
 import io.wyrmgate.iam.identity.application.SourceDrivenIdentityProcessingService;
 import io.wyrmgate.iam.identity.application.SourceMappedValueExtractor;
+import io.wyrmgate.iam.identity.application.SourceLifecyclePolicyService;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeCardinality;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeState;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeType;
@@ -108,6 +109,9 @@ class SourceDrivenIdentityProcessingIntegrationTest {
                 ids,
                 transactions);
         ObjectMapper json = new ObjectMapper();
+        SourceMappedValueExtractor extractor = new SourceMappedValueExtractor(json);
+        SourceLifecyclePolicyService lifecyclePolicies = new SourceLifecyclePolicyService(
+                sourceRepository, identityRepository, identities, extractor, ids, transactions);
         processor = new SourceDrivenIdentityProcessingService(
                 outbox,
                 sourceRepository,
@@ -115,11 +119,12 @@ class SourceDrivenIdentityProcessingIntegrationTest {
                 sources,
                 identities,
                 resolution,
-                new SourceMappedValueExtractor(json),
+                lifecyclePolicies,
+                extractor,
                 transactions,
                 json);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("36");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("37");
     }
 
     @AfterAll
