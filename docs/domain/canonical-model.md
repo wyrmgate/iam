@@ -84,6 +84,8 @@ Observed state never silently overwrites governed desired state.
 
 IAM is event-driven where useful but does not require event sourcing as its authoritative persistence model.
 
+ADR-0031 implements the first Audit-owned runtime foundation. `AuditRecord` is immutable append-only evidence with stable record identity, occurrence/recording time, optional governed actor, semantic action/resource reference, normalized `SUCCESS`/`DENIED`/`FAILURE` outcome and correlation/causation. Producer replay is idempotent by stable record ID plus semantic content; conflicting reuse is rejected. Bounded Audit queries order by `occurredAt DESC, id DESC`. EvidenceSnapshot, material snapshots, archive/retention and public Audit APIs remain deferred.
+
 ## Canonical classification
 
 ### Authoritative/stateful

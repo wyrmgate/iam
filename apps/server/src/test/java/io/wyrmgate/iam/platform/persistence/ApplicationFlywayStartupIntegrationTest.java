@@ -62,7 +62,7 @@ class ApplicationFlywayStartupIntegrationTest {
                 LIMIT 1
                 """,
                 String.class);
-        assertThat(currentVersion).isEqualTo("45");
+        assertThat(currentVersion).isEqualTo("46");
 
         List<String> schemas = List.of(
                 "identity",
