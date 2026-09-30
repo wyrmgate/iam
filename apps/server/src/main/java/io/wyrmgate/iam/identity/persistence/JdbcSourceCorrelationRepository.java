@@ -196,9 +196,23 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                 VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, NULL)
                 ON CONFLICT (tenant_id, source_system_id, native_key)
                 DO UPDATE SET
-                    observed_attributes = EXCLUDED.observed_attributes,
-                    source_updated_at = EXCLUDED.source_updated_at,
-                    last_observed_at = EXCLUDED.last_observed_at,
+                    observed_attributes = CASE
+                        WHEN EXCLUDED.source_updated_at IS NOT NULL
+                         AND identity.source_record.source_updated_at IS NOT NULL
+                         AND EXCLUDED.source_updated_at < identity.source_record.source_updated_at
+                            THEN identity.source_record.observed_attributes
+                        ELSE EXCLUDED.observed_attributes
+                    END,
+                    source_updated_at = CASE
+                        WHEN EXCLUDED.source_updated_at IS NOT NULL
+                         AND identity.source_record.source_updated_at IS NOT NULL
+                         AND EXCLUDED.source_updated_at < identity.source_record.source_updated_at
+                            THEN identity.source_record.source_updated_at
+                        ELSE EXCLUDED.source_updated_at
+                    END,
+                    last_observed_at = GREATEST(
+                        identity.source_record.last_observed_at,
+                        EXCLUDED.last_observed_at),
                     last_import_run_id = EXCLUDED.last_import_run_id
                 """,
                 proposedId,
