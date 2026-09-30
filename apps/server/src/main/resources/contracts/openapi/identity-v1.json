@@ -284,7 +284,8 @@
           }
         },
         "x-wyrmgate-authority": "Identity canonical authoritative state with provenance summary",
-        "x-wyrmgate-administrative-permission": "identity:read"
+        "x-wyrmgate-administrative-permission": "identity:read",
+        "x-wyrmgate-value-administrative-permission": "canonical-attribute-value:read scoped GLOBAL or to the exact canonical classification"
       }
     },
     "/identities/{identityId}:activate": {
