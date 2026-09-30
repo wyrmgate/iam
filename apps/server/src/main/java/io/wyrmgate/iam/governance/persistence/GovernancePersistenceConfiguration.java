@@ -36,6 +36,7 @@ import io.wyrmgate.iam.governance.application.GovernanceExceptionRepository;
 import io.wyrmgate.iam.governance.application.GovernanceExceptionService;
 import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
 import io.wyrmgate.iam.governance.application.GovernanceLifecycleAccessPrivilegeGuard;
+import io.wyrmgate.iam.governance.application.LifecycleAccessEvaluationEvidenceSink;
 import io.wyrmgate.iam.governance.application.GovernancePolicyEligibilityEvaluator;
 import io.wyrmgate.iam.governance.application.GovernancePolicyRepository;
 import io.wyrmgate.iam.governance.application.GovernancePolicyService;
@@ -112,18 +113,28 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    LifecycleAccessEvaluationEvidenceSink lifecycleAccessEvaluationEvidenceSink(
+            JdbcTemplate jdbc) {
+        return new JdbcLifecycleAccessEvaluationEvidenceSink(jdbc);
+    }
+
+    @Bean
     LifecycleAccessPrivilegeGuard lifecycleAccessPrivilegeGuard(
             GovernancePolicyService policyService,
             CatalogAccessReferenceQuery catalog,
             RoleExpansionQuery roleExpansion,
             EffectiveAccessQuery effectiveAccess,
-            GovernanceExceptionQuery exceptions) {
+            GovernanceExceptionQuery exceptions,
+            LifecycleAccessEvaluationEvidenceSink evidence,
+            IdGenerator ids) {
         return new GovernanceLifecycleAccessPrivilegeGuard(
                 policyService,
                 catalog,
                 roleExpansion,
                 effectiveAccess,
-                exceptions);
+                exceptions,
+                evidence,
+                ids);
     }
 
     @Bean
