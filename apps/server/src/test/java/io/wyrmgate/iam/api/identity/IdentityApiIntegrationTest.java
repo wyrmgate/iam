@@ -17,14 +17,21 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
+import io.wyrmgate.iam.identity.application.CanonicalAttributeConfigurationService;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluator;
+import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
+import io.wyrmgate.iam.identity.domain.CanonicalAttributeCardinality;
+import io.wyrmgate.iam.identity.domain.CanonicalAttributeType;
+import io.wyrmgate.iam.identity.domain.CanonicalSchemaVersion;
+import io.wyrmgate.iam.identity.domain.CanonicalValue;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
 import io.wyrmgate.iam.identity.domain.IdentityType;
+import io.wyrmgate.iam.identity.persistence.JdbcCanonicalAttributeFactSink;
 import io.wyrmgate.iam.identity.persistence.JdbcCanonicalAttributeReadRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcCanonicalAttributeRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
@@ -44,12 +51,14 @@ import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.math.BigDecimal;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Signature;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -79,6 +88,8 @@ class IdentityApiIntegrationTest {
     private static JdbcIdempotencyRepository idempotency;
     private static TransactionExecutor transactions;
     private static JdbcCanonicalAttributeRepository canonicalAttributes;
+    private static CanonicalAttributeConfigurationService canonicalConfiguration;
+    private static CanonicalAttributeResolutionService canonicalResolution;
     private static IdentityQueryService queries;
 
     private TenantContext tenant;
@@ -108,6 +119,12 @@ class IdentityApiIntegrationTest {
                 transactions);
         idempotency = new JdbcIdempotencyRepository(jdbc, ids);
         canonicalAttributes = new JdbcCanonicalAttributeRepository(jdbc, ids);
+        var sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
+        var canonicalFacts = new JdbcCanonicalAttributeFactSink(outbox, ids);
+        canonicalConfiguration = new CanonicalAttributeConfigurationService(
+                canonicalAttributes, sourceRepository, canonicalFacts, ids, transactions);
+        canonicalResolution = new CanonicalAttributeResolutionService(
+                canonicalAttributes, sourceRepository, identities, canonicalFacts, ids, transactions);
         CanonicalAttributeResolutionEvaluator evaluator = new CanonicalAttributeResolutionEvaluator();
         queries = new IdentityQueryService(
                 identities,
@@ -116,7 +133,7 @@ class IdentityApiIntegrationTest {
                 new JdbcCanonicalAttributeReadRepository(jdbc),
                 evaluator);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("44");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("45");
     }
 
     @AfterAll
@@ -580,12 +597,141 @@ class IdentityApiIntegrationTest {
     }
 
     @Test
+    void canonicalValuesRequireExactClassificationScopeAndSerializeTypedValues() throws Exception {
+        Instant now = Instant.parse("2026-09-30T12:30:00Z");
+        CanonicalSchemaVersion schema = canonicalConfiguration.createDraftSchema(tenant, 1, now);
+        defineCanonical(schema, "aBoolean", CanonicalAttributeType.BOOLEAN,
+                CanonicalAttributeCardinality.SINGLE, "HR-SENSITIVE", now.plusMillis(1));
+        defineCanonical(schema, "bDate", CanonicalAttributeType.DATE,
+                CanonicalAttributeCardinality.SINGLE, "HR-SENSITIVE", now.plusMillis(2));
+        defineCanonical(schema, "cDateTime", CanonicalAttributeType.DATETIME,
+                CanonicalAttributeCardinality.SINGLE, "HR-SENSITIVE", now.plusMillis(3));
+        defineCanonical(schema, "dDecimal", CanonicalAttributeType.DECIMAL,
+                CanonicalAttributeCardinality.SINGLE, "HR-SENSITIVE", now.plusMillis(4));
+        defineCanonical(schema, "eSkills", CanonicalAttributeType.ENUM,
+                CanonicalAttributeCardinality.MULTI, "HR-SENSITIVE", now.plusMillis(5));
+        defineCanonical(schema, "fInteger", CanonicalAttributeType.INTEGER,
+                CanonicalAttributeCardinality.SINGLE, "HR-SENSITIVE", now.plusMillis(6));
+        defineCanonical(schema, "gString", CanonicalAttributeType.STRING,
+                CanonicalAttributeCardinality.SINGLE, "HR-SENSITIVE", now.plusMillis(7));
+        defineCanonical(schema, "hFinance", CanonicalAttributeType.STRING,
+                CanonicalAttributeCardinality.SINGLE, "FINANCE", now.plusMillis(8));
+        canonicalConfiguration.activateSchema(
+                tenant, schema.id(), now.plusSeconds(1), ids.nextId(), null);
+
+        overrideCanonical("aBoolean", List.of(new CanonicalValue.BooleanValue(true)), now.plusSeconds(2));
+        overrideCanonical("bDate", List.of(new CanonicalValue.DateValue(LocalDate.of(2026, 9, 30))), now.plusSeconds(3));
+        overrideCanonical("cDateTime", List.of(new CanonicalValue.DateTimeValue(Instant.parse("2026-09-30T12:34:56Z"))), now.plusSeconds(4));
+        overrideCanonical("dDecimal", List.of(new CanonicalValue.DecimalValue(new BigDecimal("12.3400"))), now.plusSeconds(5));
+        overrideCanonical("eSkills", List.of(new CanonicalValue.EnumValue("JAVA"), new CanonicalValue.EnumValue("SQL")), now.plusSeconds(6));
+        overrideCanonical("fInteger", List.of(new CanonicalValue.IntegerValue(42)), now.plusSeconds(7));
+        overrideCanonical("gString", List.of(new CanonicalValue.StringValue("visible")), now.plusSeconds(8));
+        overrideCanonical("hFinance", List.of(new CanonicalValue.StringValue("finance-secret")), now.plusSeconds(9));
+
+        MockMvc hrReader = mockMvc(authorizationWithCanonicalValueScope("HR-SENSITIVE", false));
+        hrReader.perform(get("/api/v1/identities/{identityId}/canonical-attributes", actorIdentity.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].visibility").value("VALUE"))
+                .andExpect(jsonPath("$.items[0].values[0].type").value("BOOLEAN"))
+                .andExpect(jsonPath("$.items[0].values[0].value").value(true))
+                .andExpect(jsonPath("$.items[1].values[0].type").value("DATE"))
+                .andExpect(jsonPath("$.items[1].values[0].value").value("2026-09-30"))
+                .andExpect(jsonPath("$.items[2].values[0].type").value("DATETIME"))
+                .andExpect(jsonPath("$.items[2].values[0].value").value("2026-09-30T12:34:56Z"))
+                .andExpect(jsonPath("$.items[3].values[0].type").value("DECIMAL"))
+                .andExpect(jsonPath("$.items[3].values[0].value").value("12.34"))
+                .andExpect(jsonPath("$.items[4].values[0].type").value("ENUM"))
+                .andExpect(jsonPath("$.items[4].values[0].key").value("JAVA"))
+                .andExpect(jsonPath("$.items[4].values[1].key").value("SQL"))
+                .andExpect(jsonPath("$.items[5].values[0].type").value("INTEGER"))
+                .andExpect(jsonPath("$.items[5].values[0].value").value(42))
+                .andExpect(jsonPath("$.items[6].values[0].type").value("STRING"))
+                .andExpect(jsonPath("$.items[6].values[0].value").value("visible"))
+                .andExpect(jsonPath("$.items[7].classification").value("FINANCE"))
+                .andExpect(jsonPath("$.items[7].visibility").value("REDACTED"))
+                .andExpect(jsonPath("$.items[7].values").doesNotExist())
+                .andExpect(jsonPath("$.items[0].provenance").doesNotExist());
+
+        MockMvc globalReader = mockMvc(authorizationWithCanonicalValueScope(null, true));
+        globalReader.perform(get("/api/v1/identities/{identityId}/canonical-attributes", actorIdentity.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[7].visibility").value("VALUE"))
+                .andExpect(jsonPath("$.items[7].values[0].value").value("finance-secret"));
+    }
+
+    @Test
     void missingAdministrativeGrantReturnsForbiddenBeforeDomainAccess() throws Exception {
         MockMvc denied = mockMvc(authorization(false));
         denied.perform(get("/api/v1/identities/{identityId}", actorIdentity.id())
                         .requestAttr(ACTOR_ATTRIBUTE, actor))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("forbidden"));
+    }
+
+    private void defineCanonical(
+            CanonicalSchemaVersion schema,
+            String key,
+            CanonicalAttributeType type,
+            CanonicalAttributeCardinality cardinality,
+            String classification,
+            Instant now) {
+        canonicalConfiguration.defineAttribute(
+                tenant, schema.id(), key, type, cardinality, classification,
+                true, true, true, now);
+    }
+
+    private void overrideCanonical(String key, List<CanonicalValue> values, Instant now) {
+        canonicalResolution.applyOverride(
+                tenant,
+                actorIdentity.id(),
+                key,
+                values,
+                "API visibility test",
+                null,
+                null,
+                now,
+                ids.nextId(),
+                null);
+    }
+
+    private AdministrativeAuthorizationService authorizationWithCanonicalValueScope(
+            String classification,
+            boolean globalValueRead) {
+        Instant grantTime = Instant.parse("2026-01-01T00:00:00Z");
+        AdministrativeGrant identityRead = new AdministrativeGrant(
+                ids.nextId(), actorIdentity.id(), ids.nextId(),
+                AdministrativeScope.global(),
+                AdministrativeGrantState.ACTIVE,
+                grantTime, null, 1, grantTime, grantTime);
+        AdministrativeGrant valueRead = new AdministrativeGrant(
+                ids.nextId(), actorIdentity.id(), ids.nextId(),
+                globalValueRead
+                        ? AdministrativeScope.global()
+                        : AdministrativeScope.canonicalAttributeClassification(classification),
+                AdministrativeGrantState.ACTIVE,
+                grantTime, null, 1, grantTime, grantTime);
+        return new AdministrativeAuthorizationService(
+                (requestedTenant, actorIdentityId, permission) -> {
+                    if (!requestedTenant.equals(tenant)
+                            || !actorIdentityId.equals(actorIdentity.id())) {
+                        return List.of();
+                    }
+                    if (permission.equals(AdministrativePermissions.IDENTITY_READ)) {
+                        return List.of(identityRead);
+                    }
+                    if (permission.equals(AdministrativePermissions.CANONICAL_ATTRIBUTE_VALUE_READ)) {
+                        return List.of(valueRead);
+                    }
+                    return List.of();
+                },
+                (requestedTenant, actorIdentityId) ->
+                        requestedTenant.equals(tenant)
+                                && actorIdentityId.equals(actorIdentity.id())
+                                && identities.findById(requestedTenant, actorIdentityId)
+                                        .map(identity -> identity.lifecycleState() == IdentityLifecycleState.ACTIVE)
+                                        .orElse(false));
     }
 
     private MockMvc mockMvc(AdministrativeAuthorizationService authorization) {
