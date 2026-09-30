@@ -4,6 +4,7 @@ import io.wyrmgate.iam.identity.domain.IdentityLink;
 import io.wyrmgate.iam.identity.domain.IdentityType;
 import io.wyrmgate.iam.identity.domain.SourceCorrelationPolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
+import io.wyrmgate.iam.identity.domain.SourceLifecyclePolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceImportRun;
 import io.wyrmgate.iam.identity.domain.SourceRecord;
 import io.wyrmgate.iam.identity.domain.SourceSystem;
@@ -75,6 +76,17 @@ public interface SourceCorrelationRepository {
             UUID newPolicyId);
 
     Optional<SourceCorrelationPolicyVersion> findActiveCorrelationPolicy(
+            TenantContext tenant, UUID sourceSystemId);
+
+    SourceLifecyclePolicyVersion replaceActiveLifecyclePolicy(
+            TenantContext tenant,
+            UUID sourceSystemId,
+            String sourcePath,
+            java.util.List<SourceLifecyclePolicyVersion.Rule> rules,
+            Instant activatedAt,
+            UUID newPolicyId);
+
+    Optional<SourceLifecyclePolicyVersion> findActiveLifecyclePolicy(
             TenantContext tenant, UUID sourceSystemId);
 
     record LinkReplacement(IdentityLink link, boolean changed, UUID previousIdentityId) {

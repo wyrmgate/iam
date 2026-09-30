@@ -30,5 +30,6 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0020 Credential authority, external secret references and durable rotation](0020-credential-authority-external-secret-reference-durable-rotation.md)
 - [ADR-0021 Identity lifecycle eligibility and durable Access reduction](0021-identity-lifecycle-eligibility-durable-access-reduction.md)
 - [ADR-0022 Source-driven Identity construction and lifecycle orchestration](0022-source-driven-identity-construction-lifecycle-orchestration.md)
+- [ADR-0023 Source-driven Identity lifecycle policy](0023-source-driven-identity-lifecycle-policy.md)
 
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.4, which folds ADR-0017 through ADR-0021 into the formal baseline. A later accepted ADR may again amend that baseline between controlled document revisions and must be folded into the next formal revision.

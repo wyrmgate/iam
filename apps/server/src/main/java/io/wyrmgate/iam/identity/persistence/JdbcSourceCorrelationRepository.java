@@ -8,6 +8,7 @@ import io.wyrmgate.iam.identity.domain.SourceCorrelationPolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceImportCompleteness;
 import io.wyrmgate.iam.identity.domain.SourceImportRun;
 import io.wyrmgate.iam.identity.domain.SourceImportRunState;
+import io.wyrmgate.iam.identity.domain.SourceLifecyclePolicyVersion;
 import io.wyrmgate.iam.identity.domain.SourceRecord;
 import io.wyrmgate.iam.identity.domain.SourceSystem;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -453,6 +454,124 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                 sourceSystemId)
                 .stream()
                 .findFirst();
+    }
+
+    @Override
+    public SourceLifecyclePolicyVersion replaceActiveLifecyclePolicy(
+            TenantContext tenant,
+            UUID sourceSystemId,
+            String sourcePath,
+            List<SourceLifecyclePolicyVersion.Rule> rules,
+            Instant activatedAt,
+            UUID newPolicyId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(sourceSystemId, "sourceSystemId");
+        Objects.requireNonNull(sourcePath, "sourcePath");
+        Objects.requireNonNull(rules, "rules");
+        Objects.requireNonNull(activatedAt, "activatedAt");
+        Objects.requireNonNull(newPolicyId, "newPolicyId");
+
+        List<UUID> sourceRows = jdbcTemplate.query(
+                "SELECT id FROM identity.source_system WHERE tenant_id = ? AND id = ? FOR UPDATE",
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                tenant.tenantId(),
+                sourceSystemId);
+        if (sourceRows.isEmpty()) {
+            throw new IllegalArgumentException("source system does not exist");
+        }
+
+        Long nextVersion = jdbcTemplate.queryForObject(
+                """
+                SELECT COALESCE(max(version_number), 0) + 1
+                FROM identity.source_lifecycle_policy_version
+                WHERE tenant_id = ? AND source_system_id = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                sourceSystemId);
+
+        jdbcTemplate.update(
+                """
+                UPDATE identity.source_lifecycle_policy_version
+                SET state = 'SUPERSEDED', superseded_at = ?
+                WHERE tenant_id = ? AND source_system_id = ? AND state = 'ACTIVE'
+                """,
+                Timestamp.from(activatedAt),
+                tenant.tenantId(),
+                sourceSystemId);
+
+        jdbcTemplate.update(
+                """
+                INSERT INTO identity.source_lifecycle_policy_version (
+                    id, tenant_id, source_system_id, source_path, version_number,
+                    state, created_at, activated_at)
+                VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+                """,
+                newPolicyId,
+                tenant.tenantId(),
+                sourceSystemId,
+                sourcePath,
+                nextVersion,
+                Timestamp.from(activatedAt),
+                Timestamp.from(activatedAt));
+
+        for (SourceLifecyclePolicyVersion.Rule rule : rules) {
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO identity.source_lifecycle_policy_rule (
+                        policy_version_id, tenant_id, source_value, target_lifecycle_state)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    newPolicyId,
+                    tenant.tenantId(),
+                    rule.sourceValue(),
+                    rule.targetState().name());
+        }
+
+        return findActiveLifecyclePolicy(tenant, sourceSystemId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "activated source lifecycle policy could not be reloaded"));
+    }
+
+    @Override
+    public Optional<SourceLifecyclePolicyVersion> findActiveLifecyclePolicy(
+            TenantContext tenant, UUID sourceSystemId) {
+        List<SourceLifecyclePolicyVersion> policies = jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, source_path, version_number,
+                       state, created_at, activated_at, superseded_at
+                FROM identity.source_lifecycle_policy_version
+                WHERE tenant_id = ? AND source_system_id = ? AND state = 'ACTIVE'
+                """,
+                (rs, rowNum) -> {
+                    UUID policyId = rs.getObject("id", UUID.class);
+                    List<SourceLifecyclePolicyVersion.Rule> rules = jdbcTemplate.query(
+                            """
+                            SELECT source_value, target_lifecycle_state
+                            FROM identity.source_lifecycle_policy_rule
+                            WHERE tenant_id = ? AND policy_version_id = ?
+                            ORDER BY source_value
+                            """,
+                            (ruleRs, ruleRow) -> new SourceLifecyclePolicyVersion.Rule(
+                                    ruleRs.getString("source_value"),
+                                    io.wyrmgate.iam.identity.domain.IdentityLifecycleState.valueOf(
+                                            ruleRs.getString("target_lifecycle_state"))),
+                            tenant.tenantId(),
+                            policyId);
+                    return new SourceLifecyclePolicyVersion(
+                            policyId,
+                            rs.getObject("source_system_id", UUID.class),
+                            rs.getString("source_path"),
+                            rs.getLong("version_number"),
+                            rules,
+                            SourceLifecyclePolicyVersion.State.valueOf(rs.getString("state")),
+                            rs.getTimestamp("created_at").toInstant(),
+                            rs.getTimestamp("activated_at").toInstant(),
+                            instant(rs.getTimestamp("superseded_at")));
+                },
+                tenant.tenantId(),
+                sourceSystemId);
+        return policies.stream().findFirst();
     }
 
     private Optional<SourceRecord> querySourceRecord(String whereClause, Object... args) {
