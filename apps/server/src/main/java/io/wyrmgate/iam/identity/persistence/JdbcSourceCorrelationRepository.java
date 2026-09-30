@@ -189,7 +189,7 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
         UUID proposedId = idGenerator.nextId();
         jdbcTemplate.update(
                 """
-                INSERT INTO identity.source_record (
+                INSERT INTO identity.source_record AS current_record (
                     id, tenant_id, source_system_id, native_key, observed_attributes,
                     source_updated_at, first_observed_at, last_observed_at,
                     last_import_run_id, last_complete_import_run_id)
@@ -198,20 +198,20 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                 DO UPDATE SET
                     observed_attributes = CASE
                         WHEN EXCLUDED.source_updated_at IS NOT NULL
-                         AND identity.source_record.source_updated_at IS NOT NULL
-                         AND EXCLUDED.source_updated_at < identity.source_record.source_updated_at
-                            THEN identity.source_record.observed_attributes
+                         AND current_record.source_updated_at IS NOT NULL
+                         AND EXCLUDED.source_updated_at < current_record.source_updated_at
+                            THEN current_record.observed_attributes
                         ELSE EXCLUDED.observed_attributes
                     END,
                     source_updated_at = CASE
                         WHEN EXCLUDED.source_updated_at IS NOT NULL
-                         AND identity.source_record.source_updated_at IS NOT NULL
-                         AND EXCLUDED.source_updated_at < identity.source_record.source_updated_at
-                            THEN identity.source_record.source_updated_at
+                         AND current_record.source_updated_at IS NOT NULL
+                         AND EXCLUDED.source_updated_at < current_record.source_updated_at
+                            THEN current_record.source_updated_at
                         ELSE EXCLUDED.source_updated_at
                     END,
                     last_observed_at = GREATEST(
-                        identity.source_record.last_observed_at,
+                        current_record.last_observed_at,
                         EXCLUDED.last_observed_at),
                     last_import_run_id = EXCLUDED.last_import_run_id
                 """,
