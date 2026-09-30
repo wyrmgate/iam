@@ -17,6 +17,7 @@ public final class GovernanceLifecycleAccessApprovalService
     private final GovernancePolicyService policies;
     private final LifecycleAccessApprovalCandidateRepository candidates;
     private final ApprovalCaseStartService approvals;
+    private final ApprovalRepository approvalRepository;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
@@ -24,13 +25,33 @@ public final class GovernanceLifecycleAccessApprovalService
             GovernancePolicyService policies,
             LifecycleAccessApprovalCandidateRepository candidates,
             ApprovalCaseStartService approvals,
+            ApprovalRepository approvalRepository,
             IdGenerator ids,
             TransactionExecutor transactions) {
         this.policies=java.util.Objects.requireNonNull(policies);
         this.candidates=java.util.Objects.requireNonNull(candidates);
         this.approvals=java.util.Objects.requireNonNull(approvals);
+        this.approvalRepository=java.util.Objects.requireNonNull(approvalRepository);
         this.ids=java.util.Objects.requireNonNull(ids);
         this.transactions=java.util.Objects.requireNonNull(transactions);
+    }
+
+    @Override
+    public boolean currentApprovalSatisfied(
+            TenantContext tenant, UUID identityId, UUID lifecycleRuleId,
+            AccessAssignment.TargetKind targetKind, UUID targetId) {
+        var snapshot=policies.findActiveSnapshot(tenant,PolicyKind.ACCESS_REQUEST).orElse(null);
+        if(snapshot==null || snapshot.approvalStages().isEmpty()) return false;
+        PlanSpec plan=plan(snapshot);
+        String hash=ApprovalCaseStartService.contentHash(plan);
+        Candidate candidate=candidates.findByContext(
+                tenant,identityId,lifecycleRuleId,targetKind,targetId,
+                snapshot.version().id(),hash).orElse(null);
+        if(candidate==null) return false;
+        return approvalRepository.findLatestBySubject(
+                        tenant,SubjectKind.LIFECYCLE_ACCESS_CANDIDATE,candidate.id())
+                .map(c->c.state()==CaseState.APPROVED)
+                .orElse(false);
     }
 
     @Override
