@@ -222,8 +222,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
                         now))
                 .containsExactly("HR-SENSITIVE");
 
-        UUID globalRole = roleWithPermission(tenant, "canonical-attribute-value", "read", now.plusMillis(1));
-        grant(tenant, actor.id(), globalRole, "GLOBAL", null, null,
+        grant(tenant, actor.id(), roleId, "GLOBAL", null, null,
                 "ACTIVE", null, null, now.plusMillis(1));
         assertThat(authorization.authorizedClassificationKeys(
                         administrativeActor,
