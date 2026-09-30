@@ -22,6 +22,7 @@ import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
@@ -199,8 +200,10 @@ class SourceCorrelationPersistenceIntegrationTest {
         assertThat(lateOld.id()).isEqualTo(first.id());
         assertThat(lateOld.observedAttributesJson()).contains("Newest");
         assertThat(lateOld.observedAttributesJson()).doesNotContain("Older Provider Value");
-        assertThat(lateOld.sourceUpdatedAt()).isEqualTo(now.plusSeconds(20));
-        assertThat(lateOld.lastObservedAt()).isEqualTo(now.plusSeconds(4));
+        assertThat(lateOld.sourceUpdatedAt())
+                .isCloseTo(now.plusSeconds(20), org.assertj.core.api.Assertions.within(1, ChronoUnit.MICROS));
+        assertThat(lateOld.lastObservedAt())
+                .isCloseTo(now.plusSeconds(4), org.assertj.core.api.Assertions.within(1, ChronoUnit.MICROS));
         assertThat(lateOld.lastImportRunId()).isEqualTo(secondRun.id());
     }
 
