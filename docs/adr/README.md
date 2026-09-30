@@ -38,4 +38,4 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0028 Governance approval for lifecycle-policy privilege increases](0028-governance-approval-lifecycle-policy-privilege-increase.md)
 - [ADR-0029 Typed scalar equality for lifecycle-access policy predicates](0029-typed-scalar-lifecycle-policy-predicates.md)
 
-Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.4, which folds ADR-0017 through ADR-0021 into the formal baseline. A later accepted ADR may again amend that baseline between controlled document revisions and must be folded into the next formal revision.
+Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.5, which carries forward the prior baseline and folds ADR-0022 through ADR-0029 into the formal specification set. A later accepted ADR may again amend that baseline between controlled document revisions and must be folded into the next formal revision.
