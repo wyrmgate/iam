@@ -923,6 +923,12 @@ Migration V38 extends the Identity-owned source import model with an explicit ru
 
 `identity.source_absence_inference` is the Identity-owned durable process record keyed uniquely by tenant + SourceImportRun. It stores the selected policy version, frozen transition ceiling, `RUNNING|COMPLETED|SUPERSEDED|MANUAL_REQUIRED` process state, optimistic revision, candidate/transition counters and the paired `after_first_observed_at + after_source_record_id` keyset checkpoint. SourceRecord candidate scans use `(tenant_id, source_system_id, first_observed_at, id)`, are bounded, and re-read the current SourceRecord/link/Identity before destructive action. Lifecycle transition and process checkpoint/count update commit atomically so retry cannot undercount transitions and bypass the configured mass-Leaver ceiling.
 
+### LifecycleAccess policy persistence
+
+Migration V39 adds Access-owned immutable `access.lifecycle_access_policy_version` and typed child `access.lifecycle_access_policy_rule`. At most one policy version is ACTIVE per tenant. Rules carry a stable logical `rule_id`, bounded predicate shape (ALWAYS or exact canonical STRING/SINGLE key/value), typed ROLE/ENTITLEMENT target and no arbitrary JSON expression payload.
+
+`access.access_assignment` adds provenance kind `LIFECYCLE_POLICY_RULE`. Its provenance reference is the stable logical rule UUID. A partial unique index on tenant + Identity + rule UUID applies only to non-terminal policy assignments, allowing one current rule-owned intent while retaining terminal assignment history and permitting a later new assignment after a prior policy assignment becomes terminal.
+
 ### IdentityAccessReduction persistence
 
 `access.identity_access_reduction` is the Access-owned durable process record for lifecycle-driven privilege reduction. Its causal uniqueness is `(tenant_id, identity_id, source_identity_revision)`; the Identity ID is a semantic cross-capability reference rather than a database foreign key. The row stores the source lifecycle/revision and snapshot time, `RUNNING|COMPLETED` process state, optimistic revision, processed count, and an optional paired `after_created_at + after_assignment_id` continuation. The supporting AccessAssignment partial index is ordered by tenant, Identity, creation time and ID for bounded deterministic reduction pages over non-terminal assignments.
