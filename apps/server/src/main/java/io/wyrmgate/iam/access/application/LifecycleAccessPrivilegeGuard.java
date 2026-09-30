@@ -12,9 +12,12 @@ public interface LifecycleAccessPrivilegeGuard {
     Result evaluate(
             TenantContext tenant,
             UUID identityId,
+            UUID lifecycleRuleId,
             AccessAssignment.TargetKind targetKind,
             UUID targetId,
-            Instant at);
+            Instant at,
+            UUID correlationId,
+            UUID causationId);
 
     enum Decision {
         AUTHORIZE,
