@@ -21,6 +21,10 @@ public final class AdministrativePermissions {
             new AdministrativePermission("identity", "deactivate");
     public static final AdministrativePermission IDENTITY_DECOMMISSION =
             new AdministrativePermission("identity", "decommission");
+    public static final AdministrativePermission IDENTITY_MERGE =
+            new AdministrativePermission("identity", "merge");
+    public static final AdministrativePermission IDENTITY_SPLIT =
+            new AdministrativePermission("identity", "split");
 
     public static final AdministrativePermission PRINCIPAL_READ =
             new AdministrativePermission("principal", "read");

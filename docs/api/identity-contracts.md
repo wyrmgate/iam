@@ -124,6 +124,15 @@ The first Administration persistence/evaluator slice now supplies operation-time
 
 The authentication, trusted actor/tenant resolution, burn-once bootstrap, direct-grant evaluator, and Identity HTTP adapters now form one enforced chain. Collection operations require a grant that can authorize the collection; exact resource operations evaluate that resource ID. Relationship/ownership context, policy/assurance requirements and sensitive authorization-decision audit hooks are added as corresponding governed operations require them.
 
+## Identity merge and split
+
+ADR-0026 adds two explicit administrative correction operations to the Identity v1 control plane:
+
+- POST /identities/{identityId}:merge uses the path Identity as survivor and requires strong If-Match for its revision, an absorbedIdentityId plus absorbedRevision, a bounded reason, causal Idempotency-Key, and identity:merge authority on both Identities. The response is immutable merge-operation evidence; the absorbed Identity remains readable and becomes DECOMMISSIONED through normal lifecycle semantics.
+- POST /identities/{identityId}:split uses the path Identity as source and requires strong If-Match, a new display name, explicit bounded sourceRecordIds/principalIds selections, reason, causal idempotency and identity:split authority. It creates one same-type PENDING Identity and returns immutable split-operation evidence plus the new Identity ID.
+
+These operations move only Identity-owned current source correlation and Principal ownership. They never move or clone AccessAssignment/Governance authority. Source-link history, old Identity IDs and operation evidence remain preserved. Merge/split permissions are default-deny and are not included in INITIAL_TENANT_ADMIN.
+
 ## Principal administration boundary
 
 Principal is Identity-owned technical authority, not a provider observation record and not a synonym for Identity. Public registration accepts only `applicationTargetId` and `nativePrincipalKey`; the server fixes the initial public shape to uncorrelated `ACCOUNT` + `ACTIVE`. The API therefore cannot use registration to choose an Identity, force a lifecycle value, inject provider payload, or invent an arbitrary Principal kind.

@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.access.application;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
@@ -20,13 +21,14 @@ public final class DesiredStateProcessingService {
     private final JdbcOutboxRepository outbox;
     private final IdentityAccessReferenceQuery identityReferences;
     private final DesiredStateDerivationService derivation;
+    private final ObjectMapper json;
     private final Clock clock;
 
     public DesiredStateProcessingService(
             JdbcOutboxRepository outbox,
             IdentityAccessReferenceQuery identityReferences,
             DesiredStateDerivationService derivation) {
-        this(outbox, identityReferences, derivation, Clock.systemUTC());
+        this(outbox, identityReferences, derivation, new ObjectMapper(), Clock.systemUTC());
     }
 
     DesiredStateProcessingService(
@@ -34,10 +36,20 @@ public final class DesiredStateProcessingService {
             IdentityAccessReferenceQuery identityReferences,
             DesiredStateDerivationService derivation,
             Clock clock) {
+        this(outbox, identityReferences, derivation, new ObjectMapper(), clock);
+    }
+
+    DesiredStateProcessingService(
+            JdbcOutboxRepository outbox,
+            IdentityAccessReferenceQuery identityReferences,
+            DesiredStateDerivationService derivation,
+            ObjectMapper json,
+            Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.identityReferences = Objects.requireNonNull(
                 identityReferences, "identityReferences");
         this.derivation = Objects.requireNonNull(derivation, "derivation");
+        this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -62,6 +74,16 @@ public final class DesiredStateProcessingService {
                         item.tenant(), event.aggregateId());
                 if (principal.status()
                         == IdentityAccessReferenceQuery.Status.RESOLVED) {
+                    java.util.UUID previousIdentityId = previousIdentityId(
+                            event.payloadJson());
+                    if (previousIdentityId != null
+                            && !previousIdentityId.equals(principal.identityId())) {
+                        derivation.reconcileAnyForPrincipalChange(
+                                item.tenant(),
+                                previousIdentityId,
+                                principal.applicationTargetId(),
+                                clock.instant());
+                    }
                     derivation.reconcileAnyForPrincipalChange(
                             item.tenant(),
                             principal.identityId(),
@@ -84,5 +106,22 @@ public final class DesiredStateProcessingService {
             }
         }
         return processed;
+    }
+
+    private java.util.UUID previousIdentityId(String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) {
+            return null;
+        }
+        try {
+            var payload = json.readTree(payloadJson);
+            var node = payload.get("previousIdentityId");
+            if (node == null || !node.isTextual() || node.textValue().isBlank()) {
+                return null;
+            }
+            return java.util.UUID.fromString(node.textValue());
+        } catch (Exception invalid) {
+            throw new IllegalArgumentException(
+                    "invalid Principal access projection payload", invalid);
+        }
     }
 }

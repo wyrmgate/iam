@@ -14,6 +14,8 @@ import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQueryService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
+import io.wyrmgate.iam.identity.application.IdentityMergeSplitRepository;
+import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
 import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.IdentityQueryRepository;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
@@ -51,6 +53,13 @@ public class IdentityPersistenceConfiguration {
     @Bean
     IdentityRepository identityRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcIdentityRepository(jdbcTemplate);
+    }
+
+    @Bean
+    IdentityMergeSplitRepository identityMergeSplitRepository(
+            JdbcTemplate jdbcTemplate,
+            IdentityRepository identityRepository) {
+        return new JdbcIdentityMergeSplitRepository(jdbcTemplate, identityRepository);
     }
 
     @Bean
@@ -100,6 +109,27 @@ public class IdentityPersistenceConfiguration {
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
         return new IdentityCommandService(identityRepository, identityFactSink, idGenerator, transactionExecutor);
+    }
+
+    @Bean
+    IdentityMergeSplitService identityMergeSplitService(
+            IdentityMergeSplitRepository mergeSplitRepository,
+            IdentityRepository identityRepository,
+            SourceCorrelationRepository sourceCorrelationRepository,
+            SourceCorrelationFactSink sourceCorrelationFactSink,
+            PrincipalFactSink principalFactSink,
+            IdentityCommandService identityCommandService,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new IdentityMergeSplitService(
+                mergeSplitRepository,
+                identityRepository,
+                sourceCorrelationRepository,
+                sourceCorrelationFactSink,
+                principalFactSink,
+                identityCommandService,
+                idGenerator,
+                transactionExecutor);
     }
 
     @Bean

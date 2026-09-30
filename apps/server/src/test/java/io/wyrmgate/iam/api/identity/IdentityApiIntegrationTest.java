@@ -19,6 +19,7 @@ import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluator;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
+import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
@@ -27,8 +28,12 @@ import io.wyrmgate.iam.identity.domain.IdentityType;
 import io.wyrmgate.iam.identity.persistence.JdbcCanonicalAttributeReadRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcCanonicalAttributeRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcIdentityMergeSplitRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityQueryRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
+import io.wyrmgate.iam.identity.persistence.JdbcPrincipalFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcSourceCorrelationFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcSourceCorrelationRepository;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -111,7 +116,7 @@ class IdentityApiIntegrationTest {
                 new JdbcCanonicalAttributeReadRepository(jdbc),
                 evaluator);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("40");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("41");
     }
 
     @AfterAll
@@ -261,6 +266,104 @@ class IdentityApiIntegrationTest {
         authorized.perform(get("/api/v1/identities")
                         .requestAttr(ACTOR_ATTRIBUTE, actor)
                         .param("cursor", "not-a-valid-cursor"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_failed"));
+    }
+
+    @Test
+    void mergeApiIsIdempotentAndMergeSplitPermissionsAreDefaultDeny() throws Exception {
+        Instant now = Instant.parse("2026-09-16T10:45:00Z");
+        Identity survivor = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Survivor",
+                now,
+                ids.nextId(),
+                null);
+        Identity absorbed = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Absorbed",
+                now.plusSeconds(1),
+                ids.nextId(),
+                null);
+
+        String body = "{\"absorbedIdentityId\":\"" + absorbed.id()
+                + "\",\"absorbedRevision\":1,\"reason\":\"duplicate confirmed\"}";
+
+        String operationId = authorized.perform(
+                        post("/api/v1/identities/{identityId}:merge", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "merge-identity-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.survivorIdentityId").value(survivor.id().toString()))
+                .andExpect(jsonPath("$.absorbedIdentityId").value(absorbed.id().toString()))
+                .andExpect(jsonPath("$.movedLinkCount").value(0))
+                .andExpect(jsonPath("$.movedPrincipalCount").value(0))
+                .andReturn().getResponse().getContentAsString();
+
+        authorized.perform(
+                        post("/api/v1/identities/{identityId}:merge", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "merge-identity-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.survivorIdentityId").value(survivor.id().toString()));
+
+        assertThat(identities.findById(tenant, absorbed.id()).orElseThrow().lifecycleState())
+                .isEqualTo(IdentityLifecycleState.DECOMMISSIONED);
+        assertThat(operationId).contains(survivor.id().toString());
+
+        MockMvc updateOnly = mockMvc(
+                authorizationOnly(AdministrativePermissions.IDENTITY_UPDATE));
+        Identity other = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Other",
+                now.plusSeconds(2),
+                ids.nextId(),
+                null);
+        updateOnly.perform(
+                        post("/api/v1/identities/{identityId}:merge", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "merge-identity-0002")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"absorbedIdentityId\":\"" + other.id()
+                                        + "\",\"absorbedRevision\":1,\"reason\":\"test\"}"))
+                .andExpect(status().isForbidden());
+
+        updateOnly.perform(
+                        post("/api/v1/identities/{identityId}:split", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "split-identity-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"newDisplayName\":\"Split\","
+                                        + "\"sourceRecordIds\":[\"" + ids.nextId() + "\"],"
+                                        + "\"principalIds\":[],\"reason\":\"test\"}"))
+                .andExpect(status().isForbidden());
+
+        authorized.perform(
+                        post("/api/v1/identities/{identityId}:split", survivor.id())
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "split-identity-0002")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"newDisplayName\":\"Split\","
+                                        + "\"sourceRecordIds\":[],\"principalIds\":[],"
+                                        + "\"reason\":\"test\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("validation_failed"));
     }
@@ -488,7 +591,33 @@ class IdentityApiIntegrationTest {
     private MockMvc mockMvc(AdministrativeAuthorizationService authorization) {
         IdentityApiMutationService mutations = new IdentityApiMutationService(
                 authorization, commands, identities, idempotency, transactions);
-        IdentityController controller = new IdentityController(queries, mutations, authorization, ids, testCursorCodec());
+        var outbox = new JdbcOutboxRepository(jdbc);
+        var sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
+        var sourceFacts = new JdbcSourceCorrelationFactSink(outbox, ids);
+        var principalFacts = new JdbcPrincipalFactSink(outbox, ids);
+        var mergeSplitRepository = new JdbcIdentityMergeSplitRepository(jdbc, identities);
+        var mergeSplitService = new IdentityMergeSplitService(
+                mergeSplitRepository,
+                identities,
+                sourceRepository,
+                sourceFacts,
+                principalFacts,
+                commands,
+                ids,
+                transactions);
+        var mergeSplitMutations = new IdentityMergeSplitApiMutationService(
+                authorization,
+                mergeSplitService,
+                mergeSplitRepository,
+                idempotency,
+                transactions);
+        IdentityController controller = new IdentityController(
+                queries,
+                mutations,
+                mergeSplitMutations,
+                authorization,
+                ids,
+                testCursorCodec());
         return MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new IdentityApiErrorHandler(ids))
                 .build();

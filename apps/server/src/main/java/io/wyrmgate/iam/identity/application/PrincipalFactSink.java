@@ -23,4 +23,13 @@ public interface PrincipalFactSink {
             UUID correlationId,
             UUID causationId) {
     }
+
+    default void principalReassigned(
+            TenantContext tenant,
+            Principal principal,
+            UUID previousIdentityId,
+            UUID correlationId,
+            UUID causationId) {
+        principalCorrelated(tenant, principal, correlationId, causationId);
+    }
 }

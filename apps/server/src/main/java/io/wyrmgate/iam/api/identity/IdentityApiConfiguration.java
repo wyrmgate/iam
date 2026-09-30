@@ -3,6 +3,8 @@ package io.wyrmgate.iam.api.identity;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
+import io.wyrmgate.iam.identity.application.IdentityMergeSplitRepository;
+import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalRepository;
@@ -28,6 +30,17 @@ class IdentityApiConfiguration {
             TransactionExecutor transactions) {
         return new IdentityApiMutationService(
                 authorization, commands, identities, idempotency, transactions);
+    }
+
+    @Bean
+    IdentityMergeSplitApiMutationService identityMergeSplitApiMutationService(
+            AdministrativeAuthorizationService authorization,
+            IdentityMergeSplitService service,
+            IdentityMergeSplitRepository operations,
+            JdbcIdempotencyRepository idempotency,
+            TransactionExecutor transactions) {
+        return new IdentityMergeSplitApiMutationService(
+                authorization, service, operations, idempotency, transactions);
     }
 
     @Bean

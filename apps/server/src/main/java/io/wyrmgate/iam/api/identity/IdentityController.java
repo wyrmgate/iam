@@ -6,8 +6,10 @@ import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeAct
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.CanonicalAttributePage;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.CanonicalAttributeResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.IdentityMergeOperationResource;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.IdentityPage;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.IdentityResource;
+import io.wyrmgate.iam.api.identity.IdentityApiModels.IdentitySplitOperationResource;
 import io.wyrmgate.iam.api.identity.IdentityApiModels.ProfileResource;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributePagePosition;
@@ -22,8 +24,11 @@ import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -48,6 +53,7 @@ public class IdentityController {
 
     private final IdentityQueryService queries;
     private final IdentityApiMutationService mutations;
+    private final IdentityMergeSplitApiMutationService mergeSplitMutations;
     private final AdministrativeAuthorizationService authorization;
     private final IdGenerator ids;
     private final IdentityCursorCodec cursors;
@@ -55,11 +61,13 @@ public class IdentityController {
     public IdentityController(
             IdentityQueryService queries,
             IdentityApiMutationService mutations,
+            IdentityMergeSplitApiMutationService mergeSplitMutations,
             AdministrativeAuthorizationService authorization,
             IdGenerator ids,
             IdentityCursorCodec cursors) {
         this.queries = queries;
         this.mutations = mutations;
+        this.mergeSplitMutations = mergeSplitMutations;
         this.authorization = authorization;
         this.ids = ids;
         this.cursors = cursors;
@@ -158,6 +166,99 @@ public class IdentityController {
                 .body(resource(updated));
     }
 
+
+    @PostMapping("/{identityId}:merge")
+    public ResponseEntity<IdentityMergeOperationResource> merge(
+            @PathVariable UUID identityId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest request) {
+        UUID correlationId = IdentityApiRequestContext.resolveCorrelationId(request, ids);
+        long survivorRevision = parseIfMatch(ifMatch, correlationId);
+        String causalKey = validateIdempotencyKey(idempotencyKey, correlationId);
+        MergeRequest parsed = parseMerge(body, correlationId);
+        AuthenticatedAdministrativeActor actor =
+                ControlPlaneActorRequestContext.require(request);
+        Instant now = Instant.now();
+        RequestFingerprint fingerprint = RequestFingerprint.sha256(
+                mergeFingerprint(
+                                identityId,
+                                survivorRevision,
+                                parsed.absorbedIdentityId(),
+                                parsed.absorbedRevision(),
+                                parsed.reason())
+                        .getBytes(StandardCharsets.UTF_8));
+        var operation = mergeSplitMutations.merge(
+                actor,
+                identityId,
+                survivorRevision,
+                parsed.absorbedIdentityId(),
+                parsed.absorbedRevision(),
+                parsed.reason(),
+                causalKey,
+                fingerprint,
+                now,
+                correlationId);
+        return ResponseEntity.ok()
+                .header("X-Correlation-Id", correlationId.toString())
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(new IdentityMergeOperationResource(
+                        operation.id(),
+                        operation.survivorIdentityId(),
+                        operation.absorbedIdentityId(),
+                        operation.movedLinkCount(),
+                        operation.movedPrincipalCount(),
+                        operation.completedAt()));
+    }
+
+    @PostMapping("/{identityId}:split")
+    public ResponseEntity<IdentitySplitOperationResource> split(
+            @PathVariable UUID identityId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest request) {
+        UUID correlationId = IdentityApiRequestContext.resolveCorrelationId(request, ids);
+        long sourceRevision = parseIfMatch(ifMatch, correlationId);
+        String causalKey = validateIdempotencyKey(idempotencyKey, correlationId);
+        SplitRequest parsed = parseSplit(body, correlationId);
+        AuthenticatedAdministrativeActor actor =
+                ControlPlaneActorRequestContext.require(request);
+        Instant now = Instant.now();
+        RequestFingerprint fingerprint = RequestFingerprint.sha256(
+                splitFingerprint(
+                                identityId,
+                                sourceRevision,
+                                parsed.newDisplayName(),
+                                parsed.sourceRecordIds(),
+                                parsed.principalIds(),
+                                parsed.reason())
+                        .getBytes(StandardCharsets.UTF_8));
+        var operation = mergeSplitMutations.split(
+                actor,
+                identityId,
+                sourceRevision,
+                parsed.newDisplayName(),
+                parsed.sourceRecordIds(),
+                parsed.principalIds(),
+                parsed.reason(),
+                causalKey,
+                fingerprint,
+                now,
+                correlationId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .header("X-Correlation-Id", correlationId.toString())
+                .header(HttpHeaders.LOCATION, "/api/v1/identities/" + operation.newIdentityId())
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(new IdentitySplitOperationResource(
+                        operation.id(),
+                        operation.sourceIdentityId(),
+                        operation.newIdentityId(),
+                        operation.movedSourceRecordIds(),
+                        operation.movedPrincipalIds(),
+                        operation.completedAt()));
+    }
 
     @PostMapping("/{identityId}:activate")
     public ResponseEntity<IdentityResource> activate(
@@ -426,6 +527,131 @@ public class IdentityController {
         return new CreateRequest(type, lifecycleState, displayName);
     }
 
+    private static MergeRequest parseMerge(
+            Map<String, Object> body,
+            UUID correlationId) {
+        requireObject(body, correlationId);
+        requireExactFields(
+                body,
+                Set.of("absorbedIdentityId", "absorbedRevision", "reason"),
+                correlationId);
+        return new MergeRequest(
+                requireUuid(body, "absorbedIdentityId", correlationId),
+                requirePositiveLong(body, "absorbedRevision", correlationId),
+                requireReason(body, "reason", correlationId));
+    }
+
+    private static SplitRequest parseSplit(
+            Map<String, Object> body,
+            UUID correlationId) {
+        requireObject(body, correlationId);
+        requireExactFields(
+                body,
+                Set.of(
+                        "newDisplayName",
+                        "sourceRecordIds",
+                        "principalIds",
+                        "reason"),
+                correlationId);
+        List<UUID> sourceRecordIds =
+                requireUuidList(body, "sourceRecordIds", correlationId);
+        List<UUID> principalIds =
+                requireUuidList(body, "principalIds", correlationId);
+        if (sourceRecordIds.isEmpty() && principalIds.isEmpty()) {
+            throw IdentityApiException.validation(
+                    correlationId,
+                    "sourceRecordIds",
+                    "relationship_required",
+                    "split must move at least one SourceRecord link or Principal.");
+        }
+        return new SplitRequest(
+                requireDisplayName(
+                        Map.of("displayName", body.get("newDisplayName")),
+                        correlationId),
+                sourceRecordIds,
+                principalIds,
+                requireReason(body, "reason", correlationId));
+    }
+
+    private static UUID requireUuid(
+            Map<String, Object> body,
+            String field,
+            UUID correlationId) {
+        String text = requireText(body, field, correlationId);
+        try {
+            return UUID.fromString(text);
+        } catch (IllegalArgumentException invalid) {
+            throw IdentityApiException.validation(
+                    correlationId, field, "invalid_uuid", field + " must be a UUID.");
+        }
+    }
+
+    private static long requirePositiveLong(
+            Map<String, Object> body,
+            String field,
+            UUID correlationId) {
+        Object raw = body.get(field);
+        if (!(raw instanceof Number number)) {
+            throw IdentityApiException.validation(
+                    correlationId, field, "required_integer", field + " must be an integer.");
+        }
+        long value = number.longValue();
+        if (value < 1) {
+            throw IdentityApiException.validation(
+                    correlationId, field, "out_of_range", field + " must be positive.");
+        }
+        return value;
+    }
+
+    private static List<UUID> requireUuidList(
+            Map<String, Object> body,
+            String field,
+            UUID correlationId) {
+        Object raw = body.get(field);
+        if (!(raw instanceof List<?> list)) {
+            throw IdentityApiException.validation(
+                    correlationId, field, "required_array", field + " must be an array.");
+        }
+        if (list.size() > 200) {
+            throw IdentityApiException.validation(
+                    correlationId, field, "out_of_range", field + " supports at most 200 values.");
+        }
+        ArrayList<UUID> values = new ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof String text)) {
+                throw IdentityApiException.validation(
+                        correlationId, field, "invalid_uuid", field + " must contain UUID strings.");
+            }
+            try {
+                values.add(UUID.fromString(text));
+            } catch (IllegalArgumentException invalid) {
+                throw IdentityApiException.validation(
+                        correlationId, field, "invalid_uuid", field + " must contain UUID strings.");
+            }
+        }
+        if (new HashSet<>(values).size() != values.size()) {
+            throw IdentityApiException.validation(
+                    correlationId, field, "duplicate_value", field + " must not contain duplicates.");
+        }
+        values.sort(Comparator.comparing(UUID::toString));
+        return List.copyOf(values);
+    }
+
+    private static String requireReason(
+            Map<String, Object> body,
+            String field,
+            UUID correlationId) {
+        String reason = requireText(body, field, correlationId).trim();
+        if (reason.isBlank() || reason.length() > 1024) {
+            throw IdentityApiException.validation(
+                    correlationId,
+                    field,
+                    "invalid_value",
+                    field + " must be non-blank and at most 1024 characters.");
+        }
+        return reason;
+    }
+
     private static String parseUpdate(Map<String, Object> body, UUID correlationId) {
         requireObject(body, correlationId);
         requireExactFields(body, Set.of("displayName"), correlationId);
@@ -517,6 +743,38 @@ public class IdentityController {
         return "v1|" + part(identityId.toString()) + part(Long.toString(expectedRevision)) + part(displayName);
     }
 
+    private static String mergeFingerprint(
+            UUID survivorIdentityId,
+            long survivorRevision,
+            UUID absorbedIdentityId,
+            long absorbedRevision,
+            String reason) {
+        return "v1|"
+                + part(survivorIdentityId.toString())
+                + part(Long.toString(survivorRevision))
+                + part(absorbedIdentityId.toString())
+                + part(Long.toString(absorbedRevision))
+                + part(reason);
+    }
+
+    private static String splitFingerprint(
+            UUID sourceIdentityId,
+            long sourceRevision,
+            String newDisplayName,
+            List<UUID> sourceRecordIds,
+            List<UUID> principalIds,
+            String reason) {
+        return "v1|"
+                + part(sourceIdentityId.toString())
+                + part(Long.toString(sourceRevision))
+                + part(newDisplayName)
+                + part(sourceRecordIds.stream().map(UUID::toString)
+                        .collect(java.util.stream.Collectors.joining(",")))
+                + part(principalIds.stream().map(UUID::toString)
+                        .collect(java.util.stream.Collectors.joining(",")))
+                + part(reason);
+    }
+
     private static String lifecycleFingerprint(
             UUID identityId,
             IdentityLifecycleState targetState,
@@ -539,5 +797,18 @@ public class IdentityController {
             IdentityType type,
             IdentityLifecycleState lifecycleState,
             String displayName) {
+    }
+
+    private record MergeRequest(
+            UUID absorbedIdentityId,
+            long absorbedRevision,
+            String reason) {
+    }
+
+    private record SplitRequest(
+            String newDisplayName,
+            List<UUID> sourceRecordIds,
+            List<UUID> principalIds,
+            String reason) {
     }
 }

@@ -31,13 +31,15 @@ public final class JdbcPrincipalFactSink implements PrincipalFactSink {
                 PRINCIPAL_CORRELATED,
                 principal,
                 correlationId,
-                causationId);
+                causationId,
+                null);
         append(
                 tenant,
                 ACCESS_PROJECTION_INPUT_CHANGED,
                 principal,
                 correlationId,
-                causationId);
+                causationId,
+                null);
     }
 
     @Override
@@ -51,7 +53,31 @@ public final class JdbcPrincipalFactSink implements PrincipalFactSink {
                 ACCESS_PROJECTION_INPUT_CHANGED,
                 principal,
                 correlationId,
-                causationId);
+                causationId,
+                null);
+    }
+
+    @Override
+    public void principalReassigned(
+            TenantContext tenant,
+            Principal principal,
+            UUID previousIdentityId,
+            UUID correlationId,
+            UUID causationId) {
+        append(
+                tenant,
+                PRINCIPAL_CORRELATED,
+                principal,
+                correlationId,
+                causationId,
+                previousIdentityId);
+        append(
+                tenant,
+                ACCESS_PROJECTION_INPUT_CHANGED,
+                principal,
+                correlationId,
+                causationId,
+                previousIdentityId);
     }
 
     private void append(
@@ -59,10 +85,15 @@ public final class JdbcPrincipalFactSink implements PrincipalFactSink {
             String eventType,
             Principal principal,
             UUID correlationId,
-            UUID causationId) {
+            UUID causationId,
+            UUID previousIdentityId) {
         String payload = "{\"applicationTargetId\":\""
                 + principal.applicationTargetId()
-                + "\"}";
+                + "\""
+                + (previousIdentityId == null
+                        ? ""
+                        : ",\"previousIdentityId\":\"" + previousIdentityId + "\"")
+                + "}";
         outbox.append(
                 tenant,
                 new OutboxEvent(
