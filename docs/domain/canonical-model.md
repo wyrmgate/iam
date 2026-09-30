@@ -12,6 +12,8 @@ A canonical Identity may be represented by many `Principal` objects in external 
 
 Identity-source construction uses `SourceSystem`, `SourceRecord`, `IdentityLink`, attribute mapping, correlation and attribute-authority rules. Mapping, correlation and authority are separate concerns. Source records preserve what external sources reported and never become canonical state merely because they were imported.
 
+ADR-0022 adds the first positive source-driven construction policy. `SourceCorrelationPolicyVersion` is Identity-owned and immutable after activation. The first implementation uses one exact `STRING`/`SINGLE` governed canonical key, keeps an existing accepted `IdentityLink` sticky, refuses ambiguous matches, and may create a new Identity only when policy explicitly permits no-match creation. A source-created Identity begins `PENDING`, so source arrival alone never creates access-eligible authority. Historical source-derived candidates remain provenance after explicit relinking but are current resolution inputs only while their SourceRecord is actively accepted to that Identity.
+
 ## Organization and relationships
 
 `Organization` is business/governance structure, not tenant isolation. Identity-to-organization relationships are typed and temporal; a single `organizationId` attribute is insufficient to model legal employer, business unit, department, project or other relationships.
