@@ -76,7 +76,7 @@ class EffectiveAccessProcessingIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("38");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("39");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
