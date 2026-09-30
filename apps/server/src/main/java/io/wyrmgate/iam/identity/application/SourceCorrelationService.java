@@ -166,7 +166,7 @@ public final class SourceCorrelationService {
                     causationId,
                     idGenerator.nextId());
             if (replacement.changed()) {
-                facts.identityLinkAccepted(tenant, replacement.link());
+                facts.identityLinkAccepted(tenant, replacement.link(), replacement.previousIdentityId());
             }
             return replacement.link();
         });
