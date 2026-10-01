@@ -951,3 +951,10 @@ Flyway V48 adds `administration.administrative_delegation` as distinct Administr
 
 Delegation authority is source-dependent by semantics: persistence does not copy it into an independent direct grant. Operation-time evaluation re-reads the current direct source and therefore source revocation/expiry/loss of delegability ends delegated authority immediately even when the delegation row still records ACTIVE for historical/process purposes.
 
+
+
+## V50 administrative break-glass
+
+Flyway V50 adds Administration-owned `administrative_break_glass_operation` and `administrative_break_glass_obligation` tables. Operation rows carry tenant-safe Role ownership, typed scope columns, finite validity, strong-assurance evidence metadata, lifecycle/revision, revocation evidence and correlation/causation. Reason and incident/reference remain Administration evidence and are not copied into AuditRecord payloads.
+
+Each operation has at most one durable obligation of each typed kind through the tenant + operation + obligation-type uniqueness constraint. Current obligation kinds are SECURITY_NOTIFICATION and POST_USE_REVIEW. Their PENDING/COMPLETED state is operational evidence only and has no authority semantics. Indexes support actor/state validity evaluation, Role/state lookup and bounded pending-obligation work.
