@@ -204,9 +204,19 @@ Destructive absence inference requires a complete trustworthy run and connector/
 
 ## Administrative authorization
 
-Administrative grants/delegations are checked at operation time against state, ValidityWindow, actor identity state, scope, policy and required authentication assurance. An authenticated session does not extend an expired grant.
+Administrative grants/delegations/elevations/break-glass authority are checked at operation time against authoritative state, semantic time validity, governed actor Identity state, typed scope, current Role permissions, policy and required authentication assurance. An authenticated session or delayed scheduler never extends expired authority.
 
-Delegation stops being effective when the delegator loses the delegated authority. Administration-role editing/granting cannot be used to self-escalate beyond the actor's grantable authority. Self-approval of administrative elevation is denied by default.
+A direct AdministrativeGrant may explicitly be grantable and/or delegable. Creating privilege-increasing direct authority requires `administration:manage-authorization` plus one current effective grantable direct basis that contains the complete target permission set, scope, validity and propagated grant/delegation rights. The first slice does not union multiple bases.
+
+AdministrativeDelegation is single-hop in the first slice. It references one direct source AdministrativeGrant, uses the same AdministrativeRole, may only narrow scope/time and is finite. Delegation stops being effective immediately when the source grant is revoked/expired/no longer delegable or no longer contains the delegated authority. Delegated authority cannot itself be delegated.
+
+Scope containment fails closed: GLOBAL may contain supported narrower scopes; SPECIFIC_RESOURCE and CANONICAL_ATTRIBUTE_CLASSIFICATION use exact containment; other modeled scope types require explicit owning-capability containment semantics before they may participate in grant/delegation creation.
+
+AdministrativeRole permission addition is a privilege increase for every current grant/delegation referencing that Role. The prospective edit must satisfy the actor's grantability ceiling for every affected authority; otherwise the whole edit is denied. Permission removal is authority reduction and does not require the privilege-increase ceiling check.
+
+AdministrativeElevation is an explicit finite Administration process/authority source rather than a long-lived grant shortcut. Governance ApprovalCase, when required, is immutable approval evidence only. Self-approval by the elevation beneficiary/initiator is denied by default. Final application revalidates current grantable basis, role/scope/time, governed actor eligibility, approval fingerprint/result and required assurance; stale approval/context cannot authorize current elevation.
+
+AdministrativeBreakGlassOperation is distinct from ordinary elevation and GLOBAL grants. Effective emergency authority requires short finite validity, strong provider-neutral authentication assurance, reason/incident evidence and current governed actor eligibility. Notification and post-use review are durable obligations but do not extend authority; expiry/revocation takes effect semantically before asynchronous cleanup/review work.
 
 ## Structural/cardinality highlights
 
