@@ -1,0 +1,57 @@
+name: Actions Retention
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report deletions without removing workflow runs
+        required: true
+        type: boolean
+        default: true
+      branch:
+        description: Optional non-default branch to clean immediately
+        required: false
+        type: string
+      stale_days:
+        description: Age threshold for scheduled stale-branch cleanup
+        required: true
+        type: number
+        default: 7
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: actions-retention
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: cleanup-obsolete-runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      REPOSITORY_OWNER: ${{ github.repository_owner }}
+      EVENT_NAME: ${{ github.event_name }}
+      PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+      DRY_RUN_INPUT: ${{ inputs.dry_run }}
+      MANUAL_BRANCH: ${{ inputs.branch }}
+      STALE_DAYS_INPUT: ${{ inputs.stale_days }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Apply workflow-run retention
+        shell: bash
+        run: bash scripts/ci/actions-retention.sh
