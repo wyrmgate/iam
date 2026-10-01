@@ -197,6 +197,59 @@ class AdministrativeElevationPersistenceIntegrationTest {
     }
 
     @Test
+    void pendingRejectedAndExcessiveElevationNeverAuthorize() {
+        Instant now = Instant.parse("2026-10-01T10:30:00Z");
+        TenantContext tenant = tenant("Elevation negative");
+        Admin admin = bootstrapAdmin(tenant, now);
+        Identity beneficiary = identity(tenant, IdentityLifecycleState.ACTIVE, now.plusSeconds(1));
+        Identity reviewer = identity(tenant, IdentityLifecycleState.ACTIVE, now.plusSeconds(1));
+        approver.set(reviewer.id());
+
+        var role = authority.createRole(
+                admin.actor(), "negative-reader", "Negative Reader",
+                Set.of(AdministrativePermissions.IDENTITY_READ), now.plusSeconds(2));
+        var elevation = elevations.request(
+                admin.actor(), beneficiary.id(), role.id(), AdministrativeScope.global(),
+                null, now.plusSeconds(60), admin.rootGrantId(), null, null, now.plusSeconds(3));
+        var pending = elevations.requestApproval(
+                admin.actor(), elevation.id(), elevation.revision(), now.plusSeconds(4));
+        var beneficiaryActor = new AuthenticatedAdministrativeActor(tenant, beneficiary.id());
+
+        assertThat(authorization.authorize(
+                        beneficiaryActor,
+                        AdministrativePermissions.IDENTITY_READ,
+                        io.wyrmgate.iam.administration.application.AdministrativeResource.collection("identity"),
+                        now.plusSeconds(5)).allowed())
+                .isFalse();
+
+        approvalCommands.decide(
+                tenant, pending.approvalCaseId(), reviewer.id(), DecisionValue.REJECT,
+                "not approved", 1, now.plusSeconds(6));
+        var denied = elevations.apply(
+                admin.actor(), pending.id(), pending.revision(), now.plusSeconds(7));
+        assertThat(denied.state().name()).isEqualTo("DENIED");
+        assertThat(authorization.authorize(
+                        beneficiaryActor,
+                        AdministrativePermissions.IDENTITY_READ,
+                        io.wyrmgate.iam.administration.application.AdministrativeResource.collection("identity"),
+                        now.plusSeconds(8)).allowed())
+                .isFalse();
+
+        var excessiveRole = authority.createRole(
+                admin.actor(), "forbidden-elevation", "Forbidden Elevation",
+                Set.of(new io.wyrmgate.iam.administration.domain.AdministrativePermission(
+                        "catalog", "update")),
+                now.plusSeconds(9));
+        assertThatThrownBy(() -> elevations.request(
+                        admin.actor(), beneficiary.id(), excessiveRole.id(),
+                        AdministrativeScope.global(), null, now.plusSeconds(90),
+                        admin.rootGrantId(), null, null, now.plusSeconds(10)))
+                .isInstanceOf(io.wyrmgate.iam.administration.application.AdministrativeAuthorityException.class)
+                .extracting(e -> ((io.wyrmgate.iam.administration.application.AdministrativeAuthorityException) e).code())
+                .isEqualTo("elevation_ceiling_exceeded");
+    }
+
+    @Test
     void beneficiarySelfApprovalAndStaleApprovedContextFailClosed() {
         Instant now = Instant.parse("2026-10-01T11:00:00Z");
         TenantContext tenant = tenant("Elevation self approval");
