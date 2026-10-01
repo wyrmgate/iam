@@ -55,12 +55,32 @@ public final class AdministrativeBreakGlassService {
             UUID correlationId,
             UUID causationId,
             Instant now) {
+        return activate(
+                ids.nextId(), actor, roleId, scope, validUntil, reason, incidentReference,
+                correlationId, causationId, now);
+    }
+
+    /**
+     * Activation variant for replay-safe transport adapters that must preselect a stable operation ID.
+     * Domain/security validation is identical to the ordinary activation path.
+     */
+    public AdministrativeBreakGlassOperation activate(
+            UUID operationId,
+            AuthenticatedAdministrativeActor actor,
+            UUID roleId,
+            AdministrativeScope scope,
+            Instant validUntil,
+            String reason,
+            String incidentReference,
+            UUID correlationId,
+            UUID causationId,
+            Instant now) {
+        Objects.requireNonNull(operationId, "operationId");
         Objects.requireNonNull(actor, "actor");
         Objects.requireNonNull(roleId, "roleId");
         Objects.requireNonNull(scope, "scope");
         Objects.requireNonNull(validUntil, "validUntil");
         Objects.requireNonNull(now, "now");
-        UUID operationId = ids.nextId();
         try {
             AdministrativeBreakGlassOperation result = activateAuthoritative(
                     operationId,
