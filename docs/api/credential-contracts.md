@@ -35,6 +35,8 @@ There is no public arbitrary lifecycle/status patch. There is no public manual a
 
 There are no public operations that advance CREATING_REPLACEMENT, DISTRIBUTING, VERIFYING, CUTOVER_COMPLETE, REVOKING_OLD or failure process steps. Those states exist so later typed SecretProvider/Integration execution can resume safely. Exposing manual process-state mutation now would pretend deferred provider work had occurred.
 
+Public Credential create, revoke, compromise and rotate attempts append data-minimized ADR-0031 AuditRecord evidence after the authoritative transaction commits or rolls back. Audit retains only the governed actor, semantic action, target Credential when one is known, normalized SUCCESS/DENIED/FAILURE outcome and request correlation ID. Create denial/failure before a Credential exists uses no resource ID. SecretReference provider/key metadata, Principal IDs, request bodies, rotation checkpoints and exception/provider detail are not copied into AuditRecord. Audit persistence failure is operationally logged and never rewrites the Credential business outcome.
+
 ## Principal boundary
 
 Credential creation validates the referenced Principal through the Identity-owned semantic Principal query. Credential does not read or mutate Identity persistence and V32 deliberately has no cross-capability database foreign key to identity.principal.
