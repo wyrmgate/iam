@@ -49,6 +49,8 @@ The v0.2 controlled package does not define profile-specific business fields, so
 
 Tenant is not a writable resource attribute. Tenant/isolation context is resolved from authenticated control-plane context before normal authorization.
 
+Public Identity create and display-name update attempts append data-minimized ADR-0031 AuditRecord evidence after the Identity authoritative transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target Identity when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Display names, Identity type/profile payloads, canonical attributes, source/provider data, request bodies, and exception detail are excluded. Idempotent replay remains a distinct authenticated operation attempt for audit purposes, and Audit persistence failure is logged operationally without rewriting the Identity business outcome.
+
 ## Concurrency and idempotency
 
 Mutable authoritative resources use semantic revision concurrency.
