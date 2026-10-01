@@ -10,6 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationService;
 import io.wyrmgate.iam.governance.application.AccessRequestApprovalResultSink;
 import io.wyrmgate.iam.governance.application.AccessRequestCommandService;
@@ -79,6 +82,8 @@ class GovernanceApiIntegrationTest {
     private AuthenticatedAdministrativeActor approver;
     private JdbcAccessRequestRepository requests;
     private JdbcApprovalRepository approvalRepository;
+    private AccessRequestCommandService requestCommands;
+    private ApprovalCommandService approvalCommands;
     private ApprovalQueryService approvalQueries;
     private AccessRequestEvaluationProcessingService evaluator;
     private MockMvc mvc;
@@ -126,6 +131,7 @@ class GovernanceApiIntegrationTest {
                     governance.request_item,
                     governance.access_request,
                     governance.approval_case,
+                    audit.audit_record,
                     platform.idempotency_record,
                     platform.outbox_event,
                     platform.tenant
@@ -151,7 +157,7 @@ class GovernanceApiIntegrationTest {
         var authorizedSink =
                 new JdbcAuthorizedAccessIntentSink(
                         outbox, ids);
-        var approvals = new ApprovalCommandService(
+        approvalCommands = new ApprovalCommandService(
                 approvalRepository,
                 new AccessRequestApprovalResultSink(
                         requests,
@@ -162,7 +168,7 @@ class GovernanceApiIntegrationTest {
                 new ApprovalQueryService(
                         approvalRepository);
 
-        AccessRequestCommandService requestCommands =
+        requestCommands =
                 new AccessRequestCommandService(
                         requests,
                         (requestedTenant, request, item) ->
@@ -172,7 +178,7 @@ class GovernanceApiIntegrationTest {
                                                         DecisionMode.ANY_ONE,
                                                         List.of(
                                                                 approverId))))),
-                        approvals,
+                        approvalCommands,
                         new JdbcSubmittedRequestItemSink(
                                 outbox, ids),
                         authorizedSink,
@@ -184,26 +190,11 @@ class GovernanceApiIntegrationTest {
                         requests,
                         requestCommands);
 
-        GovernanceApiMutationService mutations =
-                new GovernanceApiMutationService(
-                        requestCommands,
-                        requests,
-                        approvals,
-                        approvalQueries,
-                        idempotency,
-                        transactions);
-        GovernanceController controller =
-                new GovernanceController(
-                        requests,
-                        approvalQueries,
-                        mutations,
-                        ids,
-                        cursorCodec());
-        mvc = MockMvcBuilders
-                .standaloneSetup(controller)
-                .setControllerAdvice(
-                        new GovernanceApiErrorHandler(ids))
-                .build();
+        mvc = mockMvc(
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
     }
 
     @Test
@@ -439,6 +430,83 @@ class GovernanceApiIntegrationTest {
                 .andExpect(
                         jsonPath("$.code")
                                 .value("stale_revision"));
+
+        Integer requestCreateSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'access-request:create'
+                  AND resource_type = 'access-request'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                requesterId,
+                requestId);
+        assertThat(requestCreateSuccess).isEqualTo(2);
+
+        Integer requestSubmitSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'access-request:submit'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                requesterId,
+                requestId);
+        assertThat(requestSubmitSuccess).isEqualTo(1);
+
+        Integer approvalSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'approval:approve'
+                  AND resource_type = 'approval-case'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                approverId,
+                item.approvalCaseId());
+        assertThat(approvalSuccess).isEqualTo(2);
+
+        Integer staleSubmitFailure = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND action_type = 'access-request:submit'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                requestId);
+        assertThat(staleSubmitFailure).isEqualTo(1);
+
+        Integer materializedPayloads = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND resource_type IN ('access-request', 'approval-case')
+                  AND (material_snapshot IS NOT NULL
+                       OR integrity_metadata IS NOT NULL)
+                """,
+                Integer.class,
+                tenant.tenantId());
+        assertThat(materializedPayloads).isZero();
     }
 
     @Test
@@ -529,6 +597,132 @@ class GovernanceApiIntegrationTest {
                         jsonPath("$.code")
                                 .value(
                                         "approval_actor_not_approver"));
+
+        mvc.perform(
+                        post("/api/v1/governance/approvals/{id}/reject",
+                                secondCase)
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        approver)
+                                .header(
+                                        "If-Match",
+                                        "\"rev-1\"")
+                                .header(
+                                        "Idempotency-Key",
+                                        "approver-reject-0001")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"not appropriate\"}"))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.state")
+                                .value("REJECTED"));
+
+        Integer deniedCreate = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'access-request:create'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                requesterId);
+        assertThat(deniedCreate).isEqualTo(1);
+
+        Integer deniedReject = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'approval:reject'
+                  AND resource_id = ?
+                  AND outcome = 'DENIED'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                outsider.identityId(),
+                secondCase);
+        assertThat(deniedReject).isEqualTo(1);
+
+        Integer successfulReject = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'approval:reject'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                approverId,
+                secondCase);
+        assertThat(successfulReject).isEqualTo(1);
+    }
+
+    @Test
+    void auditFailureDoesNotRewriteSuccessfulRequestOutcome()
+            throws Exception {
+        SecurityAuditPort unavailableAudit =
+                (requestedTenant, draft) -> {
+                    throw new IllegalStateException(
+                            "audit unavailable");
+                };
+        MockMvc unavailable = mockMvc(unavailableAudit);
+
+        String location = unavailable.perform(
+                        post("/api/v1/governance/access-requests")
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        requester)
+                                .header(
+                                        "Idempotency-Key",
+                                        "governance-audit-unavailable")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content(requestBody(
+                                        requesterId,
+                                        ids.nextId())))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+
+        UUID requestId = UUID.fromString(
+                location.substring(location.lastIndexOf('/') + 1));
+        assertThat(requests.findRequest(tenant, requestId))
+                .isPresent();
+    }
+
+    private MockMvc mockMvc(SecurityAuditPort audit) {
+        GovernanceApiMutationService mutations =
+                new GovernanceApiMutationService(
+                        requestCommands,
+                        requests,
+                        approvalCommands,
+                        approvalQueries,
+                        idempotency,
+                        transactions,
+                        audit,
+                        ids);
+        GovernanceController controller =
+                new GovernanceController(
+                        requests,
+                        approvalQueries,
+                        mutations,
+                        ids,
+                        cursorCodec());
+        return MockMvcBuilders
+                .standaloneSetup(controller)
+                .setControllerAdvice(
+                        new GovernanceApiErrorHandler(ids))
+                .build();
     }
 
     private UUID createPendingRequest(
