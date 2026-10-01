@@ -6,7 +6,9 @@ import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogRepository;
 import io.wyrmgate.iam.catalog.application.RoleCommandService;
 import io.wyrmgate.iam.catalog.application.RoleRepository;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
@@ -27,9 +29,17 @@ class CatalogApiConfiguration {
             CatalogCommandService commands,
             CatalogRepository repository,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new CatalogApiMutationService(
-                authorization, commands, repository, idempotency, transactions);
+                authorization,
+                commands,
+                repository,
+                idempotency,
+                transactions,
+                audit,
+                ids);
     }
 
     @Bean
