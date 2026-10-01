@@ -5,6 +5,8 @@ import io.wyrmgate.iam.integration.application.IntegrationAdministrationCommandS
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import org.springframework.context.annotation.Bean;
@@ -21,9 +23,11 @@ class IntegrationAdminApiConfiguration {
             IntegrationEntitlementMappingService mappingCommands,
             IntegrationEntitlementMappingRepository mappings,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new IntegrationAdminApiMutationService(
                 authorization,commands,repository,mappingCommands,mappings,
-                idempotency,transactions);
+                idempotency,transactions,audit,ids);
     }
 }
