@@ -346,11 +346,13 @@ public final class AdministrativeAuthorityService {
             return false;
         }
 
-        Instant effectiveTargetStart =
-                targetValidFrom == null || targetValidFrom.isBefore(now) ? now : targetValidFrom;
-        if (basis.validFrom() != null && effectiveTargetStart.isBefore(basis.validFrom())) {
+        if (basis.validFrom() != null
+                && targetValidFrom != null
+                && targetValidFrom.isBefore(basis.validFrom())) {
             return false;
         }
+        Instant effectiveTargetStart =
+                targetValidFrom == null || targetValidFrom.isBefore(now) ? now : targetValidFrom;
         if (basis.validUntil() != null) {
             if (targetValidUntil == null || targetValidUntil.isAfter(basis.validUntil())) {
                 return false;
