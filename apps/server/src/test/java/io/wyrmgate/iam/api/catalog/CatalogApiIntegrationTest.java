@@ -365,9 +365,12 @@ class CatalogApiIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("audit-safe"));
 
-        assertThat(queries.listApplications(
-                        tenant, null, null, 50).items())
-                .anyMatch(application -> application.code().equals("audit-safe"));
+        Integer persisted = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM catalog.application
+                WHERE tenant_id = ? AND code = 'audit-safe'
+                """, Integer.class, tenant.tenantId());
+        assertThat(persisted).isEqualTo(1);
     }
 
     private MockMvc mockMvc(AdministrativeAuthorizationService authorization) {
