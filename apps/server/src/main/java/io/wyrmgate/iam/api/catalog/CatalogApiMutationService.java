@@ -10,6 +10,10 @@ import io.wyrmgate.iam.catalog.application.CatalogRepository;
 import io.wyrmgate.iam.catalog.domain.Application;
 import io.wyrmgate.iam.catalog.domain.ApplicationTarget;
 import io.wyrmgate.iam.catalog.domain.Entitlement;
+import io.wyrmgate.iam.audit.application.AuditRecordDraft;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registration;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
@@ -18,27 +22,39 @@ import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class CatalogApiMutationService {
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(CatalogApiMutationService.class);
 
     private final AdministrativeAuthorizationService authorization;
     private final CatalogCommandService commands;
     private final CatalogRepository repository;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
+    private final SecurityAuditPort audit;
+    private final IdGenerator ids;
 
     CatalogApiMutationService(
             AdministrativeAuthorizationService authorization,
             CatalogCommandService commands,
             CatalogRepository repository,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         this.authorization = Objects.requireNonNull(authorization, "authorization");
         this.commands = Objects.requireNonNull(commands, "commands");
         this.repository = Objects.requireNonNull(repository, "repository");
         this.idempotency = Objects.requireNonNull(idempotency, "idempotency");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     Application createApplication(
@@ -49,7 +65,14 @@ final class CatalogApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "application",
+                null,
+                "application:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.APPLICATION_CREATE,
                     AdministrativeResource.collection("application"), now, correlationId);
             Registration registration = register(
@@ -61,7 +84,8 @@ final class CatalogApiMutationService {
             complete(actor, "api.catalog.application.create.v1", key, fingerprint,
                     "application", created.id(), now);
             return created;
-        });
+        }),
+                Application::id);
     }
 
     Application renameApplication(
@@ -73,7 +97,14 @@ final class CatalogApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "application",
+                id,
+                "application:rename",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.APPLICATION_UPDATE,
                     new AdministrativeResource("application", id), now, correlationId);
             ensureApplication(actor, id, correlationId);
@@ -87,7 +118,8 @@ final class CatalogApiMutationService {
             complete(actor, "api.catalog.application.rename.v1", key, fingerprint,
                     "application", updated.id(), now);
             return updated;
-        });
+        }),
+                Application::id);
     }
 
     Application retireApplication(
@@ -98,7 +130,14 @@ final class CatalogApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "application",
+                id,
+                "application:retire",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.APPLICATION_RETIRE,
                     new AdministrativeResource("application", id), now, correlationId);
             ensureApplication(actor, id, correlationId);
@@ -112,7 +151,8 @@ final class CatalogApiMutationService {
             complete(actor, "api.catalog.application.retire.v1", key, fingerprint,
                     "application", retired.id(), now);
             return retired;
-        });
+        }),
+                Application::id);
     }
 
     ApplicationTarget createTarget(
@@ -123,7 +163,14 @@ final class CatalogApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "application-target",
+                null,
+                "application-target:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.APPLICATION_TARGET_CREATE,
                     AdministrativeResource.collection("application-target"), now, correlationId);
             ensureApplication(actor, applicationId, correlationId);
@@ -137,7 +184,8 @@ final class CatalogApiMutationService {
             complete(actor, "api.catalog.target.create.v1", key, fingerprint,
                     "application-target", created.id(), now);
             return created;
-        });
+        }),
+                ApplicationTarget::id);
     }
 
     ApplicationTarget retireTarget(
@@ -148,7 +196,14 @@ final class CatalogApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "application-target",
+                id,
+                "application-target:retire",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.APPLICATION_TARGET_RETIRE,
                     new AdministrativeResource("application-target", id), now, correlationId);
             ensureTarget(actor, id, correlationId);
@@ -162,7 +217,8 @@ final class CatalogApiMutationService {
             complete(actor, "api.catalog.target.retire.v1", key, fingerprint,
                     "application-target", retired.id(), now);
             return retired;
-        });
+        }),
+                ApplicationTarget::id);
     }
 
     Entitlement createEntitlement(
@@ -176,7 +232,14 @@ final class CatalogApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "entitlement",
+                null,
+                "entitlement:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.ENTITLEMENT_CREATE,
                     AdministrativeResource.collection("entitlement"), now, correlationId);
             ensureApplication(actor, applicationId, correlationId);
@@ -190,7 +253,8 @@ final class CatalogApiMutationService {
             complete(actor, "api.catalog.entitlement.create.v1", key, fingerprint,
                     "entitlement", created.id(), now);
             return created;
-        });
+        }),
+                Entitlement::id);
     }
 
     Entitlement retireEntitlement(
@@ -201,7 +265,14 @@ final class CatalogApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "entitlement",
+                id,
+                "entitlement:retire",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.ENTITLEMENT_RETIRE,
                     new AdministrativeResource("entitlement", id), now, correlationId);
             ensureEntitlement(actor, id, correlationId);
@@ -215,7 +286,79 @@ final class CatalogApiMutationService {
             complete(actor, "api.catalog.entitlement.retire.v1", key, fingerprint,
                     "entitlement", retired.id(), now);
             return retired;
-        });
+        }),
+                Entitlement::id);
+    }
+
+
+    private <T> T audited(
+            AuthenticatedAdministrativeActor actor,
+            String resourceType,
+            UUID resourceId,
+            String actionType,
+            Instant now,
+            UUID correlationId,
+            Supplier<T> operation,
+            Function<T, UUID> resultId) {
+        try {
+            T result = operation.get();
+            recordOutcome(
+                    actor,
+                    resourceType,
+                    resourceId != null ? resourceId : resultId.apply(result),
+                    actionType,
+                    AuditOutcome.SUCCESS,
+                    now,
+                    correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
+                    actor,
+                    resourceType,
+                    resourceId,
+                    actionType,
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
+    }
+
+    private static AuditOutcome auditOutcome(RuntimeException failure) {
+        return failure instanceof CatalogApiException api
+                        && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                ? AuditOutcome.DENIED
+                : AuditOutcome.FAILURE;
+    }
+
+    private void recordOutcome(
+            AuthenticatedAdministrativeActor actor,
+            String resourceType,
+            UUID resourceId,
+            String actionType,
+            AuditOutcome outcome,
+            Instant occurredAt,
+            UUID correlationId) {
+        try {
+            audit.append(
+                    actor.tenant(),
+                    new AuditRecordDraft(
+                            ids.nextId(),
+                            occurredAt,
+                            actor.identityId(),
+                            actionType,
+                            resourceType,
+                            resourceId,
+                            outcome,
+                            correlationId,
+                            null));
+        } catch (RuntimeException auditFailure) {
+            LOG.warn(
+                    "Catalog AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    correlationId,
+                    actionType,
+                    outcome);
+        }
     }
 
     private Registration register(
