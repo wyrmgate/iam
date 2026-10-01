@@ -71,9 +71,9 @@ Observed state never silently overwrites governed desired state.
 
 ## Administration
 
-`AdministrativeRole`, `AdministrativePermission`, `AdministrativeGrant`, `AdministrativeScope`, and `AdministrativeDelegation` govern permission to operate IAM itself. ADR-0032 additionally defines `AdministrativeElevation` and `AdministrativeBreakGlassOperation` as distinct Administration-owned temporary/emergency authority processes. These concepts remain distinct from normal IAM roles, entitlements, access assignments and Governance approval evidence.
+`AdministrativeRole`, `AdministrativePermission`, `AdministrativeGrant`, `AdministrativeScope`, `AdministrativeDelegation`, and the implemented `AdministrativeElevation` process govern permission to operate IAM itself. ADR-0032 additionally defines `AdministrativeBreakGlassOperation` as a distinct Administration-owned emergency authority process. These concepts remain distinct from normal IAM roles, entitlements, access assignments and Governance approval evidence.
 
-A direct AdministrativeGrant is standing authority and explicitly records whether its bounded authority is grantable and/or delegable. `administration:manage-authorization` authorizes management operations but does not itself create a grantability ceiling. The first delegation model is single-hop and references one direct source grant; it remains effective only while that source still contains the delegated role/scope/time authority. Temporary elevation uses one current grantable direct basis and revalidates current authority/approval context before activation. Break-glass is never inferred from a GLOBAL grant and requires strong provider-neutral assurance, short finite validity, reason/incident evidence, durable notification work and post-use review.
+A direct AdministrativeGrant is standing authority and explicitly records whether its bounded authority is grantable and/or delegable. `administration:manage-authorization` authorizes management operations but does not itself create a grantability ceiling. The first delegation model is single-hop and references one direct source grant; it remains effective only while that source still contains the delegated role/scope/time authority. Temporary elevation uses one current grantable direct basis and revalidates current authority/approval context before activation. Its stored request fingerprint binds the material direct-basis and basis/target Role revisions/permission sets, scope, validity, initiator and beneficiary; Governance ApprovalCase is referenced evidence rather than Administration authority. Only ACTIVE and semantically time-effective elevation contributes authority. Break-glass is never inferred from a GLOBAL grant and requires strong provider-neutral assurance, short finite validity, reason/incident evidence, durable notification work and post-use review.
 
 ## Audit and evidence
 
@@ -92,7 +92,7 @@ ADR-0031 implements the first Audit-owned runtime foundation. `AuditRecord` is i
 
 ### Authoritative/stateful
 
-Identity, Organization, IdentityLink, Principal, Application, ApplicationTarget, Entitlement, Role/RoleVersion, AccessAssignment, request/review workflow state, Policy/PolicyVersion, SoDRule, GovernanceException, GovernanceFinding, Credential, ConnectorInstance/Binding, provisioning/reconciliation state, AdministrativeRole/Grant/Delegation.
+Identity, Organization, IdentityLink, Principal, Application, ApplicationTarget, Entitlement, Role/RoleVersion, AccessAssignment, request/review workflow state, Policy/PolicyVersion, SoDRule, GovernanceException, GovernanceFinding, Credential, ConnectorInstance/Binding, provisioning/reconciliation state, AdministrativeRole/Grant/Delegation/Elevation.
 
 ### Observation
 
