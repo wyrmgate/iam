@@ -81,11 +81,26 @@ AuditRecord merely to centralize storage.
 - producer adoption can proceed incrementally through a semantic command rather than Audit table
   access.
 
+## Implementation status
+
+The foundation is implemented through Flyway V46 and the Audit-owned append/query runtime.
+
+The first public Audit control-plane slice is also implemented:
+
+- `GET /api/v1/audit-records` provides bounded exact-filter search;
+- `GET /api/v1/audit-records/{auditRecordId}` provides tenant-scoped detail reads;
+- both require default-deny `audit:read` authorization;
+- collection continuation uses signed tenant/filter-bound, time-bounded cursors.
+
+Producer adoption now covers the current public mutation surfaces for Identity create/display-name update/lifecycle/merge/split, Principal register/correlate, Catalog Application/ApplicationTarget/Entitlement, Catalog Role/RoleVersion, AccessAssignment, Credential, Governance AccessRequest/approval/review, and Integration connector/binding/worker plus entitlement-observation mapping administration. These producers append data-minimized SUCCESS/DENIED/FAILURE evidence only after the authoritative transaction commits or rolls back, and Audit persistence failure does not rewrite the business outcome.
+
+This implementation status does not expand AuditRecord authority or change the accepted replay, query, tenant-isolation, or secret-boundary semantics above.
+
 ## Deferred
 
-- public Audit HTTP/search/export API and cursor transport;
+- audit export/download and any `audit:export` authorization surface;
 - archive/retention execution;
 - EvidenceSnapshot runtime;
 - material snapshots and integrity metadata;
-- producer-by-producer Audit adoption, including denied control-plane operations;
+- future producer adoption for later public/high-impact operations not yet implemented;
 - SIEM/notification transports.
