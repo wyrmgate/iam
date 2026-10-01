@@ -15,6 +15,10 @@ import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepo
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository.EntitlementObservationMapping;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
 import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
+import io.wyrmgate.iam.audit.application.AuditRecordDraft;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
 import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
@@ -24,8 +28,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class IntegrationAdminApiMutationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(IntegrationAdminApiMutationService.class);
 
     private final AdministrativeAuthorizationService authorization;
     private final IntegrationAdministrationCommandService commands;
@@ -34,6 +44,8 @@ final class IntegrationAdminApiMutationService {
     private final IntegrationEntitlementMappingRepository mappings;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
+    private final SecurityAuditPort audit;
+    private final IdGenerator ids;
 
     IntegrationAdminApiMutationService(
             AdministrativeAuthorizationService authorization,
@@ -42,7 +54,9 @@ final class IntegrationAdminApiMutationService {
             IntegrationEntitlementMappingService mappingCommands,
             IntegrationEntitlementMappingRepository mappings,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         this.authorization = authorization;
         this.commands = commands;
         this.repository = repository;
@@ -50,6 +64,8 @@ final class IntegrationAdminApiMutationService {
         this.mappings = mappings;
         this.idempotency = idempotency;
         this.transactions = transactions;
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     ConnectorInstance createConnector(
@@ -57,7 +73,14 @@ final class IntegrationAdminApiMutationService {
             String connectorType, String runtimeId, String runtimeVersion,
             long configurationVersion, Map<String,Object> configuration, String secretReference,
             String key, RequestFingerprint fingerprint, Instant now, UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector",
+                null,
+                "connector:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.CONNECTOR_CREATE,
                     AdministrativeResource.collection("connector"), now, correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector.create.v1",key,fingerprint,now,null);
@@ -68,7 +91,8 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector.create.v1",key,fingerprint,
                     "connector",created.id(),now);
             return created;
-        });
+        }),
+                ConnectorInstance::id);
     }
 
     ConnectorInstance updateConnector(
@@ -76,7 +100,14 @@ final class IntegrationAdminApiMutationService {
             String runtimeId,String runtimeVersion,long configurationVersion,
             Map<String,Object> configuration,String secretReference,long expectedRevision,
             String key,RequestFingerprint fingerprint,Instant now,UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector",
+                id,
+                "connector:update",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_UPDATE,
                     new AdministrativeResource("connector",id),now,correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector.update.v1",key,fingerprint,now,null);
@@ -86,13 +117,21 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector.update.v1",key,fingerprint,
                     "connector",updated.id(),now);
             return updated;
-        });
+        }),
+                ConnectorInstance::id);
     }
 
     ConnectorInstance disableConnector(
             AuthenticatedAdministrativeActor actor, UUID id,long expectedRevision,
             String key,RequestFingerprint fingerprint,Instant now,UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector",
+                id,
+                "connector:disable",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_DISABLE,
                     new AdministrativeResource("connector",id),now,correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector.disable.v1",key,fingerprint,now,null);
@@ -101,7 +140,8 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector.disable.v1",key,fingerprint,
                     "connector",value.id(),now);
             return value;
-        });
+        }),
+                ConnectorInstance::id);
     }
 
     ConnectorBinding createBinding(
@@ -109,7 +149,14 @@ final class IntegrationAdminApiMutationService {
             String contractId,int contractVersion,
             boolean completePrincipal,boolean completeEntitlement,boolean completeGrant,
             String key,RequestFingerprint fingerprint,Instant now,UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector-binding",
+                null,
+                "connector-binding:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_BINDING_CREATE,
                     AdministrativeResource.collection("connector-binding"),now,correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector-binding.create.v1",key,fingerprint,now,null);
@@ -121,7 +168,8 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector-binding.create.v1",key,fingerprint,
                     "connector-binding",value.id(),now);
             return value;
-        });
+        }),
+                ConnectorBinding::id);
     }
 
     ConnectorBinding updateBinding(
@@ -129,7 +177,14 @@ final class IntegrationAdminApiMutationService {
             boolean completePrincipal,boolean completeEntitlement,boolean completeGrant,
             long expectedRevision,String key,RequestFingerprint fingerprint,
             Instant now,UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector-binding",
+                id,
+                "connector-binding:update",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_BINDING_UPDATE,
                     new AdministrativeResource("connector-binding",id),now,correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector-binding.update.v1",key,fingerprint,now,null);
@@ -140,13 +195,21 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector-binding.update.v1",key,fingerprint,
                     "connector-binding",value.id(),now);
             return value;
-        });
+        }),
+                ConnectorBinding::id);
     }
 
     ConnectorBinding disableBinding(
             AuthenticatedAdministrativeActor actor,UUID id,long expectedRevision,
             String key,RequestFingerprint fingerprint,Instant now,UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector-binding",
+                id,
+                "connector-binding:disable",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_BINDING_DISABLE,
                     new AdministrativeResource("connector-binding",id),now,correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector-binding.disable.v1",key,fingerprint,now,null);
@@ -155,7 +218,8 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector-binding.disable.v1",key,fingerprint,
                     "connector-binding",value.id(),now);
             return value;
-        });
+        }),
+                ConnectorBinding::id);
     }
 
     EntitlementObservationMapping createEntitlementMapping(
@@ -167,7 +231,14 @@ final class IntegrationAdminApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "entitlement-observation-mapping",
+                null,
+                "entitlement-observation-mapping:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.ENTITLEMENT_OBSERVATION_MAPPING_CREATE,
                     AdministrativeResource.collection("entitlement-observation-mapping"),
                     now, correlationId);
@@ -187,7 +258,8 @@ final class IntegrationAdminApiMutationService {
                     key, fingerprint,
                     "entitlement-observation-mapping", value.id(), now);
             return value;
-        });
+        }),
+                EntitlementObservationMapping::id);
     }
 
     EntitlementObservationMapping unmapEntitlement(
@@ -198,7 +270,14 @@ final class IntegrationAdminApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "entitlement-observation-mapping",
+                mappingId,
+                "entitlement-observation-mapping:retire",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor, AdministrativePermissions.ENTITLEMENT_OBSERVATION_MAPPING_RETIRE,
                     new AdministrativeResource("entitlement-observation-mapping", mappingId),
                     now, correlationId);
@@ -217,14 +296,22 @@ final class IntegrationAdminApiMutationService {
                     key, fingerprint,
                     "entitlement-observation-mapping", value.id(), now);
             return value;
-        });
+        }),
+                EntitlementObservationMapping::id);
     }
 
     ConnectorWorker createWorker(
             AuthenticatedAdministrativeActor actor, WorkerExternalSubject subject,int min,int max,
             List<UUID> scope,List<WorkerPermissionSpec> permissions,
             String key,RequestFingerprint fingerprint,Instant now,UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector-worker",
+                null,
+                "connector-worker:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_WORKER_CREATE,
                     AdministrativeResource.collection("connector-worker"),now,correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector-worker.create.v1",key,fingerprint,now,null);
@@ -233,14 +320,22 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector-worker.create.v1",key,fingerprint,
                     "connector-worker",value.id(),now);
             return value;
-        });
+        }),
+                ConnectorWorker::id);
     }
 
     ConnectorWorker updateWorker(
             AuthenticatedAdministrativeActor actor,UUID id,int min,int max,List<UUID> scope,
             List<WorkerPermissionSpec> permissions,long expectedRevision,
             String key,RequestFingerprint fingerprint,Instant now,UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector-worker",
+                id,
+                "connector-worker:update",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_WORKER_UPDATE,
                     new AdministrativeResource("connector-worker",id),now,correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector-worker.update.v1",key,fingerprint,now,null);
@@ -250,13 +345,21 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector-worker.update.v1",key,fingerprint,
                     "connector-worker",value.id(),now);
             return value;
-        });
+        }),
+                ConnectorWorker::id);
     }
 
     ConnectorWorker disableWorker(
             AuthenticatedAdministrativeActor actor,UUID id,long expectedRevision,
             String key,RequestFingerprint fingerprint,Instant now,UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "connector-worker",
+                id,
+                "connector-worker:disable",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(actor,AdministrativePermissions.CONNECTOR_WORKER_DISABLE,
                     new AdministrativeResource("connector-worker",id),now,correlationId);
             var r=idempotency.register(actor.tenant(),"api.connector-worker.disable.v1",key,fingerprint,now,null);
@@ -265,7 +368,79 @@ final class IntegrationAdminApiMutationService {
             idempotency.complete(actor.tenant(),"api.connector-worker.disable.v1",key,fingerprint,
                     "connector-worker",value.id(),now);
             return value;
-        });
+        }),
+                ConnectorWorker::id);
+    }
+
+
+    private <T> T audited(
+            AuthenticatedAdministrativeActor actor,
+            String resourceType,
+            UUID resourceId,
+            String actionType,
+            Instant now,
+            UUID correlationId,
+            Supplier<T> operation,
+            Function<T, UUID> resultId) {
+        try {
+            T result = operation.get();
+            recordOutcome(
+                    actor,
+                    resourceType,
+                    resourceId != null ? resourceId : resultId.apply(result),
+                    actionType,
+                    AuditOutcome.SUCCESS,
+                    now,
+                    correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
+                    actor,
+                    resourceType,
+                    resourceId,
+                    actionType,
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
+    }
+
+    private static AuditOutcome auditOutcome(RuntimeException failure) {
+        return failure instanceof IntegrationAdminApiException api
+                        && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                ? AuditOutcome.DENIED
+                : AuditOutcome.FAILURE;
+    }
+
+    private void recordOutcome(
+            AuthenticatedAdministrativeActor actor,
+            String resourceType,
+            UUID resourceId,
+            String actionType,
+            AuditOutcome outcome,
+            Instant occurredAt,
+            UUID correlationId) {
+        try {
+            audit.append(
+                    actor.tenant(),
+                    new AuditRecordDraft(
+                            ids.nextId(),
+                            occurredAt,
+                            actor.identityId(),
+                            actionType,
+                            resourceType,
+                            resourceId,
+                            outcome,
+                            correlationId,
+                            null));
+        } catch (RuntimeException auditFailure) {
+            LOG.warn(
+                    "Integration administration AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    correlationId,
+                    actionType,
+                    outcome);
+        }
     }
 
     void requireRead(AuthenticatedAdministrativeActor actor, AdministrativePermission permission,
