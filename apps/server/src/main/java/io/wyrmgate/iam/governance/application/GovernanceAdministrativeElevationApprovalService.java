@@ -29,8 +29,19 @@ public final class GovernanceAdministrativeElevationApprovalService
             TenantContext tenant,
             UUID elevationId,
             UUID initiatorIdentityId,
+            UUID beneficiaryIdentityId,
             Instant now) {
-        var plan = resolver.resolve(tenant, elevationId, initiatorIdentityId);
+        var plan = resolver.resolve(
+                tenant, elevationId, initiatorIdentityId, beneficiaryIdentityId);
+        boolean selfApproval = plan.stages().stream()
+                .flatMap(stage -> stage.approverIdentityIds().stream())
+                .anyMatch(approver -> approver.equals(initiatorIdentityId)
+                        || approver.equals(beneficiaryIdentityId));
+        if (selfApproval) {
+            throw new ApprovalCommandException(
+                    "elevation_self_approval_forbidden",
+                    "Administrative elevation approvers must exclude the initiator and beneficiary.");
+        }
         String fingerprint = ApprovalCaseStartService.contentHash(plan);
         var approvalCase = starter.start(
                 tenant,
