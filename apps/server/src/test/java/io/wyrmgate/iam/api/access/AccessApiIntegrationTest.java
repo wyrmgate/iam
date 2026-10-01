@@ -27,6 +27,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.application.RoleCommandService;
@@ -242,6 +245,7 @@ class AccessApiIntegrationTest {
                     access.access_assignment,
                     access.desired_grant_state,
                     access.desired_principal_state,
+                    audit.audit_record,
                     platform.scheduled_work,
                     platform.outbox_event,
                     platform.idempotency_record,
@@ -486,6 +490,56 @@ class AccessApiIntegrationTest {
                 .andExpect(
                         jsonPath("$.code")
                                 .value("stale_revision"));
+
+        Integer successActions = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND resource_type = 'access-assignment'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                  AND action_type IN (
+                      'access-assignment:create',
+                      'access-assignment:suspend',
+                      'access-assignment:resume',
+                      'access-assignment:revoke')
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                assignmentId);
+        assertThat(successActions).isEqualTo(5);
+
+        Integer staleFailure = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'access-assignment:suspend'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                assignmentId);
+        assertThat(staleFailure).isEqualTo(1);
+
+        Integer materializedAuditPayloads = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND resource_type = 'access-assignment'
+                  AND (material_snapshot IS NOT NULL
+                       OR integrity_metadata IS NOT NULL)
+                """,
+                Integer.class,
+                tenant.tenantId());
+        assertThat(materializedAuditPayloads).isZero();
     }
 
     @Test
@@ -681,6 +735,138 @@ class AccessApiIntegrationTest {
                 .andExpect(
                         jsonPath("$.code")
                                 .value("forbidden"));
+
+        Integer cancelAudit = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'access-assignment:cancel'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                assignmentId);
+        assertThat(cancelAudit).isEqualTo(1);
+    }
+
+    @Test
+    void deniedAccessAssignmentCreateIsAuditedWithoutBusinessPayload()
+            throws Exception {
+        Identity identity = identity("Denied Access");
+        var app = catalog.createApplication(
+                tenant, "denied-app", "Denied App", NOW);
+        var target = catalog.createTarget(
+                tenant, app.id(), "prod", NOW);
+        var entitlement = catalog.createEntitlement(
+                tenant, app.id(), target.id(),
+                "denied-read", "Denied Read", "GROUP", NOW);
+        MockMvc denied = mockMvc(authorization(false));
+        UUID correlationId = ids.nextId();
+
+        denied.perform(
+                        post("/api/v1/access-assignments")
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE, actor)
+                                .header("X-Correlation-Id", correlationId)
+                                .header(
+                                        "Idempotency-Key",
+                                        "access-audit-denied")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "identityId":"%s",
+                                          "targetKind":"ENTITLEMENT",
+                                          "roleId":null,
+                                          "entitlementId":"%s",
+                                          "principalConstraintKind":"ANY",
+                                          "specificPrincipalId":null,
+                                          "validFrom":null,
+                                          "validUntil":null
+                                        }
+                                        """.formatted(
+                                        identity.id(),
+                                        entitlement.id())))
+                .andExpect(status().isForbidden());
+
+        Integer deniedCount = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'access-assignment:create'
+                  AND resource_type = 'access-assignment'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                  AND correlation_id = ?
+                  AND material_snapshot IS NULL
+                  AND integrity_metadata IS NULL
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                correlationId);
+        assertThat(deniedCount).isEqualTo(1);
+    }
+
+    @Test
+    void auditFailureDoesNotRewriteSuccessfulAccessAssignmentOutcome()
+            throws Exception {
+        Identity identity = identity("Audit Unavailable");
+        var app = catalog.createApplication(
+                tenant, "audit-app", "Audit App", NOW);
+        var target = catalog.createTarget(
+                tenant, app.id(), "prod", NOW);
+        var entitlement = catalog.createEntitlement(
+                tenant, app.id(), target.id(),
+                "audit-read", "Audit Read", "GROUP", NOW);
+        SecurityAuditPort unavailableAudit =
+                (requestedTenant, draft) -> {
+                    throw new IllegalStateException(
+                            "audit unavailable");
+                };
+        MockMvc withUnavailableAudit = mockMvc(
+                authorization(true),
+                unavailableAudit);
+
+        String location = withUnavailableAudit.perform(
+                        post("/api/v1/access-assignments")
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE, actor)
+                                .header(
+                                        "Idempotency-Key",
+                                        "access-audit-unavailable")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "identityId":"%s",
+                                          "targetKind":"ENTITLEMENT",
+                                          "roleId":null,
+                                          "entitlementId":"%s",
+                                          "principalConstraintKind":"ANY",
+                                          "specificPrincipalId":null,
+                                          "validFrom":null,
+                                          "validUntil":null
+                                        }
+                                        """.formatted(
+                                        identity.id(),
+                                        entitlement.id())))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+
+        UUID assignmentId = UUID.fromString(
+                location.substring(location.lastIndexOf('/') + 1));
+        assertThat(assignmentRepository.findById(
+                        tenant, assignmentId))
+                .isPresent();
     }
 
     private UUID createAssignment(
@@ -751,13 +937,26 @@ class AccessApiIntegrationTest {
 
     private MockMvc mockMvc(
             AdministrativeAuthorizationService authorization) {
+        return mockMvc(
+                authorization,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
+    }
+
+    private MockMvc mockMvc(
+            AdministrativeAuthorizationService authorization,
+            SecurityAuditPort audit) {
         AccessApiMutationService mutations =
                 new AccessApiMutationService(
                         authorization,
                         assignmentCommands,
                         assignmentRepository,
                         idempotency,
-                        transactions);
+                        transactions,
+                        audit,
+                        ids);
         AccessController controller =
                 new AccessController(
                         assignmentQueries,
