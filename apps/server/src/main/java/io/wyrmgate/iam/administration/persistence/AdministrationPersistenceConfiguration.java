@@ -2,6 +2,9 @@ package io.wyrmgate.iam.administration.persistence;
 
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorityRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorityService;
+import io.wyrmgate.iam.administration.application.AdministrativeElevationApprovalCommand;
+import io.wyrmgate.iam.administration.application.AdministrativeElevationRepository;
+import io.wyrmgate.iam.administration.application.AdministrativeElevationService;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.ControlPlaneActorBindingRepository;
@@ -50,6 +53,30 @@ public class AdministrationPersistenceConfiguration {
                 repository,
                 authorization,
                 governedActorStatusQuery,
+                idGenerator,
+                transactionExecutor);
+    }
+
+    @Bean
+    AdministrativeElevationRepository administrativeElevationRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcAdministrativeElevationRepository(jdbcTemplate);
+    }
+
+    @Bean
+    AdministrativeElevationService administrativeElevationService(
+            AdministrativeElevationRepository elevations,
+            AdministrativeAuthorityRepository authority,
+            AdministrativeAuthorizationService authorization,
+            GovernedActorStatusQuery governedActorStatusQuery,
+            AdministrativeElevationApprovalCommand approvals,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new AdministrativeElevationService(
+                elevations,
+                authority,
+                authorization,
+                governedActorStatusQuery,
+                approvals,
                 idGenerator,
                 transactionExecutor);
     }
