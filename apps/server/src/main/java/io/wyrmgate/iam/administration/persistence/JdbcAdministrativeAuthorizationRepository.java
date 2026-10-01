@@ -2,6 +2,8 @@ package io.wyrmgate.iam.administration.persistence;
 
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeDelegatedAuthorityCandidate;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassOperation;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassState;
 import io.wyrmgate.iam.administration.domain.AdministrativeDelegation;
 import io.wyrmgate.iam.administration.domain.AdministrativeDelegationState;
 import io.wyrmgate.iam.administration.domain.AdministrativeElevation;
@@ -11,6 +13,7 @@ import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
+import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceLevel;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.util.List;
@@ -18,7 +21,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** JDBC adapter for Administration-owned direct and delegated authority evaluation. */
+/** JDBC adapter for Administration-owned direct, delegated, elevated and emergency authority evaluation. */
 public final class JdbcAdministrativeAuthorizationRepository
         implements AdministrativeAuthorizationRepository {
 
@@ -231,6 +234,73 @@ public final class JdbcAdministrativeAuthorizationRepository
                         nullableInstant(rs.getTimestamp("activated_at")),
                         nullableInstant(rs.getTimestamp("denied_at")),
                         nullableInstant(rs.getTimestamp("cancelled_at")),
+                        nullableInstant(rs.getTimestamp("revoked_at")),
+                        rs.getObject("correlation_id", UUID.class),
+                        rs.getObject("causation_id", UUID.class),
+                        rs.getLong("revision"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant()),
+                tenant.tenantId(),
+                actorIdentityId,
+                permission.resourceType(),
+                permission.action());
+    }
+
+    @Override
+    public List<AdministrativeBreakGlassOperation> findCandidateBreakGlassOperations(
+            TenantContext tenant,
+            UUID actorIdentityId,
+            AdministrativePermission permission) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(actorIdentityId, "actorIdentityId");
+        Objects.requireNonNull(permission, "permission");
+
+        return jdbcTemplate.query(
+                """
+                SELECT b.id, b.actor_identity_id, b.role_id,
+                       b.scope_type, b.scope_resource_type, b.scope_ref_id, b.scope_key,
+                       b.reason, b.incident_reference,
+                       b.valid_from, b.valid_until,
+                       b.activation_assurance_level,
+                       b.activation_authenticated_at,
+                       b.activation_step_up_at,
+                       b.max_assurance_age_seconds,
+                       b.state, b.activated_at,
+                       b.revoked_by_identity_id, b.revoked_at,
+                       b.correlation_id, b.causation_id,
+                       b.revision, b.created_at, b.updated_at
+                FROM administration.administrative_break_glass_operation b
+                JOIN administration.administrative_role_permission rp
+                  ON rp.tenant_id = b.tenant_id AND rp.role_id = b.role_id
+                JOIN administration.administrative_permission p
+                  ON p.tenant_id = rp.tenant_id AND p.id = rp.permission_id
+                WHERE b.tenant_id = ?
+                  AND b.actor_identity_id = ?
+                  AND p.resource_type = ?
+                  AND p.action = ?
+                ORDER BY b.created_at, b.id
+                """,
+                (rs, rowNum) -> new AdministrativeBreakGlassOperation(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("actor_identity_id", UUID.class),
+                        rs.getObject("role_id", UUID.class),
+                        new AdministrativeScope(
+                                AdministrativeScopeType.valueOf(rs.getString("scope_type")),
+                                rs.getString("scope_resource_type"),
+                                rs.getObject("scope_ref_id", UUID.class),
+                                rs.getString("scope_key")),
+                        rs.getString("reason"),
+                        rs.getString("incident_reference"),
+                        rs.getTimestamp("valid_from").toInstant(),
+                        rs.getTimestamp("valid_until").toInstant(),
+                        AuthenticationAssuranceLevel.valueOf(
+                                rs.getString("activation_assurance_level")),
+                        nullableInstant(rs.getTimestamp("activation_authenticated_at")),
+                        rs.getTimestamp("activation_step_up_at").toInstant(),
+                        rs.getLong("max_assurance_age_seconds"),
+                        AdministrativeBreakGlassState.valueOf(rs.getString("state")),
+                        rs.getTimestamp("activated_at").toInstant(),
+                        rs.getObject("revoked_by_identity_id", UUID.class),
                         nullableInstant(rs.getTimestamp("revoked_at")),
                         rs.getObject("correlation_id", UUID.class),
                         rs.getObject("causation_id", UUID.class),
