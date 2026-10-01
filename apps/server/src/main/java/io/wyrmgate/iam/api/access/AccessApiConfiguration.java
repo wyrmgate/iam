@@ -4,7 +4,9 @@ import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
@@ -25,13 +27,17 @@ class AccessApiConfiguration {
             AccessAssignmentCommandService commands,
             AccessAssignmentRepository assignments,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new AccessApiMutationService(
                 authorization,
                 commands,
                 assignments,
                 idempotency,
-                transactions);
+                transactions,
+                audit,
+                ids);
     }
 
     @Bean
