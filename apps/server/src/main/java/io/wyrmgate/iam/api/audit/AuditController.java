@@ -63,7 +63,7 @@ public final class AuditController {
                 ControlPlaneActorRequestContext.require(request);
         requireRead(
                 actor,
-                AdministrativeResource.collection("audit-record"),
+                AdministrativeResource.collection("audit"),
                 requestCorrelationId);
 
         AuditFilter filter = filter(
@@ -112,7 +112,7 @@ public final class AuditController {
         requireRead(
                 actor,
                 new AdministrativeResource(
-                        "audit-record", auditRecordId),
+                        "audit", auditRecordId),
                 correlationId);
         AuditRecord record = queries.findById(
                         actor.tenant(), auditRecordId)
