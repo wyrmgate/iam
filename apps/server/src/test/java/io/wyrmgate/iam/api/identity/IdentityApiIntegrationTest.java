@@ -148,6 +148,7 @@ class IdentityApiIntegrationTest {
     void resetDatabaseAndController() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    audit.audit_record,
                     platform.scheduled_work,
                     platform.idempotency_record,
                     platform.inbox_message,
@@ -240,6 +241,53 @@ class IdentityApiIntegrationTest {
                         .content("{\"displayName\":\"Billing Service v2\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.revision").value(2));
+
+        Integer createSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:create'
+                  AND resource_type = 'identity'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                createdId);
+        assertThat(createSuccess).isEqualTo(2);
+
+        Integer updateSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:update-metadata'
+                  AND resource_type = 'identity'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                createdId);
+        assertThat(updateSuccess).isEqualTo(2);
+
+        Integer materializedPayloads = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND action_type IN ('identity:create', 'identity:update-metadata')
+                  AND (material_snapshot IS NOT NULL
+                       OR integrity_metadata IS NOT NULL)
+                """,
+                Integer.class,
+                tenant.tenantId());
+        assertThat(materializedPayloads).isZero();
     }
 
     @Test
@@ -283,11 +331,123 @@ class IdentityApiIntegrationTest {
                 .andExpect(status().isPreconditionFailed())
                 .andExpect(jsonPath("$.code").value("stale_revision"));
 
+        Integer staleFailure = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:update-metadata'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                createdId);
+        assertThat(staleFailure).isEqualTo(1);
+
         authorized.perform(get("/api/v1/identities")
                         .requestAttr(ACTOR_ATTRIBUTE, actor)
                         .param("cursor", "not-a-valid-cursor"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("validation_failed"));
+    }
+
+    @Test
+    void ordinaryIdentityMutationAuthorizationDenialsAreAudited()
+            throws Exception {
+        MockMvc denied = mockMvc(authorization(false));
+        UUID createCorrelation = ids.nextId();
+
+        denied.perform(post("/api/v1/identities")
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("X-Correlation-Id", createCorrelation)
+                        .header("Idempotency-Key", "identity-create-denied-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"type":"SERVICE","profile":{"kind":"SERVICE"},"lifecycleState":"PENDING","displayName":"Denied"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        UUID updateCorrelation = ids.nextId();
+        denied.perform(patch("/api/v1/identities/{identityId}", actorIdentity.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("X-Correlation-Id", updateCorrelation)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "identity-update-denied-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Denied Update\"}"))
+                .andExpect(status().isForbidden());
+
+        Integer deniedCreate = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:create'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                  AND correlation_id = ?
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                createCorrelation);
+        assertThat(deniedCreate).isEqualTo(1);
+
+        Integer deniedUpdate = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:update-metadata'
+                  AND resource_id = ?
+                  AND outcome = 'DENIED'
+                  AND correlation_id = ?
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                updateCorrelation);
+        assertThat(deniedUpdate).isEqualTo(1);
+    }
+
+    @Test
+    void ordinaryIdentityAuditFailureDoesNotRewriteSuccessfulOutcome()
+            throws Exception {
+        SecurityAuditPort unavailableAudit = (requestedTenant, draft) -> {
+            throw new IllegalStateException("audit unavailable");
+        };
+        MockMvc unavailable = mockMvc(authorization(true), unavailableAudit);
+
+        String location = unavailable.perform(post("/api/v1/identities")
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "identity-audit-unavailable-create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"type":"SERVICE","profile":{"kind":"SERVICE"},"lifecycleState":"PENDING","displayName":"Audit Safe"}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getHeader("Location");
+        UUID identityId = UUID.fromString(
+                location.substring(location.lastIndexOf('/') + 1));
+
+        unavailable.perform(patch("/api/v1/identities/{identityId}", identityId)
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "identity-audit-unavailable-update")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"displayName\":\"Audit Safe Updated\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(2));
+
+        assertThat(identities.findById(tenant, identityId))
+                .get()
+                .extracting(Identity::displayName)
+                .isEqualTo("Audit Safe Updated");
     }
 
     @Test
