@@ -6,6 +6,8 @@ This document defines PostgreSQL backup/recovery operational baselines for Wyrmg
 
 PostgreSQL is an implementation choice for the initial authoritative relational store. Backup and recovery procedures therefore belong to operations, not to canonical IAM domain semantics.
 
+The production decision gate, failure model and re-entry criteria are defined in [`production-readiness.md`](production-readiness.md). The required measured recovery exercise is defined in [`production-recovery-drill.md`](production-recovery-drill.md). This document remains the concrete DEV/standalone recovery baseline and must not be read as an approved production RPO/RTO policy.
+
 ## Active managed DEV recovery contract
 
 The active DEV/testing/demo environment uses **Neon PostgreSQL**. Its first recovery path is provider-native restore/history capability for the configured project and plan, not the standalone-host `pg_dump` timer described later in this document.
@@ -86,6 +88,8 @@ The same pattern applies to a standalone DEMO deployment with its isolated proje
 - Record restore drills and failures as operational evidence.
 - Treat backup deletion as retention housekeeping, not secure erasure of all replicas.
 
-## Future production work
+## Production transition
 
-Production readiness may add independently encrypted off-provider copies, object-storage lifecycle policy, PostgreSQL physical backup/WAL archiving, managed-provider PITR policy, explicit RPO/RTO targets, larger-scale restore timing tests, and HA/DR runbooks. Those choices must be made against the separate production topology and availability requirements; the managed DEV posture does not settle OD-005.
+OD-005 production recovery work must select backup/PITR/retention/protection mechanisms only after reviewed RPO/RTO and failure assumptions exist. Candidate mechanisms may include independently encrypted off-provider copies, object-storage lifecycle policy, PostgreSQL physical backup/WAL archiving, managed-provider PITR, and cross-region recovery where justified. The managed DEV posture does not settle those choices.
+
+The selected production mechanism must be exercised through [`production-recovery-drill.md`](production-recovery-drill.md); backup creation alone never closes OD-005.
