@@ -18,6 +18,14 @@ A valid token contributes only the exact external authentication subject `(issue
 
 When `iam.auth.enabled=false` (the default), protected `/api/v1/**` routes stay closed. Health, system information, and API-documentation endpoints may remain readable as explicitly configured.
 
+## Provider-neutral authentication assurance
+
+The trusted control-plane actor context now carries a canonical `AuthenticationAssuranceContext` with semantic level `BASELINE` or `STRONG`, plus authentication/step-up timestamps where available. This is a provider-neutral input to Administration authorization and is distinct from bearer validation itself.
+
+The default runtime resolver maps a valid bearer-authenticated request to `BASELINE`. Strong assurance is therefore never inferred from token possession. Deployments that can establish stronger authentication may provide a `ControlPlaneAssuranceResolver` adapter over already validated provider context; raw provider claims, OIDC `acr`/`amr` names, and provider-specific values do not become canonical IAM semantics.
+
+Break-glass uses this assurance contract both at activation and at operation time. Missing, stale or downgraded strong assurance fails closed while leaving ordinary direct/delegated/elevated authorization semantics unchanged.
+
 ## Governed actor resolution
 
 Administration owns `ControlPlaneActorBinding`:
