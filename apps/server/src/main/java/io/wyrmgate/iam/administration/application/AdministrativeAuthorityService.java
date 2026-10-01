@@ -109,6 +109,12 @@ public final class AdministrativeAuthorityService {
 
             Set<AdministrativePermission> prospective = new LinkedHashSet<>(current.permissions());
             prospective.add(permission);
+            if (repository.hasEffectiveTemporaryAuthorityByRole(
+                    actor.tenant(), roleId, now)) {
+                throw failure(
+                        "active_temporary_authority_role_edit_denied",
+                        "Privilege-increasing role edits are denied while current temporary or emergency authority references the role.");
+            }
             requireProspectiveRoleIncreaseWithinGrantableAuthority(actor, roleId, prospective, now);
             return repository.addRolePermission(
                     actor.tenant(), roleId, permission, expectedRevision, now);
