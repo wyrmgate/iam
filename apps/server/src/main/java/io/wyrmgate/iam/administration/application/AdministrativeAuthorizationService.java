@@ -8,7 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
-/** Default-deny Administrative Authorization evaluator for direct and delegated authority. */
+/** Default-deny Administrative Authorization evaluator for direct, delegated and temporary elevation authority. */
 public final class AdministrativeAuthorizationService {
 
     private final AdministrativeAuthorizationRepository repository;
@@ -58,6 +58,15 @@ public final class AdministrativeAuthorizationService {
                 return AdministrativeAuthorizationDecision.allow();
             }
         }
+        for (var elevation : repository.findCandidateElevations(
+                actor.tenant(), actor.identityId(), permission)) {
+            if (!elevation.isEffectiveAt(now)) {
+                continue;
+            }
+            if (matches(elevation.scope(), resource)) {
+                return AdministrativeAuthorizationDecision.allow();
+            }
+        }
         return AdministrativeAuthorizationDecision.deny("no_effective_grant");
     }
 
@@ -104,6 +113,20 @@ public final class AdministrativeAuthorizationService {
                 continue;
             }
             var scope = candidate.delegation().scope();
+            if (scope.type() == AdministrativeScopeType.GLOBAL) {
+                return Set.copyOf(requested);
+            }
+            if (scope.type() == AdministrativeScopeType.CANONICAL_ATTRIBUTE_CLASSIFICATION
+                    && requested.contains(scope.scopeKey())) {
+                allowed.add(scope.scopeKey());
+            }
+        }
+        for (var elevation : repository.findCandidateElevations(
+                actor.tenant(), actor.identityId(), permission)) {
+            if (!elevation.isEffectiveAt(now)) {
+                continue;
+            }
+            var scope = elevation.scope();
             if (scope.type() == AdministrativeScopeType.GLOBAL) {
                 return Set.copyOf(requested);
             }
