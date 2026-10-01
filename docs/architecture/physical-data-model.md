@@ -917,7 +917,7 @@ Persistence implementation should now proceed in bounded vertical slices rather 
 7. validate indexes against high-cardinality query plans/performance tests;
 8. introduce partitioning only when the documented operational thresholds are observed.
 
-OD-003 (concrete OpenAPI/AsyncAPI schemas) is the next unresolved architecture/interface area. It can proceed in parallel with early persistence implementation because public contracts remain semantic and must not expose these tables as APIs.
+OD-003 (concrete OpenAPI/AsyncAPI schemas) is partially implemented across the current public control-plane surfaces, including Administration and bounded Audit read/search. Remaining OD-003 work is limited to explicitly deferred public/JML/policy extensions, Audit export/download and other deferred interfaces; public contracts remain semantic and must not expose these tables as APIs.
 
 ### Source absence inference persistence
 
