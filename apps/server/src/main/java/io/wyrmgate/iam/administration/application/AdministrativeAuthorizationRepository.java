@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.administration.application;
 
+import io.wyrmgate.iam.administration.domain.AdministrativeElevation;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -16,6 +17,14 @@ public interface AdministrativeAuthorizationRepository {
 
 
     default List<AdministrativeDelegatedAuthorityCandidate> findCandidateDelegations(
+            TenantContext tenant,
+            UUID actorIdentityId,
+            AdministrativePermission permission) {
+        return List.of();
+    }
+
+
+    default List<AdministrativeElevation> findCandidateElevations(
             TenantContext tenant,
             UUID actorIdentityId,
             AdministrativePermission permission) {
