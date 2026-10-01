@@ -7,6 +7,7 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativeRole;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
@@ -23,9 +24,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public final class JdbcAdministrativeAuthorityRepository implements AdministrativeAuthorityRepository {
 
     private final JdbcTemplate jdbc;
+    private final IdGenerator ids;
 
-    public JdbcAdministrativeAuthorityRepository(JdbcTemplate jdbc) {
+    public JdbcAdministrativeAuthorityRepository(JdbcTemplate jdbc, IdGenerator ids) {
         this.jdbc = Objects.requireNonNull(jdbc, "jdbc");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     @Override
@@ -353,7 +356,7 @@ public final class JdbcAdministrativeAuthorityRepository implements Administrati
 
     private UUID ensurePermission(
             TenantContext tenant, AdministrativePermission permission, Instant now) {
-        UUID proposedId = UUID.randomUUID();
+        UUID proposedId = ids.nextId();
         jdbc.update(
                 """
                 INSERT INTO administration.administrative_permission (
