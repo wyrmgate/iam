@@ -9,6 +9,10 @@ import io.wyrmgate.iam.identity.application.PrincipalCommandException;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalRepository;
 import io.wyrmgate.iam.identity.domain.Principal;
+import io.wyrmgate.iam.audit.application.AuditRecordDraft;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registration;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
@@ -17,8 +21,12 @@ import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class PrincipalApiMutationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PrincipalApiMutationService.class);
 
     private static final String REGISTER_NAMESPACE =
             "api.principal.register.v1";
@@ -30,13 +38,17 @@ final class PrincipalApiMutationService {
     private final PrincipalRepository principals;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
+    private final SecurityAuditPort audit;
+    private final IdGenerator ids;
 
     PrincipalApiMutationService(
             AdministrativeAuthorizationService authorization,
             PrincipalCommandService commands,
             PrincipalRepository principals,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         this.authorization = Objects.requireNonNull(
                 authorization, "authorization");
         this.commands = Objects.requireNonNull(commands, "commands");
@@ -46,6 +58,8 @@ final class PrincipalApiMutationService {
                 idempotency, "idempotency");
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     Principal register(
@@ -56,48 +70,55 @@ final class PrincipalApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            require(
-                    actor,
-                    AdministrativePermissions.PRINCIPAL_REGISTER,
-                    AdministrativeResource.collection("principal"),
-                    now,
-                    correlationId);
-            Registration registration = idempotency.register(
-                    actor.tenant(),
-                    REGISTER_NAMESPACE,
-                    idempotencyKey,
-                    fingerprint,
-                    now,
-                    null);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                return replay(actor, registration, correlationId);
-            }
-
-            Principal created;
-            try {
-                created = commands.create(
-                        actor.tenant(),
-                        applicationTargetId,
-                        nativePrincipalKey,
-                        null,
+        try {
+            Principal result = transactions.required(() -> {
+                require(
+                        actor,
+                        AdministrativePermissions.PRINCIPAL_REGISTER,
+                        AdministrativeResource.collection("principal"),
                         now,
-                        correlationId,
+                        correlationId);
+                Registration registration = idempotency.register(
+                        actor.tenant(),
+                        REGISTER_NAMESPACE,
+                        idempotencyKey,
+                        fingerprint,
+                        now,
                         null);
-            } catch (PrincipalCommandException error) {
-                throw semantic(error, correlationId);
-            }
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replay(actor, registration, correlationId);
+                }
 
-            idempotency.complete(
-                    actor.tenant(),
-                    REGISTER_NAMESPACE,
-                    idempotencyKey,
-                    fingerprint,
-                    "principal",
-                    created.id(),
-                    now);
-            return created;
-        });
+                Principal created;
+                try {
+                    created = commands.create(
+                            actor.tenant(),
+                            applicationTargetId,
+                            nativePrincipalKey,
+                            null,
+                            now,
+                            correlationId,
+                            null);
+                } catch (PrincipalCommandException error) {
+                    throw semantic(error, correlationId);
+                }
+
+                idempotency.complete(
+                        actor.tenant(),
+                        REGISTER_NAMESPACE,
+                        idempotencyKey,
+                        fingerprint,
+                        "principal",
+                        created.id(),
+                        now);
+                return created;
+            });
+            recordOutcome(actor, result.id(), "principal:register", AuditOutcome.SUCCESS, now, correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(actor, null, "principal:register", auditOutcome(failure), now, correlationId);
+            throw failure;
+        }
     }
 
     Principal correlate(
@@ -109,55 +130,99 @@ final class PrincipalApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            require(
-                    actor,
-                    AdministrativePermissions.PRINCIPAL_CORRELATE,
-                    new AdministrativeResource(
-                            "principal", principalId),
-                    now,
-                    correlationId);
-            if (principals.findById(
-                    actor.tenant(), principalId).isEmpty()) {
-                throw IdentityApiException.notFound(
-                        correlationId);
-            }
-
-            Registration registration = idempotency.register(
-                    actor.tenant(),
-                    CORRELATE_NAMESPACE,
-                    idempotencyKey,
-                    fingerprint,
-                    now,
-                    null);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                return replay(actor, registration, correlationId);
-            }
-
-            Principal updated;
-            try {
-                updated = commands.correlate(
-                        actor.tenant(),
-                        principalId,
-                        identityId,
-                        expectedRevision,
+        try {
+            Principal result = transactions.required(() -> {
+                require(
+                        actor,
+                        AdministrativePermissions.PRINCIPAL_CORRELATE,
+                        new AdministrativeResource(
+                                "principal", principalId),
                         now,
-                        correlationId,
-                        null);
-            } catch (PrincipalCommandException error) {
-                throw semantic(error, correlationId);
-            }
+                        correlationId);
+                if (principals.findById(
+                        actor.tenant(), principalId).isEmpty()) {
+                    throw IdentityApiException.notFound(
+                            correlationId);
+                }
 
-            idempotency.complete(
+                Registration registration = idempotency.register(
+                        actor.tenant(),
+                        CORRELATE_NAMESPACE,
+                        idempotencyKey,
+                        fingerprint,
+                        now,
+                        null);
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replay(actor, registration, correlationId);
+                }
+
+                Principal updated;
+                try {
+                    updated = commands.correlate(
+                            actor.tenant(),
+                            principalId,
+                            identityId,
+                            expectedRevision,
+                            now,
+                            correlationId,
+                            null);
+                } catch (PrincipalCommandException error) {
+                    throw semantic(error, correlationId);
+                }
+
+                idempotency.complete(
+                        actor.tenant(),
+                        CORRELATE_NAMESPACE,
+                        idempotencyKey,
+                        fingerprint,
+                        "principal",
+                        updated.id(),
+                        now);
+                return updated;
+            });
+            recordOutcome(actor, principalId, "principal:correlate", AuditOutcome.SUCCESS, now, correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(actor, principalId, "principal:correlate", auditOutcome(failure), now, correlationId);
+            throw failure;
+        }
+    }
+
+
+    private static AuditOutcome auditOutcome(RuntimeException failure) {
+        return failure instanceof IdentityApiException api
+                        && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                ? AuditOutcome.DENIED
+                : AuditOutcome.FAILURE;
+    }
+
+    private void recordOutcome(
+            AuthenticatedAdministrativeActor actor,
+            UUID principalId,
+            String actionType,
+            AuditOutcome outcome,
+            Instant occurredAt,
+            UUID correlationId) {
+        try {
+            audit.append(
                     actor.tenant(),
-                    CORRELATE_NAMESPACE,
-                    idempotencyKey,
-                    fingerprint,
-                    "principal",
-                    updated.id(),
-                    now);
-            return updated;
-        });
+                    new AuditRecordDraft(
+                            ids.nextId(),
+                            occurredAt,
+                            actor.identityId(),
+                            actionType,
+                            "principal",
+                            principalId,
+                            outcome,
+                            correlationId,
+                            null));
+        } catch (RuntimeException auditFailure) {
+            LOG.warn(
+                    "Principal AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    correlationId,
+                    actionType,
+                    outcome);
+        }
     }
 
     private void require(
