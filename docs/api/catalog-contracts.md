@@ -184,3 +184,5 @@ The initial semantic permissions are:
 - `entitlement:retire`
 
 Administrative Authorization remains default-deny and independent from governed IAM Roles/Entitlements.
+
+Public Application create/rename/retire, ApplicationTarget create/retire, and Entitlement create/retire attempts append data-minimized ADR-0031 AuditRecord evidence after the Catalog transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target resource when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Catalog codes/names, entitlement native keys/types, request payloads, provider observations/mappings, Access state, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Catalog business outcome.
