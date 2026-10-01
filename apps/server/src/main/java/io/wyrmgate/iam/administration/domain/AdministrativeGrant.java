@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Tenant-scoped authoritative Administrative Authorization grant. */
+/** Tenant-scoped authoritative direct Administrative Authorization grant. */
 public record AdministrativeGrant(
         UUID id,
         UUID actorIdentityId,
@@ -13,6 +13,9 @@ public record AdministrativeGrant(
         AdministrativeGrantState state,
         Instant validFrom,
         Instant validUntil,
+        boolean grantable,
+        boolean delegable,
+        UUID authorityBasisGrantId,
         long revision,
         Instant createdAt,
         Instant updatedAt) {
@@ -23,6 +26,9 @@ public record AdministrativeGrant(
         Objects.requireNonNull(roleId, "roleId");
         Objects.requireNonNull(scope, "scope");
         Objects.requireNonNull(state, "state");
+        if (authorityBasisGrantId != null && authorityBasisGrantId.equals(id)) {
+            throw new IllegalArgumentException("authorityBasisGrantId must not reference the same grant");
+        }
         if (validFrom != null && validUntil != null && !validUntil.isAfter(validFrom)) {
             throw new IllegalArgumentException("validUntil must be after validFrom");
         }
@@ -34,6 +40,34 @@ public record AdministrativeGrant(
         if (updatedAt.isBefore(createdAt)) {
             throw new IllegalArgumentException("updatedAt must not be before createdAt");
         }
+    }
+
+    /** Compatibility constructor for pre-grantability callers and persisted legacy grants. */
+    public AdministrativeGrant(
+            UUID id,
+            UUID actorIdentityId,
+            UUID roleId,
+            AdministrativeScope scope,
+            AdministrativeGrantState state,
+            Instant validFrom,
+            Instant validUntil,
+            long revision,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(
+                id,
+                actorIdentityId,
+                roleId,
+                scope,
+                state,
+                validFrom,
+                validUntil,
+                false,
+                false,
+                null,
+                revision,
+                createdAt,
+                updatedAt);
     }
 
     public boolean isEffectiveAt(Instant instant) {
