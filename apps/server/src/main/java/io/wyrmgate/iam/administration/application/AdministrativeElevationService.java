@@ -106,7 +106,8 @@ public final class AdministrativeElevationService {
 
         // Cross-capability Governance call occurs outside the Administration transaction.
         var approval = approvals.requestApproval(
-                actor.tenant(), current.id(), current.initiatorIdentityId(), now);
+                actor.tenant(), current.id(), current.initiatorIdentityId(),
+                current.beneficiaryIdentityId(), now);
 
         return transactions.required(() -> elevations.bindApproval(
                 actor.tenant(), current.id(), expectedRevision,
