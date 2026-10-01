@@ -237,7 +237,7 @@ class AuditApiIntegrationTest {
 
         MockMvc specific = mockMvc(
                 AdministrativeScope.specificResource(
-                        "audit-record", recordId));
+                        "audit", recordId));
         specific.perform(
                         get("/api/v1/audit-records/{id}", recordId)
                                 .requestAttr(ACTOR_ATTRIBUTE, actor))
