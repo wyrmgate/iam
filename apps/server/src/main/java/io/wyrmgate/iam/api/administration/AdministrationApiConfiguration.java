@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-final class AdministrationApiConfiguration {
+class AdministrationApiConfiguration {
     @Bean
     AdministrationApiMutationService administrationApiMutationService(
             AdministrativeAuthorityService authority,
