@@ -389,6 +389,274 @@ class IdentityApiIntegrationTest {
     }
 
     @Test
+    void mergeSplitOperationsProduceDataMinimizedAuditOutcomes() throws Exception {
+        Instant now = Instant.parse("2026-09-16T10:50:00Z");
+
+        Identity survivor = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Audit Merge Survivor",
+                now,
+                ids.nextId(),
+                null);
+        Identity absorbed = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Audit Merge Absorbed",
+                now.plusSeconds(1),
+                ids.nextId(),
+                null);
+        UUID mergeCorrelation = ids.nextId();
+
+        authorized.perform(post("/api/v1/identities/{identityId}:merge", survivor.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("X-Correlation-Id", mergeCorrelation)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "audit-merge-success-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"absorbedIdentityId\":\"" + absorbed.id()
+                                + "\",\"absorbedRevision\":1,\"reason\":\"duplicate confirmed\"}"))
+                .andExpect(status().isOk());
+
+        String mergeOutcome = jdbc.queryForObject(
+                """
+                SELECT outcome
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:merge'
+                  AND resource_type = 'identity'
+                  AND resource_id = ?
+                  AND correlation_id = ?
+                """,
+                String.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                survivor.id(),
+                mergeCorrelation);
+        assertThat(mergeOutcome).isEqualTo("SUCCESS");
+
+        Identity splitSource = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Audit Split Source",
+                now.plusSeconds(2),
+                ids.nextId(),
+                null);
+        var sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
+        UUID sourceSystemId = ids.nextId();
+        sourceRepository.insertSourceSystem(
+                tenant,
+                new io.wyrmgate.iam.identity.domain.SourceSystem(
+                        sourceSystemId,
+                        "audit-split",
+                        "Audit Split Source",
+                        1,
+                        now.plusSeconds(3),
+                        now.plusSeconds(3)));
+        UUID importRunId = ids.nextId();
+        sourceRepository.insertImportRun(
+                tenant,
+                new io.wyrmgate.iam.identity.domain.SourceImportRun(
+                        importRunId,
+                        sourceSystemId,
+                        io.wyrmgate.iam.identity.domain.SourceImportRunState.RUNNING,
+                        io.wyrmgate.iam.identity.domain.SourceImportCompleteness.UNKNOWN,
+                        now.plusSeconds(4),
+                        null,
+                        null,
+                        null));
+        var sourceRecord = sourceRepository.upsertPositiveObservation(
+                tenant,
+                sourceSystemId,
+                importRunId,
+                "audit-split-native",
+                "{}",
+                now.plusSeconds(4),
+                now.plusSeconds(4));
+        sourceRepository.replaceAcceptedLink(
+                tenant,
+                sourceRecord.id(),
+                splitSource.id(),
+                "test split relationship",
+                now.plusSeconds(5),
+                ids.nextId(),
+                null,
+                ids.nextId());
+
+        UUID splitCorrelation = ids.nextId();
+        authorized.perform(post("/api/v1/identities/{identityId}:split", splitSource.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("X-Correlation-Id", splitCorrelation)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "audit-split-success-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"newDisplayName\":\"Split Child\","
+                                + "\"sourceRecordIds\":[\"" + sourceRecord.id() + "\"],"
+                                + "\"principalIds\":[],\"reason\":\"correction\"}"))
+                .andExpect(status().isCreated());
+
+        String splitOutcome = jdbc.queryForObject(
+                """
+                SELECT outcome
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'identity:split'
+                  AND resource_type = 'identity'
+                  AND resource_id = ?
+                  AND correlation_id = ?
+                """,
+                String.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                splitSource.id(),
+                splitCorrelation);
+        assertThat(splitOutcome).isEqualTo("SUCCESS");
+
+        MockMvc updateOnly = mockMvc(
+                authorizationOnly(AdministrativePermissions.IDENTITY_UPDATE));
+        Identity deniedAbsorbed = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Denied Absorbed",
+                now.plusSeconds(6),
+                ids.nextId(),
+                null);
+        UUID deniedMergeCorrelation = ids.nextId();
+        updateOnly.perform(post("/api/v1/identities/{identityId}:merge", survivor.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("X-Correlation-Id", deniedMergeCorrelation)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "audit-merge-denied-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"absorbedIdentityId\":\"" + deniedAbsorbed.id()
+                                + "\",\"absorbedRevision\":1,\"reason\":\"denied\"}"))
+                .andExpect(status().isForbidden());
+
+        UUID deniedSplitCorrelation = ids.nextId();
+        updateOnly.perform(post("/api/v1/identities/{identityId}:split", splitSource.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("X-Correlation-Id", deniedSplitCorrelation)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "audit-split-denied-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"newDisplayName\":\"Denied Split\","
+                                + "\"sourceRecordIds\":[\"" + sourceRecord.id() + "\"],"
+                                + "\"principalIds\":[],\"reason\":\"denied\"}"))
+                .andExpect(status().isForbidden());
+
+        Integer deniedCount = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND outcome = 'DENIED'
+                  AND correlation_id IN (?, ?)
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actorIdentity.id(),
+                deniedMergeCorrelation,
+                deniedSplitCorrelation);
+        assertThat(deniedCount).isEqualTo(2);
+
+        Identity staleSurvivor = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Stale Survivor",
+                now.plusSeconds(7),
+                ids.nextId(),
+                null);
+        Identity staleAbsorbed = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Stale Absorbed",
+                now.plusSeconds(8),
+                ids.nextId(),
+                null);
+        UUID failureCorrelation = ids.nextId();
+        authorized.perform(post("/api/v1/identities/{identityId}:merge", staleSurvivor.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("X-Correlation-Id", failureCorrelation)
+                        .header("If-Match", "\"rev-99\"")
+                        .header("Idempotency-Key", "audit-merge-failure-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"absorbedIdentityId\":\"" + staleAbsorbed.id()
+                                + "\",\"absorbedRevision\":1,\"reason\":\"stale\"}"))
+                .andExpect(status().isPreconditionFailed());
+
+        String failureOutcome = jdbc.queryForObject(
+                """
+                SELECT outcome
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND action_type = 'identity:merge'
+                  AND resource_id = ?
+                  AND correlation_id = ?
+                """,
+                String.class,
+                tenant.tenantId(),
+                staleSurvivor.id(),
+                failureCorrelation);
+        assertThat(failureOutcome).isEqualTo("FAILURE");
+    }
+
+    @Test
+    void mergeAuditFailureDoesNotRewriteSuccessfulIdentityOutcome() throws Exception {
+        Instant now = Instant.parse("2026-09-16T10:55:00Z");
+        Identity survivor = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Audit Failure Survivor",
+                now,
+                ids.nextId(),
+                null);
+        Identity absorbed = commands.create(
+                tenant,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                "Audit Failure Absorbed",
+                now.plusSeconds(1),
+                ids.nextId(),
+                null);
+        SecurityAuditPort unavailableAudit = (requestedTenant, draft) -> {
+            throw new IllegalStateException("audit unavailable");
+        };
+        MockMvc mergeOnly = mockMvc(
+                authorizationOnly(AdministrativePermissions.IDENTITY_MERGE),
+                unavailableAudit);
+
+        mergeOnly.perform(post("/api/v1/identities/{identityId}:merge", survivor.id())
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("If-Match", "\"rev-1\"")
+                        .header("Idempotency-Key", "audit-merge-unavailable-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"absorbedIdentityId\":\"" + absorbed.id()
+                                + "\",\"absorbedRevision\":1,\"reason\":\"duplicate\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(identities.findById(tenant, absorbed.id()).orElseThrow().lifecycleState())
+                .isEqualTo(IdentityLifecycleState.DECOMMISSIONED);
+    }
+
+    @Test
     void lifecycleOperationsPreserveTransitionSemanticsAndEmitFacts() throws Exception {
         Instant now = Instant.parse("2026-09-16T11:00:00Z");
         Identity target = commands.create(
@@ -855,7 +1123,9 @@ class IdentityApiIntegrationTest {
                 mergeSplitService,
                 mergeSplitRepository,
                 idempotency,
-                transactions);
+                transactions,
+                audit,
+                ids);
         IdentityController controller = new IdentityController(
                 queries,
                 mutations,
