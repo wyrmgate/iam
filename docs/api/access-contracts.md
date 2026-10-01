@@ -78,6 +78,15 @@ accepted the authoritative AccessAssignment, not that technical provisioning suc
 Mutable authoritative assignment operations use strong `ETag: "rev-N"` plus
 `If-Match`. Retryable mutations use durable causal `Idempotency-Key` records.
 
+Public AccessAssignment create, suspend, resume, cancel and revoke attempts append
+data-minimized ADR-0031 AuditRecord evidence after the Access transaction commits or
+rolls back. Audit retains the governed actor, semantic action, target AccessAssignment
+when one is known, normalized SUCCESS/DENIED/FAILURE outcome and request correlation
+ID. Create denial/failure before an assignment exists carries no resource ID. Identity,
+Role, Entitlement and Principal IDs, validity, request bodies, governance/policy evidence,
+provider state and exception detail are not copied into AuditRecord. Audit persistence
+failure is operationally logged and never rewrites the AccessAssignment business outcome.
+
 ## EffectiveAccess API
 
 Resources:
