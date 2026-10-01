@@ -17,6 +17,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.RoleCommandService;
 import io.wyrmgate.iam.catalog.application.RoleQueryService;
@@ -129,6 +132,7 @@ class CatalogRoleApiIntegrationTest {
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    audit.audit_record,
                     catalog.role_version_member,
                     catalog.role_version,
                     catalog.role,
@@ -340,6 +344,42 @@ class CatalogRoleApiIntegrationTest {
                 .andExpect(
                         jsonPath("$.lifecycleState")
                                 .value("RETIRED"));
+
+        Integer roleCreate = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'role:create'
+                  AND resource_type = 'role'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), roleId);
+        assertThat(roleCreate).isEqualTo(2);
+
+        Integer roleMutationSuccess = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND outcome = 'SUCCESS'
+                  AND action_type IN (
+                    'role:rename',
+                    'role:retire',
+                    'role-version:create',
+                    'role-version:validate',
+                    'role-version:activate')
+                """, Integer.class, tenant.tenantId(), actor.identityId());
+        assertThat(roleMutationSuccess).isEqualTo(5);
+
+        Integer materializedPayloads = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND resource_type IN ('role', 'role-version')
+                  AND (material_snapshot IS NOT NULL OR integrity_metadata IS NOT NULL)
+                """, Integer.class, tenant.tenantId());
+        assertThat(materializedPayloads).isZero();
     }
 
     @Test
@@ -376,6 +416,17 @@ class CatalogRoleApiIntegrationTest {
                 .andExpect(
                         jsonPath("$.code")
                                 .value("stale_revision"));
+
+        Integer staleFailure = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'role-version:validate'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), v2);
+        assertThat(staleFailure).isEqualTo(1);
 
         authorized.perform(
                         post("/api/v1/roles/{roleId}/versions/{versionId}/validate",
@@ -552,6 +603,56 @@ class CatalogRoleApiIntegrationTest {
                 .andExpect(
                         jsonPath("$.code")
                                 .value("forbidden"));
+
+        Integer deniedCreate = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'role:create'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                """, Integer.class, tenant.tenantId(), actor.identityId());
+        assertThat(deniedCreate).isEqualTo(1);
+    }
+
+    @Test
+    void auditFailureDoesNotRewriteSuccessfulRoleOutcome()
+            throws Exception {
+        SecurityAuditPort unavailableAudit = (requestedTenant, draft) -> {
+            throw new IllegalStateException("audit unavailable");
+        };
+        MockMvc unavailable =
+                mockMvc(authorization(true), unavailableAudit);
+
+        unavailable.perform(
+                        post("/api/v1/roles")
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE, actor)
+                                .header(
+                                        "Idempotency-Key",
+                                        "role-audit-unavailable")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "roleType":"BUSINESS",
+                                          "applicationId":null,
+                                          "code":"audit-safe-role",
+                                          "name":"Audit Safe Role"
+                                        }
+                                        """))
+                .andExpect(status().isCreated())
+                .andExpect(
+                        jsonPath("$.code")
+                                .value("audit-safe-role"));
+
+        Integer persisted = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM catalog.role
+                WHERE tenant_id = ? AND code = 'audit-safe-role'
+                """, Integer.class, tenant.tenantId());
+        assertThat(persisted).isEqualTo(1);
     }
 
     private UUID createApplicationRole(UUID applicationId)
@@ -643,13 +744,26 @@ class CatalogRoleApiIntegrationTest {
 
     private MockMvc mockMvc(
             AdministrativeAuthorizationService authorization) {
+        return mockMvc(
+                authorization,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
+    }
+
+    private MockMvc mockMvc(
+            AdministrativeAuthorizationService authorization,
+            SecurityAuditPort audit) {
         CatalogRoleApiMutationService mutations =
                 new CatalogRoleApiMutationService(
                         authorization,
                         roles,
                         roleRepository,
                         idempotency,
-                        transactions);
+                        transactions,
+                        audit,
+                        ids);
         CatalogRoleController controller =
                 new CatalogRoleController(
                         queries,
