@@ -211,6 +211,9 @@ class AuditApiIntegrationTest {
 
     @Test
     void detailAuthorizationAndTenantIsolationFailClosed() throws Exception {
+        assertThat(AdministrativePermissions.INITIAL_TENANT_ADMIN)
+                .doesNotContain(AdministrativePermissions.AUDIT_READ);
+
         UUID recordId = append(
                 tenant,
                 NOW.minusSeconds(5),
