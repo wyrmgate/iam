@@ -105,9 +105,21 @@ public final class AdministrativeElevationService {
         }
 
         // Cross-capability Governance call occurs outside the Administration transaction.
-        var approval = approvals.requestApproval(
-                actor.tenant(), current.id(), current.initiatorIdentityId(),
-                current.beneficiaryIdentityId(), now);
+        // If Governance already created evidence before an uncertain Administration bind,
+        // reuse that subject-bound case rather than creating duplicate approval authority.
+        var existingApproval = approvals.currentApproval(actor.tenant(), elevationId);
+        AdministrativeElevationApprovalCommand.ApprovalReference approval =
+                existingApproval.approvalCaseId() != null
+                                && existingApproval.planFingerprint() != null
+                        ? new AdministrativeElevationApprovalCommand.ApprovalReference(
+                                existingApproval.approvalCaseId(),
+                                existingApproval.planFingerprint())
+                        : approvals.requestApproval(
+                                actor.tenant(),
+                                current.id(),
+                                current.initiatorIdentityId(),
+                                current.beneficiaryIdentityId(),
+                                now);
 
         return transactions.required(() -> elevations.bindApproval(
                 actor.tenant(), current.id(), expectedRevision,
