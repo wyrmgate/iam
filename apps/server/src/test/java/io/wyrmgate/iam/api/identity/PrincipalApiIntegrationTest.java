@@ -17,6 +17,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.persistence.JdbcCatalogRepository;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
@@ -152,6 +155,7 @@ class PrincipalApiIntegrationTest {
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    audit.audit_record,
                     platform.idempotency_record,
                     platform.outbox_event,
                     identity.principal,
@@ -378,6 +382,53 @@ class PrincipalApiIntegrationTest {
                 .doesNotContain("employee-1001")
                 .doesNotContain(
                         beneficiary.id().toString());
+
+        Integer registerSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'principal:register'
+                  AND resource_type = 'principal'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                principalId);
+        assertThat(registerSuccess).isEqualTo(2);
+
+        Integer correlateSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'principal:correlate'
+                  AND resource_type = 'principal'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                principalId);
+        assertThat(correlateSuccess).isEqualTo(2);
+
+        Integer materializedPayloads = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND resource_type = 'principal'
+                  AND (material_snapshot IS NOT NULL
+                       OR integrity_metadata IS NOT NULL)
+                """,
+                Integer.class,
+                tenant.tenantId());
+        assertThat(materializedPayloads).isZero();
     }
 
     @Test
@@ -576,6 +627,22 @@ class PrincipalApiIntegrationTest {
                 .andExpect(jsonPath("$.code")
                         .value("stale_revision"));
 
+        Integer staleFailure = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'principal:correlate'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                principal.id());
+        assertThat(staleFailure).isEqualTo(1);
+
         authorized.perform(
                         post("/api/v1/principals/{principalId}:correlate",
                                 principal.id())
@@ -707,6 +774,21 @@ class PrincipalApiIntegrationTest {
                                         """.formatted(target)))
                 .andExpect(status().isForbidden());
 
+        Integer deniedRegister = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'principal:register'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId());
+        assertThat(deniedRegister).isEqualTo(1);
+
         String tampered = cursor.substring(
                         0, cursor.length() - 1)
                 + (cursor.endsWith("A") ? "B" : "A");
@@ -777,17 +859,87 @@ class PrincipalApiIntegrationTest {
                                         """.formatted(
                                                 actorIdentity.id())))
                 .andExpect(status().isForbidden());
+
+        Integer deniedCorrelate = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'principal:correlate'
+                  AND resource_id = ?
+                  AND outcome = 'DENIED'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                uncorrelated.id());
+        assertThat(deniedCorrelate).isEqualTo(1);
+    }
+
+    @Test
+    void auditFailureDoesNotRewriteSuccessfulPrincipalOutcome()
+            throws Exception {
+        UUID target = target(
+                tenant, "audit", "prod");
+        SecurityAuditPort unavailableAudit =
+                (requestedTenant, draft) -> {
+                    throw new IllegalStateException(
+                            "audit unavailable");
+                };
+        MockMvc unavailable =
+                mockMvc(
+                        authorization(true),
+                        unavailableAudit);
+
+        String location = unavailable.perform(
+                        post("/api/v1/principals")
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        actor)
+                                .header(
+                                        "Idempotency-Key",
+                                        "principal-audit-unavailable")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {"applicationTargetId":"%s","nativePrincipalKey":"audit-safe"}
+                                        """.formatted(target)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+
+        UUID principalId = UUID.fromString(
+                location.substring(
+                        location.lastIndexOf('/') + 1));
+        assertThat(principalRepository.findById(
+                        tenant, principalId))
+                .isPresent();
     }
 
     private MockMvc mockMvc(
             AdministrativeAuthorizationService authorization) {
+        return mockMvc(
+                authorization,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
+    }
+
+    private MockMvc mockMvc(
+            AdministrativeAuthorizationService authorization,
+            SecurityAuditPort audit) {
         PrincipalApiMutationService mutations =
                 new PrincipalApiMutationService(
                         authorization,
                         principals,
                         principalRepository,
                         idempotency,
-                        transactions);
+                        transactions,
+                        audit,
+                        ids);
         PrincipalController controller =
                 new PrincipalController(
                         queries,
