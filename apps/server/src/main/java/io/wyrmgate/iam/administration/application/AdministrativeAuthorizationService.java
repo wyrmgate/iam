@@ -8,7 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
-/** Default-deny Administrative Authorization evaluator for the first direct-grant slice. */
+/** Default-deny Administrative Authorization evaluator for direct and delegated authority. */
 public final class AdministrativeAuthorizationService {
 
     private final AdministrativeAuthorizationRepository repository;
@@ -45,11 +45,20 @@ public final class AdministrativeAuthorizationService {
             if (!grant.isEffectiveAt(now)) {
                 continue;
             }
-            if (matches(grant, resource)) {
+            if (matches(grant.scope(), resource)) {
                 return AdministrativeAuthorizationDecision.allow();
             }
         }
-        return AdministrativeAuthorizationDecision.deny("no_effective_grant");
+        for (AdministrativeDelegatedAuthorityCandidate candidate : repository.findCandidateDelegations(
+                actor.tenant(), actor.identityId(), permission)) {
+            if (!isEffectiveDelegation(candidate, now)) {
+                continue;
+            }
+            if (matches(candidate.delegation().scope(), resource)) {
+                return AdministrativeAuthorizationDecision.allow();
+            }
+        }
+        return AdministrativeAuthorizationDecision.deny("no_effective_authority");
     }
 
     public Set<String> authorizedClassificationKeys(
@@ -89,17 +98,55 @@ public final class AdministrativeAuthorizationService {
                 allowed.add(grant.scope().scopeKey());
             }
         }
+        for (AdministrativeDelegatedAuthorityCandidate candidate : repository.findCandidateDelegations(
+                actor.tenant(), actor.identityId(), permission)) {
+            if (!isEffectiveDelegation(candidate, now)) {
+                continue;
+            }
+            var scope = candidate.delegation().scope();
+            if (scope.type() == AdministrativeScopeType.GLOBAL) {
+                return Set.copyOf(requested);
+            }
+            if (scope.type() == AdministrativeScopeType.CANONICAL_ATTRIBUTE_CLASSIFICATION
+                    && requested.contains(scope.scopeKey())) {
+                allowed.add(scope.scopeKey());
+            }
+        }
         return Set.copyOf(allowed);
     }
 
-    private static boolean matches(AdministrativeGrant grant, AdministrativeResource resource) {
-        if (grant.scope().type() == AdministrativeScopeType.GLOBAL) {
+    private static boolean isEffectiveDelegation(
+            AdministrativeDelegatedAuthorityCandidate candidate,
+            Instant now) {
+        var delegation = candidate.delegation();
+        var source = candidate.sourceGrant();
+        if (!delegation.isEffectiveAt(now)
+                || !source.isEffectiveAt(now)
+                || !source.delegable()
+                || !source.actorIdentityId().equals(delegation.delegatorIdentityId())
+                || !source.id().equals(delegation.sourceGrantId())
+                || !source.roleId().equals(delegation.roleId())
+                || !AdministrativeAuthorityService.scopeContains(source.scope(), delegation.scope())) {
+            return false;
+        }
+        if (source.validFrom() != null
+                && delegation.validFrom() != null
+                && delegation.validFrom().isBefore(source.validFrom())) {
+            return false;
+        }
+        return source.validUntil() == null || !delegation.validUntil().isAfter(source.validUntil());
+    }
+
+    private static boolean matches(
+            io.wyrmgate.iam.administration.domain.AdministrativeScope scope,
+            AdministrativeResource resource) {
+        if (scope.type() == AdministrativeScopeType.GLOBAL) {
             return true;
         }
-        if (grant.scope().type() == AdministrativeScopeType.SPECIFIC_RESOURCE) {
+        if (scope.type() == AdministrativeScopeType.SPECIFIC_RESOURCE) {
             return resource.resourceId() != null
-                    && grant.scope().resourceType().equals(resource.resourceType())
-                    && grant.scope().resourceId().equals(resource.resourceId());
+                    && scope.resourceType().equals(resource.resourceType())
+                    && scope.resourceId().equals(resource.resourceId());
         }
         // Other canonical scope kinds are modeled but remain fail-closed until their
         // owning resource hierarchy/population semantics have concrete evaluators.
