@@ -146,6 +146,16 @@ Break-glass is a separate typed Administration emergency process and a generic G
 
 The control-plane security context uses typed provider-neutral assurance such as BASELINE/STRONG plus relevant authentication/step-up time. Provider adapters may map their own signals into this contract, but bearer possession and raw OIDC claim names are not canonical assurance semantics. Notification/review delivery is durable process work and does not define authority validity; break-glass expiry/revocation takes effect immediately from Administration state/time.
 
+## Implemented assurance-aware break-glass foundation
+
+Flyway V50 implements `AdministrativeBreakGlassOperation` as a distinct Administration-owned emergency authority source. The first bounded slice is self-use only: the exact governed actor is the beneficiary, initiation still requires existing `administration:manage-authorization`, and emergency role/scope authority is permitted only by an explicitly configured fail-closed `AdministrativeBreakGlassPolicy`. No direct AdministrativeGrant or ordinary elevation is synthesized.
+
+Activation requires a short finite validity window, non-blank reason and incident/reference, current governed actor eligibility, and provider-neutral `STRONG` assurance with a policy-bounded step-up age. The default control-plane assurance resolver yields `BASELINE`; bearer possession alone therefore cannot activate or use break-glass. A deployment adapter may map already validated provider context into the canonical assurance contract, but raw provider claims and OIDC claim names remain outside Administration semantics.
+
+Activation atomically creates durable `SECURITY_NOTIFICATION` and `POST_USE_REVIEW` obligations. Their delivery/completion state never defines or extends authority. Operation-time authorization rechecks semantic validity, current actor eligibility and current strong-assurance recency; downgrade, expiry or explicit revocation ends emergency authority immediately without waiting for workers.
+
+Break-glass activation/revocation attempts append data-minimized SUCCESS/DENIED/FAILURE AuditRecord evidence outside the authoritative transaction. Audit evidence contains the actual governed actor, semantic action, stable emergency-operation reference when known, outcome and correlation/causation only; reason, incident text, permission sets and raw authentication context remain in Administration-owned evidence. Audit outage cannot rewrite a committed Administration result.
+
 ## API/service actors
 
 Human, service and workload actors use the same administrative semantics after authentication/actor resolution. OAuth/API scopes may provide coarse API permission but do not replace resource-scoped IAM administrative authorization.
