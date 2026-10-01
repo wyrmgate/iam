@@ -4,6 +4,9 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationSer
 import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
+import io.wyrmgate.iam.audit.application.AuditRecordDraft;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitRepository;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
 import io.wyrmgate.iam.identity.domain.IdentityMergeOperation;
@@ -11,14 +14,19 @@ import io.wyrmgate.iam.identity.domain.IdentitySplitOperation;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
 import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** HTTP-adapter orchestration for authorized, causally-idempotent Identity merge/split commands. */
 final class IdentityMergeSplitApiMutationService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(IdentityMergeSplitApiMutationService.class);
 
     private static final String MERGE_NAMESPACE = "api.identity.merge.v1";
     private static final String SPLIT_NAMESPACE = "api.identity.split.v1";
@@ -28,18 +36,24 @@ final class IdentityMergeSplitApiMutationService {
     private final IdentityMergeSplitRepository operations;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
+    private final SecurityAuditPort audit;
+    private final IdGenerator ids;
 
     IdentityMergeSplitApiMutationService(
             AdministrativeAuthorizationService authorization,
             IdentityMergeSplitService service,
             IdentityMergeSplitRepository operations,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         this.authorization = Objects.requireNonNull(authorization, "authorization");
         this.service = Objects.requireNonNull(service, "service");
         this.operations = Objects.requireNonNull(operations, "operations");
         this.idempotency = Objects.requireNonNull(idempotency, "idempotency");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     IdentityMergeOperation merge(
@@ -53,7 +67,8 @@ final class IdentityMergeSplitApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        try {
+            IdentityMergeOperation result = transactions.required(() -> {
             requireAllowed(
                     actor,
                     AdministrativePermissions.IDENTITY_MERGE,
@@ -109,7 +124,20 @@ final class IdentityMergeSplitApiMutationService {
                     operation.id(),
                     now);
             return operation;
-        });
+            });
+            recordOutcome(
+                    actor, survivorIdentityId, "identity:merge", AuditOutcome.SUCCESS, now, correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
+                    actor,
+                    survivorIdentityId,
+                    "identity:merge",
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
     }
 
     IdentitySplitOperation split(
@@ -124,7 +152,8 @@ final class IdentityMergeSplitApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        try {
+            IdentitySplitOperation result = transactions.required(() -> {
             requireAllowed(
                     actor,
                     AdministrativePermissions.IDENTITY_SPLIT,
@@ -142,9 +171,9 @@ final class IdentityMergeSplitApiMutationService {
                 return replaySplit(actor, registration, correlationId);
             }
 
-            IdentityMergeSplitService.SplitResult result;
+            IdentityMergeSplitService.SplitResult splitResult;
             try {
-                result = service.split(
+                splitResult = service.split(
                         actor.tenant(),
                         sourceIdentityId,
                         expectedSourceRevision,
@@ -166,7 +195,7 @@ final class IdentityMergeSplitApiMutationService {
                                 : invalid.getMessage());
             }
 
-            IdentitySplitOperation operation = result.operation();
+            IdentitySplitOperation operation = splitResult.operation();
             idempotency.complete(
                     actor.tenant(),
                     SPLIT_NAMESPACE,
@@ -176,7 +205,20 @@ final class IdentityMergeSplitApiMutationService {
                     operation.id(),
                     now);
             return operation;
-        });
+            });
+            recordOutcome(
+                    actor, sourceIdentityId, "identity:split", AuditOutcome.SUCCESS, now, correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
+                    actor,
+                    sourceIdentityId,
+                    "identity:split",
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
     }
 
     private IdentityMergeOperation replayMerge(
@@ -213,6 +255,42 @@ final class IdentityMergeSplitApiMutationService {
                 || registration.resourceId() == null) {
             throw new IllegalStateException(
                     "completed merge/split idempotency record has invalid result");
+        }
+    }
+
+    private static AuditOutcome auditOutcome(RuntimeException failure) {
+        return failure instanceof IdentityApiException api
+                        && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                ? AuditOutcome.DENIED
+                : AuditOutcome.FAILURE;
+    }
+
+    private void recordOutcome(
+            AuthenticatedAdministrativeActor actor,
+            UUID identityId,
+            String actionType,
+            AuditOutcome outcome,
+            Instant occurredAt,
+            UUID correlationId) {
+        try {
+            audit.append(
+                    actor.tenant(),
+                    new AuditRecordDraft(
+                            ids.nextId(),
+                            occurredAt,
+                            actor.identityId(),
+                            actionType,
+                            "identity",
+                            identityId,
+                            outcome,
+                            correlationId,
+                            null));
+        } catch (RuntimeException auditFailure) {
+            LOG.warn(
+                    "Identity merge/split AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    correlationId,
+                    actionType,
+                    outcome);
         }
     }
 

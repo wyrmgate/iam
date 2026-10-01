@@ -42,9 +42,11 @@ class IdentityApiConfiguration {
             IdentityMergeSplitService service,
             IdentityMergeSplitRepository operations,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new IdentityMergeSplitApiMutationService(
-                authorization, service, operations, idempotency, transactions);
+                authorization, service, operations, idempotency, transactions, audit, ids);
     }
 
     @Bean
