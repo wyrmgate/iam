@@ -142,6 +142,8 @@ Principal listing is deterministic by stable Principal ID and uses the same ADR-
 
 Correlation requires the target Principal and Identity to exist in the same tenant, a strong `If-Match` revision and causal `Idempotency-Key`. Correlation is one-way in this slice: after `identityId` is set, the public API cannot reassign or clear it. A successful correlation emits the existing minimized `identity.principal-correlated` and `identity.principal-access-projection-input-changed` internal facts so Access can re-evaluate Principal-dependent projections without transferring ownership.
 
+Public Principal register and correlate attempts append data-minimized ADR-0031 AuditRecord evidence after the Identity-owned Principal transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target Principal when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. ApplicationTarget identifiers, native principal keys, correlated Identity identifiers, provider observations, Credential references, request payloads, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Principal business outcome.
+
 The Principal API does not expose provider observations, connector identities, desired state, fulfillment state, credentials, outbox state, or a public ACTIVE/DISABLED mutation. Provider provisioning and provider-result lifecycle realization remain behind the existing Integration/Identity collaboration boundary.
 
 ## Lifecycle command boundary
