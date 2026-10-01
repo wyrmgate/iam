@@ -93,6 +93,15 @@ Approval evidence may be read only by the case initiator or a snapshotted approv
 Approval completion changes only the subject flow through the reusable result sink;
 the approval API never writes Access persistence.
 
+Public AccessRequest create/submit and Approval approve/reject attempts append
+data-minimized ADR-0031 AuditRecord evidence only after the Governance transaction commits
+or rolls back. Audit retains the governed actor, semantic action, target AccessRequest or
+ApprovalCase when known, normalized SUCCESS/DENIED/FAILURE outcome and request correlation
+ID. Beneficiary and RequestItem targets, approval reason, plan/stage/approver lists,
+policy/risk/SoD evidence, request payloads and exception detail are not copied into
+AuditRecord. Audit persistence failure is operationally logged and never rewrites the
+Governance business outcome.
+
 ## State meaning
 
 The public API preserves the existing separation:
