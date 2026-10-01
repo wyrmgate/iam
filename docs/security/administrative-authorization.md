@@ -116,6 +116,14 @@ AdministrativeRole permission edits are evaluated prospectively. Adding a permis
 
 The burn-once bootstrap permission set is not expanded. Its root grant may be explicitly materialized as grantable/delegable only for its existing role/scope/validity; no wildcard authority is introduced.
 
+## Implemented direct role/grant management foundation
+
+The first ADR-0032 implementation slice persists direct-grant `grantable` / `delegable` rights and creation-time `authorityBasisGrantId` provenance. Administration-owned role/grant commands now require current `administration:manage-authorization` plus one current effective grantable basis for privilege-increasing direct-grant creation. Target permissions, supported typed scope, validity and propagated grant/delegation rights must all fit inside that basis.
+
+AdministrativeRole permission additions perform a bounded prospective check across current non-expired direct grants referencing the role. The actor's current grantable authority must justify every affected grant under the resulting permission set; the edit otherwise fails closed. Removing a permission and revoking a grant remain authority reductions and intentionally skip that privilege-increase ceiling while retaining normal authorization and optimistic revision checks.
+
+The synchronous prospective scan is deliberately bounded in this first slice. If the configured implementation bound is exceeded, the privilege-increasing edit fails closed rather than silently skipping affected authority. Public Administration HTTP/OpenAPI/idempotency/signed-cursor contracts remain deferred to the later public-API phase.
+
 ## Temporary elevation and break-glass
 
 ADR-0032 models temporary/JIT elevation as a distinct Administration-owned process/authority source, not as an ordinary long-lived AdministrativeGrant shortcut. An elevation records beneficiary/initiator, requested role/scope/finite validity, one current grantable authority basis, revision, correlation/causation and, where required, a Governance ApprovalCase reference plus immutable approval-context fingerprint. Governance approval is evidence only; it never mutates Administration persistence.

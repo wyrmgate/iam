@@ -37,6 +37,7 @@ public final class JdbcAdministrativeAuthorizationRepository
                 SELECT g.id, g.actor_identity_id, g.role_id,
                        g.scope_type, g.scope_resource_type, g.scope_ref_id, g.scope_key,
                        g.state, g.valid_from, g.valid_until,
+                       g.grantable, g.delegable, g.authority_basis_grant_id,
                        g.revision, g.created_at, g.updated_at
                 FROM administration.administrative_grant g
                 JOIN administration.administrative_role_permission rp
@@ -61,6 +62,9 @@ public final class JdbcAdministrativeAuthorizationRepository
                         AdministrativeGrantState.valueOf(rs.getString("state")),
                         nullableInstant(rs.getTimestamp("valid_from")),
                         nullableInstant(rs.getTimestamp("valid_until")),
+                        rs.getBoolean("grantable"),
+                        rs.getBoolean("delegable"),
+                        rs.getObject("authority_basis_grant_id", UUID.class),
                         rs.getLong("revision"),
                         rs.getTimestamp("created_at").toInstant(),
                         rs.getTimestamp("updated_at").toInstant()),

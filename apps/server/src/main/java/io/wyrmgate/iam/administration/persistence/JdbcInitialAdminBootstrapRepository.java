@@ -127,8 +127,9 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
                     id, tenant_id, actor_identity_id, role_id,
                     scope_type, scope_resource_type, scope_ref_id, scope_key,
                     state, valid_from, valid_until,
+                    grantable, delegable, authority_basis_grant_id,
                     revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 grant.id(),
                 tenant.tenantId(),
@@ -141,6 +142,9 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
                 grant.state().name(),
                 grant.validFrom() == null ? null : Timestamp.from(grant.validFrom()),
                 grant.validUntil() == null ? null : Timestamp.from(grant.validUntil()),
+                grant.grantable(),
+                grant.delegable(),
+                grant.authorityBasisGrantId(),
                 grant.revision(),
                 Timestamp.from(grant.createdAt()),
                 Timestamp.from(grant.updatedAt()));
