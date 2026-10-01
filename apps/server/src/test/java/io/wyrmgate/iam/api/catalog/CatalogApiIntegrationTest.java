@@ -15,6 +15,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.persistence.JdbcCatalogRepository;
@@ -98,6 +101,7 @@ class CatalogApiIntegrationTest {
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    audit.audit_record,
                     catalog.entitlement,
                     catalog.application_target,
                     catalog.application,
@@ -216,6 +220,43 @@ class CatalogApiIntegrationTest {
                         .header("Idempotency-Key", "idem-00000008"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lifecycleState").value("RETIRED"));
+
+        Integer applicationCreate = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'application:create'
+                  AND resource_type = 'application'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), appId);
+        assertThat(applicationCreate).isEqualTo(2);
+
+        Integer catalogSuccess = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND outcome = 'SUCCESS'
+                  AND action_type IN (
+                    'application:rename',
+                    'application:retire',
+                    'application-target:create',
+                    'application-target:retire',
+                    'entitlement:create',
+                    'entitlement:retire')
+                """, Integer.class, tenant.tenantId(), actor.identityId());
+        assertThat(catalogSuccess).isEqualTo(6);
+
+        Integer materializedPayloads = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND resource_type IN ('application', 'application-target', 'entitlement')
+                  AND (material_snapshot IS NOT NULL OR integrity_metadata IS NOT NULL)
+                """, Integer.class, tenant.tenantId());
+        assertThat(materializedPayloads).isZero();
     }
 
     @Test
@@ -254,6 +295,17 @@ class CatalogApiIntegrationTest {
                 .andExpect(status().isPreconditionFailed())
                 .andExpect(jsonPath("$.code").value("stale_revision"));
 
+        Integer staleFailure = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'application:rename'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), appId);
+        assertThat(staleFailure).isEqualTo(1);
+
         commands.createTarget(tenant, appId, "prod", Instant.now());
         commands.createTarget(tenant, appId, "dev", Instant.now().plusMillis(1));
         String targetPage = authorized.perform(get("/api/v1/applications/{id}/targets", appId)
@@ -278,11 +330,66 @@ class CatalogApiIntegrationTest {
                         .requestAttr(ACTOR_ATTRIBUTE, actor))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("forbidden"));
+
+        denied.perform(post("/api/v1/applications")
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "catalog-denied-create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"denied\",\"name\":\"Denied\"}"))
+                .andExpect(status().isForbidden());
+
+        Integer deniedCreate = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'application:create'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                """, Integer.class, tenant.tenantId(), actor.identityId());
+        assertThat(deniedCreate).isEqualTo(1);
+    }
+
+    @Test
+    void auditFailureDoesNotRewriteSuccessfulCatalogOutcome() throws Exception {
+        SecurityAuditPort unavailableAudit = (requestedTenant, draft) -> {
+            throw new IllegalStateException("audit unavailable");
+        };
+        MockMvc unavailable = mockMvc(authorization(true), unavailableAudit);
+
+        unavailable.perform(post("/api/v1/applications")
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "catalog-audit-unavailable")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"audit-safe\",\"name\":\"Audit Safe\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value("audit-safe"));
+
+        assertThat(queries.listApplications(
+                        tenant, null, null, 50).items())
+                .anyMatch(application -> application.code().equals("audit-safe"));
     }
 
     private MockMvc mockMvc(AdministrativeAuthorizationService authorization) {
+        return mockMvc(
+                authorization,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
+    }
+
+    private MockMvc mockMvc(
+            AdministrativeAuthorizationService authorization,
+            SecurityAuditPort audit) {
         CatalogApiMutationService mutations = new CatalogApiMutationService(
-                authorization, commands, repository, idempotency, transactions);
+                authorization,
+                commands,
+                repository,
+                idempotency,
+                transactions,
+                audit,
+                ids);
         CatalogController controller = new CatalogController(
                 queries, mutations, authorization, ids, testCursorCodec());
         return MockMvcBuilders.standaloneSetup(controller)
