@@ -57,7 +57,7 @@ The implemented Principal administration surface likewise separates `principal:r
 
 Raw secret retrieval is not implied by platform administration and is unavailable through the Credential public API because secret material is external by default. The implemented Credential surface uses separate semantic permissions `credential:read`, `credential:create`, `credential:revoke`, `credential:compromise`, `credential:rotate`, and `credential-rotation:read`; none is silently added to the initial tenant administrator permission set.
 
-The implemented Audit read/search surface uses the separate default-deny `audit:read` permission. A GLOBAL grant may authorize bounded collection search; an exact SPECIFIC_RESOURCE grant for resource type `audit-record` authorizes only that AuditRecord and never a collection search. Audit read authority is not silently added to the initial tenant administrator permission set, and this slice does not expose `audit:export`.
+The implemented Audit read/search surface uses the separate default-deny `audit:read` permission. A GLOBAL grant may authorize bounded collection search; an exact SPECIFIC_RESOURCE grant for resource type `audit` authorizes only that AuditRecord and never a collection search. Audit read authority is not silently added to the initial tenant administrator permission set, and this slice does not expose `audit:export`.
 
 ## Scope
 
