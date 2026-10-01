@@ -393,3 +393,10 @@ This architecture can later map timers/work to Kafka, SQS, Temporal, Camunda or 
 The Leaver reduction path follows the same domain-owned durable orchestration rule. Identity commits its lifecycle revision and access-eligibility fact first. Access then creates one `IdentityAccessReduction` process for that Identity revision, commits a deterministic assignment-page checkpoint after bounded work, and emits an Access-owned continuation fact when another page remains. Duplicate or replayed Identity facts resolve the same causal process; stale continuation facts are fenced by the reduction revision.
 
 A worker re-reads current Identity access eligibility before each page. If the Identity is access-eligible again, the old process completes without further terminations. Otherwise each selected non-terminal AccessAssignment is terminated through the existing Access command path so EffectiveAccess and desired-state projection facts continue through the established provisioning/revocation pipeline. No provider call or foreign-capability mutation occurs inside the authoritative Access transaction.
+
+
+## Administrative break-glass obligations
+
+AdministrativeBreakGlassOperation is Administration-owned emergency process/authority state. Activation commits the emergency authority and two durable Administration-owned obligations atomically: SECURITY_NOTIFICATION and POST_USE_REVIEW. Platform infrastructure may later lease/retry delivery or review work, but it never decides whether emergency authority is valid.
+
+Emergency authority validity is derived directly from Administration state, semantic time and current authentication assurance. Notification delivery failure or an unfinished post-use review cannot extend authority, and expiry/revocation does not erase those obligations. Audit recording occurs outside the authoritative transaction and cannot roll back a committed emergency result.
