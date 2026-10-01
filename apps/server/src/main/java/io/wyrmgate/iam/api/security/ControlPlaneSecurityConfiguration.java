@@ -1,8 +1,10 @@
 package io.wyrmgate.iam.api.security;
 
 import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
+import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceContext;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -37,6 +39,12 @@ public class ControlPlaneSecurityConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean(ControlPlaneAssuranceResolver.class)
+    ControlPlaneAssuranceResolver baselineControlPlaneAssuranceResolver() {
+        return validatedJwt -> AuthenticationAssuranceContext.baseline();
+    }
+
+    @Bean
     @ConditionalOnProperty(prefix = "iam.auth", name = "enabled", havingValue = "true")
     JwtDecoder controlPlaneJwtDecoder(ControlPlaneAuthProperties properties) {
         String issuer = properties.requiredIssuerUri();
@@ -58,6 +66,7 @@ public class ControlPlaneSecurityConfiguration {
             HttpSecurity http,
             @Qualifier("controlPlaneJwtDecoder") JwtDecoder controlPlaneJwtDecoder,
             ControlPlaneActorResolver actorResolver,
+            ControlPlaneAssuranceResolver assuranceResolver,
             IdGenerator idGenerator,
             SemanticAuthenticationEntryPoint entryPoint) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
@@ -77,7 +86,8 @@ public class ControlPlaneSecurityConfiguration {
                                         List.<GrantedAuthority>of(),
                                         token.getSubject()))))
                 .addFilterAfter(
-                        new ControlPlaneActorResolutionFilter(actorResolver, idGenerator),
+                        new ControlPlaneActorResolutionFilter(
+                                actorResolver, assuranceResolver, idGenerator),
                         BearerTokenAuthenticationFilter.class);
         return http.build();
     }

@@ -126,4 +126,9 @@ public interface AdministrativeAuthorityRepository {
             Instant now,
             int limit);
 
+    boolean hasEffectiveTemporaryAuthorityByRole(
+            TenantContext tenant,
+            UUID roleId,
+            Instant now);
+
 }

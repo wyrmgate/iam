@@ -18,10 +18,15 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilter {
 
     private final ControlPlaneActorResolver actorResolver;
+    private final ControlPlaneAssuranceResolver assuranceResolver;
     private final IdGenerator idGenerator;
 
-    public ControlPlaneActorResolutionFilter(ControlPlaneActorResolver actorResolver, IdGenerator idGenerator) {
+    public ControlPlaneActorResolutionFilter(
+            ControlPlaneActorResolver actorResolver,
+            ControlPlaneAssuranceResolver assuranceResolver,
+            IdGenerator idGenerator) {
         this.actorResolver = Objects.requireNonNull(actorResolver, "actorResolver");
+        this.assuranceResolver = Objects.requireNonNull(assuranceResolver, "assuranceResolver");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator");
     }
 
@@ -56,7 +61,9 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
                         idGenerator);
                 return;
             }
-            ControlPlaneActorRequestContext.set(request, resolved.orElseThrow());
+            var assurance = assuranceResolver.resolve(jwtAuthentication.getToken());
+            ControlPlaneActorRequestContext.set(
+                    request, resolved.orElseThrow().withAssurance(assurance));
             filterChain.doFilter(request, response);
         } catch (IllegalArgumentException invalidSubject) {
             SemanticAuthenticationFailureWriter.write(

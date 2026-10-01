@@ -1,6 +1,10 @@
 package io.wyrmgate.iam.administration.persistence;
 
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorityRepository;
+import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassAuditSink;
+import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassPolicy;
+import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassRepository;
+import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassService;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorityService;
 import io.wyrmgate.iam.administration.application.AdministrativeElevationApprovalCommand;
 import io.wyrmgate.iam.administration.application.AdministrativeElevationRepository;
@@ -16,6 +20,7 @@ import io.wyrmgate.iam.administration.application.InitialAdminBootstrapService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -53,6 +58,41 @@ public class AdministrationPersistenceConfiguration {
                 repository,
                 authorization,
                 governedActorStatusQuery,
+                idGenerator,
+                transactionExecutor);
+    }
+
+    @Bean
+    AdministrativeBreakGlassRepository administrativeBreakGlassRepository(
+            JdbcTemplate jdbcTemplate) {
+        return new JdbcAdministrativeBreakGlassRepository(jdbcTemplate);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(AdministrativeBreakGlassPolicy.class)
+    AdministrativeBreakGlassPolicy defaultDenyAdministrativeBreakGlassPolicy() {
+        return (tenant, actorIdentityId, requestedRole, requestedScope, requestedValidUntil, now) ->
+                AdministrativeBreakGlassPolicy.Decision.deny(
+                        "break_glass_policy_unconfigured");
+    }
+
+    @Bean
+    AdministrativeBreakGlassService administrativeBreakGlassService(
+            AdministrativeBreakGlassRepository repository,
+            AdministrativeAuthorityRepository authority,
+            AdministrativeAuthorizationService authorization,
+            GovernedActorStatusQuery governedActorStatusQuery,
+            AdministrativeBreakGlassPolicy policy,
+            AdministrativeBreakGlassAuditSink audit,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new AdministrativeBreakGlassService(
+                repository,
+                authority,
+                authorization,
+                governedActorStatusQuery,
+                policy,
+                audit,
                 idGenerator,
                 transactionExecutor);
     }

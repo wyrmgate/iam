@@ -105,3 +105,10 @@ ApprovalDecision, ReviewDecision, RiskAssessment, SoDConflict, PolicyEvaluation,
 ### Projection
 
 EffectiveAccess, DesiredPrincipalState, DesiredGrantState, AssignmentFulfillment, Identity360, Application360, effective administrative access, and search/reporting views.
+
+
+## Administrative break-glass
+
+AdministrativeBreakGlassOperation is a first-class Administration-owned emergency authority/process object, distinct from direct AdministrativeGrant, AdministrativeDelegation and AdministrativeElevation. It records the exact governed actor/beneficiary, requested AdministrativeRole and typed scope, finite validity, reason/incident evidence, provider-neutral activation assurance, lifecycle/revision, correlation/causation and durable obligation references.
+
+Break-glass authority contributes to control-plane authorization only while the operation is ACTIVE, semantically time-valid, the governed actor remains administratively eligible, and current STRONG assurance satisfies the stored policy-bounded assurance-age requirement. SECURITY_NOTIFICATION and POST_USE_REVIEW are durable obligations/evidence, not authority. AuditRecord remains a separate Audit-owned data-minimized evidence stream.

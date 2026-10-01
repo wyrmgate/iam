@@ -113,7 +113,7 @@ class PrincipalApiIntegrationTest {
                         .current()
                         .getVersion()
                         .getVersion())
-                .isEqualTo("49");
+                .isEqualTo("50");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
