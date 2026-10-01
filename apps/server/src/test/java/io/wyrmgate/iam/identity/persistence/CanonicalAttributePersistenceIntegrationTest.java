@@ -91,7 +91,7 @@ class CanonicalAttributePersistenceIntegrationTest {
         resolution = new CanonicalAttributeResolutionService(
                 attributes, sources, identities, facts, ids, transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("48");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("49");
     }
 
     @AfterAll

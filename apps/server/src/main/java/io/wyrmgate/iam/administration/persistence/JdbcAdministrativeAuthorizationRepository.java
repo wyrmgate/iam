@@ -4,6 +4,8 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationRep
 import io.wyrmgate.iam.administration.application.AdministrativeDelegatedAuthorityCandidate;
 import io.wyrmgate.iam.administration.domain.AdministrativeDelegation;
 import io.wyrmgate.iam.administration.domain.AdministrativeDelegationState;
+import io.wyrmgate.iam.administration.domain.AdministrativeElevation;
+import io.wyrmgate.iam.administration.domain.AdministrativeElevationState;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
@@ -174,6 +176,67 @@ public final class JdbcAdministrativeAuthorizationRepository
                                 rs.getLong("g_revision"),
                                 rs.getTimestamp("g_created_at").toInstant(),
                                 rs.getTimestamp("g_updated_at").toInstant())),
+                tenant.tenantId(),
+                actorIdentityId,
+                permission.resourceType(),
+                permission.action());
+    }
+
+    @Override
+    public List<AdministrativeElevation> findCandidateElevations(
+            TenantContext tenant,
+            UUID actorIdentityId,
+            AdministrativePermission permission) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(actorIdentityId, "actorIdentityId");
+        Objects.requireNonNull(permission, "permission");
+
+        return jdbcTemplate.query(
+                """
+                SELECT e.id, e.beneficiary_identity_id, e.initiator_identity_id,
+                       e.authority_basis_grant_id, e.role_id,
+                       e.scope_type, e.scope_resource_type, e.scope_ref_id, e.scope_key,
+                       e.valid_from, e.valid_until, e.request_fingerprint, e.state,
+                       e.approval_case_id, e.approval_plan_fingerprint,
+                       e.activated_at, e.denied_at, e.cancelled_at, e.revoked_at,
+                       e.correlation_id, e.causation_id, e.revision, e.created_at, e.updated_at
+                FROM administration.administrative_elevation e
+                JOIN administration.administrative_role_permission rp
+                  ON rp.tenant_id = e.tenant_id AND rp.role_id = e.role_id
+                JOIN administration.administrative_permission p
+                  ON p.tenant_id = rp.tenant_id AND p.id = rp.permission_id
+                WHERE e.tenant_id = ?
+                  AND e.beneficiary_identity_id = ?
+                  AND p.resource_type = ?
+                  AND p.action = ?
+                ORDER BY e.created_at, e.id
+                """,
+                (rs, rowNum) -> new AdministrativeElevation(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("beneficiary_identity_id", UUID.class),
+                        rs.getObject("initiator_identity_id", UUID.class),
+                        rs.getObject("authority_basis_grant_id", UUID.class),
+                        rs.getObject("role_id", UUID.class),
+                        new AdministrativeScope(
+                                AdministrativeScopeType.valueOf(rs.getString("scope_type")),
+                                rs.getString("scope_resource_type"),
+                                rs.getObject("scope_ref_id", UUID.class),
+                                rs.getString("scope_key")),
+                        nullableInstant(rs.getTimestamp("valid_from")),
+                        rs.getTimestamp("valid_until").toInstant(),
+                        rs.getString("request_fingerprint"),
+                        AdministrativeElevationState.valueOf(rs.getString("state")),
+                        rs.getObject("approval_case_id", UUID.class),
+                        rs.getString("approval_plan_fingerprint"),
+                        nullableInstant(rs.getTimestamp("activated_at")),
+                        nullableInstant(rs.getTimestamp("denied_at")),
+                        nullableInstant(rs.getTimestamp("cancelled_at")),
+                        nullableInstant(rs.getTimestamp("revoked_at")),
+                        rs.getObject("correlation_id", UUID.class),
+                        rs.getObject("causation_id", UUID.class),
+                        rs.getLong("revision"),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("updated_at").toInstant()),
                 tenant.tenantId(),
                 actorIdentityId,
                 permission.resourceType(),
