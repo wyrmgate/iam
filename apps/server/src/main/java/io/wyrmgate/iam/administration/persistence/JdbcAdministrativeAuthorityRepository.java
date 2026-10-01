@@ -517,6 +517,35 @@ public final class JdbcAdministrativeAuthorityRepository implements Administrati
                 limit);
     }
 
+    @Override
+    public boolean hasEffectiveTemporaryAuthorityByRole(
+            TenantContext tenant,
+            UUID roleId,
+            Instant now) {
+        Integer count = jdbc.queryForObject(
+                """
+                SELECT
+                    (SELECT count(*)
+                     FROM administration.administrative_elevation e
+                     WHERE e.tenant_id = ?
+                       AND e.role_id = ?
+                       AND e.state = 'ACTIVE'
+                       AND (e.valid_from IS NULL OR e.valid_from <= ?)
+                       AND e.valid_until > ?)
+                  + (SELECT count(*)
+                     FROM administration.administrative_break_glass_operation b
+                     WHERE b.tenant_id = ?
+                       AND b.role_id = ?
+                       AND b.state = 'ACTIVE'
+                       AND b.valid_from <= ?
+                       AND b.valid_until > ?)
+                """,
+                Integer.class,
+                tenant.tenantId(), roleId, Timestamp.from(now), Timestamp.from(now),
+                tenant.tenantId(), roleId, Timestamp.from(now), Timestamp.from(now));
+        return count != null && count > 0;
+    }
+
     private UUID ensurePermission(
             TenantContext tenant, AdministrativePermission permission, Instant now) {
         UUID proposedId = ids.nextId();
