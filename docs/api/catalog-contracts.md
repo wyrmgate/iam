@@ -58,6 +58,8 @@ Role type, application binding and code are immutable after Role creation. RoleV
 
 Role and RoleVersion lifecycle mutations use strong revision ETags plus `If-Match`. RoleVersion has its own positive authoritative revision; DRAFT creation starts at revision 1, validation advances it, activation advances it again, and automatic supersession advances the superseded version revision. Retryable mutations use causal idempotency. Role lists and per-Role version lists use signed tenant/context-bound cursors; a RoleVersion cursor cannot be replayed for another Role.
 
+Public Role create/rename/retire and RoleVersion create/validate/activate attempts append data-minimized ADR-0031 AuditRecord evidence after the Catalog transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target Role/RoleVersion when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Role codes/names/application bindings, RoleVersion composition/content hashes, request payloads, expansion paths, Access state, Governance evidence, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Catalog business outcome.
+
 The initial public composition member union is intentionally typed:
 
 - `ENTITLEMENT` + `entitlementId`;

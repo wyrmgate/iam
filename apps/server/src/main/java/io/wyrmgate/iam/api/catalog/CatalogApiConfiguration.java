@@ -48,9 +48,17 @@ class CatalogApiConfiguration {
             RoleCommandService commands,
             RoleRepository roles,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new CatalogRoleApiMutationService(
-                authorization, commands, roles, idempotency, transactions);
+                authorization,
+                commands,
+                roles,
+                idempotency,
+                transactions,
+                audit,
+                ids);
     }
 
     @Bean

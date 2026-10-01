@@ -9,6 +9,10 @@ import io.wyrmgate.iam.catalog.application.RoleCommandService;
 import io.wyrmgate.iam.catalog.application.RoleRepository;
 import io.wyrmgate.iam.catalog.domain.Role;
 import io.wyrmgate.iam.catalog.domain.RoleVersion;
+import io.wyrmgate.iam.audit.application.AuditRecordDraft;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registration;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
@@ -18,22 +22,32 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class CatalogRoleApiMutationService {
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(CatalogRoleApiMutationService.class);
 
     private final AdministrativeAuthorizationService authorization;
     private final RoleCommandService commands;
     private final RoleRepository roles;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
+    private final SecurityAuditPort audit;
+    private final IdGenerator ids;
 
     CatalogRoleApiMutationService(
             AdministrativeAuthorizationService authorization,
             RoleCommandService commands,
             RoleRepository roles,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         this.authorization = Objects.requireNonNull(
                 authorization, "authorization");
         this.commands = Objects.requireNonNull(commands, "commands");
@@ -42,6 +56,8 @@ final class CatalogRoleApiMutationService {
                 idempotency, "idempotency");
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     Role createRole(
@@ -54,7 +70,14 @@ final class CatalogRoleApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "role",
+                null,
+                "role:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(
                     actor,
                     AdministrativePermissions.ROLE_CREATE,
@@ -83,7 +106,8 @@ final class CatalogRoleApiMutationService {
                     created.id(),
                     now);
             return created;
-        });
+        }),
+                Role::id);
     }
 
     Role renameRole(
@@ -95,7 +119,14 @@ final class CatalogRoleApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "role",
+                roleId,
+                "role:rename",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(
                     actor,
                     AdministrativePermissions.ROLE_UPDATE,
@@ -124,7 +155,8 @@ final class CatalogRoleApiMutationService {
                     updated.id(),
                     now);
             return updated;
-        });
+        }),
+                Role::id);
     }
 
     Role retireRole(
@@ -135,7 +167,14 @@ final class CatalogRoleApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "role",
+                roleId,
+                "role:retire",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(
                     actor,
                     AdministrativePermissions.ROLE_RETIRE,
@@ -163,7 +202,8 @@ final class CatalogRoleApiMutationService {
                     retired.id(),
                     now);
             return retired;
-        });
+        }),
+                Role::id);
     }
 
     RoleVersion createVersion(
@@ -174,7 +214,14 @@ final class CatalogRoleApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "role-version",
+                null,
+                "role-version:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(
                     actor,
                     AdministrativePermissions.ROLE_VERSION_CREATE,
@@ -200,7 +247,8 @@ final class CatalogRoleApiMutationService {
                     created.id(),
                     now);
             return created;
-        });
+        }),
+                RoleVersion::id);
     }
 
     RoleVersion validateVersion(
@@ -212,7 +260,14 @@ final class CatalogRoleApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "role-version",
+                roleVersionId,
+                "role-version:validate",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(
                     actor,
                     AdministrativePermissions.ROLE_VERSION_VALIDATE,
@@ -243,7 +298,8 @@ final class CatalogRoleApiMutationService {
                     ready.id(),
                     now);
             return ready;
-        });
+        }),
+                RoleVersion::id);
     }
 
     RoleVersion activateVersion(
@@ -255,7 +311,14 @@ final class CatalogRoleApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
+        return audited(
+                actor,
+                "role-version",
+                roleVersionId,
+                "role-version:activate",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
             require(
                     actor,
                     AdministrativePermissions.ROLE_VERSION_ACTIVATE,
@@ -286,7 +349,79 @@ final class CatalogRoleApiMutationService {
                     active.id(),
                     now);
             return active;
-        });
+        }),
+                RoleVersion::id);
+    }
+
+
+    private <T> T audited(
+            AuthenticatedAdministrativeActor actor,
+            String resourceType,
+            UUID resourceId,
+            String actionType,
+            Instant now,
+            UUID correlationId,
+            Supplier<T> operation,
+            Function<T, UUID> resultId) {
+        try {
+            T result = operation.get();
+            recordOutcome(
+                    actor,
+                    resourceType,
+                    resourceId != null ? resourceId : resultId.apply(result),
+                    actionType,
+                    AuditOutcome.SUCCESS,
+                    now,
+                    correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
+                    actor,
+                    resourceType,
+                    resourceId,
+                    actionType,
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
+    }
+
+    private static AuditOutcome auditOutcome(RuntimeException failure) {
+        return failure instanceof CatalogApiException api
+                        && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                ? AuditOutcome.DENIED
+                : AuditOutcome.FAILURE;
+    }
+
+    private void recordOutcome(
+            AuthenticatedAdministrativeActor actor,
+            String resourceType,
+            UUID resourceId,
+            String actionType,
+            AuditOutcome outcome,
+            Instant occurredAt,
+            UUID correlationId) {
+        try {
+            audit.append(
+                    actor.tenant(),
+                    new AuditRecordDraft(
+                            ids.nextId(),
+                            occurredAt,
+                            actor.identityId(),
+                            actionType,
+                            resourceType,
+                            resourceId,
+                            outcome,
+                            correlationId,
+                            null));
+        } catch (RuntimeException auditFailure) {
+            LOG.warn(
+                    "Catalog Role AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    correlationId,
+                    actionType,
+                    outcome);
+        }
     }
 
     private Registration register(
