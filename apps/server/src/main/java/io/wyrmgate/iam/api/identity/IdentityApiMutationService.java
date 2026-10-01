@@ -71,20 +71,27 @@ final class IdentityApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            requireAllowed(actor, AdministrativeResource.collection("identity"), true, now, correlationId);
-            var registration = idempotency.register(
-                    actor.tenant(), CREATE_NAMESPACE, idempotencyKey, fingerprint, now, null);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                return replay(actor, registration, correlationId);
-            }
-            Identity created = commands.create(
-                    actor.tenant(), type, profile, lifecycleState, displayName, now, correlationId, null);
-            idempotency.complete(
-                    actor.tenant(), CREATE_NAMESPACE, idempotencyKey, fingerprint,
-                    "identity", created.id(), now);
-            return created;
-        });
+        try {
+            Identity result = transactions.required(() -> {
+                requireAllowed(actor, AdministrativeResource.collection("identity"), true, now, correlationId);
+                var registration = idempotency.register(
+                        actor.tenant(), CREATE_NAMESPACE, idempotencyKey, fingerprint, now, null);
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replay(actor, registration, correlationId);
+                }
+                Identity created = commands.create(
+                        actor.tenant(), type, profile, lifecycleState, displayName, now, correlationId, null);
+                idempotency.complete(
+                        actor.tenant(), CREATE_NAMESPACE, idempotencyKey, fingerprint,
+                        "identity", created.id(), now);
+                return created;
+            });
+            recordOutcome(actor, result.id(), "identity:create", AuditOutcome.SUCCESS, now, correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(actor, null, "identity:create", auditOutcome(failure), now, correlationId);
+            throw failure;
+        }
     }
 
     Identity updateDisplayName(
@@ -96,23 +103,30 @@ final class IdentityApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            requireAllowed(actor, new AdministrativeResource("identity", identityId), false, now, correlationId);
-            if (identities.findById(actor.tenant(), identityId).isEmpty()) {
-                throw IdentityApiException.notFound(correlationId);
-            }
-            var registration = idempotency.register(
-                    actor.tenant(), UPDATE_NAMESPACE, idempotencyKey, fingerprint, now, null);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                return replay(actor, registration, correlationId);
-            }
-            Identity updated = commands.changeDisplayName(
-                    actor.tenant(), identityId, displayName, expectedRevision, now, correlationId, null);
-            idempotency.complete(
-                    actor.tenant(), UPDATE_NAMESPACE, idempotencyKey, fingerprint,
-                    "identity", updated.id(), now);
-            return updated;
-        });
+        try {
+            Identity result = transactions.required(() -> {
+                requireAllowed(actor, new AdministrativeResource("identity", identityId), false, now, correlationId);
+                if (identities.findById(actor.tenant(), identityId).isEmpty()) {
+                    throw IdentityApiException.notFound(correlationId);
+                }
+                var registration = idempotency.register(
+                        actor.tenant(), UPDATE_NAMESPACE, idempotencyKey, fingerprint, now, null);
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replay(actor, registration, correlationId);
+                }
+                Identity updated = commands.changeDisplayName(
+                        actor.tenant(), identityId, displayName, expectedRevision, now, correlationId, null);
+                idempotency.complete(
+                        actor.tenant(), UPDATE_NAMESPACE, idempotencyKey, fingerprint,
+                        "identity", updated.id(), now);
+                return updated;
+            });
+            recordOutcome(actor, identityId, "identity:update-metadata", AuditOutcome.SUCCESS, now, correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(actor, identityId, "identity:update-metadata", auditOutcome(failure), now, correlationId);
+            throw failure;
+        }
     }
 
     Identity changeLifecycle(
@@ -174,20 +188,23 @@ final class IdentityApiMutationService {
                     now);
                 return updated;
             });
-            recordLifecycleOutcome(
+            recordOutcome(
                     actor, identityId, operation.auditAction(), AuditOutcome.SUCCESS, now, correlationId);
             return result;
         } catch (RuntimeException failure) {
-            AuditOutcome outcome = failure instanceof IdentityApiException api
-                            && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
-                    ? AuditOutcome.DENIED
-                    : AuditOutcome.FAILURE;
-            recordLifecycleOutcome(actor, identityId, operation.auditAction(), outcome, now, correlationId);
+            recordOutcome(actor, identityId, operation.auditAction(), auditOutcome(failure), now, correlationId);
             throw failure;
         }
     }
 
-    private void recordLifecycleOutcome(
+    private static AuditOutcome auditOutcome(RuntimeException failure) {
+        return failure instanceof IdentityApiException api
+                        && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                ? AuditOutcome.DENIED
+                : AuditOutcome.FAILURE;
+    }
+
+    private void recordOutcome(
             AuthenticatedAdministrativeActor actor,
             UUID identityId,
             String actionType,
@@ -209,7 +226,7 @@ final class IdentityApiMutationService {
                             null));
         } catch (RuntimeException auditFailure) {
             LOG.warn(
-                    "Identity lifecycle AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    "Identity AuditRecord append failed; correlationId={} actionType={} outcome={}",
                     correlationId,
                     actionType,
                     outcome);
