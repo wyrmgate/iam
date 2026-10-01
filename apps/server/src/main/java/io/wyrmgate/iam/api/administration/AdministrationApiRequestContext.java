@@ -1,0 +1,69 @@
+package io.wyrmgate.iam.api.administration;
+
+import io.wyrmgate.iam.platform.id.IdGenerator;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Objects;
+import java.util.UUID;
+
+final class AdministrationApiRequestContext {
+    private static final String ATTRIBUTE =
+            AdministrationApiRequestContext.class.getName() + ".correlationId";
+
+    private AdministrationApiRequestContext() {}
+
+    static UUID resolveCorrelationId(HttpServletRequest request, IdGenerator ids) {
+        Objects.requireNonNull(request, "request");
+        Object current = request.getAttribute(ATTRIBUTE);
+        if (current instanceof UUID id) return id;
+        String header = request.getHeader("X-Correlation-Id");
+        if (header == null) {
+            UUID id = ids.nextId();
+            request.setAttribute(ATTRIBUTE, id);
+            return id;
+        }
+        try {
+            UUID id = UUID.fromString(header);
+            request.setAttribute(ATTRIBUTE, id);
+            return id;
+        } catch (IllegalArgumentException invalid) {
+            UUID id = ids.nextId();
+            request.setAttribute(ATTRIBUTE, id);
+            throw AdministrationApiException.validation(
+                    id,
+                    "X-Correlation-Id",
+                    "invalid_uuid",
+                    "X-Correlation-Id must be a UUID.");
+        }
+    }
+
+    static UUID correlationIdForError(HttpServletRequest request, IdGenerator ids) {
+        Object current = request.getAttribute(ATTRIBUTE);
+        if (current instanceof UUID id) return id;
+        try {
+            String header = request.getHeader("X-Correlation-Id");
+            if (header != null) {
+                UUID id = UUID.fromString(header);
+                request.setAttribute(ATTRIBUTE, id);
+                return id;
+            }
+        } catch (IllegalArgumentException ignored) {
+        }
+        UUID id = ids.nextId();
+        request.setAttribute(ATTRIBUTE, id);
+        return id;
+    }
+
+    static UUID optionalCausationId(HttpServletRequest request, UUID correlationId) {
+        String header = request.getHeader("X-Causation-Id");
+        if (header == null || header.isBlank()) return null;
+        try {
+            return UUID.fromString(header);
+        } catch (IllegalArgumentException invalid) {
+            throw AdministrationApiException.validation(
+                    correlationId,
+                    "X-Causation-Id",
+                    "invalid_uuid",
+                    "X-Causation-Id must be a UUID.");
+        }
+    }
+}
