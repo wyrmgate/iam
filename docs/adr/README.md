@@ -39,5 +39,6 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0029 Typed scalar equality for lifecycle-access policy predicates](0029-typed-scalar-lifecycle-policy-predicates.md)
 - [ADR-0030 Classification-scoped canonical attribute value authorization](0030-classification-scoped-canonical-value-authorization.md)
 - [ADR-0031 Append-only AuditRecord foundation and replay semantics](0031-append-only-audit-record-foundation.md)
+- [ADR-0032 Delegated, elevated and emergency administrative authority](0032-delegated-elevated-emergency-administrative-authority.md)
 
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.5, which carries forward the prior baseline and folds ADR-0022 through ADR-0029 into the formal specification set. A later accepted ADR may again amend that baseline between controlled document revisions and must be folded into the next formal revision.
