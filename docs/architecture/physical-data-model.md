@@ -145,6 +145,8 @@ The following is the initial physical table-family contract. Additional subordin
 | `integration` | provider-observation mappings to canonical stable IDs | Integration | Authoritative technical interpretation/provenance |
 | `governance` | observation-derived drift findings | Governance | Authoritative/process |
 | `administration` | administrative permission/role/grant/delegation/elevation | Administration | Authoritative/process |
+
+Migration V49 materializes `administration.administrative_elevation` as a distinct finite process/authority table. It stores stable beneficiary/initiator Identity IDs, one same-tenant direct authority-basis grant, target AdministrativeRole, typed scope columns, finite validity, immutable request fingerprint, optional Governance ApprovalCase/fingerprint evidence references, semantic process state/revision, activation/denial/cancellation/revocation timestamps and correlation/causation. The Governance case is deliberately not a database foreign key: cross-capability evidence is consumed through a semantic contract. Beneficiary/state and Role/state indexes support bounded authorization/process reads; time validity is still evaluated semantically rather than delegated to a cleanup scheduler.
 | `audit` | audit record, evidence snapshot | Audit | Evidence |
 | `platform` | tenant, outbox, inbox/dedup, idempotency, scheduled delivery/work claim, projection checkpoint | Platform | Technical infrastructure |
 
