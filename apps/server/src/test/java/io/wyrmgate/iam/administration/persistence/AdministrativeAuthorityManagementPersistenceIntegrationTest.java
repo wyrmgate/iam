@@ -256,6 +256,18 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
                 admin.actor(),
                 beneficiary.id(),
                 reader.id(),
+                AdministrativeScope.specificResource("identity", resourceId),
+                now.plusSeconds(5),
+                now.plusSeconds(1800),
+                false,
+                false,
+                narrowBasis.id(),
+                now.plusSeconds(7)));
+
+        assertCeilingDenied(() -> authority.createGrant(
+                admin.actor(),
+                beneficiary.id(),
+                reader.id(),
                 AdministrativeScope.global(),
                 now.plusSeconds(7),
                 now.plusSeconds(1800),
