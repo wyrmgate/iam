@@ -22,8 +22,8 @@
         <springdoc-openapi.version>3.1.1</springdoc-openapi.version>
         <archunit.version>1.4.1</archunit.version>
         <!-- Security patch overrides for CVE-2026-68497 until the parent BOM catches up. -->
-        <jackson2-databind.version>2.21.6</jackson2-databind.version>
-        <jackson3-databind.version>3.1.6</jackson3-databind.version>
+        <jackson2-databind.version>2.21.7</jackson2-databind.version>
+        <jackson3-databind.version>3.1.7</jackson3-databind.version>
     </properties>
 
     <dependencies>
