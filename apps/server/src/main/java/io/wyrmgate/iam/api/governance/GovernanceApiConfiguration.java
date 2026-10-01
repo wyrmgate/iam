@@ -55,14 +55,18 @@ class GovernanceApiConfiguration {
             ReviewRepository reviewRepository,
             ReviewQueryService reviewQueries,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new GovernanceReviewApiMutationService(
                 authorization,
                 reviews,
                 reviewRepository,
                 reviewQueries,
                 idempotency,
-                transactions);
+                transactions,
+                audit,
+                ids);
     }
 
     @Bean

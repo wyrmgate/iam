@@ -5,6 +5,9 @@ import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
+import io.wyrmgate.iam.audit.application.AuditRecordDraft;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.governance.application.ReviewQueryModels.ItemEvidence;
 import io.wyrmgate.iam.governance.application.ReviewQueryService;
 import io.wyrmgate.iam.governance.application.ReviewRepository;
@@ -13,6 +16,7 @@ import io.wyrmgate.iam.governance.domain.ReviewModels.CampaignState;
 import io.wyrmgate.iam.governance.domain.ReviewModels.DecisionValue;
 import io.wyrmgate.iam.governance.domain.ReviewModels.ItemState;
 import io.wyrmgate.iam.governance.domain.ReviewModels.ReviewCampaign;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registration;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
@@ -22,8 +26,13 @@ import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class GovernanceReviewApiMutationService {
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(GovernanceReviewApiMutationService.class);
 
     private final AdministrativeAuthorizationService authorization;
     private final ReviewService reviews;
@@ -31,6 +40,8 @@ final class GovernanceReviewApiMutationService {
     private final ReviewQueryService queries;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
+    private final SecurityAuditPort audit;
+    private final IdGenerator ids;
 
     GovernanceReviewApiMutationService(
             AdministrativeAuthorizationService authorization,
@@ -38,7 +49,9 @@ final class GovernanceReviewApiMutationService {
             ReviewRepository repository,
             ReviewQueryService queries,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         this.authorization = Objects.requireNonNull(
                 authorization, "authorization");
         this.reviews = Objects.requireNonNull(reviews, "reviews");
@@ -49,6 +62,8 @@ final class GovernanceReviewApiMutationService {
                 idempotency, "idempotency");
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     ReviewCampaign createCampaign(
@@ -60,40 +75,61 @@ final class GovernanceReviewApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            require(
+        try {
+            ReviewCampaign result = transactions.required(() -> {
+                require(
+                        actor,
+                        AdministrativePermissions.REVIEW_CAMPAIGN_CREATE,
+                        AdministrativeResource.collection("review-campaign"),
+                        now,
+                        correlationId);
+                Registration registration = register(
+                        actor,
+                        "api.governance.review-campaign.create.v1",
+                        key,
+                        fingerprint,
+                        now);
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replayCampaign(
+                            actor, registration, correlationId);
+                }
+                ReviewCampaign created =
+                        reviews.createIdentityAccessCampaign(
+                                actor.tenant(),
+                                subjectIdentityId,
+                                reviewerIdentityId,
+                                snapshotAt,
+                                now);
+                complete(
+                        actor,
+                        "api.governance.review-campaign.create.v1",
+                        key,
+                        fingerprint,
+                        "review-campaign",
+                        created.id(),
+                        now);
+                return created;
+            });
+            recordOutcome(
                     actor,
-                    AdministrativePermissions.REVIEW_CAMPAIGN_CREATE,
-                    AdministrativeResource.collection("review-campaign"),
+                    "review-campaign",
+                    result.id(),
+                    "review-campaign:create",
+                    AuditOutcome.SUCCESS,
                     now,
                     correlationId);
-            Registration registration = register(
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
                     actor,
-                    "api.governance.review-campaign.create.v1",
-                    key,
-                    fingerprint,
-                    now);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                return replayCampaign(
-                        actor, registration, correlationId);
-            }
-            ReviewCampaign created =
-                    reviews.createIdentityAccessCampaign(
-                            actor.tenant(),
-                            subjectIdentityId,
-                            reviewerIdentityId,
-                            snapshotAt,
-                            now);
-            complete(
-                    actor,
-                    "api.governance.review-campaign.create.v1",
-                    key,
-                    fingerprint,
                     "review-campaign",
-                    created.id(),
-                    now);
-            return created;
-        });
+                    null,
+                    "review-campaign:create",
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
     }
 
     ReviewCampaign startCampaign(
@@ -104,59 +140,80 @@ final class GovernanceReviewApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            ReviewCampaign existing =
-                    repository.findCampaign(
-                                    actor.tenant(), campaignId)
-                            .orElseThrow(() ->
-                                    GovernanceApiException.notFound(
-                                            correlationId));
-            require(
-                    actor,
-                    AdministrativePermissions.REVIEW_CAMPAIGN_START,
-                    new AdministrativeResource(
+        try {
+            ReviewCampaign result = transactions.required(() -> {
+                ReviewCampaign existing =
+                        repository.findCampaign(
+                                        actor.tenant(), campaignId)
+                                .orElseThrow(() ->
+                                        GovernanceApiException.notFound(
+                                                correlationId));
+                require(
+                        actor,
+                        AdministrativePermissions.REVIEW_CAMPAIGN_START,
+                        new AdministrativeResource(
+                                "review-campaign",
+                                existing.id()),
+                        now,
+                        correlationId);
+                Registration registration = register(
+                        actor,
+                        "api.governance.review-campaign.start.v1",
+                        key,
+                        fingerprint,
+                        now);
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replayCampaign(
+                            actor, registration, correlationId);
+                }
+                if (existing.revision() != expectedRevision) {
+                    throw new StaleWriteException(
                             "review-campaign",
-                            existing.id()),
+                            campaignId,
+                            expectedRevision);
+                }
+                if (existing.state() != CampaignState.DRAFT) {
+                    throw GovernanceApiException.conflict(
+                            correlationId,
+                            "review_campaign_not_draft",
+                            "Only a DRAFT ReviewCampaign can start generation.");
+                }
+                ReviewCampaign started =
+                        reviews.startGeneration(
+                                actor.tenant(),
+                                campaignId,
+                                expectedRevision,
+                                now);
+                complete(
+                        actor,
+                        "api.governance.review-campaign.start.v1",
+                        key,
+                        fingerprint,
+                        "review-campaign",
+                        started.id(),
+                        now);
+                return started;
+            });
+            recordOutcome(
+                    actor,
+                    "review-campaign",
+                    campaignId,
+                    "review-campaign:start",
+                    AuditOutcome.SUCCESS,
                     now,
                     correlationId);
-            Registration registration = register(
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
                     actor,
-                    "api.governance.review-campaign.start.v1",
-                    key,
-                    fingerprint,
-                    now);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                return replayCampaign(
-                        actor, registration, correlationId);
-            }
-            if (existing.revision() != expectedRevision) {
-                throw new StaleWriteException(
-                        "review-campaign",
-                        campaignId,
-                        expectedRevision);
-            }
-            if (existing.state() != CampaignState.DRAFT) {
-                throw GovernanceApiException.conflict(
-                        correlationId,
-                        "review_campaign_not_draft",
-                        "Only a DRAFT ReviewCampaign can start generation.");
-            }
-            ReviewCampaign started =
-                    reviews.startGeneration(
-                            actor.tenant(),
-                            campaignId,
-                            expectedRevision,
-                            now);
-            complete(
-                    actor,
-                    "api.governance.review-campaign.start.v1",
-                    key,
-                    fingerprint,
                     "review-campaign",
-                    started.id(),
-                    now);
-            return started;
-        });
+                    campaignId,
+                    "review-campaign:start",
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
     }
 
     ItemEvidence decide(
@@ -169,60 +226,121 @@ final class GovernanceReviewApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            var existing = repository.findItem(
-                            actor.tenant(), reviewItemId)
-                    .orElseThrow(() ->
-                            GovernanceApiException.notFound(
-                                    correlationId));
-            if (!existing.reviewerIdentityId()
-                    .equals(actor.identityId())) {
-                throw GovernanceApiException.forbidden(
-                        correlationId);
-            }
-            Registration registration = register(
-                    actor,
-                    "api.governance.review-item.decision.v1",
-                    key,
-                    fingerprint,
-                    now);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                return replayItem(
-                        actor, registration, correlationId);
-            }
-            if (existing.revision() != expectedRevision) {
-                throw new StaleWriteException(
+        String auditAction = decision == DecisionValue.KEEP
+                ? "review-item:keep"
+                : "review-item:revoke";
+        try {
+            ItemEvidence result = transactions.required(() -> {
+                var existing = repository.findItem(
+                                actor.tenant(), reviewItemId)
+                        .orElseThrow(() ->
+                                GovernanceApiException.notFound(
+                                        correlationId));
+                if (!existing.reviewerIdentityId()
+                        .equals(actor.identityId())) {
+                    throw GovernanceApiException.forbidden(
+                            correlationId);
+                }
+                Registration registration = register(
+                        actor,
+                        "api.governance.review-item.decision.v1",
+                        key,
+                        fingerprint,
+                        now);
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replayItem(
+                            actor, registration, correlationId);
+                }
+                if (existing.revision() != expectedRevision) {
+                    throw new StaleWriteException(
+                            "review-item",
+                            reviewItemId,
+                            expectedRevision);
+                }
+                if (existing.state() != ItemState.PENDING) {
+                    throw GovernanceApiException.conflict(
+                            correlationId,
+                            "review_item_already_decided",
+                            "The ReviewItem already has an immutable decision.");
+                }
+                reviews.decide(
+                        actor.tenant(),
+                        reviewItemId,
+                        actor.identityId(),
+                        decision,
+                        reason,
+                        expectedRevision,
+                        now);
+                complete(
+                        actor,
+                        "api.governance.review-item.decision.v1",
+                        key,
+                        fingerprint,
                         "review-item",
                         reviewItemId,
-                        expectedRevision);
-            }
-            if (existing.state() != ItemState.PENDING) {
-                throw GovernanceApiException.conflict(
-                        correlationId,
-                        "review_item_already_decided",
-                        "The ReviewItem already has an immutable decision.");
-            }
-            reviews.decide(
-                    actor.tenant(),
-                    reviewItemId,
-                    actor.identityId(),
-                    decision,
-                    reason,
-                    expectedRevision,
-                    now);
-            complete(
+                        now);
+                return queries.itemEvidence(
+                                actor.tenant(),
+                                reviewItemId)
+                        .orElseThrow();
+            });
+            recordOutcome(
                     actor,
-                    "api.governance.review-item.decision.v1",
-                    key,
-                    fingerprint,
                     "review-item",
                     reviewItemId,
-                    now);
-            return queries.itemEvidence(
-                            actor.tenant(),
-                            reviewItemId)
-                    .orElseThrow();
-        });
+                    auditAction,
+                    AuditOutcome.SUCCESS,
+                    now,
+                    correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
+                    actor,
+                    "review-item",
+                    reviewItemId,
+                    auditAction,
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
+    }
+
+    private static AuditOutcome auditOutcome(RuntimeException failure) {
+        return failure instanceof GovernanceApiException api
+                        && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                ? AuditOutcome.DENIED
+                : AuditOutcome.FAILURE;
+    }
+
+    private void recordOutcome(
+            AuthenticatedAdministrativeActor actor,
+            String resourceType,
+            UUID resourceId,
+            String actionType,
+            AuditOutcome outcome,
+            Instant occurredAt,
+            UUID correlationId) {
+        try {
+            audit.append(
+                    actor.tenant(),
+                    new AuditRecordDraft(
+                            ids.nextId(),
+                            occurredAt,
+                            actor.identityId(),
+                            actionType,
+                            resourceType,
+                            resourceId,
+                            outcome,
+                            correlationId,
+                            null));
+        } catch (RuntimeException auditFailure) {
+            LOG.warn(
+                    "Governance review AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    correlationId,
+                    actionType,
+                    outcome);
+        }
     }
 
     private Registration register(
