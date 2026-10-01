@@ -32,6 +32,8 @@ A generic workflow engine may be added later as an adapter for selected operatio
 | trusted source absence inference | Identity | SourceAbsenceInference / SourceAbsencePolicyVersion |
 | Joiner/Mover lifecycle access reconciliation | Access | LifecycleAccessPolicyVersion + AccessAssignment rule provenance |
 | application or target retirement | Catalog coordinating semantic commands | retirement operation/process record when cross-capability work is required |
+| administrative elevation | Administration, with optional Governance ApprovalCase | AdministrativeElevation plus Governance-owned approval evidence |
+| administrative break-glass | Administration | AdministrativeBreakGlassOperation plus durable notification/review obligations |
 | tenant decommissioning | Platform/Administration coordination | explicit durable decommissioning operation |
 
 A process that crosses capabilities coordinates through semantic commands and facts. It does not directly mutate another capability's repository.
@@ -228,6 +230,16 @@ ReviewItem is the scalable reviewer work boundary. ReviewDecision is immutable `
 The campaign cutoff prevents access created later from entering the campaign, but v1 does not invent historical lifecycle reconstruction that AccessAssignment does not store. Each ReviewItem snapshots the authoritative state actually read during bounded generation; concurrent removals may be omitted or later produce `NO_ACTION_REQUIRED`, never resurrection.
 
 Escalations/reminders apply to undecided ReviewItems; they remain a later typed extension and do not mutate earlier ReviewDecisions.
+
+## Administrative elevation and break-glass orchestration
+
+ADR-0032 keeps administrative authority processes Administration-owned. AdministrativeElevation is a typed temporary/JIT process and authority source. Governance may own a reusable ApprovalCase when approval is required, but approval is evidence only: Governance never creates an AdministrativeGrant or mutates Administration persistence.
+
+The elevation application step re-reads current Administration authority immediately before privilege becomes effective. It revalidates the one grantable direct authority basis, current Role permission membership, typed scope/temporal containment, governed Identity eligibility, approval fingerprint/result when applicable, and required assurance context. Mandatory context failure for a privilege increase fails closed or remains pending. An approved case with stale authority/context cannot activate an elevation.
+
+AdministrativeBreakGlassOperation is a separate emergency process. Its reason and incident/reference, bounded requested authority, strong provider-neutral assurance evidence, notification obligation and post-use-review obligation are explicit durable Administration state/evidence. Platform timers/workers may deliver expiry materialization, notification attempts and review reminders, but they do not define whether emergency authority is effective.
+
+Elevation and break-glass validity is semantic from time. If `validUntil` has passed, authority is ineffective even while a scheduler or notification/review worker is delayed. Notification delivery failure and pending post-use review never extend authority.
 
 ## Provisioning orchestration
 
