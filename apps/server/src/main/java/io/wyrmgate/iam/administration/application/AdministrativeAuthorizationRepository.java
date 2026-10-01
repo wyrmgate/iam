@@ -6,10 +6,16 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.util.List;
 import java.util.UUID;
 
-/** Administration-owned persistence port used to evaluate direct grants. */
+/** Administration-owned persistence port used to evaluate direct and delegated authority. */
 public interface AdministrativeAuthorizationRepository {
 
     List<AdministrativeGrant> findCandidateGrants(
+            TenantContext tenant,
+            UUID actorIdentityId,
+            AdministrativePermission permission);
+
+
+    List<AdministrativeDelegatedAuthorityCandidate> findCandidateDelegations(
             TenantContext tenant,
             UUID actorIdentityId,
             AdministrativePermission permission);
