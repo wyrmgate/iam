@@ -2,6 +2,7 @@ package io.wyrmgate.iam.api.governance;
 
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.governance.application.AccessRequestCommandService;
 import io.wyrmgate.iam.governance.application.AccessRequestRepository;
 import io.wyrmgate.iam.governance.application.ApprovalCommandService;
@@ -10,6 +11,7 @@ import io.wyrmgate.iam.governance.application.ReviewQueryService;
 import io.wyrmgate.iam.governance.application.ReviewRepository;
 import io.wyrmgate.iam.governance.application.ReviewService;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
@@ -32,14 +34,18 @@ class GovernanceApiConfiguration {
             ApprovalCommandService approvals,
             ApprovalQueryService approvalQueries,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new GovernanceApiMutationService(
                 requests,
                 requestRepository,
                 approvals,
                 approvalQueries,
                 idempotency,
-                transactions);
+                transactions,
+                audit,
+                ids);
     }
 
     @Bean
