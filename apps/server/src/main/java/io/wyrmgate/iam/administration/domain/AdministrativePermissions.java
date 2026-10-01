@@ -112,6 +112,9 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission REVIEW_CAMPAIGN_START =
             new AdministrativePermission("review-campaign", "start");
 
+    public static final AdministrativePermission AUDIT_READ =
+            new AdministrativePermission("audit-record", "read");
+
     public static final AdministrativePermission CONNECTOR_READ =
             new AdministrativePermission("connector", "read");
     public static final AdministrativePermission CONNECTOR_CREATE =
