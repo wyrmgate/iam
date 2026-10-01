@@ -121,7 +121,7 @@ class AuditApiIntegrationTest {
         actor = new AuthenticatedAdministrativeActor(
                 tenant, ids.nextId());
         cursors = cursorCodec();
-        authorized = mockMvc(authorization(AdministrativeScope.global()));
+        authorized = mockMvc(AdministrativeScope.global());
     }
 
     @Test
