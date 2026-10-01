@@ -124,6 +124,14 @@ AdministrativeRole permission additions perform a bounded prospective check acro
 
 The synchronous prospective scan is deliberately bounded in this first slice. If the configured implementation bound is exceeded, the privilege-increasing edit fails closed rather than silently skipping affected authority. Public Administration HTTP/OpenAPI/idempotency/signed-cursor contracts remain deferred to the later public-API phase.
 
+## Implemented single-hop delegation foundation
+
+The ADR-0032 single-hop delegation runtime now persists `AdministrativeDelegation` separately from direct grants. Creation requires one current effective `delegable` direct grant held by the delegator, an ACTIVE same-tenant delegate Identity, the exact source Role, a supported typed scope no wider than the source, and a finite validity window contained by the source. Re-delegation is structurally absent from the command model.
+
+Operation-time authorization evaluates the delegate as the actual actor and revalidates both the delegation and its direct source grant. Revoked/expired/non-delegable source authority, source-role mismatch, scope/time escape, delegation expiry/revocation, or delegate ineligibility fails closed immediately; no scheduler transition is needed for authority to end. Privilege-increasing Role edits include current source-backed delegations in the bounded prospective grantability check.
+
+Delegation creation and revocation retain Administration-owned provenance, including delegator/delegate/source Role and grant, creation/revocation actor/time, and optional correlation/causation identifiers. Public Administration transport, idempotency and AuditRecord producer wiring remain intentionally deferred to the public Administration API phase.
+
 ## Temporary elevation and break-glass
 
 ADR-0032 models temporary/JIT elevation as a distinct Administration-owned process/authority source, not as an ordinary long-lived AdministrativeGrant shortcut. An elevation records beneficiary/initiator, requested role/scope/finite validity, one current grantable authority basis, revision, correlation/causation and, where required, a Governance ApprovalCase reference plus immutable approval-context fingerprint. Governance approval is evidence only; it never mutates Administration persistence.
@@ -161,7 +169,7 @@ All canonical scope types are structurally modeled. The first evaluator intentio
 
 `CANONICAL_ATTRIBUTE_CLASSIFICATION` is now implemented only for exact classification-key matching with `canonical-attribute-value:read`; it has no hierarchy, wildcard or sensitivity ordering semantics. `ORGANIZATION`, `APPLICATION`, `APPLICATION_TARGET`, `SOURCE_SYSTEM`, `CONNECTOR_INSTANCE` and `IDENTITY_POPULATION` remain fail-closed until their concrete hierarchy/population semantics and owning-capability queries are implemented. A resource-specific grant never authorizes a collection query.
 
-A fresh installation contains no administrative roles or grants and therefore denies protected control-plane operations. Initial-administrator bootstrap/provisioning and transport authentication/actor resolution are implemented. Role/grant management, delegation/elevation and assurance-aware break-glass remain subsequent implementation slices governed by ADR-0032. Public control-plane mutations continue to use operation-time authorization and ADR-0031 AuditRecord evidence.
+A fresh installation contains no administrative roles or grants and therefore denies protected control-plane operations. Initial-administrator bootstrap/provisioning, transport authentication/actor resolution, governed direct role/grant management, and single-hop administrative delegation are implemented. Temporary elevation, assurance-aware break-glass and the public Administration control-plane surface remain subsequent implementation slices governed by ADR-0032. Public control-plane mutations continue to use operation-time authorization and ADR-0031 AuditRecord evidence.
 
 ## Security invariants
 

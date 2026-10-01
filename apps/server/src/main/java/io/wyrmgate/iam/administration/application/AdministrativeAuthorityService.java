@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.administration.application;
 
+import io.wyrmgate.iam.administration.domain.AdministrativeDelegation;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
@@ -16,7 +17,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Administration-owned semantic command/query service for the first direct role/grant management slice.
+ * Administration-owned semantic command/query service for direct role/grant management and single-hop delegation.
  *
  * <p>Possessing manage-authorization permits the management operation but never substitutes for
  * the explicit grantability ceiling required by ADR-0032.</p>
@@ -232,6 +233,106 @@ public final class AdministrativeAuthorityService {
                 repository.revokeGrant(actor.tenant(), grantId, expectedRevision, now));
     }
 
+    public AdministrativeDelegation createDelegation(
+            AuthenticatedAdministrativeActor actor,
+            UUID delegateIdentityId,
+            UUID sourceGrantId,
+            AdministrativeScope scope,
+            Instant validFrom,
+            Instant validUntil,
+            UUID correlationId,
+            UUID causationId,
+            Instant now) {
+        Objects.requireNonNull(delegateIdentityId, "delegateIdentityId");
+        Objects.requireNonNull(sourceGrantId, "sourceGrantId");
+        Objects.requireNonNull(scope, "scope");
+        Objects.requireNonNull(validUntil, "validUntil");
+        requireManagement(actor, now);
+        if (!governedActorStatusQuery.isAdministrativelyEligible(actor.tenant(), delegateIdentityId)) {
+            throw failure(
+                    "delegate_not_eligible",
+                    "Administrative delegate is not an active governed Identity in this tenant.");
+        }
+        if (!validUntil.isAfter(now)) {
+            throw failure("invalid_validity", "Administrative delegation validUntil must be in the future.");
+        }
+        if (validFrom != null && !validUntil.isAfter(validFrom)) {
+            throw failure("invalid_validity", "Administrative delegation validUntil must be after validFrom.");
+        }
+
+        return transactions.required(() -> {
+            AdministrativeGrant source = repository.findGrant(actor.tenant(), sourceGrantId)
+                    .orElseThrow(() -> failure(
+                            "delegation_source_not_found",
+                            "Administrative delegation source grant does not exist."));
+            if (!source.actorIdentityId().equals(actor.identityId())
+                    || !source.delegable()
+                    || !source.isEffectiveAt(now)) {
+                throw failure(
+                        "delegation_source_not_effective",
+                        "Delegation source must be a current effective delegable direct grant held by the actor.");
+            }
+            if (!scopeContains(source.scope(), scope)
+                    || !temporalContains(source, validFrom, validUntil, now)) {
+                throw failure(
+                        "delegation_ceiling_exceeded",
+                        "Delegated scope or validity exceeds the current source grant.");
+            }
+            return repository.createDelegation(
+                    actor.tenant(),
+                    ids.nextId(),
+                    delegateIdentityId,
+                    actor.identityId(),
+                    source.id(),
+                    source.roleId(),
+                    scope,
+                    validFrom,
+                    validUntil,
+                    actor.identityId(),
+                    correlationId,
+                    causationId,
+                    now);
+        });
+    }
+
+    public AdministrativeDelegation getDelegation(
+            AuthenticatedAdministrativeActor actor,
+            UUID delegationId,
+            Instant now) {
+        requireManagement(actor, now);
+        return repository.findDelegation(
+                        actor.tenant(), Objects.requireNonNull(delegationId, "delegationId"))
+                .orElseThrow(() -> failure(
+                        "administrative_delegation_not_found",
+                        "Administrative delegation does not exist."));
+    }
+
+    public List<AdministrativeDelegation> listDelegations(
+            AuthenticatedAdministrativeActor actor,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit,
+            Instant now) {
+        requireManagement(actor, now);
+        return repository.listDelegations(
+                actor.tenant(), afterCreatedAt, afterId, requirePageSize(limit));
+    }
+
+    public AdministrativeDelegation revokeDelegation(
+            AuthenticatedAdministrativeActor actor,
+            UUID delegationId,
+            long expectedRevision,
+            Instant now) {
+        requireManagement(actor, now);
+        // Explicit delegation revocation is authoritative privilege reduction.
+        return transactions.required(() -> repository.revokeDelegation(
+                actor.tenant(),
+                Objects.requireNonNull(delegationId, "delegationId"),
+                expectedRevision,
+                actor.identityId(),
+                now));
+    }
+
     private void requireProspectiveRoleIncreaseWithinGrantableAuthority(
             AuthenticatedAdministrativeActor actor,
             UUID roleId,
@@ -239,12 +340,16 @@ public final class AdministrativeAuthorityService {
             Instant now) {
         List<AdministrativeGrant> affected = repository.findAuthorityBearingGrantsByRole(
                 actor.tenant(), roleId, now, MAX_AUTHORITY_SCAN + 1);
-        if (affected.size() > MAX_AUTHORITY_SCAN) {
+        List<AdministrativeDelegation> affectedDelegations =
+                repository.findAuthorityBearingDelegationsByRole(
+                        actor.tenant(), roleId, now, MAX_AUTHORITY_SCAN + 1);
+        if (affected.size() > MAX_AUTHORITY_SCAN
+                || affectedDelegations.size() > MAX_AUTHORITY_SCAN) {
             throw failure(
                     "authority_scan_limit_exceeded",
-                    "Privilege-increasing role edit affects too many grants for the bounded synchronous check.");
+                    "Privilege-increasing role edit affects too much authority for the bounded synchronous check.");
         }
-        if (affected.isEmpty()) {
+        if (affected.isEmpty() && affectedDelegations.isEmpty()) {
             return;
         }
 
@@ -257,34 +362,52 @@ public final class AdministrativeAuthorityService {
         }
 
         for (AdministrativeGrant target : affected) {
-            boolean contained = false;
-            for (AdministrativeGrant candidate : actorGrants) {
-                if (!candidate.grantable() || !candidate.isEffectiveAt(now)) {
-                    continue;
-                }
-                AdministrativeRole basisRole = repository.findRole(actor.tenant(), candidate.roleId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "Administrative grant references missing role " + candidate.roleId()));
-                if (contains(
-                        candidate,
-                        basisRole.permissions(),
-                        prospectivePermissions,
-                        target.scope(),
-                        target.validFrom(),
-                        target.validUntil(),
-                        target.grantable(),
-                        target.delegable(),
-                        now)) {
-                    contained = true;
-                    break;
-                }
+            requireContainedByActorGrantableAuthority(
+                    actor, actorGrants, prospectivePermissions,
+                    target.scope(), target.validFrom(), target.validUntil(),
+                    target.grantable(), target.delegable(), now);
+        }
+        for (AdministrativeDelegation target : affectedDelegations) {
+            requireContainedByActorGrantableAuthority(
+                    actor, actorGrants, prospectivePermissions,
+                    target.scope(), target.validFrom(), target.validUntil(),
+                    false, false, now);
+        }
+    }
+
+    private void requireContainedByActorGrantableAuthority(
+            AuthenticatedAdministrativeActor actor,
+            List<AdministrativeGrant> actorGrants,
+            Set<AdministrativePermission> targetPermissions,
+            AdministrativeScope targetScope,
+            Instant targetValidFrom,
+            Instant targetValidUntil,
+            boolean targetGrantable,
+            boolean targetDelegable,
+            Instant now) {
+        for (AdministrativeGrant candidate : actorGrants) {
+            if (!candidate.grantable() || !candidate.isEffectiveAt(now)) {
+                continue;
             }
-            if (!contained) {
-                throw failure(
-                        "grantability_ceiling_exceeded",
-                        "Role edit would increase existing administrative authority beyond the actor's current grantable authority.");
+            AdministrativeRole basisRole = repository.findRole(actor.tenant(), candidate.roleId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Administrative grant references missing role " + candidate.roleId()));
+            if (contains(
+                    candidate,
+                    basisRole.permissions(),
+                    targetPermissions,
+                    targetScope,
+                    targetValidFrom,
+                    targetValidUntil,
+                    targetGrantable,
+                    targetDelegable,
+                    now)) {
+                return;
             }
         }
+        throw failure(
+                "grantability_ceiling_exceeded",
+                "Role edit would increase existing administrative authority beyond the actor's current grantable authority.");
     }
 
     private void requireBasisContains(
@@ -359,6 +482,24 @@ public final class AdministrativeAuthorityService {
             }
         }
         return targetValidUntil == null || targetValidUntil.isAfter(effectiveTargetStart);
+    }
+
+    private static boolean temporalContains(
+            AdministrativeGrant basis,
+            Instant targetValidFrom,
+            Instant targetValidUntil,
+            Instant now) {
+        if (basis.validFrom() != null
+                && targetValidFrom != null
+                && targetValidFrom.isBefore(basis.validFrom())) {
+            return false;
+        }
+        Instant effectiveTargetStart =
+                targetValidFrom == null || targetValidFrom.isBefore(now) ? now : targetValidFrom;
+        if (basis.validUntil() != null && targetValidUntil.isAfter(basis.validUntil())) {
+            return false;
+        }
+        return targetValidUntil.isAfter(effectiveTargetStart);
     }
 
     static boolean scopeContains(AdministrativeScope basis, AdministrativeScope target) {
