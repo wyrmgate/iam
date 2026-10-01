@@ -144,6 +144,8 @@ Correlation requires the target Principal and Identity to exist in the same tena
 
 The Principal API does not expose provider observations, connector identities, desired state, fulfillment state, credentials, outbox state, or a public ACTIVE/DISABLED mutation. Provider provisioning and provider-result lifecycle realization remain behind the existing Integration/Identity collaboration boundary.
 
+Public Principal register/correlate attempts append data-minimized ADR-0031 AuditRecord evidence after the Identity-owned Principal transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target Principal when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. ApplicationTarget IDs, native principal keys, correlated Identity IDs, provider observation data, Credential references, request payloads, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Principal business outcome.
+
 ## Lifecycle command boundary
 
 Every public lifecycle command requires a strong revision ETag through `If-Match` and a causal `Idempotency-Key`. Retry replay uses the same durable platform idempotency record pattern as other control-plane mutations. Reusing a key with a different normalized identity/target-state/revision fingerprint is a conflict.
