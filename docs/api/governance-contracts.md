@@ -170,6 +170,14 @@ not from a generic administrative permission. An administrator who is not the as
 reviewer cannot KEEP or REVOKE an item. Decision mutations require ReviewItem
 `If-Match` plus causal idempotency.
 
+Public ReviewCampaign create/start and ReviewItem KEEP/REVOKE attempts append
+data-minimized ADR-0031 AuditRecord evidence only after the Governance review transaction
+commits or rolls back. Audit retains the governed actor, semantic action, target campaign
+or item when known, normalized SUCCESS/DENIED/FAILURE outcome and request correlation ID.
+Subject/reviewer Identity IDs, snapshot content, review reason, AccessAssignment/remediation
+detail, request payloads and exception detail are not copied into AuditRecord. Audit
+persistence failure is operationally logged and never rewrites the review business outcome.
+
 Specific campaign/item/remediation reads are allowed to the assigned reviewer or to an
 administrator with `review-campaign:read` authority for that campaign. The subject
 Identity does not gain visibility merely by being the review subject.
