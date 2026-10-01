@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
+import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceContext;
 import io.wyrmgate.iam.administration.domain.ExternalAuthenticationSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -46,7 +47,8 @@ class ControlPlaneActorResolutionFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
 
-        new ControlPlaneActorResolutionFilter(resolver, ids)
+        new ControlPlaneActorResolutionFilter(
+                resolver, jwt -> AuthenticationAssuranceContext.baseline(), ids)
                 .doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
@@ -71,7 +73,8 @@ class ControlPlaneActorResolutionFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
 
-        new ControlPlaneActorResolutionFilter(resolver, ids)
+        new ControlPlaneActorResolutionFilter(
+                resolver, jwt -> AuthenticationAssuranceContext.baseline(), ids)
                 .doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(200);
@@ -90,7 +93,8 @@ class ControlPlaneActorResolutionFilterTest {
         MockHttpServletRequest request = protectedRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        new ControlPlaneActorResolutionFilter(resolver, ids)
+        new ControlPlaneActorResolutionFilter(
+                resolver, jwt -> AuthenticationAssuranceContext.baseline(), ids)
                 .doFilter(request, response, new MockFilterChain());
 
         assertThat(response.getStatus()).isEqualTo(503);
