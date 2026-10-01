@@ -11,6 +11,7 @@ public interface AdministrativeElevationApprovalCommand {
             TenantContext tenant,
             UUID elevationId,
             UUID initiatorIdentityId,
+            UUID beneficiaryIdentityId,
             Instant now);
 
     ApprovalStatus currentApproval(TenantContext tenant, UUID elevationId);
