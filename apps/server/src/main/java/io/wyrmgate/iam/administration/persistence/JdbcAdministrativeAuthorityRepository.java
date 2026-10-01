@@ -1,6 +1,8 @@
 package io.wyrmgate.iam.administration.persistence;
 
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorityRepository;
+import io.wyrmgate.iam.administration.domain.AdministrativeDelegation;
+import io.wyrmgate.iam.administration.domain.AdministrativeDelegationState;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
@@ -354,6 +356,158 @@ public final class JdbcAdministrativeAuthorityRepository implements Administrati
                 limit);
     }
 
+    @Override
+    public Optional<AdministrativeDelegation> findDelegation(
+            TenantContext tenant, UUID delegationId) {
+        return jdbc.query(
+                        delegationSelect() + " WHERE d.tenant_id = ? AND d.id = ?",
+                        (rs, rowNum) -> delegationRow(rs),
+                        tenant.tenantId(),
+                        delegationId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public AdministrativeDelegation createDelegation(
+            TenantContext tenant,
+            UUID id,
+            UUID delegateIdentityId,
+            UUID delegatorIdentityId,
+            UUID sourceGrantId,
+            UUID roleId,
+            AdministrativeScope scope,
+            Instant validFrom,
+            Instant validUntil,
+            UUID createdByIdentityId,
+            UUID correlationId,
+            UUID causationId,
+            Instant now) {
+        jdbc.update(
+                """
+                INSERT INTO administration.administrative_delegation (
+                    id, tenant_id,
+                    delegate_identity_id, delegator_identity_id,
+                    source_grant_id, role_id,
+                    scope_type, scope_resource_type, scope_ref_id, scope_key,
+                    state, valid_from, valid_until,
+                    created_by_identity_id,
+                    revoked_by_identity_id, revoked_at,
+                    correlation_id, causation_id,
+                    revision, created_at, updated_at)
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    'ACTIVE', ?, ?, ?,
+                    NULL, NULL, ?, ?,
+                    1, ?, ?)
+                """,
+                id,
+                tenant.tenantId(),
+                delegateIdentityId,
+                delegatorIdentityId,
+                sourceGrantId,
+                roleId,
+                scope.type().name(),
+                scope.resourceType(),
+                scope.resourceId(),
+                scope.scopeKey(),
+                nullableTimestamp(validFrom),
+                Timestamp.from(validUntil),
+                createdByIdentityId,
+                correlationId,
+                causationId,
+                Timestamp.from(now),
+                Timestamp.from(now));
+        return findDelegation(tenant, id).orElseThrow();
+    }
+
+    @Override
+    public AdministrativeDelegation revokeDelegation(
+            TenantContext tenant,
+            UUID delegationId,
+            long expectedRevision,
+            UUID revokedByIdentityId,
+            Instant now) {
+        int affected = jdbc.update(
+                """
+                UPDATE administration.administrative_delegation
+                SET state = 'REVOKED',
+                    revoked_by_identity_id = ?,
+                    revoked_at = ?,
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ?
+                  AND id = ?
+                  AND revision = ?
+                  AND state = 'ACTIVE'
+                """,
+                revokedByIdentityId,
+                Timestamp.from(now),
+                Timestamp.from(now),
+                tenant.tenantId(),
+                delegationId,
+                expectedRevision);
+        requireUpdated(affected, "administrative-delegation", delegationId, expectedRevision);
+        return findDelegation(tenant, delegationId).orElseThrow();
+    }
+
+    @Override
+    public List<AdministrativeDelegation> listDelegations(
+            TenantContext tenant,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        if (afterCreatedAt == null && afterId == null) {
+            return jdbc.query(
+                    delegationSelect()
+                            + """
+                             WHERE d.tenant_id = ?
+                             ORDER BY d.created_at, d.id
+                             LIMIT ?
+                             """,
+                    (rs, rowNum) -> delegationRow(rs),
+                    tenant.tenantId(),
+                    limit);
+        }
+        requireCursor(afterCreatedAt, afterId);
+        return jdbc.query(
+                delegationSelect()
+                        + """
+                         WHERE d.tenant_id = ?
+                           AND (d.created_at, d.id) > (?, ?)
+                         ORDER BY d.created_at, d.id
+                         LIMIT ?
+                         """,
+                (rs, rowNum) -> delegationRow(rs),
+                tenant.tenantId(),
+                Timestamp.from(afterCreatedAt),
+                afterId,
+                limit);
+    }
+
+    @Override
+    public List<AdministrativeDelegation> findAuthorityBearingDelegationsByRole(
+            TenantContext tenant,
+            UUID roleId,
+            Instant now,
+            int limit) {
+        return jdbc.query(
+                delegationSelect()
+                        + """
+                         WHERE d.tenant_id = ?
+                           AND d.role_id = ?
+                           AND d.state = 'ACTIVE'
+                           AND d.valid_until > ?
+                         ORDER BY d.created_at, d.id
+                         LIMIT ?
+                         """,
+                (rs, rowNum) -> delegationRow(rs),
+                tenant.tenantId(),
+                roleId,
+                Timestamp.from(now),
+                limit);
+    }
+
     private UUID ensurePermission(
             TenantContext tenant, AdministrativePermission permission, Instant now) {
         UUID proposedId = ids.nextId();
@@ -410,6 +564,46 @@ public final class JdbcAdministrativeAuthorityRepository implements Administrati
                 rs.getObject("id", UUID.class),
                 rs.getString("code"),
                 rs.getString("name"),
+                rs.getLong("revision"),
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant());
+    }
+
+    private static String delegationSelect() {
+        return """
+                SELECT d.id, d.delegate_identity_id, d.delegator_identity_id,
+                       d.source_grant_id, d.role_id,
+                       d.scope_type, d.scope_resource_type, d.scope_ref_id, d.scope_key,
+                       d.state, d.valid_from, d.valid_until,
+                       d.created_by_identity_id,
+                       d.revoked_by_identity_id, d.revoked_at,
+                       d.correlation_id, d.causation_id,
+                       d.revision, d.created_at, d.updated_at
+                FROM administration.administrative_delegation d
+                """;
+    }
+
+    private static AdministrativeDelegation delegationRow(
+            java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new AdministrativeDelegation(
+                rs.getObject("id", UUID.class),
+                rs.getObject("delegate_identity_id", UUID.class),
+                rs.getObject("delegator_identity_id", UUID.class),
+                rs.getObject("source_grant_id", UUID.class),
+                rs.getObject("role_id", UUID.class),
+                new AdministrativeScope(
+                        AdministrativeScopeType.valueOf(rs.getString("scope_type")),
+                        rs.getString("scope_resource_type"),
+                        rs.getObject("scope_ref_id", UUID.class),
+                        rs.getString("scope_key")),
+                AdministrativeDelegationState.valueOf(rs.getString("state")),
+                nullableInstant(rs.getTimestamp("valid_from")),
+                rs.getTimestamp("valid_until").toInstant(),
+                rs.getObject("created_by_identity_id", UUID.class),
+                rs.getObject("revoked_by_identity_id", UUID.class),
+                nullableInstant(rs.getTimestamp("revoked_at")),
+                rs.getObject("correlation_id", UUID.class),
+                rs.getObject("causation_id", UUID.class),
                 rs.getLong("revision"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("updated_at").toInstant());
