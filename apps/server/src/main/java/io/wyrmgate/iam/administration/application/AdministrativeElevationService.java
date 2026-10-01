@@ -76,9 +76,12 @@ public final class AdministrativeElevationService {
                     .orElseThrow(() -> failure("administrative_role_not_found", "Administrative role does not exist."));
             AdministrativeGrant basis = authority.findGrant(actor.tenant(), authorityBasisGrantId)
                     .orElseThrow(() -> failure("authority_basis_not_found", "Elevation authority basis does not exist."));
-            requireBasis(actor, basis, role.permissions(), scope, validFrom, validUntil, now);
+            AdministrativeRole basisRole = authority.findRole(actor.tenant(), basis.roleId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Administrative grant references missing role " + basis.roleId()));
+            requireBasis(actor, basis, basisRole.permissions(), role.permissions(), scope, validFrom, validUntil, now);
             String fingerprint = fingerprint(
-                    beneficiaryIdentityId, actor.identityId(), basis, role, scope, validFrom, validUntil);
+                    beneficiaryIdentityId, actor.identityId(), basis, basisRole, role, scope, validFrom, validUntil);
             return elevations.insert(
                     actor.tenant(), ids.nextId(), beneficiaryIdentityId, actor.identityId(),
                     basis.id(), role.id(), scope, validFrom, validUntil, fingerprint,
@@ -156,12 +159,16 @@ public final class AdministrativeElevationService {
                     .orElseThrow(() -> failure("administrative_role_not_found", "Administrative role does not exist."));
             AdministrativeGrant basis = authority.findGrant(actor.tenant(), locked.authorityBasisGrantId())
                     .orElseThrow(() -> failure("authority_basis_not_found", "Elevation authority basis does not exist."));
+            AdministrativeRole basisRole = authority.findRole(actor.tenant(), basis.roleId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Administrative grant references missing role " + basis.roleId()));
             requireBasis(
                     new AuthenticatedAdministrativeActor(actor.tenant(), locked.initiatorIdentityId()),
-                    basis, role.permissions(), locked.scope(), locked.validFrom(), locked.validUntil(), now);
+                    basis, basisRole.permissions(), role.permissions(),
+                    locked.scope(), locked.validFrom(), locked.validUntil(), now);
             String fingerprint = fingerprint(
                     locked.beneficiaryIdentityId(), locked.initiatorIdentityId(),
-                    basis, role, locked.scope(), locked.validFrom(), locked.validUntil());
+                    basis, basisRole, role, locked.scope(), locked.validFrom(), locked.validUntil());
             if (!fingerprint.equals(locked.requestFingerprint())) {
                 throw failure("stale_elevation_context", "Current authority context differs from the approved request.");
             }
@@ -230,6 +237,7 @@ public final class AdministrativeElevationService {
     private static void requireBasis(
             AuthenticatedAdministrativeActor actor,
             AdministrativeGrant basis,
+            Set<AdministrativePermission> basisPermissions,
             Set<AdministrativePermission> targetPermissions,
             AdministrativeScope targetScope,
             Instant targetValidFrom,
@@ -238,14 +246,14 @@ public final class AdministrativeElevationService {
         if (!basis.actorIdentityId().equals(actor.identityId())
                 || !basis.grantable()
                 || !basis.isEffectiveAt(now)
-                || !basisContains(basis, targetPermissions, targetScope, targetValidFrom, targetValidUntil, now)) {
+                || !basisPermissions.containsAll(targetPermissions)
+                || !basisContains(basis, targetScope, targetValidFrom, targetValidUntil, now)) {
             throw failure("elevation_ceiling_exceeded", "Requested elevation exceeds the current grantable basis.");
         }
     }
 
     private static boolean basisContains(
             AdministrativeGrant basis,
-            Set<AdministrativePermission> targetPermissions,
             AdministrativeScope targetScope,
             Instant targetValidFrom,
             Instant targetValidUntil,
@@ -258,25 +266,23 @@ public final class AdministrativeElevationService {
         return targetValidUntil.isAfter(effectiveStart);
     }
 
-    private String fingerprint(
+    private static String fingerprint(
             UUID beneficiaryIdentityId,
             UUID initiatorIdentityId,
             AdministrativeGrant basis,
+            AdministrativeRole basisRole,
             AdministrativeRole role,
             AdministrativeScope scope,
             Instant validFrom,
             Instant validUntil) {
-        AdministrativeRole basisRole = authority.findRole(
-                        new io.wyrmgate.iam.platform.tenant.TenantContext(
-                                // only used from same-tenant caller; repository lookup below is replaced by role permission check in requireBasis
-                                UUID.randomUUID()), basis.roleId())
-                .orElse(null);
-        // Avoid repository-derived nondeterminism in the canonical hash; target role permissions and basis identity/revision bind the context.
-        String permissions = role.permissions().stream()
+        String basisPermissions = basisRole.permissions().stream()
+                .map(AdministrativePermission::key).sorted().reduce("", (a, b) -> a + b + ",");
+        String targetPermissions = role.permissions().stream()
                 .map(AdministrativePermission::key).sorted().reduce("", (a, b) -> a + b + ",");
         String canonical = beneficiaryIdentityId + "|" + initiatorIdentityId + "|"
-                + basis.id() + "|" + basis.revision() + "|" + basis.roleId() + "|"
-                + role.id() + "|" + role.revision() + "|" + permissions + "|"
+                + basis.id() + "|" + basis.revision() + "|"
+                + basisRole.id() + "|" + basisRole.revision() + "|" + basisPermissions + "|"
+                + role.id() + "|" + role.revision() + "|" + targetPermissions + "|"
                 + scope.type() + "|" + scope.resourceType() + "|" + scope.resourceId() + "|" + scope.scopeKey() + "|"
                 + validFrom + "|" + validUntil;
         try {
