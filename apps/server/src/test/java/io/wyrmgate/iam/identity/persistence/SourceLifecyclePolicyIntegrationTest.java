@@ -83,7 +83,7 @@ class SourceLifecyclePolicyIntegrationTest {
                 ids,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("46");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("47");
     }
 
     @AfterAll
