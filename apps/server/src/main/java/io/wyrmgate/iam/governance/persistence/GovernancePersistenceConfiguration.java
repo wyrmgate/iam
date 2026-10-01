@@ -7,9 +7,11 @@ import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
 import io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand;
 import io.wyrmgate.iam.access.application.AccessReviewSnapshotQuery;
 import io.wyrmgate.iam.access.application.AccessReviewRemediationCommand;
+import io.wyrmgate.iam.administration.application.AdministrativeElevationApprovalCommand;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationScheduler;
+import io.wyrmgate.iam.governance.application.AdministrativeElevationApproverResolver;
 import io.wyrmgate.iam.governance.application.AccessRequestAccessApplicationService;
 import io.wyrmgate.iam.governance.application.AccessRequestApprovalResultSink;
 import io.wyrmgate.iam.governance.application.AccessRequestCommandService;
@@ -27,6 +29,7 @@ import io.wyrmgate.iam.governance.application.ApprovalResultQuery;
 import io.wyrmgate.iam.governance.application.ApprovalResultSink;
 import io.wyrmgate.iam.governance.application.AuthorizedAccessIntentSink;
 import io.wyrmgate.iam.governance.application.SubmittedRequestItemSink;
+import io.wyrmgate.iam.governance.application.GovernanceAdministrativeElevationApprovalService;
 import io.wyrmgate.iam.governance.application.GovernanceExceptionApprovalResultSink;
 import io.wyrmgate.iam.governance.application.GovernanceExceptionBoundaryScheduler;
 import io.wyrmgate.iam.governance.application.GovernanceExceptionChangeSink;
@@ -197,6 +200,21 @@ public class GovernancePersistenceConfiguration {
             TransactionExecutor transactions) {
         return new ApprovalCaseStartService(
                 approvals, ids, transactions);
+    }
+
+    @Bean
+    AdministrativeElevationApprovalCommand administrativeElevationApprovalCommand(
+            ObjectProvider<AdministrativeElevationApproverResolver> resolvers,
+            ApprovalCaseStartService starter,
+            ApprovalRepository approvals) {
+        AdministrativeElevationApproverResolver resolver = resolvers.getIfAvailable(() ->
+                (tenant, elevationId, initiatorIdentityId, beneficiaryIdentityId) -> {
+                    throw new io.wyrmgate.iam.governance.application.ApprovalCommandException(
+                            "administrative_elevation_approver_unavailable",
+                            "No administrative elevation approver resolver is configured.");
+                });
+        return new GovernanceAdministrativeElevationApprovalService(
+                resolver, starter, approvals);
     }
 
     @Bean
