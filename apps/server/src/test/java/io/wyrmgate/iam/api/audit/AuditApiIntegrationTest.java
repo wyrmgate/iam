@@ -68,6 +68,7 @@ class AuditApiIntegrationTest {
 
     private TenantContext tenant;
     private AuthenticatedAdministrativeActor actor;
+    private AuditCursorCodec cursors;
     private MockMvc authorized;
 
     @BeforeAll
@@ -119,6 +120,7 @@ class AuditApiIntegrationTest {
                 tenants.create("Audit API", NOW).id());
         actor = new AuthenticatedAdministrativeActor(
                 tenant, ids.nextId());
+        cursors = cursorCodec();
         authorized = mockMvc(authorization(AdministrativeScope.global()));
     }
 
@@ -335,7 +337,7 @@ class AuditApiIntegrationTest {
         AuditController controller = new AuditController(
                 queries,
                 authorization,
-                cursorCodec(),
+                cursors,
                 ids);
         return MockMvcBuilders
                 .standaloneSetup(controller)
