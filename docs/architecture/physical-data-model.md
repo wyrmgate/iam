@@ -942,3 +942,10 @@ Merge/split never rewrites foreign-capability references. Current accepted Ident
 ### IdentityAccessReduction persistence
 
 `access.identity_access_reduction` is the Access-owned durable process record for lifecycle-driven privilege reduction. Its causal uniqueness is `(tenant_id, identity_id, source_identity_revision)`; the Identity ID is a semantic cross-capability reference rather than a database foreign key. The row stores the source lifecycle/revision and snapshot time, `RUNNING|COMPLETED` process state, optimistic revision, processed count, and an optional paired `after_created_at + after_assignment_id` continuation. The supporting AccessAssignment partial index is ordered by tenant, Identity, creation time and ID for bounded deterministic reduction pages over non-terminal assignments.
+
+### Administration delegation persistence
+
+Flyway V48 adds `administration.administrative_delegation` as distinct Administration-owned authoritative state. Each row retains the actual delegate Identity, delegator Identity, one direct source AdministrativeGrant, the exact source AdministrativeRole, typed scope, finite validity, optimistic revision, creation/revocation evidence and optional correlation/causation. Tenant-safe foreign keys bind only same-capability source grant/role state; governed Identity references remain stable cross-capability IDs without database foreign keys.
+
+Delegation authority is source-dependent by semantics: persistence does not copy it into an independent direct grant. Operation-time evaluation re-reads the current direct source and therefore source revocation/expiry/loss of delegability ends delegated authority immediately even when the delegation row still records ACTIVE for historical/process purposes.
+
