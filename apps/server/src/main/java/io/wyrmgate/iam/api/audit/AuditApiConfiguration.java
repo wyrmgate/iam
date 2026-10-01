@@ -18,15 +18,6 @@ import org.springframework.context.annotation.Configuration;
 class AuditApiConfiguration {
 
     @Bean
-    AuditController auditController(
-            AuditQueryService queries,
-            AdministrativeAuthorizationService authorization,
-            AuditCursorCodec cursors,
-            IdGenerator ids) {
-        return new AuditController(queries, authorization, cursors, ids);
-    }
-
-    @Bean
     AuditCursorCodec auditCursorCodec(
             ObjectProvider<SigningKeyProvider> signingKeys,
             ControlPlaneAuthProperties authProperties,
