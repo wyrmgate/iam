@@ -8,6 +8,10 @@ import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
+import io.wyrmgate.iam.audit.application.AuditRecordDraft;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registration;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
@@ -17,21 +21,30 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class AccessApiMutationService {
+
+    private static final Logger LOG =
+            LoggerFactory.getLogger(AccessApiMutationService.class);
 
     private final AdministrativeAuthorizationService authorization;
     private final AccessAssignmentCommandService commands;
     private final AccessAssignmentRepository assignments;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
+    private final SecurityAuditPort audit;
+    private final IdGenerator ids;
 
     AccessApiMutationService(
             AdministrativeAuthorizationService authorization,
             AccessAssignmentCommandService commands,
             AccessAssignmentRepository assignments,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         this.authorization = Objects.requireNonNull(
                 authorization, "authorization");
         this.commands = Objects.requireNonNull(commands, "commands");
@@ -41,6 +54,8 @@ final class AccessApiMutationService {
                 idempotency, "idempotency");
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
+        this.audit = Objects.requireNonNull(audit, "audit");
+        this.ids = Objects.requireNonNull(ids, "ids");
     }
 
     AccessAssignment create(
@@ -57,51 +72,70 @@ final class AccessApiMutationService {
             RequestFingerprint fingerprint,
             Instant now,
             UUID correlationId) {
-        return transactions.required(() -> {
-            require(
+        try {
+            AccessAssignment result = transactions.required(() -> {
+                require(
+                        actor,
+                        AdministrativePermissions.ACCESS_ASSIGNMENT_CREATE,
+                        AdministrativeResource.collection("access-assignment"),
+                        now,
+                        correlationId);
+                Registration registration = register(
+                        actor,
+                        "api.access.assignment.create.v1",
+                        key,
+                        fingerprint,
+                        now);
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replay(actor, registration, correlationId);
+                }
+                AccessAssignment created =
+                        targetKind == AccessAssignment.TargetKind.ROLE
+                                ? commands.createRoleAssignment(
+                                        actor.tenant(),
+                                        identityId,
+                                        roleId,
+                                        constraintKind,
+                                        specificPrincipalId,
+                                        validFrom,
+                                        validUntil,
+                                        now)
+                                : commands.createEntitlementAssignment(
+                                        actor.tenant(),
+                                        identityId,
+                                        entitlementId,
+                                        constraintKind,
+                                        specificPrincipalId,
+                                        validFrom,
+                                        validUntil,
+                                        now);
+                complete(
+                        actor,
+                        "api.access.assignment.create.v1",
+                        key,
+                        fingerprint,
+                        created.id(),
+                        now);
+                return created;
+            });
+            recordOutcome(
                     actor,
-                    AdministrativePermissions.ACCESS_ASSIGNMENT_CREATE,
-                    AdministrativeResource.collection("access-assignment"),
+                    result.id(),
+                    "access-assignment:create",
+                    AuditOutcome.SUCCESS,
                     now,
                     correlationId);
-            Registration registration = register(
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
                     actor,
-                    "api.access.assignment.create.v1",
-                    key,
-                    fingerprint,
-                    now);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                return replay(actor, registration, correlationId);
-            }
-            AccessAssignment created =
-                    targetKind == AccessAssignment.TargetKind.ROLE
-                            ? commands.createRoleAssignment(
-                                    actor.tenant(),
-                                    identityId,
-                                    roleId,
-                                    constraintKind,
-                                    specificPrincipalId,
-                                    validFrom,
-                                    validUntil,
-                                    now)
-                            : commands.createEntitlementAssignment(
-                                    actor.tenant(),
-                                    identityId,
-                                    entitlementId,
-                                    constraintKind,
-                                    specificPrincipalId,
-                                    validFrom,
-                                    validUntil,
-                                    now);
-            complete(
-                    actor,
-                    "api.access.assignment.create.v1",
-                    key,
-                    fingerprint,
-                    created.id(),
-                    now);
-            return created;
-        });
+                    null,
+                    "access-assignment:create",
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
     }
 
     AccessAssignment suspend(
@@ -122,6 +156,7 @@ final class AccessApiMutationService {
                 correlationId,
                 AdministrativePermissions.ACCESS_ASSIGNMENT_SUSPEND,
                 "api.access.assignment.suspend.v1",
+                "access-assignment:suspend",
                 () -> commands.suspend(
                         actor.tenant(),
                         assignmentId,
@@ -147,6 +182,7 @@ final class AccessApiMutationService {
                 correlationId,
                 AdministrativePermissions.ACCESS_ASSIGNMENT_RESUME,
                 "api.access.assignment.resume.v1",
+                "access-assignment:resume",
                 () -> commands.resume(
                         actor.tenant(),
                         assignmentId,
@@ -172,6 +208,7 @@ final class AccessApiMutationService {
                 correlationId,
                 AdministrativePermissions.ACCESS_ASSIGNMENT_CANCEL,
                 "api.access.assignment.cancel.v1",
+                "access-assignment:cancel",
                 () -> commands.cancel(
                         actor.tenant(),
                         assignmentId,
@@ -197,6 +234,7 @@ final class AccessApiMutationService {
                 correlationId,
                 AdministrativePermissions.ACCESS_ASSIGNMENT_REVOKE,
                 "api.access.assignment.revoke.v1",
+                "access-assignment:revoke",
                 () -> commands.revoke(
                         actor.tenant(),
                         assignmentId,
@@ -214,8 +252,10 @@ final class AccessApiMutationService {
             UUID correlationId,
             AdministrativePermission permission,
             String namespace,
+            String auditAction,
             Supplier<AccessAssignment> action) {
-        return transactions.required(() -> {
+        try {
+            AccessAssignment result = transactions.required(() -> {
             require(
                     actor,
                     permission,
@@ -243,8 +283,62 @@ final class AccessApiMutationService {
                     fingerprint,
                     updated.id(),
                     now);
-            return updated;
-        });
+                return updated;
+            });
+            recordOutcome(
+                    actor,
+                    assignmentId,
+                    auditAction,
+                    AuditOutcome.SUCCESS,
+                    now,
+                    correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(
+                    actor,
+                    assignmentId,
+                    auditAction,
+                    auditOutcome(failure),
+                    now,
+                    correlationId);
+            throw failure;
+        }
+    }
+
+    private static AuditOutcome auditOutcome(RuntimeException failure) {
+        return failure instanceof AccessApiException api
+                        && api.status() == org.springframework.http.HttpStatus.FORBIDDEN
+                ? AuditOutcome.DENIED
+                : AuditOutcome.FAILURE;
+    }
+
+    private void recordOutcome(
+            AuthenticatedAdministrativeActor actor,
+            UUID assignmentId,
+            String actionType,
+            AuditOutcome outcome,
+            Instant occurredAt,
+            UUID correlationId) {
+        try {
+            audit.append(
+                    actor.tenant(),
+                    new AuditRecordDraft(
+                            ids.nextId(),
+                            occurredAt,
+                            actor.identityId(),
+                            actionType,
+                            "access-assignment",
+                            assignmentId,
+                            outcome,
+                            correlationId,
+                            null));
+        } catch (RuntimeException auditFailure) {
+            LOG.warn(
+                    "AccessAssignment AuditRecord append failed; correlationId={} actionType={} outcome={}",
+                    correlationId,
+                    actionType,
+                    outcome);
+        }
     }
 
     private Registration register(
