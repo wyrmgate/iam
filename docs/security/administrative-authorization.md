@@ -83,9 +83,13 @@ For example, an Application owner may be permitted to manage requestability, app
 
 ## Delegation
 
-Administrative delegation is separate from approval delegation. Delegation is explicit, scoped and temporal. A delegate cannot receive more authority than the delegator has and may only use delegated authority while the delegator still possesses it.
+ADR-0032 makes administrative delegation a distinct Administration-owned authority object rather than a generic AdministrativeGrant type or approval delegation. The first implementation is deliberately single-hop: one delegate, one delegator, and one current direct source AdministrativeGrant. Re-delegation is not allowed.
 
-Audit must identify the actual actor and the acting-for/delegation context; it must never pretend the delegator performed the action.
+The source direct grant must explicitly be delegable. A delegation keeps the same AdministrativeRole as its source and may only narrow typed scope and time. It records the actual delegate, delegator, source grant, role, scope, finite validity, revision, creation/revocation evidence, and correlation/causation. At operation time Administration revalidates both the delegation and its source; source revocation, expiry, loss of delegability, role narrowing, or other loss of the delegated authority immediately makes the delegation ineffective without waiting for cleanup.
+
+Scope containment is fail-closed. GLOBAL can contain a supported narrower scope; SPECIFIC_RESOURCE and CANONICAL_ATTRIBUTE_CLASSIFICATION use exact containment. Other modeled scope kinds cannot be granted/delegated until concrete owning-capability hierarchy/population semantics can prove containment.
+
+Audit identifies the delegate as the actual actor. Delegator/source details remain Administration provenance linked through semantic resource references and correlation/causation; Audit must never pretend the delegator performed the action.
 
 ## High-impact actions
 
@@ -102,9 +106,25 @@ Sensitive actions may require stronger authentication and/or maker-checker appro
 
 Authorization and approval are separate questions: authorization determines whether the actor may initiate/perform an operation; governance policy determines whether the operation requires additional approval before execution.
 
+## Grantability and self-escalation prevention
+
+The semantic permission `administration:manage-authorization` authorizes a management operation but is not a superuser/mint-authority permission. ADR-0032 adds explicit grantable/delegable rights to direct AdministrativeGrant authority.
+
+A privilege-increasing direct grant must name one current effective grantable direct grant held by the acting Identity as its authority basis. That one basis must contain the target role's complete permission set, requested scope, validity, and any propagated grantable/delegable rights. The first slice does not union multiple bases to synthesize authority.
+
+AdministrativeRole permission edits are evaluated prospectively. Adding a permission must be justified for every current direct grant/delegation whose effective authority would increase; otherwise the whole edit fails closed. Permission removal is authority reduction and does not require the privilege-increase ceiling check, although normal operation authorization and optimistic revision still apply.
+
+The burn-once bootstrap permission set is not expanded. Its root grant may be explicitly materialized as grantable/delegable only for its existing role/scope/validity; no wildcard authority is introduced.
+
 ## Temporary elevation and break-glass
 
-Powerful administration should support time-bound/JIT grants. Break-glass elevation is separate from emergency access to a governed business application and requires short validity, explicit reason/incident reference, strong authentication, immutable audit/evidence, notification and post-use review.
+ADR-0032 models temporary/JIT elevation as a distinct Administration-owned process/authority source, not as an ordinary long-lived AdministrativeGrant shortcut. An elevation records beneficiary/initiator, requested role/scope/finite validity, one current grantable authority basis, revision, correlation/causation and, where required, a Governance ApprovalCase reference plus immutable approval-context fingerprint. Governance approval is evidence only; it never mutates Administration persistence.
+
+Self-approval by the elevation beneficiary/initiator is denied by default. Immediately before activation, Administration revalidates current actor eligibility, authority basis, role permissions, scope/time containment, approval context and any mandatory assurance/policy context. Stale approval cannot create current authority. Elevation expiry is semantic from time and cannot be extended by scheduler delay.
+
+Break-glass is a separate typed Administration emergency process and a generic GLOBAL role/grant is never treated as break-glass. Activation requires exact governed actor, requested role/scope, short finite validity, explicit reason, incident/reference, strong provider-neutral authentication assurance, immutable Administration evidence, AuditRecord evidence, durable notification work/evidence and a durable post-use review obligation.
+
+The control-plane security context uses typed provider-neutral assurance such as BASELINE/STRONG plus relevant authentication/step-up time. Provider adapters may map their own signals into this contract, but bearer possession and raw OIDC claim names are not canonical assurance semantics. Notification/review delivery is durable process work and does not define authority validity; break-glass expiry/revocation takes effect immediately from Administration state/time.
 
 ## API/service actors
 
@@ -133,7 +153,7 @@ All canonical scope types are structurally modeled. The first evaluator intentio
 
 `CANONICAL_ATTRIBUTE_CLASSIFICATION` is now implemented only for exact classification-key matching with `canonical-attribute-value:read`; it has no hierarchy, wildcard or sensitivity ordering semantics. `ORGANIZATION`, `APPLICATION`, `APPLICATION_TARGET`, `SOURCE_SYSTEM`, `CONNECTOR_INSTANCE` and `IDENTITY_POPULATION` remain fail-closed until their concrete hierarchy/population semantics and owning-capability queries are implemented. A resource-specific grant never authorizes a collection query.
 
-A fresh installation contains no administrative roles or grants and therefore denies protected control-plane operations. Initial-administrator bootstrap/provisioning, role/grant management commands, delegation/elevation, assurance-aware policy, security-audit emission for sensitive authorization decisions, and transport authentication/actor resolution are separate implementation slices. Public Identity runtime endpoints remain gated until the required authentication/actor-resolution and safe administration provisioning path exist.
+A fresh installation contains no administrative roles or grants and therefore denies protected control-plane operations. Initial-administrator bootstrap/provisioning and transport authentication/actor resolution are implemented. Role/grant management, delegation/elevation and assurance-aware break-glass remain subsequent implementation slices governed by ADR-0032. Public control-plane mutations continue to use operation-time authorization and ADR-0031 AuditRecord evidence.
 
 ## Security invariants
 
