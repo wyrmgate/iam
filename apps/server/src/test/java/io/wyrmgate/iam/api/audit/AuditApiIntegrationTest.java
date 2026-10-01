@@ -269,6 +269,16 @@ class AuditApiIntegrationTest {
                 other,
                 otherActor,
                 AdministrativeScope.global());
+
+        append(
+                tenant,
+                NOW.minusSeconds(3),
+                "identity:update-metadata",
+                "identity",
+                ids.nextId(),
+                AuditOutcome.SUCCESS,
+                ids.nextId());
+
         String page = authorized.perform(
                         get("/api/v1/audit-records")
                                 .requestAttr(ACTOR_ATTRIBUTE, actor)
