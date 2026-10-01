@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/audit-records")
-final class AuditController {
+public final class AuditController {
 
     private static final int DEFAULT_LIMIT = 50;
 
