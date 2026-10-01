@@ -494,16 +494,25 @@ public final class JdbcAdministrativeAuthorityRepository implements Administrati
         return jdbc.query(
                 delegationSelect()
                         + """
+                         JOIN administration.administrative_grant g
+                           ON g.tenant_id = d.tenant_id AND g.id = d.source_grant_id
                          WHERE d.tenant_id = ?
                            AND d.role_id = ?
                            AND d.state = 'ACTIVE'
                            AND d.valid_until > ?
+                           AND g.state = 'ACTIVE'
+                           AND g.delegable = true
+                           AND g.role_id = d.role_id
+                           AND (g.valid_from IS NULL OR g.valid_from <= ?)
+                           AND (g.valid_until IS NULL OR g.valid_until > ?)
                          ORDER BY d.created_at, d.id
                          LIMIT ?
                          """,
                 (rs, rowNum) -> delegationRow(rs),
                 tenant.tenantId(),
                 roleId,
+                Timestamp.from(now),
+                Timestamp.from(now),
                 Timestamp.from(now),
                 limit);
     }
