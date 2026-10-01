@@ -522,7 +522,7 @@ public final class JdbcAdministrativeAuthorityRepository implements Administrati
             TenantContext tenant,
             UUID roleId,
             Instant now) {
-        Integer count = jdbc.queryForObject(
+        Long count = jdbc.queryForObject(
                 """
                 SELECT
                     (SELECT count(*)
@@ -540,7 +540,7 @@ public final class JdbcAdministrativeAuthorityRepository implements Administrati
                        AND b.valid_from <= ?
                        AND b.valid_until > ?)
                 """,
-                Integer.class,
+                Long.class,
                 tenant.tenantId(), roleId, Timestamp.from(now), Timestamp.from(now),
                 tenant.tenantId(), roleId, Timestamp.from(now), Timestamp.from(now));
         return count != null && count > 0;
