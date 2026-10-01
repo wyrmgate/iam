@@ -524,7 +524,7 @@ public final class AdministrationController {
     }
 
     private static long revision(String value, UUID correlationId) {
-        if (value == null || !value.matches("\\"rev-[1-9][0-9]*\\"")) {
+        if (value == null || !value.matches("\\\"rev-[1-9][0-9]*\\\"")) {
             throw AdministrationApiException.validation(
                     correlationId, "If-Match", "invalid_revision",
                     "If-Match must be a strong revision ETag such as \"rev-3\".");
