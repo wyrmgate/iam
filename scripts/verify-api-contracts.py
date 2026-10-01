@@ -18,6 +18,7 @@ ASYNCAPI = ROOT / "apps/server/src/main/resources/contracts/asyncapi/identity-ev
 CONNECTOR_WORKER_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/connector-worker-v1.json"
 INTEGRATION_ADMIN_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/integration-admin-v1.json"
 CREDENTIAL_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/credential-v1.json"
+AUDIT_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/audit-v1.json"
 
 
 def load_json(path: Path) -> dict:
@@ -496,12 +497,85 @@ def verify_credential_openapi(document: dict) -> None:
             f"Credential API leaked raw-secret-shaped property: {forbidden}"
         )
 
+
+def verify_audit_openapi(document: dict) -> None:
+    assert document.get("openapi", "").startswith("3.1.")
+    assert document.get("security") == [{"controlPlaneBearer": []}]
+    assert document.get("x-wyrmgate-contract-status") == (
+        "runtime-exposed-authenticated-authorized"
+    )
+
+    paths = document.get("paths", {})
+    assert set(paths) == {
+        "/audit-records",
+        "/audit-records/{auditRecordId}",
+    }
+
+    listing = paths["/audit-records"]["get"]
+    assert listing.get("x-wyrmgate-administrative-permission") == "audit:read"
+    listing_params = ref_names(listing)
+    assert {
+        "ActorId",
+        "ActionType",
+        "ResourceType",
+        "ResourceId",
+        "Outcome",
+        "CorrelationIdFilter",
+        "Cursor",
+        "Limit",
+    }.issubset(listing_params)
+
+    detail = paths["/audit-records/{auditRecordId}"]["get"]
+    assert detail.get("x-wyrmgate-administrative-permission") == "audit:read"
+
+    schemas = document["components"]["schemas"]
+    audit = schemas["AuditRecord"]
+    assert audit.get("additionalProperties") is False
+    assert set(audit["properties"]) == {
+        "id",
+        "occurredAt",
+        "recordedAt",
+        "actorId",
+        "actionType",
+        "resourceType",
+        "resourceId",
+        "outcome",
+        "correlationId",
+        "causationId",
+    }
+    assert set(audit["properties"]["outcome"]["enum"]) == {
+        "SUCCESS",
+        "DENIED",
+        "FAILURE",
+    }
+
+    serialized = json.dumps(document, sort_keys=True).lower()
+    for forbidden in (
+        "material_snapshot",
+        "materialsnapshot",
+        "integrity_metadata",
+        "integritymetadata",
+        "password",
+        "privatekey",
+        "private_key",
+        "refreshtoken",
+        "refresh_token",
+        "secretvalue",
+        "secret_value",
+    ):
+        assert forbidden not in serialized, (
+            f"Audit API leaked deferred or secret-shaped field: {forbidden}"
+        )
+
+
+
 def main() -> None:
     verify_openapi(load_json(OPENAPI))
     verify_asyncapi(load_json(ASYNCAPI))
     verify_connector_worker_openapi(load_json(CONNECTOR_WORKER_OPENAPI))
     verify_integration_admin_openapi(load_json(INTEGRATION_ADMIN_OPENAPI))
     verify_credential_openapi(load_json(CREDENTIAL_OPENAPI))
+    verify_audit_openapi(load_json(AUDIT_OPENAPI))
     print("API contracts verified")
 
 
