@@ -11,6 +11,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.persistence.JdbcAdministrativeAuthorizationRepository;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.persistence.JdbcCatalogRepository;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
@@ -42,6 +45,7 @@ import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -111,7 +115,12 @@ class IntegrationAdminApiPersistenceIntegrationTest {
         mutations = new IntegrationAdminApiMutationService(
                 authorization, commands, integration,
                 mappingCommands, observationMappings,
-                idempotency, transactions);
+                idempotency, transactions,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()),
+                ids);
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("46");
     }
 
@@ -124,6 +133,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
     void clear() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    audit.audit_record,
                     integration.connector_worker_session_contract,
                     integration.connector_worker_session_capability,
                     integration.connector_worker_session,
@@ -169,11 +179,33 @@ class IntegrationAdminApiPersistenceIntegrationTest {
         assertThat(created.configuration()).containsEntry("baseUrl", "https://provider.example");
         assertThat(integration.findConnector(tenant, created.id()).orElseThrow().secretConfigured()).isTrue();
 
+        Integer deniedCreate = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'connector:create'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                """, Integer.class, tenant.tenantId(), actor.identityId());
+        assertThat(deniedCreate).isEqualTo(1);
+
         var replay = mutations.createConnector(
                 actor, "SCIM", "runtime.scim", "1.0", 1,
                 Map.of("baseUrl", "https://provider.example"), "vault://connector/1",
                 "connector-create-001", fingerprint, now.plusSeconds(1), ids.nextId());
         assertThat(replay.id()).isEqualTo(created.id());
+
+        Integer createSuccess = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'connector:create'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), created.id());
+        assertThat(createSuccess).isEqualTo(2);
 
         assertThatThrownBy(() -> mutations.createConnector(
                 actor, "SCIM", "runtime.scim", "1.0", 2,
@@ -226,6 +258,17 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 actor, connector.id(), "runtime.scim", "1.2", 3, Map.of(), null, 1,
                 "connector-update-002", fp("update2"), now.plusSeconds(2), ids.nextId()))
                 .isInstanceOf(StaleWriteException.class);
+
+        Integer staleFailure = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'connector:update'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), connector.id());
+        assertThat(staleFailure).isEqualTo(1);
 
         UUID otherConnector = ids.nextId();
         jdbc.update("""
@@ -297,6 +340,90 @@ class IntegrationAdminApiPersistenceIntegrationTest {
         assertThat(workerFact).isEqualTo("{}")
                 .doesNotContain(subject.issuer())
                 .doesNotContain(subject.subject());
+
+        Integer workerCreate = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'connector-worker:create'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), worker.id());
+        assertThat(workerCreate).isEqualTo(1);
+
+        Integer workerFailure = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'connector-worker:update'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), worker.id());
+        assertThat(workerFailure).isEqualTo(1);
+
+        Integer workerDisable = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'connector-worker:disable'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """, Integer.class, tenant.tenantId(), actor.identityId(), worker.id());
+        assertThat(workerDisable).isEqualTo(1);
+
+        Integer materialized = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND resource_type IN ('connector', 'connector-binding', 'connector-worker',
+                                        'entitlement-observation-mapping')
+                  AND (material_snapshot IS NOT NULL OR integrity_metadata IS NOT NULL)
+                """, Integer.class, tenant.tenantId());
+        assertThat(materialized).isZero();
+    }
+
+    @Test
+    void auditFailureDoesNotRewriteSuccessfulIntegrationOutcome() {
+        Instant now = Instant.parse("2026-09-21T08:30:00Z");
+        TenantContext tenant = tenant("audit");
+        var actor = actor(tenant, now);
+        grant(tenant, actor.identityId(), AdministrativePermissions.CONNECTOR_CREATE, now);
+
+        var factSink = new JdbcIntegrationAdministrationFactSink(outbox, ids);
+        var commands = new IntegrationAdministrationCommandService(
+                integration, factSink, ids, transactions);
+        var observationMappings = new JdbcIntegrationObservationRepository(jdbc);
+        var mappingCommands = new IntegrationEntitlementMappingService(
+                integration,
+                observationMappings,
+                new CatalogQueryService(new JdbcCatalogRepository(jdbc)),
+                factSink,
+                new JdbcIntegrationObservedAccessFactSink(outbox, ids),
+                ids,
+                transactions);
+        SecurityAuditPort unavailableAudit = (requestedTenant, draft) -> {
+            throw new IllegalStateException("audit unavailable");
+        };
+        IntegrationAdminApiMutationService unavailable =
+                new IntegrationAdminApiMutationService(
+                        authorization,
+                        commands,
+                        integration,
+                        mappingCommands,
+                        observationMappings,
+                        idempotency,
+                        transactions,
+                        unavailableAudit,
+                        ids);
+
+        var created = unavailable.createConnector(
+                actor, "SCIM", "runtime.scim", "1.0", 1, Map.of(), null,
+                "connector-audit-unavailable", fp("audit-unavailable"), now, ids.nextId());
+
+        assertThat(integration.findConnector(tenant, created.id())).isPresent();
     }
 
     private TenantContext tenant(String name) {
