@@ -15,8 +15,10 @@ public interface AdministrativeAuthorizationRepository {
             AdministrativePermission permission);
 
 
-    List<AdministrativeDelegatedAuthorityCandidate> findCandidateDelegations(
+    default List<AdministrativeDelegatedAuthorityCandidate> findCandidateDelegations(
             TenantContext tenant,
             UUID actorIdentityId,
-            AdministrativePermission permission);
+            AdministrativePermission permission) {
+        return List.of();
+    }
 }
