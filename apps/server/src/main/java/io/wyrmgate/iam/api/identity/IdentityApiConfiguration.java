@@ -55,13 +55,17 @@ class IdentityApiConfiguration {
             PrincipalCommandService commands,
             PrincipalRepository principals,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new PrincipalApiMutationService(
                 authorization,
                 commands,
                 principals,
                 idempotency,
-                transactions);
+                transactions,
+                audit,
+                ids);
     }
 
     @Bean
