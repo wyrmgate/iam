@@ -15,6 +15,9 @@ import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AdministrativeScopeType;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.credential.application.CredentialQueryService;
 import io.wyrmgate.iam.credential.application.CredentialRotationService;
 import io.wyrmgate.iam.credential.application.CredentialService;
@@ -120,6 +123,7 @@ class CredentialApiIntegrationTest {
                 TRUNCATE TABLE
                     credential.credential_rotation,
                     credential.credential,
+                    audit.audit_record,
                     platform.scheduled_work,
                     platform.idempotency_record,
                     platform.tenant
@@ -297,6 +301,56 @@ class CredentialApiIntegrationTest {
                 .andExpect(
                         jsonPath("$.lifecycleState")
                                 .value("REVOKED"));
+
+        Integer successActions = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND resource_type = 'credential'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                  AND action_type IN (
+                      'credential:create',
+                      'credential:rotate',
+                      'credential:compromise',
+                      'credential:revoke')
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                credentialId);
+        assertThat(successActions).isEqualTo(5);
+
+        Integer failedRevoke = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'credential:revoke'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                credentialId);
+        assertThat(failedRevoke).isEqualTo(1);
+
+        Integer materializedAuditPayloads = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND resource_type = 'credential'
+                  AND (material_snapshot IS NOT NULL
+                       OR integrity_metadata IS NOT NULL)
+                """,
+                Integer.class,
+                tenant.tenantId());
+        assertThat(materializedAuditPayloads).isZero();
     }
 
     @Test
@@ -459,6 +513,101 @@ class CredentialApiIntegrationTest {
     }
 
     @Test
+    void deniedCredentialMutationIsAuditedWithoutRequestMaterial()
+            throws Exception {
+        MockMvc denied = mockMvc(
+                authorization(actor, false));
+        UUID correlationId = ids.nextId();
+
+        denied.perform(
+                        post("/api/v1/credentials")
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("X-Correlation-Id", correlationId)
+                                .header(
+                                        "Idempotency-Key",
+                                        "credential-audit-denied")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "principalId":"%s",
+                                          "kind":"API_KEY",
+                                          "secretReference":{
+                                            "providerType":"vault",
+                                            "referenceKey":"must-not-enter-audit"
+                                          },
+                                          "validFrom":null,
+                                          "validUntil":null
+                                        }
+                                        """.formatted(principalId)))
+                .andExpect(status().isForbidden());
+
+        Integer deniedCount = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'credential:create'
+                  AND resource_type = 'credential'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                  AND correlation_id = ?
+                  AND material_snapshot IS NULL
+                  AND integrity_metadata IS NULL
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                actor.identityId(),
+                correlationId);
+        assertThat(deniedCount).isEqualTo(1);
+    }
+
+    @Test
+    void auditFailureDoesNotRewriteSuccessfulCredentialOutcome()
+            throws Exception {
+        SecurityAuditPort unavailableAudit =
+                (requestedTenant, draft) -> {
+                    throw new IllegalStateException(
+                            "audit unavailable");
+                };
+        MockMvc withUnavailableAudit = mockMvc(
+                authorization(actor, true),
+                unavailableAudit);
+
+        String location = withUnavailableAudit.perform(
+                        post("/api/v1/credentials")
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header(
+                                        "Idempotency-Key",
+                                        "credential-audit-unavailable")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "principalId":"%s",
+                                          "kind":"API_KEY",
+                                          "secretReference":{
+                                            "providerType":"vault",
+                                            "referenceKey":"audit-unavailable"
+                                          },
+                                          "validFrom":null,
+                                          "validUntil":null
+                                        }
+                                        """.formatted(principalId)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+
+        UUID credentialId = UUID.fromString(
+                location.substring(location.lastIndexOf('/') + 1));
+        assertThat(repository.findCredential(
+                        tenant, credentialId))
+                .isPresent();
+    }
+
+    @Test
     void idempotencyKeyReuseWithDifferentCreateConflicts()
             throws Exception {
         String first = """
@@ -505,6 +654,17 @@ class CredentialApiIntegrationTest {
 
     private MockMvc mockMvc(
             AdministrativeAuthorizationService authorization) {
+        return mockMvc(
+                authorization,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
+    }
+
+    private MockMvc mockMvc(
+            AdministrativeAuthorizationService authorization,
+            SecurityAuditPort audit) {
         CredentialApiMutationService mutations =
                 new CredentialApiMutationService(
                         authorization,
@@ -512,7 +672,9 @@ class CredentialApiIntegrationTest {
                         rotations,
                         repository,
                         idempotency,
-                        transactions);
+                        transactions,
+                        audit,
+                        ids);
         CredentialController controller =
                 new CredentialController(
                         queries,

@@ -2,10 +2,12 @@ package io.wyrmgate.iam.api.credential;
 
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.credential.application.CredentialRepository;
 import io.wyrmgate.iam.credential.application.CredentialRotationService;
 import io.wyrmgate.iam.credential.application.CredentialService;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
+import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
@@ -27,14 +29,18 @@ class CredentialApiConfiguration {
             CredentialRotationService rotations,
             CredentialRepository repository,
             JdbcIdempotencyRepository idempotency,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
         return new CredentialApiMutationService(
                 authorization,
                 credentials,
                 rotations,
                 repository,
                 idempotency,
-                transactions);
+                transactions,
+                audit,
+                ids);
     }
 
     @Bean
