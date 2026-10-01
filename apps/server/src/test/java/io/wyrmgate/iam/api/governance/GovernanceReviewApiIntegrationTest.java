@@ -15,6 +15,9 @@ import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeAct
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
+import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.governance.application.ReviewQueryService;
 import io.wyrmgate.iam.governance.application.ReviewRepository;
 import io.wyrmgate.iam.governance.application.ReviewService;
@@ -86,6 +89,7 @@ class GovernanceReviewApiIntegrationTest {
     private ReviewRepository repository;
     private ReviewQueryService queries;
     private ReviewService reviewService;
+    private AdministrativeAuthorizationService authorization;
     private Map<UUID,AdministrativeScope> adminScopes;
     private MockMvc mvc;
 
@@ -129,6 +133,7 @@ class GovernanceReviewApiIntegrationTest {
                     governance.review_remediation,
                     governance.review_item,
                     governance.review_campaign,
+                    audit.audit_record,
                     platform.idempotency_record,
                     platform.outbox_event,
                     platform.tenant
@@ -211,32 +216,16 @@ class GovernanceReviewApiIntegrationTest {
                             now,
                             now));
                 };
-        AdministrativeAuthorizationService authorization =
+        authorization =
                 new AdministrativeAuthorizationService(
                         grants,
                         (requestedTenant, identityId) -> true);
 
-        GovernanceReviewApiMutationService mutations =
-                new GovernanceReviewApiMutationService(
-                        authorization,
-                        reviewService,
-                        repository,
-                        queries,
-                        idempotency,
-                        transactions);
-        GovernanceReviewController controller =
-                new GovernanceReviewController(
-                        repository,
-                        queries,
-                        mutations,
-                        authorization,
-                        ids,
-                        cursorCodec());
-        mvc = MockMvcBuilders
-                .standaloneSetup(controller)
-                .setControllerAdvice(
-                        new GovernanceApiErrorHandler(ids))
-                .build();
+        mvc = mockMvc(
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()));
     }
 
     @Test
@@ -552,6 +541,98 @@ class GovernanceReviewApiIntegrationTest {
                 .andExpect(
                         jsonPath("$.state")
                                 .value("PENDING"));
+
+        Integer createSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'review-campaign:create'
+                  AND resource_type = 'review-campaign'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                adminId,
+                campaignId);
+        assertThat(createSuccess).isEqualTo(2);
+
+        Integer startSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'review-campaign:start'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                adminId,
+                campaignId);
+        assertThat(startSuccess).isEqualTo(2);
+
+        Integer staleStart = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND action_type = 'review-campaign:start'
+                  AND resource_id = ?
+                  AND outcome = 'FAILURE'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                campaignId);
+        assertThat(staleStart).isEqualTo(1);
+
+        Integer deniedRevoke = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'review-item:revoke'
+                  AND resource_id = ?
+                  AND outcome = 'DENIED'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                adminId,
+                item.id());
+        assertThat(deniedRevoke).isEqualTo(1);
+
+        Integer revokeSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'review-item:revoke'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                reviewerId,
+                item.id());
+        assertThat(revokeSuccess).isEqualTo(2);
+
+        Integer materializedPayloads = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND resource_type IN ('review-campaign', 'review-item')
+                  AND (material_snapshot IS NOT NULL
+                       OR integrity_metadata IS NOT NULL)
+                """,
+                Integer.class,
+                tenant.tenantId());
+        assertThat(materializedPayloads).isZero();
     }
 
     @Test
@@ -652,6 +733,201 @@ class GovernanceReviewApiIntegrationTest {
                                         ACTOR_ATTRIBUTE,
                                         outsider))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void keepDecisionAndCreateDenialAreAudited()
+            throws Exception {
+        adminScopes.remove(adminId);
+        mvc.perform(
+                        post("/api/v1/governance/review-campaigns")
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        admin)
+                                .header(
+                                        "Idempotency-Key",
+                                        "review-create-denied")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "subjectIdentityId":"%s",
+                                          "reviewerIdentityId":"%s",
+                                          "snapshotAt":"2026-09-29T09:00:00Z"
+                                        }
+                                        """.formatted(
+                                        ids.nextId(),
+                                        reviewerId)))
+                .andExpect(status().isForbidden());
+        adminScopes.put(
+                adminId,
+                AdministrativeScope.global());
+
+        UUID campaignId = createCampaign(
+                "review-keep-create",
+                reviewerId);
+        mvc.perform(
+                        post("/api/v1/governance/review-campaigns/{id}/start",
+                                campaignId)
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        admin)
+                                .header("If-Match", "\"rev-1\"")
+                                .header(
+                                        "Idempotency-Key",
+                                        "review-keep-start"))
+                .andExpect(status().isOk());
+
+        Instant now = Instant.now();
+        ReviewItem item = new ReviewItem(
+                ids.nextId(),
+                campaignId,
+                reviewerId,
+                ids.nextId(),
+                1,
+                "ENTITLEMENT",
+                null,
+                ids.nextId(),
+                "ANY",
+                null,
+                "MANUAL",
+                null,
+                "ACTIVE",
+                null,
+                null,
+                now.minusSeconds(10),
+                Instant.parse("2026-09-29T09:00:00Z"),
+                ItemState.PENDING,
+                1,
+                now,
+                now);
+        assertThat(repository.insertItemIfAbsent(
+                tenant, item)).isTrue();
+        repository.recordGenerationPage(
+                tenant,
+                campaignId,
+                item.assignmentCreatedAt(),
+                item.accessAssignmentId(),
+                1,
+                true,
+                2,
+                now.plusSeconds(1));
+
+        mvc.perform(
+                        post("/api/v1/governance/review-items/{id}/keep",
+                                item.id())
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        reviewer)
+                                .header("If-Match", "\"rev-1\"")
+                                .header(
+                                        "Idempotency-Key",
+                                        "review-keep-decision")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("{\"reason\":\"still required\"}"))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.decision.decision")
+                                .value("KEEP"));
+
+        Integer deniedCreate = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'review-campaign:create'
+                  AND resource_id IS NULL
+                  AND outcome = 'DENIED'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                adminId);
+        assertThat(deniedCreate).isEqualTo(1);
+
+        Integer keepSuccess = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND actor_id = ?
+                  AND action_type = 'review-item:keep'
+                  AND resource_id = ?
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                reviewerId,
+                item.id());
+        assertThat(keepSuccess).isEqualTo(1);
+    }
+
+    @Test
+    void auditFailureDoesNotRewriteSuccessfulReviewCampaignOutcome()
+            throws Exception {
+        SecurityAuditPort unavailableAudit =
+                (requestedTenant, draft) -> {
+                    throw new IllegalStateException(
+                            "audit unavailable");
+                };
+        MockMvc unavailable = mockMvc(unavailableAudit);
+
+        String location = unavailable.perform(
+                        post("/api/v1/governance/review-campaigns")
+                                .requestAttr(
+                                        ACTOR_ATTRIBUTE,
+                                        admin)
+                                .header(
+                                        "Idempotency-Key",
+                                        "review-audit-unavailable")
+                                .contentType(
+                                        MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "subjectIdentityId":"%s",
+                                          "reviewerIdentityId":"%s",
+                                          "snapshotAt":"2026-09-29T09:00:00Z"
+                                        }
+                                        """.formatted(
+                                        ids.nextId(),
+                                        reviewerId)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getHeader("Location");
+
+        UUID campaignId = UUID.fromString(
+                location.substring(location.lastIndexOf('/') + 1));
+        assertThat(repository.findCampaign(
+                        tenant, campaignId))
+                .isPresent();
+    }
+
+    private MockMvc mockMvc(SecurityAuditPort audit) {
+        GovernanceReviewApiMutationService mutations =
+                new GovernanceReviewApiMutationService(
+                        authorization,
+                        reviewService,
+                        repository,
+                        queries,
+                        idempotency,
+                        transactions,
+                        audit,
+                        ids);
+        GovernanceReviewController controller =
+                new GovernanceReviewController(
+                        repository,
+                        queries,
+                        mutations,
+                        authorization,
+                        ids,
+                        cursorCodec());
+        return MockMvcBuilders
+                .standaloneSetup(controller)
+                .setControllerAdvice(
+                        new GovernanceApiErrorHandler(ids))
+                .build();
     }
 
     private UUID createCampaign(
