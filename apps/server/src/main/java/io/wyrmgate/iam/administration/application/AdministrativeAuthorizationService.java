@@ -58,7 +58,7 @@ public final class AdministrativeAuthorizationService {
                 return AdministrativeAuthorizationDecision.allow();
             }
         }
-        return AdministrativeAuthorizationDecision.deny("no_effective_authority");
+        return AdministrativeAuthorizationDecision.deny("no_effective_grant");
     }
 
     public Set<String> authorizedClassificationKeys(
