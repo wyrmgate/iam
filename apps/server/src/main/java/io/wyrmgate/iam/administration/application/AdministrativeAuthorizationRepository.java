@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.administration.application;
 
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassOperation;
 import io.wyrmgate.iam.administration.domain.AdministrativeElevation;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
@@ -25,6 +26,13 @@ public interface AdministrativeAuthorizationRepository {
 
 
     default List<AdministrativeElevation> findCandidateElevations(
+            TenantContext tenant,
+            UUID actorIdentityId,
+            AdministrativePermission permission) {
+        return List.of();
+    }
+
+    default List<AdministrativeBreakGlassOperation> findCandidateBreakGlassOperations(
             TenantContext tenant,
             UUID actorIdentityId,
             AdministrativePermission permission) {
