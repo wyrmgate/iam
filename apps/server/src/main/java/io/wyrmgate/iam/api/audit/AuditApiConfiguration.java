@@ -1,10 +1,7 @@
 package io.wyrmgate.iam.api.audit;
 
-import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
-import io.wyrmgate.iam.audit.application.AuditQueryService;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
-import io.wyrmgate.iam.platform.id.IdGenerator;
 import java.time.Clock;
 import java.time.Duration;
 import org.springframework.beans.factory.ObjectProvider;
