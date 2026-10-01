@@ -233,3 +233,20 @@ AdministrativeBreakGlassOperation is distinct from ordinary elevation and GLOBAL
 - A RequestItem has at most one current active ApprovalPlan but may retain superseded historical plans.
 - ConnectorBinding separates SourceSystem/ApplicationTarget from ConnectorInstance implementation.
 - No normal domain relationship crosses an enabled tenant/isolation boundary.
+
+
+## Administrative break-glass invariants
+
+AdministrativeBreakGlassOperation starts ACTIVE only after all activation invariants succeed and may transition explicitly to REVOKED. Expiry is semantic from `validUntil`; a scheduler is not required to make expired authority ineffective.
+
+Invariant set:
+- the governed actor is the emergency authority beneficiary in the first slice;
+- validity is finite, positive and bounded by the configured break-glass policy;
+- non-blank reason and incident/reference evidence are mandatory;
+- activation and use require current provider-neutral STRONG assurance within the configured maximum age;
+- the default/unconfigured policy fails closed;
+- a generic GLOBAL grant or ordinary elevation never substitutes for break-glass;
+- activation creates exactly one SECURITY_NOTIFICATION and one POST_USE_REVIEW obligation;
+- obligation state cannot extend or restore emergency authority;
+- explicit revocation is optimistic-revision guarded and ends authority immediately;
+- Audit failure never rewrites a committed Administration result.
