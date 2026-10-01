@@ -51,6 +51,7 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
     private static IdentityCommandService identityCommands;
     private static InitialAdminBootstrapService bootstrap;
     private static AdministrativeAuthorityService authority;
+    private static AdministrativeAuthorizationService authorization;
 
     @BeforeAll
     static void startPostgresAndMigrate() {
@@ -70,7 +71,7 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
                 new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         var governedActors = new IdentityGovernedActorStatusQuery(identities);
         var bindings = new JdbcControlPlaneActorBindingRepository(jdbc);
-        var authorization = new AdministrativeAuthorizationService(
+        authorization = new AdministrativeAuthorizationService(
                 new JdbcAdministrativeAuthorizationRepository(jdbc), governedActors);
         bootstrap = new InitialAdminBootstrapService(
                 new JdbcInitialAdminBootstrapRepository(jdbc),
@@ -91,7 +92,7 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
                 ids,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("47");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("48");
     }
 
     @AfterAll
@@ -105,6 +106,7 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
                 TRUNCATE TABLE
                     administration.initial_admin_bootstrap,
                     administration.control_plane_actor_binding,
+                    administration.administrative_delegation,
                     administration.administrative_grant,
                     administration.administrative_role_permission,
                     administration.administrative_role,
@@ -471,6 +473,193 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
                 .isInstanceOf(AdministrativeAuthorityException.class)
                 .extracting(e -> ((AdministrativeAuthorityException) e).code())
                 .isEqualTo("authority_basis_not_effective");
+    }
+
+    @Test
+    void createsBoundedDelegationAndAuthorizesActualDelegate() {
+        Instant now = Instant.parse("2026-10-01T16:00:00Z");
+        TenantContext tenant = tenant("Delegation", now);
+        Admin admin = bootstrapAdmin(tenant, now.plusSeconds(1));
+        Identity delegate = identity(tenant, IdentityLifecycleState.ACTIVE, now.plusSeconds(2));
+
+        var delegation = authority.createDelegation(
+                admin.actor(),
+                delegate.id(),
+                admin.rootGrantId(),
+                AdministrativeScope.global(),
+                now.plusSeconds(3),
+                now.plusSeconds(300),
+                ids.nextId(),
+                ids.nextId(),
+                now.plusSeconds(3));
+
+        var decision = authorization.authorize(
+                new AuthenticatedAdministrativeActor(tenant, delegate.id()),
+                AdministrativePermissions.IDENTITY_READ,
+                io.wyrmgate.iam.administration.application.AdministrativeResource.collection("identity"),
+                now.plusSeconds(4));
+
+        assertThat(decision.allowed()).isTrue();
+        assertThat(delegation.delegateIdentityId()).isEqualTo(delegate.id());
+        assertThat(delegation.delegatorIdentityId()).isEqualTo(admin.actor().identityId());
+        assertThat(delegation.sourceGrantId()).isEqualTo(admin.rootGrantId());
+        assertThat(delegation.createdByIdentityId()).isEqualTo(admin.actor().identityId());
+    }
+
+    @Test
+    void delegationRejectsForeignInactiveNonDelegableAndWidenedAuthority() {
+        Instant now = Instant.parse("2026-10-01T17:00:00Z");
+        TenantContext tenant = tenant("Delegation Bounds", now);
+        Admin admin = bootstrapAdmin(tenant, now.plusSeconds(1));
+        Identity active = identity(tenant, IdentityLifecycleState.ACTIVE, now.plusSeconds(2));
+        Identity inactive = identity(tenant, IdentityLifecycleState.INACTIVE, now.plusSeconds(2));
+        TenantContext other = tenant("Other", now);
+        Identity foreign = identity(other, IdentityLifecycleState.ACTIVE, now.plusSeconds(2));
+
+        assertThatThrownBy(() -> authority.createDelegation(
+                        admin.actor(), foreign.id(), admin.rootGrantId(),
+                        AdministrativeScope.global(), null, now.plusSeconds(300),
+                        null, null, now.plusSeconds(3)))
+                .isInstanceOf(AdministrativeAuthorityException.class)
+                .extracting(e -> ((AdministrativeAuthorityException) e).code())
+                .isEqualTo("delegate_not_eligible");
+
+        assertThatThrownBy(() -> authority.createDelegation(
+                        admin.actor(), inactive.id(), admin.rootGrantId(),
+                        AdministrativeScope.global(), null, now.plusSeconds(300),
+                        null, null, now.plusSeconds(3)))
+                .isInstanceOf(AdministrativeAuthorityException.class)
+                .extracting(e -> ((AdministrativeAuthorityException) e).code())
+                .isEqualTo("delegate_not_eligible");
+
+        var readerRole = authority.createRole(
+                admin.actor(), "delegation-reader", "Delegation Reader",
+                Set.of(AdministrativePermissions.IDENTITY_READ), now.plusSeconds(4));
+        UUID resourceId = ids.nextId();
+        var nonDelegable = authority.createGrant(
+                admin.actor(), admin.actor().identityId(), readerRole.id(),
+                AdministrativeScope.specificResource("identity", resourceId),
+                now.plusSeconds(5), now.plusSeconds(200),
+                true, false, admin.rootGrantId(), now.plusSeconds(5));
+
+        assertThatThrownBy(() -> authority.createDelegation(
+                        admin.actor(), active.id(), nonDelegable.id(),
+                        AdministrativeScope.specificResource("identity", resourceId),
+                        now.plusSeconds(6), now.plusSeconds(100),
+                        null, null, now.plusSeconds(6)))
+                .isInstanceOf(AdministrativeAuthorityException.class)
+                .extracting(e -> ((AdministrativeAuthorityException) e).code())
+                .isEqualTo("delegation_source_not_effective");
+
+        var delegable = authority.createGrant(
+                admin.actor(), admin.actor().identityId(), readerRole.id(),
+                AdministrativeScope.specificResource("identity", resourceId),
+                now.plusSeconds(7), now.plusSeconds(200),
+                true, true, admin.rootGrantId(), now.plusSeconds(7));
+
+        assertThatThrownBy(() -> authority.createDelegation(
+                        admin.actor(), active.id(), delegable.id(),
+                        AdministrativeScope.global(),
+                        now.plusSeconds(8), now.plusSeconds(100),
+                        null, null, now.plusSeconds(8)))
+                .isInstanceOf(AdministrativeAuthorityException.class)
+                .extracting(e -> ((AdministrativeAuthorityException) e).code())
+                .isEqualTo("delegation_ceiling_exceeded");
+
+        assertThatThrownBy(() -> authority.createDelegation(
+                        admin.actor(), active.id(), delegable.id(),
+                        AdministrativeScope.specificResource("identity", resourceId),
+                        now.plusSeconds(6), now.plusSeconds(100),
+                        null, null, now.plusSeconds(8)))
+                .isInstanceOf(AdministrativeAuthorityException.class)
+                .extracting(e -> ((AdministrativeAuthorityException) e).code())
+                .isEqualTo("delegation_ceiling_exceeded");
+
+        assertThatThrownBy(() -> authority.createDelegation(
+                        admin.actor(), active.id(), delegable.id(),
+                        AdministrativeScope.specificResource("identity", resourceId),
+                        now.plusSeconds(8), now.plusSeconds(300),
+                        null, null, now.plusSeconds(8)))
+                .isInstanceOf(AdministrativeAuthorityException.class)
+                .extracting(e -> ((AdministrativeAuthorityException) e).code())
+                .isEqualTo("delegation_ceiling_exceeded");
+    }
+
+    @Test
+    void sourceRevocationExpiryAndDelegationRevocationInvalidateAuthorization() {
+        Instant now = Instant.parse("2026-10-01T18:00:00Z");
+        TenantContext tenant = tenant("Delegation Invalidation", now);
+        Admin admin = bootstrapAdmin(tenant, now.plusSeconds(1));
+        Identity delegate = identity(tenant, IdentityLifecycleState.ACTIVE, now.plusSeconds(2));
+        var readerRole = authority.createRole(
+                admin.actor(), "delegated-reader", "Delegated Reader",
+                Set.of(AdministrativePermissions.IDENTITY_READ), now.plusSeconds(3));
+
+        var source = authority.createGrant(
+                admin.actor(), admin.actor().identityId(), readerRole.id(),
+                AdministrativeScope.global(),
+                now.plusSeconds(4), now.plusSeconds(120),
+                true, true, admin.rootGrantId(), now.plusSeconds(4));
+        var delegation = authority.createDelegation(
+                admin.actor(), delegate.id(), source.id(),
+                AdministrativeScope.global(),
+                now.plusSeconds(5), now.plusSeconds(100),
+                null, null, now.plusSeconds(5));
+        var delegateActor = new AuthenticatedAdministrativeActor(tenant, delegate.id());
+
+        assertThat(authorization.authorize(
+                        delegateActor,
+                        AdministrativePermissions.IDENTITY_READ,
+                        io.wyrmgate.iam.administration.application.AdministrativeResource.collection("identity"),
+                        now.plusSeconds(6)).allowed())
+                .isTrue();
+
+        authority.revokeGrant(admin.actor(), source.id(), source.revision(), now.plusSeconds(7));
+
+        assertThat(authorization.authorize(
+                        delegateActor,
+                        AdministrativePermissions.IDENTITY_READ,
+                        io.wyrmgate.iam.administration.application.AdministrativeResource.collection("identity"),
+                        now.plusSeconds(8)).allowed())
+                .isFalse();
+
+        var source2 = authority.createGrant(
+                admin.actor(), admin.actor().identityId(), readerRole.id(),
+                AdministrativeScope.global(),
+                now.plusSeconds(9), now.plusSeconds(40),
+                true, true, admin.rootGrantId(), now.plusSeconds(9));
+        var delegation2 = authority.createDelegation(
+                admin.actor(), delegate.id(), source2.id(),
+                AdministrativeScope.global(),
+                now.plusSeconds(10), now.plusSeconds(30),
+                null, null, now.plusSeconds(10));
+
+        assertThat(authorization.authorize(
+                        delegateActor,
+                        AdministrativePermissions.IDENTITY_READ,
+                        io.wyrmgate.iam.administration.application.AdministrativeResource.collection("identity"),
+                        now.plusSeconds(41)).allowed())
+                .isFalse();
+
+        var source3 = authority.createGrant(
+                admin.actor(), admin.actor().identityId(), readerRole.id(),
+                AdministrativeScope.global(),
+                now.plusSeconds(42), now.plusSeconds(100),
+                true, true, admin.rootGrantId(), now.plusSeconds(42));
+        var delegation3 = authority.createDelegation(
+                admin.actor(), delegate.id(), source3.id(),
+                AdministrativeScope.global(),
+                now.plusSeconds(43), now.plusSeconds(90),
+                null, null, now.plusSeconds(43));
+
+        var revoked = authority.revokeDelegation(
+                admin.actor(), delegation3.id(), delegation3.revision(), now.plusSeconds(44));
+        assertThat(revoked.state().name()).isEqualTo("REVOKED");
+        assertThat(revoked.revokedByIdentityId()).isEqualTo(admin.actor().identityId());
+
+        assertThatThrownBy(() -> authority.revokeDelegation(
+                        admin.actor(), delegation3.id(), delegation3.revision(), now.plusSeconds(45)))
+                .isInstanceOf(StaleWriteException.class);
     }
 
     private static void assertCeilingDenied(org.assertj.core.api.ThrowableAssert.ThrowingCallable callable) {
