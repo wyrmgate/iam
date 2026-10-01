@@ -417,7 +417,9 @@ Provisioning work carries the desired revision. Remote claim requires a semantic
 
 ### Administration
 
-`administration.administrative_grant` stores tenant, actor reference, administrative role, strongly typed scope type/reference, lifecycle, temporal validity and revision. Scope is not arbitrary JSON. `administration.administrative_delegation` separately records delegator/delegate, bounded scope and validity so delegated authority can be invalidated when the delegator loses authority.
+`administration.administrative_grant` stores tenant, actor reference, administrative role, strongly typed scope type/reference, lifecycle, temporal validity and revision. Scope is not arbitrary JSON. V47 adds explicit `grantable` / `delegable` rights and nullable same-tenant `authority_basis_grant_id` creation provenance. Grantability/delegability are not implied by `administration:manage-authorization`; a created direct grant remains independent if its creation basis later expires or is revoked. The burn-once bootstrap root is explicitly grantable/delegable only for its existing role/scope/validity, while pre-V47 non-bootstrap grants remain non-grantable/non-delegable by default.
+
+`administration.administrative_delegation` remains a separate later table/object that records delegator/delegate, direct source grant, bounded scope and finite validity so delegated authority can be invalidated when the delegator loses the source authority.
 
 ### Audit
 
