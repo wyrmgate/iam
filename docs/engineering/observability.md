@@ -93,6 +93,14 @@ Before treating an environment as observable:
 6. confirm Collector/backend credentials do not appear in deployment logs or application logs;
 7. for Railway Serverless DEV, verify telemetry does not unexpectedly defeat the intended idle/sleep posture.
 
+## Production SLO/alerting boundary
+
+[`../operations/production-readiness.md`](../operations/production-readiness.md) defines the OD-005 production indicators and decision register. Production observability must make those indicators measurable and actionable, but numeric targets are not invented by telemetry configuration.
+
+At minimum the production layer must provide actionable health/SLO alerting for API availability/latency, database/startup/migration failures, durable-work age/backlog/retry exhaustion/stuck leases, public-event delivery where enabled, connector/provisioning/reconciliation failures, and stale/failed recovery evidence. Alert routing and escalation are deployment/operations policy and must be documented for the selected production environment.
+
+Observability remains distinct from AuditRecord and domain evidence; production dashboards/alerts must preserve the existing redaction, privacy and bounded-cardinality rules.
+
 ## Known limits
 
-This baseline does not provide production SLOs, dashboards, alert policies, centralized application-log shipping, tail sampling, or audit-event visualization. Those remain operational layers on top of the telemetry foundation.
+The current implemented telemetry baseline does not yet provide the selected production dashboards, alert routing/escalation, centralized application-log shipping, tail sampling, or audit-event visualization. Production SLO/RPO/RTO numbers and alert thresholds remain pending reviewed OD-005 decisions.
