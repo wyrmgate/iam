@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.administration.application;
 
+import io.wyrmgate.iam.administration.domain.AdministrativeDelegation;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativeRole;
@@ -88,4 +89,41 @@ public interface AdministrativeAuthorityRepository {
             TenantContext tenant,
             UUID actorIdentityId,
             int limit);
+
+    Optional<AdministrativeDelegation> findDelegation(TenantContext tenant, UUID delegationId);
+
+    AdministrativeDelegation createDelegation(
+            TenantContext tenant,
+            UUID id,
+            UUID delegateIdentityId,
+            UUID delegatorIdentityId,
+            UUID sourceGrantId,
+            UUID roleId,
+            AdministrativeScope scope,
+            Instant validFrom,
+            Instant validUntil,
+            UUID createdByIdentityId,
+            UUID correlationId,
+            UUID causationId,
+            Instant now);
+
+    AdministrativeDelegation revokeDelegation(
+            TenantContext tenant,
+            UUID delegationId,
+            long expectedRevision,
+            UUID revokedByIdentityId,
+            Instant now);
+
+    List<AdministrativeDelegation> listDelegations(
+            TenantContext tenant,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit);
+
+    List<AdministrativeDelegation> findAuthorityBearingDelegationsByRole(
+            TenantContext tenant,
+            UUID roleId,
+            Instant now,
+            int limit);
+
 }
