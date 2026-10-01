@@ -122,7 +122,7 @@ The first ADR-0032 implementation slice persists direct-grant `grantable` / `del
 
 AdministrativeRole permission additions perform a bounded prospective check across current non-expired direct grants referencing the role. The actor's current grantable authority must justify every affected grant under the resulting permission set; the edit otherwise fails closed. Removing a permission and revoking a grant remain authority reductions and intentionally skip that privilege-increase ceiling while retaining normal authorization and optimistic revision checks.
 
-The synchronous prospective scan is deliberately bounded in this first slice. If the configured implementation bound is exceeded, the privilege-increasing edit fails closed rather than silently skipping affected authority. Public Administration HTTP/OpenAPI/idempotency/signed-cursor contracts remain deferred to the later public-API phase.
+The synchronous prospective scan is deliberately bounded in this first slice. If the configured implementation bound is exceeded, the privilege-increasing edit fails closed rather than silently skipping affected authority. The public Administration HTTP/OpenAPI surface is implemented with semantic operations, causal idempotency, optimistic revision guards and signed deterministic cursors.
 
 ## Implemented single-hop delegation foundation
 
@@ -130,7 +130,7 @@ The ADR-0032 single-hop delegation runtime now persists `AdministrativeDelegatio
 
 Operation-time authorization evaluates the delegate as the actual actor and revalidates both the delegation and its direct source grant. Revoked/expired/non-delegable source authority, source-role mismatch, scope/time escape, delegation expiry/revocation, or delegate ineligibility fails closed immediately; no scheduler transition is needed for authority to end. Privilege-increasing Role edits include current source-backed delegations in the bounded prospective grantability check.
 
-Delegation creation and revocation retain Administration-owned provenance, including delegator/delegate/source Role and grant, creation/revocation actor/time, and optional correlation/causation identifiers. Public Administration transport, idempotency and AuditRecord producer wiring remain intentionally deferred to the public Administration API phase.
+Delegation creation and revocation retain Administration-owned provenance, including delegator/delegate/source Role and grant, creation/revocation actor/time, and optional correlation/causation identifiers. Public Administration delegation transport, causal idempotency and data-minimized AuditRecord producer wiring are implemented in the public Administration API.
 
 ## Temporary elevation and break-glass
 
@@ -140,7 +140,7 @@ The temporary-elevation foundation is now implemented through Flyway V49. Admini
 
 Self-approval by the elevation beneficiary **or** initiator is denied by the typed elevation approval adapter before an ApprovalCase can be used. The approver resolver is intentionally constrained and provider-neutral; no default privileged group is invented. If no explicit `AdministrativeElevationApproverResolver` is configured, the approval path fails closed rather than minting authority. Immediately before activation, Administration revalidates current beneficiary/initiator eligibility, basis ownership/effectiveness/grantability, basis permission containment, role permissions, typed scope/time containment, bound approval case/fingerprint, and remaining validity. Governance approval never creates authority by itself.
 
-Only an `ACTIVE` AdministrativeElevation contributes temporary authority, and operation-time authorization still evaluates the governed beneficiary and semantic validity window. `REQUESTED`, `PENDING_APPROVAL`, `DENIED`, `CANCELLED`, `REVOKED`, not-yet-valid and expired elevations never authorize. Expiry is semantic from time; no scheduler delay can extend authority. Public Administration transport/idempotency/AuditRecord producer wiring remains deferred to the public Administration API slice.
+Only an `ACTIVE` AdministrativeElevation contributes temporary authority, and operation-time authorization still evaluates the governed beneficiary and semantic validity window. `REQUESTED`, `PENDING_APPROVAL`, `DENIED`, `CANCELLED`, `REVOKED`, not-yet-valid and expired elevations never authorize. Expiry is semantic from time; no scheduler delay can extend authority. Public Administration elevation transport, causal idempotency and data-minimized AuditRecord producer wiring are implemented in the public Administration API.
 
 Break-glass is a separate typed Administration emergency process and a generic GLOBAL role/grant is never treated as break-glass. Activation requires exact governed actor, requested role/scope, short finite validity, explicit reason, incident/reference, strong provider-neutral authentication assurance, immutable Administration evidence, AuditRecord evidence, durable notification work/evidence and a durable post-use review obligation.
 
@@ -183,7 +183,7 @@ All canonical scope types are structurally modeled. The first evaluator intentio
 
 `CANONICAL_ATTRIBUTE_CLASSIFICATION` is now implemented only for exact classification-key matching with `canonical-attribute-value:read`; it has no hierarchy, wildcard or sensitivity ordering semantics. `ORGANIZATION`, `APPLICATION`, `APPLICATION_TARGET`, `SOURCE_SYSTEM`, `CONNECTOR_INSTANCE` and `IDENTITY_POPULATION` remain fail-closed until their concrete hierarchy/population semantics and owning-capability queries are implemented. A resource-specific grant never authorizes a collection query.
 
-A fresh installation contains no administrative roles or grants and therefore denies protected control-plane operations. Initial-administrator bootstrap/provisioning, transport authentication/actor resolution, governed direct role/grant management, single-hop administrative delegation, and the temporary/JIT elevation foundation are implemented. Assurance-aware break-glass and the public Administration control-plane surface remain subsequent implementation slices governed by ADR-0032. Public control-plane mutations continue to use operation-time authorization and ADR-0031 AuditRecord evidence.
+A fresh installation contains no administrative roles or grants and therefore denies protected control-plane operations. Initial-administrator bootstrap/provisioning, transport authentication/actor resolution, governed direct role/grant management, single-hop administrative delegation, temporary/JIT elevation, assurance-aware break-glass and the public Administration control-plane surface are implemented under ADR-0032. Concrete break-glass notification transport and the detailed post-use-review workflow remain deferred. Public control-plane mutations continue to use operation-time authorization and ADR-0031 AuditRecord evidence.
 
 ## Security invariants
 
