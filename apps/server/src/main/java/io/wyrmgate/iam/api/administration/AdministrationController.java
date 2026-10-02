@@ -5,6 +5,8 @@ import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassServic
 import io.wyrmgate.iam.administration.application.AdministrativeElevationService;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassOperation;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReview;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReviewOutcome;
 import io.wyrmgate.iam.administration.domain.AdministrativeDelegation;
 import io.wyrmgate.iam.administration.domain.AdministrativeElevation;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
@@ -470,6 +472,27 @@ public final class AdministrationController {
         return ok(resource(value), value.revision(), ctx.correlationId());
     }
 
+    @PostMapping("/administrative-break-glass-operations/{operationId}:complete-review")
+    public ResponseEntity<AdministrativeBreakGlassReviewResource> completeBreakGlassReview(
+            @PathVariable UUID operationId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody Map<String,Object> body,
+            HttpServletRequest request) {
+        RequestContext ctx = context(request);
+        long rev = revision(ifMatch, ctx.correlationId());
+        String key = idempotency(idempotencyKey, ctx.correlationId());
+        Map<String,Object> parsed = exact(body, Set.of("outcome", "summary"), ctx.correlationId());
+        AdministrativeBreakGlassReviewOutcome outcome =
+                reviewOutcome(text(parsed, "outcome", 64, ctx.correlationId()), ctx.correlationId());
+        String summary = text(parsed, "summary", 2048, ctx.correlationId());
+        AdministrativeBreakGlassReview value = mutations.completeBreakGlassReview(
+                ctx.actor(), operationId, rev, outcome, summary, key,
+                fingerprint("break-glass:complete-review", operationId, rev, outcome, summary),
+                Instant.now(), ctx.correlationId());
+        return ok(resource(value), rev + 1, ctx.correlationId());
+    }
+
     private RequestContext context(HttpServletRequest request) {
         UUID correlationId = AdministrationApiRequestContext.resolveCorrelationId(request, ids);
         return new RequestContext(ControlPlaneActorRequestContext.require(request), correlationId);
@@ -621,6 +644,17 @@ public final class AdministrationController {
                     correlationId, "permissions", "duplicate_value", "permissions must not contain duplicates.");
         }
         return Set.copyOf(result);
+    }
+
+    private static AdministrativeBreakGlassReviewOutcome reviewOutcome(
+            String value, UUID correlationId) {
+        try {
+            return AdministrativeBreakGlassReviewOutcome.valueOf(value);
+        } catch (IllegalArgumentException invalid) {
+            throw AdministrationApiException.validation(
+                    correlationId, "outcome", "invalid_enum",
+                    "outcome must be APPROVED_USE, POLICY_CONCERN or INCIDENT_FOLLOW_UP_REQUIRED.");
+        }
     }
 
     private static AdministrativePermission permission(String value, UUID correlationId) {
@@ -780,6 +814,14 @@ public final class AdministrationController {
                 value.validFrom(), value.validUntil(), value.state().name(), value.incidentReference(),
                 value.revision(), value.createdAt(), value.updatedAt());
     }
+
+    private static AdministrativeBreakGlassReviewResource resource(AdministrativeBreakGlassReview value) {
+        return new AdministrativeBreakGlassReviewResource(
+                value.id(), value.breakGlassOperationId(), value.reviewerIdentityId(),
+                value.outcome().name(), value.summary(), value.reviewedAt(),
+                value.correlationId(), value.causationId(), value.createdAt());
+    }
+
 
     private static ScopeResource resource(AdministrativeScope value) {
         return new ScopeResource(value.type().name(), value.resourceType(), value.resourceId(), value.scopeKey());
