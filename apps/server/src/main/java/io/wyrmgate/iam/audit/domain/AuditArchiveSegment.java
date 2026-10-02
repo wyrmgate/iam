@@ -30,6 +30,7 @@ public record AuditArchiveSegment(
         Instant updatedAt) {
 
     public static final String NDJSON_V1 = "audit-archive-ndjson-v1";
+    public static final String NDJSON_V2 = "audit-archive-ndjson-v2";
 
     public enum State {
         REQUESTED,
