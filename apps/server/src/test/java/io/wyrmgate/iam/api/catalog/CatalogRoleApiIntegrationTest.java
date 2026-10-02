@@ -101,7 +101,7 @@ class CatalogRoleApiIntegrationTest {
                         .current()
                         .getVersion()
                         .getVersion())
-                .isEqualTo("57");
+                .isEqualTo("58");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
