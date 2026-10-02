@@ -2,15 +2,13 @@ package io.wyrmgate.iam.administration.notification;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassNotificationPublisher;
-import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassNotificationRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassRepository;
-import io.wyrmgate.iam.administration.persistence.JdbcAdministrativeBreakGlassNotificationRepository;
+import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import java.net.http.HttpClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration(proxyBeanMethods = false)
@@ -23,16 +21,13 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 class BreakGlassNotificationConfiguration {
 
     @Bean
-    AdministrativeBreakGlassNotificationRepository administrativeBreakGlassNotificationRepository(
-            JdbcTemplate jdbc,
-            AdministrativeBreakGlassRepository breakGlass) {
-        return new JdbcAdministrativeBreakGlassNotificationRepository(jdbc, breakGlass);
-    }
-
-    @Bean
     AdministrativeBreakGlassNotificationPublisher administrativeBreakGlassNotificationPublisher(
             BreakGlassNotificationProperties properties,
             ObjectMapper objectMapper) {
+        if (properties.effectiveClaimLease().compareTo(properties.effectiveRequestTimeout()) <= 0) {
+            throw new IllegalStateException(
+                    "break-glass notification claim-lease must exceed request-timeout");
+        }
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(properties.effectiveConnectTimeout())
                 .followRedirects(HttpClient.Redirect.NEVER)
@@ -47,10 +42,12 @@ class BreakGlassNotificationConfiguration {
 
     @Bean
     BreakGlassNotificationDeliveryService breakGlassNotificationDeliveryService(
-            AdministrativeBreakGlassNotificationRepository repository,
+            JdbcScheduledWorkRepository scheduledWork,
+            AdministrativeBreakGlassRepository breakGlass,
             AdministrativeBreakGlassNotificationPublisher publisher,
             BreakGlassNotificationProperties properties) {
-        return new BreakGlassNotificationDeliveryService(repository, publisher, properties);
+        return new BreakGlassNotificationDeliveryService(
+                scheduledWork, breakGlass, publisher, properties);
     }
 
     @Bean
