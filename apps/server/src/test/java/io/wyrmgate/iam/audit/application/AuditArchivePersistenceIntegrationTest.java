@@ -230,7 +230,7 @@ class AuditArchivePersistenceIntegrationTest {
         assertThat(exportService.executeAvailable().completed()).isEqualTo(1);
 
         AuditExportOperation completed = exportService.find(tenant, requested.id());
-        assertThat(completed.artifactExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(7)));
+        assertThat(completed.artifactExpiresAt()).isEqualTo(completed.completedAt().plus(Duration.ofDays(7)));
     }
 
     @Test
