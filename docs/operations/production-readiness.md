@@ -10,7 +10,7 @@ The production design must preserve the existing architecture: capability owners
 
 OD-005 remains open until the objectives, selected topology, recovery design, verification drill, observability coverage and operator runbooks are all reviewed and evidenced.
 
-The current Cloudflare Pages / Railway Serverless / Neon PostgreSQL deployment is a DEV/testing/demo topology only. It is input evidence for deployment mechanics, not the production architecture.
+The former Cloudflare Pages / Railway Serverless / Neon PostgreSQL combination is retired as an end-to-end DEV topology because the Railway server is no longer in use. Historical deployment evidence remains useful, but no replacement managed server target is currently canonical and none of this settles the production architecture.
 
 ## Production objective register
 
