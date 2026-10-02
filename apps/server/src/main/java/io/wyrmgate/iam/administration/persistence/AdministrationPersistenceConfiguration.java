@@ -3,6 +3,7 @@ package io.wyrmgate.iam.administration.persistence;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorityRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassAuditSink;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassPolicy;
+import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassNotificationScheduler;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassService;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorityService;
@@ -19,6 +20,7 @@ import io.wyrmgate.iam.administration.application.InitialAdminBootstrapRepositor
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
+import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -69,6 +71,12 @@ public class AdministrationPersistenceConfiguration {
     }
 
     @Bean
+    AdministrativeBreakGlassNotificationScheduler administrativeBreakGlassNotificationScheduler(
+            JdbcScheduledWorkRepository scheduledWork) {
+        return new JdbcAdministrativeBreakGlassNotificationScheduler(scheduledWork);
+    }
+
+    @Bean
     @ConditionalOnMissingBean(AdministrativeBreakGlassPolicy.class)
     AdministrativeBreakGlassPolicy defaultDenyAdministrativeBreakGlassPolicy() {
         return (tenant, actorIdentityId, requestedRole, requestedScope, requestedValidUntil, now) ->
@@ -84,6 +92,7 @@ public class AdministrationPersistenceConfiguration {
             GovernedActorStatusQuery governedActorStatusQuery,
             AdministrativeBreakGlassPolicy policy,
             AdministrativeBreakGlassAuditSink audit,
+            AdministrativeBreakGlassNotificationScheduler notificationScheduler,
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
         return new AdministrativeBreakGlassService(
@@ -93,6 +102,7 @@ public class AdministrationPersistenceConfiguration {
                 governedActorStatusQuery,
                 policy,
                 audit,
+                notificationScheduler,
                 idGenerator,
                 transactionExecutor);
     }
