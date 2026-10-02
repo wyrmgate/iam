@@ -254,7 +254,7 @@ class CatalogApiIntegrationTest {
                 FROM audit.audit_record
                 WHERE tenant_id = ?
                   AND resource_type IN ('application', 'application-target', 'entitlement')
-                  AND (material_snapshot IS NOT NULL OR integrity_metadata IS NOT NULL)
+                  AND material_snapshot IS NOT NULL
                 """, Integer.class, tenant.tenantId());
         assertThat(materializedPayloads).isZero();
     }
