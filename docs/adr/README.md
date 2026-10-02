@@ -42,5 +42,8 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0032 Delegated, elevated and emergency administrative authority](0032-delegated-elevated-emergency-administrative-authority.md)
 - [ADR-0033 Break-glass notification delivery and post-use review completion](0033-break-glass-notification-post-use-review.md)
 - [ADR-0034 Durable Audit export and immutable evidence archive](0034-durable-audit-export-immutable-archive.md)
+- [ADR-0035 Audit legal hold, destructive purge and archived query continuity](0035-audit-legal-hold-purge-archived-query.md)
+- [ADR-0036 Audit EvidenceSnapshot, material display snapshot and integrity metadata](0036-audit-evidence-snapshot-material-integrity.md)
+- [ADR-0037 Audit SIEM delivery boundary](0037-audit-siem-delivery.md)
 
 Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.6, which carries forward the prior baseline and folds ADR-0030 through ADR-0032 into the formal specification set. ADR-0033 and ADR-0034 are newer accepted repository amendments and must be folded into the next controlled formal revision. A later accepted ADR may again amend that baseline between controlled document revisions and must be folded into the next formal revision.
