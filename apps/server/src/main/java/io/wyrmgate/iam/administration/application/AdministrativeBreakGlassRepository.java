@@ -2,6 +2,8 @@ package io.wyrmgate.iam.administration.application;
 
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassObligation;
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassOperation;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReview;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReviewOutcome;
 import io.wyrmgate.iam.administration.domain.AdministrativeRole;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceContext;
@@ -46,6 +48,21 @@ public interface AdministrativeBreakGlassRepository {
             Instant afterCreatedAt,
             UUID afterId,
             int limit);
+
+    Optional<AdministrativeBreakGlassReview> findReview(
+            TenantContext tenant, UUID operationId);
+
+    AdministrativeBreakGlassReview completeReview(
+            TenantContext tenant,
+            UUID reviewId,
+            UUID operationId,
+            UUID reviewerIdentityId,
+            long expectedOperationRevision,
+            AdministrativeBreakGlassReviewOutcome outcome,
+            String summary,
+            UUID correlationId,
+            UUID causationId,
+            Instant now);
 
     List<AdministrativeBreakGlassObligation> listObligations(
             TenantContext tenant, UUID operationId);
