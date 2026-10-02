@@ -64,6 +64,19 @@ public final class JdbcAuditArchiveRepository
     }
 
     @Override
+    public Optional<AuditRetentionPolicyVersion> findById(
+            TenantContext tenant,
+            UUID id) {
+        return jdbc.query(
+                        policySelect() + " WHERE p.tenant_id = ? AND p.id = ?",
+                        (rs, rowNum) -> policy(rs),
+                        tenant.tenantId(),
+                        id)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public Optional<AuditRetentionPolicyVersion> findByVersion(
             TenantContext tenant,
             long version) {
