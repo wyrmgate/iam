@@ -2,10 +2,13 @@ package io.wyrmgate.iam.audit.persistence;
 
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassAuditSink;
 import io.wyrmgate.iam.audit.application.AuditAdministrativeBreakGlassAuditSink;
+import io.wyrmgate.iam.audit.application.AuditArchiveRepository;
 import io.wyrmgate.iam.audit.application.AuditCommandService;
 import io.wyrmgate.iam.audit.application.AuditExportRepository;
 import io.wyrmgate.iam.audit.application.AuditQueryService;
 import io.wyrmgate.iam.audit.application.AuditRecordRepository;
+import io.wyrmgate.iam.audit.application.AuditRetentionPolicyRepository;
+import io.wyrmgate.iam.audit.application.AuditRetentionPolicyService;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -25,6 +28,24 @@ public class AuditPersistenceConfiguration {
     @Bean
     AuditExportRepository auditExportRepository(JdbcTemplate jdbc) {
         return new JdbcAuditExportRepository(jdbc);
+    }
+
+    @Bean
+    AuditArchiveRepository auditArchiveRepository(JdbcTemplate jdbc) {
+        return new JdbcAuditArchiveRepository(jdbc);
+    }
+
+    @Bean
+    AuditRetentionPolicyRepository auditRetentionPolicyRepository(JdbcTemplate jdbc) {
+        return new JdbcAuditRetentionPolicyRepository(jdbc);
+    }
+
+    @Bean
+    AuditRetentionPolicyService auditRetentionPolicyService(
+            AuditRetentionPolicyRepository repository,
+            TransactionExecutor transactions,
+            IdGenerator ids) {
+        return new AuditRetentionPolicyService(repository, transactions, ids);
     }
 
     @Bean
