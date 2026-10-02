@@ -5,6 +5,8 @@ import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassObligation;
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassObligationState;
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassObligationType;
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassOperation;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReview;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReviewOutcome;
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassState;
 import io.wyrmgate.iam.administration.domain.AdministrativeRole;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
@@ -176,6 +178,121 @@ public final class JdbcAdministrativeBreakGlassRepository
                 Timestamp.from(afterCreatedAt),
                 afterId,
                 limit);
+    }
+
+    @Override
+    public Optional<AdministrativeBreakGlassReview> findReview(
+            TenantContext tenant, UUID operationId) {
+        return jdbc.query(
+                        """
+                        SELECT r.id, r.break_glass_operation_id, r.obligation_id,
+                               r.reviewer_identity_id, r.outcome, r.summary,
+                               r.reviewed_at, r.correlation_id, r.causation_id, r.created_at
+                        FROM administration.administrative_break_glass_review r
+                        WHERE r.tenant_id = ? AND r.break_glass_operation_id = ?
+                        """,
+                        (rs, rowNum) -> new AdministrativeBreakGlassReview(
+                                rs.getObject("id", UUID.class),
+                                rs.getObject("break_glass_operation_id", UUID.class),
+                                rs.getObject("obligation_id", UUID.class),
+                                rs.getObject("reviewer_identity_id", UUID.class),
+                                AdministrativeBreakGlassReviewOutcome.valueOf(rs.getString("outcome")),
+                                rs.getString("summary"),
+                                rs.getTimestamp("reviewed_at").toInstant(),
+                                rs.getObject("correlation_id", UUID.class),
+                                rs.getObject("causation_id", UUID.class),
+                                rs.getTimestamp("created_at").toInstant()),
+                        tenant.tenantId(),
+                        operationId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public AdministrativeBreakGlassReview completeReview(
+            TenantContext tenant,
+            UUID reviewId,
+            UUID operationId,
+            UUID reviewerIdentityId,
+            long expectedOperationRevision,
+            AdministrativeBreakGlassReviewOutcome outcome,
+            String summary,
+            UUID correlationId,
+            UUID causationId,
+            Instant now) {
+        int operationUpdated = jdbc.update(
+                """
+                UPDATE administration.administrative_break_glass_operation
+                SET revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ? AND id = ? AND revision = ?
+                """,
+                Timestamp.from(now),
+                tenant.tenantId(),
+                operationId,
+                expectedOperationRevision);
+        if (operationUpdated != 1) {
+            throw new StaleWriteException(
+                    "administrative-break-glass", operationId, expectedOperationRevision);
+        }
+
+        UUID obligationId = jdbc.query(
+                        """
+                        SELECT id
+                        FROM administration.administrative_break_glass_obligation
+                        WHERE tenant_id = ?
+                          AND break_glass_operation_id = ?
+                          AND obligation_type = 'POST_USE_REVIEW'
+                          AND state = 'PENDING'
+                        """,
+                        (rs, rowNum) -> rs.getObject("id", UUID.class),
+                        tenant.tenantId(),
+                        operationId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "post-use review obligation is not pending"));
+
+        jdbc.update(
+                """
+                INSERT INTO administration.administrative_break_glass_review (
+                    id, tenant_id, break_glass_operation_id, obligation_id,
+                    reviewer_identity_id, outcome, summary, reviewed_at,
+                    correlation_id, causation_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                reviewId,
+                tenant.tenantId(),
+                operationId,
+                obligationId,
+                reviewerIdentityId,
+                outcome.name(),
+                summary,
+                Timestamp.from(now),
+                correlationId,
+                causationId,
+                Timestamp.from(now));
+
+        int obligationUpdated = jdbc.update(
+                """
+                UPDATE administration.administrative_break_glass_obligation
+                SET state = 'COMPLETED',
+                    completed_at = ?,
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ?
+                  AND id = ?
+                  AND state = 'PENDING'
+                """,
+                Timestamp.from(now),
+                Timestamp.from(now),
+                tenant.tenantId(),
+                obligationId);
+        if (obligationUpdated != 1) {
+            throw new IllegalStateException("post-use review obligation was not completed");
+        }
+
+        return findReview(tenant, operationId).orElseThrow();
     }
 
     @Override
