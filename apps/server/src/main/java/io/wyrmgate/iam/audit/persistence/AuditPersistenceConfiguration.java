@@ -10,8 +10,10 @@ import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.audit.application.EvidenceSnapshotRepository;
 import io.wyrmgate.iam.audit.application.EvidenceSnapshotService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
+import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -54,8 +56,15 @@ public class AuditPersistenceConfiguration {
     @Bean
     SecurityAuditPort securityAuditPort(
             AuditRecordRepository repository,
-            TransactionExecutor transactions) {
-        return new AuditCommandService(repository, transactions, Clock.systemUTC());
+            TransactionExecutor transactions,
+            JdbcScheduledWorkRepository scheduledWork,
+            @Value("${iam.audit.siem.enabled:false}") boolean siemEnabled) {
+        return new AuditCommandService(
+                repository,
+                transactions,
+                Clock.systemUTC(),
+                scheduledWork,
+                siemEnabled);
     }
 
     @Bean
