@@ -2,7 +2,7 @@
 
 ## Scope
 
-The implemented public Audit control-plane exposes immutable `AuditRecord` evidence under ADR-0031 plus the first durable ADR-0034 export runtime. Audit remains evidence rather than business authority, an event store, or an observability log. Immutable archive-segment and retention-policy runtime remain deferred.
+The implemented Audit control-plane exposes immutable `AuditRecord` evidence under ADR-0031, durable export/archive under ADR-0034, governed evidence lifecycle under ADR-0035, typed evidence snapshots/integrity under ADR-0036, and separate SIEM delivery under ADR-0037. Audit remains evidence rather than business authority, an event store, or an observability log.
 
 Base path: `/api/v1`.
 
@@ -12,7 +12,12 @@ Public operations:
 - `GET /audit-records/{auditRecordId}` — tenant-scoped AuditRecord read;
 - `POST /audit-exports` — request one durable asynchronous closed-schema export;
 - `GET /audit-exports/{auditExportId}` — read export process/artifact metadata without exposing storage references;
-- `POST /audit-exports/{auditExportId}:download` — re-authorized no-store streaming download after success.
+- `POST /audit-exports/{auditExportId}:download` — re-authorized no-store streaming download after success;
+- `POST /audit-evidence-lifecycle/legal-holds` and `GET /audit-evidence-lifecycle/legal-holds/{holdId}` — create/read explicit legal holds;
+- `POST /audit-evidence-lifecycle/legal-holds/{holdId}:release` — revision-guarded hold release;
+- `POST /audit-evidence-lifecycle/purges` and `GET /audit-evidence-lifecycle/purges/{purgeId}` — request/read destructive purge operations;
+- `POST /audit-evidence-lifecycle/purges/{purgeId}:approve` — separately authorized dual-control approval;
+- `GET /evidence-snapshots` and `GET /evidence-snapshots/{evidenceSnapshotId}` — bounded immutable EvidenceSnapshot search/read.
 
 Machine-readable contract:
 
@@ -24,7 +29,7 @@ The implemented read/search operations require the default-deny semantic permiss
 
 - `audit:read`.
 
-The durable export operations require the separate semantic permission `audit:export`. `audit:read` does not imply `audit:export`, and INITIAL_TENANT_ADMIN is not silently expanded.
+The durable export operations require `audit:export`. Legal-hold management uses `audit:hold`; destructive purge uses `audit:purge`; EvidenceSnapshot reads use `evidence-snapshot:read`. These permissions are independent, default-deny, and are not silently added to INITIAL_TENANT_ADMIN.
 
 Collection search requires authority applicable to the AuditRecord collection. A specific-resource grant may authorize one AuditRecord read but does not authorize collection search.
 
@@ -67,7 +72,7 @@ The public record contains only:
 - optional `correlationId`;
 - optional `causationId`.
 
-`material_snapshot` and `integrity_metadata` are not exposed because their semantics remain deferred. Raw secrets/private credential material remain prohibited.
+`materialSnapshot` is an optional closed `audit-material-v1` explanatory display snapshot and `integrityMetadata` is derived `audit-integrity-v1` SHA-256 tamper-detection metadata. Stable IDs remain authoritative references. Raw secrets/private credential material remain prohibited.
 
 AuditRecord remains immutable evidence. Reading Audit does not mutate or reconstruct capability authority.
 
@@ -79,13 +84,15 @@ Workers page the frozen membership in deterministic `occurredAt ASC, id ASC` ord
 
 The first concrete adapter is a deployment-configured filesystem path and is disabled by default. The path must itself provide the durability/shared-storage properties required by its deployment; an ephemeral instance filesystem is not production HA/DR evidence. Public representations never expose the internal artifact reference. Download is re-authorized at request time and uses `Cache-Control: no-store`.
 
-Flyway V54 implements the internal archive-segment and retention-policy foundation defined by ADR-0034. Archive generation is not exposed as arbitrary public CRUD: an internal typed Audit command selects an exact eligible occurrence range under the current immutable tenant policy, captures `snapshotRecordedAt`, and produces one verified external artifact through bounded durable work. Policy values are tenant-scoped, immutable/versioned inputs rather than client-owned status fields. Public AuditRecord read/search remains online-store backed, and source AuditRecords remain append-only. Destructive purge remains fail-closed pending a separate accepted legal-hold/purge decision.
+Flyway V54 implements archive-segment and immutable retention-policy state. V55 adds explicit legal holds, dual-control purge operations, a segment-specific archived-record query index, a transparent online-or-archived AuditRecord read view, and a database purge fence. Retention policy alone never grants deletion authority: execution revalidates minimum-online retention, a verified covering archive, exact archived-row membership, no matching ACTIVE hold, and requester/approver separation immediately before deletion. Ordinary AuditRecord UPDATE/DELETE remains rejected by the database trigger.
+
+V56 activates the reserved material/integrity columns as closed typed contracts and adds relational immutable `EvidenceSnapshot`. New AuditRecords derive SHA-256 integrity metadata inside Audit; replay verifies stored integrity when present. Archive NDJSON v2 and the archived query index preserve material/integrity evidence. EvidenceSnapshot creation is an internal typed producer boundary; the public API is read-only and exact-filtered.
+
+ADR-0037 SIEM delivery is a separate opt-in technical transport. A committed AuditRecord is offered to Platform scheduled work only after the Audit transaction completes. Delivery re-reads the immutable record, emits a closed `audit-siem-v1` message to one deployment-configured signed HTTPS endpoint, retries bounded transient failures, and never rewrites AuditRecord outcome or business authority.
 
 ## Deferred
 
-- destructive AuditRecord purge/legal-hold semantics;
-- transparent archived-record query after any future online removal;
-- EvidenceSnapshot;
-- material snapshots and integrity-chain metadata;
-- SIEM transport;
+- archive artifact deletion after `minimumArchiveRetention` plus legal/compliance policy authorization;
+- historical SIEM backfill/replay as a separate bounded operation;
+- multi-destination SIEM fan-out;
 - richer search/reporting that would require new explicit requirements.
