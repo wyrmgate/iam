@@ -479,6 +479,9 @@ class LifecycleAccessReconciliationIntegrationTest {
                         null,
                         null,
                         null,
+                        null,
+                        null,
+                        null,
                         AccessAssignment.TargetKind.ROLE,
                         roleId)),
                 NOW.plusSeconds(2));
