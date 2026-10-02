@@ -29,7 +29,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
 - [`api/identity-contracts.md`](api/identity-contracts.md) — first OD-003 machine-readable Identity OpenAPI/AsyncAPI implementation slice and runtime authorization boundary.
 - [`api/credential-contracts.md`](api/credential-contracts.md) — Credential public control-plane resource/operation, secret-reference, concurrency, idempotency and cursor boundary.
-- [`api/audit-contracts.md`](api/audit-contracts.md) — bounded AuditRecord read/search plus durable asynchronous export/download, authorization, filtering and artifact boundary.
+- [`api/audit-contracts.md`](api/audit-contracts.md) — AuditRecord, export/archive, legal-hold/purge, EvidenceSnapshot, integrity and SIEM contracts — bounded AuditRecord read/search plus durable asynchronous export/download, authorization, filtering and artifact boundary.
 - [`api/administration-contracts.md`](api/administration-contracts.md) — AdministrativeRole/Grant/Delegation/Elevation/BreakGlass semantic control-plane API, concurrency, idempotency, cursor, audit and assurance boundary.
 - [`api/catalog-contracts.md`](api/catalog-contracts.md) — authoritative Application/ApplicationTarget/Entitlement/Role runtime contract, revisions, retirement, pagination and provider-observation boundary.
 - [`api/access-contracts.md`](api/access-contracts.md) — authoritative AccessAssignment control-plane API and read-only EffectiveAccess projection contract.
