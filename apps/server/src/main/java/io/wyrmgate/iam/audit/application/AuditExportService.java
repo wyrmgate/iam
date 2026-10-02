@@ -318,6 +318,9 @@ public final class AuditExportService {
                             if (page.isEmpty()) break;
 
                             for (AuditRecord record : page) {
+                                if (!AuditRecordIntegrity.verifies(item.tenant(), record)) {
+                                    throw new AuditIntegrityException(record.id());
+                                }
                                 byte[] line = objectMapper.writeValueAsBytes(ExportRecord.from(record));
                                 output.write(line);
                                 output.write('\n');
