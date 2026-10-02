@@ -94,7 +94,7 @@ class AuditExportControllerTest {
         AuditExportOperation completed = new AuditExportOperation(
                 exportId,
                 actor.identityId(),
-                AuditFilter.none(),
+                new AuditExportOperation.Filter(null, null, null, null, null, null),
                 NOW.minusSeconds(3600),
                 NOW,
                 NOW,
@@ -127,7 +127,7 @@ class AuditExportControllerTest {
         return new AuditExportOperation(
                 exportId,
                 actor.identityId(),
-                new AuditFilter(null, "identity:create", null, null, null, null),
+                new AuditExportOperation.Filter(null, "identity:create", null, null, null, null),
                 NOW.minusSeconds(3600),
                 NOW,
                 NOW,
