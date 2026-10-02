@@ -55,7 +55,7 @@ class CatalogPersistenceIntegrationTest {
                 new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         commands = new CatalogCommandService(repository, ids, transactions);
         queries = new CatalogQueryService(repository);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("54");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("56");
     }
 
     @AfterAll
