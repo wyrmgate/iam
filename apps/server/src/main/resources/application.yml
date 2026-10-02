@@ -60,6 +60,16 @@ iam:
   api:
     cursor:
       lifetime: ${IAM_API_CURSOR_LIFETIME:PT15M}
+  audit:
+    export:
+      enabled: ${IAM_AUDIT_EXPORT_ENABLED:false}
+      directory: ${IAM_AUDIT_EXPORT_DIRECTORY:./var/audit-exports}
+      poll-interval: ${IAM_AUDIT_EXPORT_POLL_INTERVAL:PT1S}
+      claim-lease: ${IAM_AUDIT_EXPORT_CLAIM_LEASE:PT30S}
+      batch-size: ${IAM_AUDIT_EXPORT_BATCH_SIZE:10}
+      max-attempts: ${IAM_AUDIT_EXPORT_MAX_ATTEMPTS:5}
+      retry-delay: ${IAM_AUDIT_EXPORT_RETRY_DELAY:PT5S}
+      artifact-retention: ${IAM_AUDIT_EXPORT_ARTIFACT_RETENTION:}
   integration:
     worker-auth:
       enabled: ${IAM_CONNECTOR_WORKER_AUTH_ENABLED:false}
