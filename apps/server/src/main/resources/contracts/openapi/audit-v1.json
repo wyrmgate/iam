@@ -2,8 +2,8 @@
   "openapi": "3.1.2",
   "info": {
     "title": "Wyrmgate IAM Audit API",
-    "version": "0.1.0",
-    "description": "Bounded tenant-scoped read/search API for immutable AuditRecord evidence under ADR-0031."
+    "version": "0.2.0",
+    "description": "Bounded tenant-scoped AuditRecord read/search plus durable ADR-0034 Audit export operations."
   },
   "servers": [
     {
@@ -106,6 +106,137 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/audit-exports": {
+      "post": {
+        "operationId": "createAuditExport",
+        "summary": "Request a durable audit export",
+        "x-wyrmgate-administrative-permission": "audit:export",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditExportCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Audit export accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExport"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/audit-exports/{auditExportId}": {
+      "get": {
+        "operationId": "getAuditExport",
+        "summary": "Read one durable audit export operation",
+        "x-wyrmgate-administrative-permission": "audit:export",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuditExportId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit export operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExport"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/audit-exports/{auditExportId}:download": {
+      "post": {
+        "operationId": "downloadAuditExport",
+        "summary": "Download a completed audit export artifact",
+        "x-wyrmgate-administrative-permission": "audit:export",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuditExportId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Closed UTF-8 NDJSON v1 artifact",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
           }
         }
       }
@@ -217,6 +348,25 @@
           "type": "string",
           "format": "uuid"
         }
+      },
+      "AuditExportId": {
+        "name": "auditExportId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
       }
     },
     "responses": {
@@ -252,6 +402,36 @@
       },
       "NotFound": {
         "description": "AuditRecord not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Request conflicts with current durable operation state",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Gone": {
+        "description": "Requested export artifact has expired",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unavailable": {
+        "description": "Audit export is not enabled for this deployment",
         "content": {
           "application/json": {
             "schema": {
@@ -398,6 +578,223 @@
             "items": {
               "$ref": "#/components/schemas/FieldError"
             }
+          }
+        }
+      },
+      "AuditExportCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "occurredFrom",
+          "occurredUntil"
+        ],
+        "properties": {
+          "actorId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "actionType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "resourceType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "resourceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "SUCCESS",
+              "DENIED",
+              "FAILURE",
+              null
+            ]
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "occurredFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occurredUntil": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuditExport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "requestedByIdentityId",
+          "occurredFrom",
+          "occurredUntil",
+          "snapshotRecordedAt",
+          "schemaVersion",
+          "state",
+          "recordCount",
+          "byteCount",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestedByIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "actorId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "actionType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "resourceType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "resourceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "SUCCESS",
+              "DENIED",
+              "FAILURE",
+              null
+            ]
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "occurredFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occurredUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "snapshotRecordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schemaVersion": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "REQUESTED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED"
+            ]
+          },
+          "recordCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "byteCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "artifactExpiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }
