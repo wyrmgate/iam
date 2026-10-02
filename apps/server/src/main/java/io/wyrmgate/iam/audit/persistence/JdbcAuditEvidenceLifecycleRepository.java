@@ -29,6 +29,14 @@ public final class JdbcAuditEvidenceLifecycleRepository implements AuditEvidence
     }
 
     @Override
+    public void lockLifecycle(TenantContext tenant) {
+        jdbc.queryForObject(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                Long.class,
+                tenant.tenantId().toString());
+    }
+
+    @Override
     public AuditLegalHold createHold(
             TenantContext tenant,
             UUID holdId,
@@ -39,6 +47,7 @@ public final class JdbcAuditEvidenceLifecycleRepository implements AuditEvidence
             UUID correlationId,
             UUID causationId,
             Instant now) {
+        lockLifecycle(tenant);
         jdbc.update(
                 """
                 INSERT INTO audit.audit_legal_hold (
@@ -224,6 +233,33 @@ public final class JdbcAuditEvidenceLifecycleRepository implements AuditEvidence
                 purgeId,
                 expectedRevision,
                 approvedByIdentityId);
+        stale(updated, "audit-purge", purgeId, expectedRevision);
+        return findPurge(tenant, purgeId).orElseThrow();
+    }
+
+    @Override
+    public AuditPurgeOperation blockApprovedPurge(
+            TenantContext tenant,
+            UUID purgeId,
+            long expectedRevision,
+            String failureCode,
+            Instant now) {
+        int updated = jdbc.update(
+                """
+                UPDATE audit.audit_purge_operation
+                SET state = 'BLOCKED',
+                    failure_code = ?,
+                    completed_at = ?,
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ? AND id = ? AND revision = ? AND state = 'APPROVED'
+                """,
+                failureCode,
+                Timestamp.from(now),
+                Timestamp.from(now),
+                tenant.tenantId(),
+                purgeId,
+                expectedRevision);
         stale(updated, "audit-purge", purgeId, expectedRevision);
         return findPurge(tenant, purgeId).orElseThrow();
     }
