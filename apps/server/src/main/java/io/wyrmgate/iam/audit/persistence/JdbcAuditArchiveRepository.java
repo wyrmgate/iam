@@ -351,14 +351,15 @@ public final class JdbcAuditArchiveRepository
         return jdbc.query(
                 """
                 SELECT id, occurred_at, recorded_at, actor_id, action_type,
-                       resource_type, resource_id, outcome, correlation_id, causation_id
+                       resource_type, resource_id, outcome, correlation_id, causation_id,
+                       material_snapshot, integrity_metadata
                 FROM audit.audit_record_query
                 WHERE tenant_id = ?
                   AND occurred_at >= ?
                   AND occurred_at < ?
                   AND recorded_at <= ?
                 """ + continuation + " ORDER BY occurred_at ASC, id ASC LIMIT ?",
-                (rs, rowNum) -> auditRecord(rs),
+                (rs, rowNum) -> AuditRecordPersistenceMapper.row(rs),
                 args);
     }
 
@@ -427,19 +428,6 @@ public final class JdbcAuditArchiveRepository
                 rs.getTimestamp("updated_at").toInstant());
     }
 
-    private static AuditRecord auditRecord(ResultSet rs) throws SQLException {
-        return new AuditRecord(
-                rs.getObject("id", UUID.class),
-                rs.getTimestamp("occurred_at").toInstant(),
-                rs.getTimestamp("recorded_at").toInstant(),
-                rs.getObject("actor_id", UUID.class),
-                rs.getString("action_type"),
-                rs.getString("resource_type"),
-                rs.getObject("resource_id", UUID.class),
-                AuditOutcome.valueOf(rs.getString("outcome")),
-                rs.getObject("correlation_id", UUID.class),
-                rs.getObject("causation_id", UUID.class));
-    }
 
     private static Instant instant(Timestamp value) {
         return value == null ? null : value.toInstant();
