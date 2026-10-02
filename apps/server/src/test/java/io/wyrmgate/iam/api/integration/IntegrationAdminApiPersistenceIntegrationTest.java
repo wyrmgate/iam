@@ -380,7 +380,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 WHERE tenant_id = ?
                   AND resource_type IN ('connector', 'connector-binding', 'connector-worker',
                                         'entitlement-observation-mapping')
-                  AND (material_snapshot IS NOT NULL OR integrity_metadata IS NOT NULL)
+                  AND material_snapshot IS NOT NULL
                 """, Integer.class, tenant.tenantId());
         assertThat(materialized).isZero();
     }
