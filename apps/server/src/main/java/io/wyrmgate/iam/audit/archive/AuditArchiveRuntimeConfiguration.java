@@ -3,6 +3,7 @@ package io.wyrmgate.iam.audit.archive;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.audit.application.AuditArchiveRepository;
 import io.wyrmgate.iam.audit.application.AuditArchiveService;
+import io.wyrmgate.iam.audit.application.AuditEvidenceLifecycleRepository;
 import io.wyrmgate.iam.audit.application.AuditExportArtifactStore;
 import io.wyrmgate.iam.audit.application.AuditRetentionPolicyRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -21,6 +22,7 @@ class AuditArchiveRuntimeConfiguration {
     @Bean
     AuditArchiveService auditArchiveService(
             AuditArchiveRepository archives,
+            AuditEvidenceLifecycleRepository lifecycle,
             AuditRetentionPolicyRepository policies,
             AuditExportArtifactStore artifactStore,
             JdbcScheduledWorkRepository scheduledWork,
@@ -34,6 +36,7 @@ class AuditArchiveRuntimeConfiguration {
             @Value("${iam.audit.archive.retry-delay:PT5S}") Duration retryDelay) {
         return new AuditArchiveService(
                 archives,
+                lifecycle,
                 policies,
                 artifactStore,
                 scheduledWork,

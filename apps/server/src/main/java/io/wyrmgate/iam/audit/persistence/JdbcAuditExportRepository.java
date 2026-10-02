@@ -230,8 +230,9 @@ public final class JdbcAuditExportRepository implements AuditExportRepository {
 
         StringBuilder sql = new StringBuilder("""
                 SELECT id, occurred_at, recorded_at, actor_id, action_type,
-                       resource_type, resource_id, outcome, correlation_id, causation_id
-                FROM audit.audit_record
+                       resource_type, resource_id, outcome, correlation_id, causation_id,
+                       material_snapshot, integrity_metadata
+                FROM audit.audit_record_query
                 WHERE tenant_id = ?
                   AND occurred_at >= ?
                   AND occurred_at < ?
@@ -276,7 +277,7 @@ public final class JdbcAuditExportRepository implements AuditExportRepository {
         sql.append(" ORDER BY occurred_at ASC, id ASC LIMIT ?");
         args.add(limit);
 
-        return jdbc.query(sql.toString(), (rs, rowNum) -> auditRecord(rs), args.toArray());
+        return jdbc.query(sql.toString(), (rs, rowNum) -> AuditRecordPersistenceMapper.row(rs), args.toArray());
     }
 
     private static String selectOperation() {
@@ -325,19 +326,6 @@ public final class JdbcAuditExportRepository implements AuditExportRepository {
                 rs.getTimestamp("updated_at").toInstant());
     }
 
-    private static AuditRecord auditRecord(ResultSet rs) throws SQLException {
-        return new AuditRecord(
-                rs.getObject("id", UUID.class),
-                rs.getTimestamp("occurred_at").toInstant(),
-                rs.getTimestamp("recorded_at").toInstant(),
-                rs.getObject("actor_id", UUID.class),
-                rs.getString("action_type"),
-                rs.getString("resource_type"),
-                rs.getObject("resource_id", UUID.class),
-                AuditOutcome.valueOf(rs.getString("outcome")),
-                rs.getObject("correlation_id", UUID.class),
-                rs.getObject("causation_id", UUID.class));
-    }
 
     private static Instant instant(Timestamp value) {
         return value == null ? null : value.toInstant();

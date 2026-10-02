@@ -101,7 +101,7 @@ class CatalogRoleApiIntegrationTest {
                         .current()
                         .getVersion()
                         .getVersion())
-                .isEqualTo("54");
+                .isEqualTo("56");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -377,7 +377,7 @@ class CatalogRoleApiIntegrationTest {
                 FROM audit.audit_record
                 WHERE tenant_id = ?
                   AND resource_type IN ('role', 'role-version')
-                  AND (material_snapshot IS NOT NULL OR integrity_metadata IS NOT NULL)
+                  AND material_snapshot IS NOT NULL
                 """, Integer.class, tenant.tenantId());
         assertThat(materializedPayloads).isZero();
     }

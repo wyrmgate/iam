@@ -2,6 +2,7 @@ package io.wyrmgate.iam.api.audit;
 
 import io.wyrmgate.iam.audit.application.AuditQueryModels.AuditFilter;
 import io.wyrmgate.iam.audit.application.AuditQueryModels.AuditPagePosition;
+import io.wyrmgate.iam.audit.application.EvidenceSnapshotService;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -54,6 +55,71 @@ final class AuditCursorCodec {
                         Long.toString(position.occurredAt().getEpochSecond()),
                         Integer.toString(position.occurredAt().getNano()),
                         position.id().toString()));
+    }
+
+    String encodeEvidenceSnapshot(
+            TenantContext tenant,
+            String snapshotType,
+            String subjectResourceType,
+            UUID subjectResourceId,
+            UUID correlationId,
+            EvidenceSnapshotService.Position position) {
+        return position == null
+                ? null
+                : sign(payload(
+                        "evidence-snapshot",
+                        tenant.tenantId().toString(),
+                        evidenceFilterContext(
+                                snapshotType,
+                                subjectResourceType,
+                                subjectResourceId,
+                                correlationId),
+                        clock.instant().toString(),
+                        Long.toString(position.occurredAt().getEpochSecond()),
+                        Integer.toString(position.occurredAt().getNano()),
+                        position.id().toString()));
+    }
+
+    EvidenceSnapshotService.Position decodeEvidenceSnapshot(
+            String cursor,
+            TenantContext tenant,
+            String snapshotType,
+            String subjectResourceType,
+            UUID subjectResourceId,
+            UUID correlationId) {
+        String[] parts = verifiedPayload(cursor);
+        if (parts.length != 8
+                || !PAYLOAD_VERSION.equals(parts[0])
+                || !"evidence-snapshot".equals(parts[1])
+                || !tenant.tenantId().toString().equals(parts[2])
+                || !evidenceFilterContext(
+                        snapshotType,
+                        subjectResourceType,
+                        subjectResourceId,
+                        correlationId).equals(parts[3])) {
+            throw invalid();
+        }
+        validateIssuedAt(parts[4]);
+        try {
+            return new EvidenceSnapshotService.Position(
+                    Instant.ofEpochSecond(
+                            Long.parseLong(parts[5]),
+                            Integer.parseInt(parts[6])),
+                    UUID.fromString(parts[7]));
+        } catch (RuntimeException invalid) {
+            throw invalid(invalid);
+        }
+    }
+
+    private static String evidenceFilterContext(
+            String snapshotType,
+            String subjectResourceType,
+            UUID subjectResourceId,
+            UUID correlationId) {
+        return component(snapshotType == null ? null : snapshotType.trim())
+                + "|" + component(subjectResourceType == null ? null : subjectResourceType.trim())
+                + "|" + component(subjectResourceId)
+                + "|" + component(correlationId);
     }
 
     AuditPagePosition decode(

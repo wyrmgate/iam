@@ -89,7 +89,7 @@ class AuditApiIntegrationTest {
                         .current()
                         .getVersion()
                         .getVersion())
-                .isEqualTo("54");
+                .isEqualTo("56");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -162,7 +162,9 @@ class AuditApiIntegrationTest {
                 .andExpect(jsonPath("$.items[0].id").value(secondId.toString()))
                 .andExpect(jsonPath("$.items[0].actionType").value("identity:create"))
                 .andExpect(jsonPath("$.items[0].materialSnapshot").doesNotExist())
-                .andExpect(jsonPath("$.items[0].integrityMetadata").doesNotExist())
+                .andExpect(jsonPath("$.items[0].integrityMetadata.schemaVersion").value("audit-integrity-v1"))
+                .andExpect(jsonPath("$.items[0].integrityMetadata.algorithm").value("SHA-256"))
+                .andExpect(jsonPath("$.items[0].integrityMetadata.contentSha256").isString())
                 .andExpect(jsonPath("$.nextCursor").isString())
                 .andReturn()
                 .getResponse()

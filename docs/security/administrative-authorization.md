@@ -48,7 +48,8 @@ AdministrativeRole is a manageable bundle of stable control-plane permissions. E
 - governance exception request/approval;
 - connector/source configuration, testing and reconciliation execution;
 - credential read/create/revoke/compromise/rotate and credential-rotation read; secret-reference management remains metadata-only and never implies raw secret retrieval;
-- audit read/export;
+- audit read/export, legal-hold management and destructive purge;
+- EvidenceSnapshot read;
 - administrative-authorization management.
 
 The implemented Identity lifecycle surface separates `identity:activate`, `identity:suspend`, `identity:deactivate`, and `identity:decommission` from generic `identity:update`. Possession of metadata-update authority therefore does not authorize lifecycle changes. These lifecycle permissions are default-deny and are not silently added to the initial tenant administrator permission set.
@@ -57,7 +58,7 @@ The implemented Principal administration surface likewise separates `principal:r
 
 Raw secret retrieval is not implied by platform administration and is unavailable through the Credential public API because secret material is external by default. The implemented Credential surface uses separate semantic permissions `credential:read`, `credential:create`, `credential:revoke`, `credential:compromise`, `credential:rotate`, and `credential-rotation:read`; none is silently added to the initial tenant administrator permission set.
 
-The implemented Audit read/search surface uses the separate default-deny `audit:read` permission. A GLOBAL grant may authorize bounded collection search; an exact SPECIFIC_RESOURCE grant for resource type `audit` authorizes only that AuditRecord and never a collection search. Durable export uses the distinct default-deny `audit:export` permission for creation, operation reads and download; `audit:read` does not imply export authority. Neither Audit permission is silently added to the initial tenant administrator permission set.
+The implemented Audit read/search surface uses `audit:read`. Durable export uses `audit:export`; legal-hold create/read/release uses `audit:hold`; destructive purge request/read/approval uses `audit:purge`; immutable EvidenceSnapshot read/search uses `evidence-snapshot:read`. All are default-deny and independent. A GLOBAL grant may authorize bounded collection operations; an exact SPECIFIC_RESOURCE grant authorizes only the matching semantic resource. None is silently added to the initial tenant administrator permission set.
 
 ## Scope
 
@@ -102,6 +103,7 @@ Sensitive actions may require stronger authentication and/or maker-checker appro
 - authoritative-source/correlation-rule changes;
 - audit/security control changes;
 - sensitive audit exports;
+- legal-hold release and destructive Audit purge approval/execution;
 - break-glass use.
 
 Authorization and approval are separate questions: authorization determines whether the actor may initiate/perform an operation; governance policy determines whether the operation requires additional approval before execution.

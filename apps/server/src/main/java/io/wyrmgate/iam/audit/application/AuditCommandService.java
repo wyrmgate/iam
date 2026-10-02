@@ -11,48 +11,75 @@ public final class AuditCommandService implements SecurityAuditPort {
     private final AuditRecordRepository repository;
     private final TransactionExecutor transactions;
     private final Clock clock;
+    private final AuditSiemEnqueuer siem;
 
     public AuditCommandService(
             AuditRecordRepository repository,
             TransactionExecutor transactions,
             Clock clock) {
+        this(repository, transactions, clock, null);
+    }
+
+    public AuditCommandService(
+            AuditRecordRepository repository,
+            TransactionExecutor transactions,
+            Clock clock,
+            AuditSiemEnqueuer siem) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.siem = siem;
     }
 
     @Override
     public AuditRecord append(TenantContext tenant, AuditRecordDraft draft) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(draft, "draft");
-        return transactions.required(() -> appendInside(tenant, draft));
+        AuditRecord record = transactions.required(() -> appendInside(tenant, draft));
+        if (siem != null) {
+            try {
+                siem.enqueue(tenant, record);
+            } catch (RuntimeException ignored) {
+                // ADR-0037: SIEM technical handoff cannot invalidate committed Audit evidence.
+            }
+        }
+        return record;
     }
 
     private AuditRecord appendInside(TenantContext tenant, AuditRecordDraft draft) {
         var existing = repository.findById(tenant, draft.id());
         if (existing.isPresent()) {
-            return requireSame(existing.get(), draft);
+            return requireSame(tenant, existing.get(), draft);
         }
+        Instant recordedAt = Instant.now(clock);
         AuditRecord proposed = new AuditRecord(
                 draft.id(),
                 draft.occurredAt(),
-                Instant.now(clock),
+                recordedAt,
                 draft.actorId(),
                 draft.actionType(),
                 draft.resourceType(),
                 draft.resourceId(),
                 draft.outcome(),
                 draft.correlationId(),
-                draft.causationId());
+                draft.causationId(),
+                draft.materialSnapshot(),
+                AuditRecordIntegrity.derive(tenant, draft, recordedAt));
         if (repository.insertIfAbsent(tenant, proposed)) {
             return proposed;
         }
         AuditRecord raced = repository.findById(tenant, draft.id())
                 .orElseThrow(() -> new AuditRecordConflictException(draft.id()));
-        return requireSame(raced, draft);
+        return requireSame(tenant, raced, draft);
     }
 
-    private static AuditRecord requireSame(AuditRecord existing, AuditRecordDraft draft) {
+    private static AuditRecord requireSame(
+            TenantContext tenant,
+            AuditRecord existing,
+            AuditRecordDraft draft) {
+        if (!AuditRecordIntegrity.verifies(tenant, existing)) {
+            throw new AuditIntegrityException(existing.id());
+        }
         if (!existing.semanticallyEquals(draft)) {
             throw new AuditRecordConflictException(draft.id());
         }

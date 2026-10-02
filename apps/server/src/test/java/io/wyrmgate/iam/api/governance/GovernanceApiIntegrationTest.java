@@ -103,7 +103,7 @@ class GovernanceApiIntegrationTest {
         flyway.validate();
         assertThat(flyway.info().current()
                 .getVersion().getVersion())
-                .isEqualTo("54");
+                .isEqualTo("56");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -501,8 +501,7 @@ class GovernanceApiIntegrationTest {
                 FROM audit.audit_record
                 WHERE tenant_id = ?
                   AND resource_type IN ('access-request', 'approval-case')
-                  AND (material_snapshot IS NOT NULL
-                       OR integrity_metadata IS NOT NULL)
+                  AND material_snapshot IS NOT NULL
                 """,
                 Integer.class,
                 tenant.tenantId());

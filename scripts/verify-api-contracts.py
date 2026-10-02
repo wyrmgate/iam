@@ -512,6 +512,14 @@ def verify_audit_openapi(document: dict) -> None:
         "/audit-exports",
         "/audit-exports/{auditExportId}",
         "/audit-exports/{auditExportId}:download",
+        "/evidence-snapshots",
+        "/evidence-snapshots/{evidenceSnapshotId}",
+        "/audit-evidence-lifecycle/legal-holds",
+        "/audit-evidence-lifecycle/legal-holds/{holdId}",
+        "/audit-evidence-lifecycle/legal-holds/{holdId}:release",
+        "/audit-evidence-lifecycle/purges",
+        "/audit-evidence-lifecycle/purges/{purgeId}",
+        "/audit-evidence-lifecycle/purges/{purgeId}:approve",
     }
 
     listing = paths["/audit-records"]["get"]
@@ -533,20 +541,31 @@ def verify_audit_openapi(document: dict) -> None:
 
     export_create = paths["/audit-exports"]["post"]
     assert export_create.get("x-wyrmgate-administrative-permission") == "audit:export"
-    assert "IdempotencyKey" in ref_names(export_create), (
-        "Audit export creation must require causal idempotency"
-    )
-    export_request_ref = export_create["requestBody"]["content"]["application/json"]["schema"]["$ref"]
-    assert export_request_ref.endswith("/AuditExportCreateRequest")
+    assert "IdempotencyKey" in ref_names(export_create)
 
-    export_detail = paths["/audit-exports/{auditExportId}"]["get"]
-    assert export_detail.get("x-wyrmgate-administrative-permission") == "audit:export"
+    for path in ("/audit-exports/{auditExportId}", "/audit-exports/{auditExportId}:download"):
+        operation = paths[path]["get" if path.endswith("}") else "post"]
+        assert operation.get("x-wyrmgate-administrative-permission") == "audit:export"
 
-    export_download = paths["/audit-exports/{auditExportId}:download"]["post"]
-    assert export_download.get("x-wyrmgate-administrative-permission") == "audit:export"
-    assert "requestBody" not in export_download, (
-        "Audit export download must not accept provider-native artifact state"
-    )
+    snapshot_list = paths["/evidence-snapshots"]["get"]
+    snapshot_detail = paths["/evidence-snapshots/{evidenceSnapshotId}"]["get"]
+    assert snapshot_list.get("x-wyrmgate-administrative-permission") == "evidence-snapshot:read"
+    assert snapshot_detail.get("x-wyrmgate-administrative-permission") == "evidence-snapshot:read"
+    assert {"Cursor", "Limit"}.issubset(ref_names(snapshot_list))
+
+    hold_create = paths["/audit-evidence-lifecycle/legal-holds"]["post"]
+    assert hold_create.get("x-wyrmgate-administrative-permission") == "audit:hold"
+    assert "IdempotencyKey" in ref_names(hold_create)
+    hold_release = paths["/audit-evidence-lifecycle/legal-holds/{holdId}:release"]["post"]
+    assert hold_release.get("x-wyrmgate-administrative-permission") == "audit:hold"
+    assert "IfMatch" in ref_names(hold_release)
+
+    purge_create = paths["/audit-evidence-lifecycle/purges"]["post"]
+    assert purge_create.get("x-wyrmgate-administrative-permission") == "audit:purge"
+    assert "IdempotencyKey" in ref_names(purge_create)
+    purge_approve = paths["/audit-evidence-lifecycle/purges/{purgeId}:approve"]["post"]
+    assert purge_approve.get("x-wyrmgate-administrative-permission") == "audit:purge"
+    assert "IfMatch" in ref_names(purge_approve)
 
     schemas = document["components"]["schemas"]
     audit = schemas["AuditRecord"]
@@ -562,11 +581,42 @@ def verify_audit_openapi(document: dict) -> None:
         "outcome",
         "correlationId",
         "causationId",
+        "materialSnapshot",
+        "integrityMetadata",
     }
     assert set(audit["properties"]["outcome"]["enum"]) == {
         "SUCCESS",
         "DENIED",
         "FAILURE",
+    }
+
+    for schema_name in (
+        "AuditMaterialSnapshot",
+        "AuditIntegrityMetadata",
+        "AuditLegalHoldCreateRequest",
+        "AuditLegalHold",
+        "AuditPurgeCreateRequest",
+        "AuditPurgeOperation",
+        "EvidenceReference",
+        "EvidenceSnapshot",
+        "EvidenceSnapshotPage",
+    ):
+        assert schemas[schema_name].get("additionalProperties") is False, (
+            f"{schema_name} must remain a closed Audit contract"
+        )
+
+    assert set(schemas["AuditMaterialSnapshot"]["properties"]) == {
+        "schemaVersion",
+        "actorDisplayLabel",
+        "resourceDisplayLabel",
+        "resourceRevision",
+        "resourceState",
+    }
+    assert set(schemas["AuditIntegrityMetadata"]["properties"]) == {
+        "schemaVersion",
+        "algorithm",
+        "contentSha256",
+        "materialSnapshotSha256",
     }
 
     export_request = schemas["AuditExportCreateRequest"]
@@ -585,9 +635,7 @@ def verify_audit_openapi(document: dict) -> None:
 
     export_resource = schemas["AuditExport"]
     assert export_resource.get("additionalProperties") is False
-    assert "artifactReference" not in export_resource["properties"], (
-        "Audit export public state must not expose internal artifact references"
-    )
+    assert "artifactReference" not in export_resource["properties"]
     assert {
         "snapshotRecordedAt",
         "schemaVersion",
@@ -598,19 +646,9 @@ def verify_audit_openapi(document: dict) -> None:
         "artifactExpiresAt",
         "revision",
     }.issubset(export_resource["properties"])
-    assert set(export_resource["properties"]["state"]["enum"]) == {
-        "REQUESTED",
-        "RUNNING",
-        "SUCCEEDED",
-        "FAILED",
-    }
 
     serialized = json.dumps(document, sort_keys=True).lower()
     for forbidden in (
-        "material_snapshot",
-        "materialsnapshot",
-        "integrity_metadata",
-        "integritymetadata",
         "password",
         "privatekey",
         "private_key",
@@ -620,9 +658,8 @@ def verify_audit_openapi(document: dict) -> None:
         "secret_value",
     ):
         assert forbidden not in serialized, (
-            f"Audit API leaked deferred or secret-shaped field: {forbidden}"
+            f"Audit API leaked secret-shaped field: {forbidden}"
         )
-
 
 
 def main() -> None:

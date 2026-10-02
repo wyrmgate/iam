@@ -86,7 +86,7 @@ A direct AdministrativeGrant is standing authority and explicitly records whethe
 
 IAM is event-driven where useful but does not require event sourcing as its authoritative persistence model.
 
-ADR-0031 implements the Audit-owned runtime foundation. `AuditRecord` is immutable append-only evidence with stable record identity, occurrence/recording time, optional governed actor, semantic action/resource reference, normalized `SUCCESS`/`DENIED`/`FAILURE` outcome and correlation/causation. Producer replay is idempotent by stable record ID plus semantic content; conflicting reuse is rejected. Bounded Audit queries order by `occurredAt DESC, id DESC`, and public tenant-scoped read/search is implemented. ADR-0034 adds `AuditExportOperation`, implemented as a durable asynchronous process that freezes a bounded record set with an Audit-owned recording-time cutoff and produces a data-minimized external NDJSON artifact. `AuditRetentionPolicyVersion` is immutable tenant-scoped policy input for export-artifact lifetime, archive eligibility and minimum online/archive retention. `AuditArchiveSegment` is now a durable immutable evidence-copy process that pins one policy version and one frozen AuditRecord range, verifies its external artifact before success, and records a minimum archive-retain-until boundary. Export and archive never mutate source AuditRecords. EvidenceSnapshot, material snapshots/integrity metadata, destructive purge/legal-hold semantics, transparent archived-record hydration and SIEM transport remain separate/deferred.
+ADR-0031 implements the Audit-owned runtime foundation. `AuditRecord` is immutable evidence with stable identity, occurrence/recording time, optional governed actor, semantic action/resource reference, normalized outcome and correlation/causation. ADR-0034 adds durable snapshot-frozen export plus verified immutable archive segments and versioned retention policy. ADR-0035 adds explicit `AuditLegalHold` and a dual-control `AuditPurgeOperation`; retention alone never authorizes deletion, and bounded reads use online evidence when present otherwise one verified archived projection. ADR-0036 implements immutable relational `EvidenceSnapshot` plus optional closed `AuditMaterialSnapshot` display context and derived `AuditIntegrityMetadata`; these remain evidence and never current business authority. ADR-0037 adds a separate at-least-once SIEM delivery edge using immutable AuditRecord content. Export, archive, purge, EvidenceSnapshot and SIEM remain distinct concepts with separate state and failure semantics.
 
 ## Canonical classification
 
@@ -112,3 +112,15 @@ EffectiveAccess, DesiredPrincipalState, DesiredGrantState, AssignmentFulfillment
 AdministrativeBreakGlassOperation is a first-class Administration-owned emergency authority/process object, distinct from direct AdministrativeGrant, AdministrativeDelegation and AdministrativeElevation. It records the exact governed actor/beneficiary, requested AdministrativeRole and typed scope, finite validity, reason/incident evidence, provider-neutral activation assurance, lifecycle/revision, correlation/causation and durable obligation references.
 
 Break-glass authority contributes to control-plane authorization only while the operation is ACTIVE, semantically time-valid, the governed actor remains administratively eligible, and current STRONG assurance satisfies the stored policy-bounded assurance-age requirement. SECURITY_NOTIFICATION and POST_USE_REVIEW are durable obligations/evidence, not authority. AuditRecord remains a separate Audit-owned data-minimized evidence stream.
+
+
+## Audit evidence lifecycle completion
+
+Audit owns four distinct evidence-lifecycle concepts that must not be collapsed:
+
+- `AuditRecord` — immutable semantic occurrence evidence; optional closed material display snapshot and derived integrity metadata do not create authority.
+- `EvidenceSnapshot` — immutable decision-time contextual references with typed subject/policy/related resource identities and revisions; never current-state mutation authority.
+- `AuditArchiveSegment` / archived-record index — immutable external evidence artifact plus an Audit-owned query projection used to keep bounded reads coherent after permitted online purge.
+- `AuditLegalHold` / `AuditPurgeOperation` — explicit evidence-lifecycle control/process state. Retention age is input, not deletion authority; ACTIVE hold always dominates purge.
+
+SIEM delivery is a separate outbound technical transport of data-minimized Audit evidence. It is neither a public integration event nor authoritative Audit state.

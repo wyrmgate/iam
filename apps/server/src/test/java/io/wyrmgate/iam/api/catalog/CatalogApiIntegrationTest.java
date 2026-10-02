@@ -89,7 +89,7 @@ class CatalogApiIntegrationTest {
         commands = new CatalogCommandService(repository, ids, transactions);
         queries = new CatalogQueryService(repository);
         idempotency = new JdbcIdempotencyRepository(jdbc, ids);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("54");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("56");
     }
 
     @AfterAll
@@ -254,7 +254,7 @@ class CatalogApiIntegrationTest {
                 FROM audit.audit_record
                 WHERE tenant_id = ?
                   AND resource_type IN ('application', 'application-target', 'entitlement')
-                  AND (material_snapshot IS NOT NULL OR integrity_metadata IS NOT NULL)
+                  AND material_snapshot IS NOT NULL
                 """, Integer.class, tenant.tenantId());
         assertThat(materializedPayloads).isZero();
     }

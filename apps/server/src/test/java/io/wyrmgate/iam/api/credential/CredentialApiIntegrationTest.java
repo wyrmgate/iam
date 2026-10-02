@@ -99,7 +99,7 @@ class CredentialApiIntegrationTest {
         flyway.validate();
         assertThat(flyway.info().current()
                 .getVersion().getVersion())
-                .isEqualTo("54");
+                .isEqualTo("56");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -345,8 +345,7 @@ class CredentialApiIntegrationTest {
                 FROM audit.audit_record
                 WHERE tenant_id = ?
                   AND resource_type = 'credential'
-                  AND (material_snapshot IS NOT NULL
-                       OR integrity_metadata IS NOT NULL)
+                  AND material_snapshot IS NOT NULL
                 """,
                 Integer.class,
                 tenant.tenantId());
@@ -554,7 +553,7 @@ class CredentialApiIntegrationTest {
                   AND outcome = 'DENIED'
                   AND correlation_id = ?
                   AND material_snapshot IS NULL
-                  AND integrity_metadata IS NULL
+                  AND integrity_metadata IS NOT NULL
                 """,
                 Integer.class,
                 tenant.tenantId(),

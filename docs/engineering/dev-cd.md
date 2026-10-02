@@ -1,89 +1,62 @@
 # DEV Deployment Topology
 
-## Active DEV target
+## Current status
 
-The first real DEV/testing/demo environment uses managed services:
+The previously documented Railway backend is retired and is no longer an active Wyrmgate IAM deployment target.
 
-- **Cloudflare Pages** serves the built `apps/console` static application.
-- **Cloudflare Pages Functions** handles only `/api/*` and reverse-proxies those requests to the IAM server through the server-side `IAM_BACKEND_ORIGIN` binding.
-- **Railway Serverless** runs `iam-server` from `apps/server/Dockerfile`.
-- **Neon PostgreSQL** provides the DEV PostgreSQL database over TLS.
-- **Grafana Cloud** is deferred until its free-tier behavior is confirmed suitable; application OTLP support remains disabled by default.
+No replacement managed server target is currently canonical. Do not infer a new provider from retained infrastructure files, CI examples, or prior deployment history. Selecting a replacement managed server/runtime is an implementation/operations decision and must be verified before this document names it as active.
 
-This is a DEV/demo implementation topology only. It does not redefine the canonical IAM capability architecture or establish a production topology.
+The repository still preserves provider-neutral deployment contracts:
 
-## Console / Pages contract
+- `apps/server/Dockerfile` is the container build contract for `iam-server`;
+- Spring Boot binds to `${PORT:8080}` and consumes database configuration through `IAM_DB_URL`, `IAM_DB_USER`, and `IAM_DB_PASSWORD`;
+- `/actuator/health` is the server health endpoint;
+- Flyway startup is verified by application integration tests;
+- Core CI is the authoritative repository gate for compiling and testing the server.
 
-Configure the Cloudflare Pages project with repository root directory `apps/console`, build command `npm run build`, and output directory `dist`. `apps/console/.node-version` pins the expected Node runtime for the build.
+## Console / Cloudflare Pages contract
 
-The console continues to call same-origin `/api/*`. `apps/console/functions/api/[[path]].js` forwards only that route family to `IAM_BACKEND_ORIGIN`. The binding is evaluated server-side by Pages Functions and must not be exposed as a `VITE_*` browser variable.
+The console build and Pages Function routing contract remain supported repository behavior:
 
-`apps/console/public/_routes.json` is copied into the Vite build output and includes only `/api/*`; normal HTML, JavaScript, CSS, images, and other static routes therefore do not invoke Functions unnecessarily.
+- `apps/console` builds the static application;
+- only `/api/*` is routed through `apps/console/functions/api/[[path]].js`;
+- the Function reads server-side `IAM_BACKEND_ORIGIN`;
+- browser code must not receive a `VITE_IAM_BACKEND_ORIGIN` secret/configuration substitute.
 
-For the shared DEV environment, set the Cloudflare Pages production branch to `main` and keep production-branch automatic deployment enabled. Preview branch deployments must remain disabled initially (`None`): feature-branch Pages previews do not have isolated Railway or Neon backends and must not accidentally target the shared DEV backend/database. Preview environments may be introduced later only with explicit backend/data isolation.
+A Pages deployment is not a complete shared DEV environment unless `IAM_BACKEND_ORIGIN` points to a separately selected and verified IAM server environment. Until a replacement server target exists, do not describe Pages plus any database provider as an active end-to-end DEV topology.
 
-Local development is unchanged: Vite proxies `/api` and `/actuator` to `http://localhost:8080`.
+Preview environments remain disabled unless they have explicit backend and data isolation. A feature-branch console must never silently target shared governed data.
 
-## Railway / server contract
+## Server deployment contract
 
-Railway builds the server from **repository root** with `apps/server/Dockerfile`. Do not set the Railway service Root Directory to `apps/server`: the Dockerfile intentionally uses repository-root paths such as `COPY apps/server/...`, so changing the build context to the service directory would break the image build.
+Any future managed server target must:
 
-`apps/server/railway.json` is the checked-in Railway service contract. It pins the Dockerfile path and `/actuator/health` health check while leaving the repository root as the build context. Because `.dockerignore` is also a repository-root Docker build input, it is included in Railway `watchPatterns` alongside `apps/server/**`.
+1. deploy a reviewed `main` revision whose required CI checks are green;
+2. build the checked-in server artifact/container without provider-specific domain changes;
+3. supply database credentials only through deployment secret/configuration facilities;
+4. verify Flyway completed to the repository current migration version;
+5. expose `/actuator/health`;
+6. preserve external-call-outside-authoritative-transaction and retry/idempotency semantics;
+7. document rollback and recovery behavior before being called the shared DEV baseline.
 
-The service must provide:
+Provider-specific configuration belongs in a provider runbook/config file only while that provider is actually used. Obsolete provider configuration must be removed rather than kept as an apparent active contract.
 
-- `IAM_DB_URL` — a Neon JDBC URL using the direct, TLS-required endpoint because Flyway runs on the same Spring datasource at startup;
-- `IAM_DB_USER`;
-- `IAM_DB_PASSWORD`;
-- `IAM_DEPLOYMENT_ENVIRONMENT=dev`;
-- `IAM_OTEL_ENABLED=false` until observability is deliberately activated;
-- `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`;
-- `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`;
-- `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5` for the validated initial DEV serverless baseline.
+## Database posture
 
-Optional ADR-0013 public-event webhook activation additionally requires:
+PostgreSQL remains the implementation target. Neon-specific recovery material may be retained only where it describes an actually used database environment; it does not imply a canonical server provider or a complete active DEV topology.
 
-- `IAM_INTEGRATION_EVENTS_ENABLED=true`;
-- `IAM_INTEGRATION_EVENTS_TRANSPORT=webhook`;
-- `IAM_INTEGRATION_EVENTS_WEBHOOK_ENDPOINT=https://...`;
-- `IAM_INTEGRATION_EVENTS_WEBHOOK_SECRET` supplied through Railway secrets and at least 32 UTF-8 bytes.
-
-Webhook delivery is disabled by default. Do not activate it until an intended DEV receiver exists and the receiver/signature/retry checks in [`../operations/public-event-webhook.md`](../operations/public-event-webhook.md) have been completed.
-
-Railway supplies `PORT`; Spring Boot binds to `${PORT:8080}`, preserving port 8080 locally and in standalone containers.
-
-Configure Railway's Git integration to deploy `main` and enable **Wait for CI**. Railway remains the deployment engine, but a `main` revision must not begin its provider deployment until the associated GitHub check suites have completed successfully.
-
-Railway Serverless considers outbound traffic when deciding whether a service is idle, so long-lived database connections, telemetry, or frequent event-webhook polling/delivery can keep the service awake. The initial DEV posture therefore allows Hikari to drain to zero idle connections and leaves OTLP disabled. Before enabling the public-event webhook in DEV, verify its effect on the intended idle/cost behavior. A maximum pool size of `5` is the validated DEV compatibility baseline; an effective maximum of `2` caused Flyway startup timeout during activation. Treat `5` as an observed DEV baseline, not production sizing guidance.
-
-Neon offers pooled endpoints for high-concurrency/serverless workloads, but migration tooling may need a direct connection. Because this application currently runs Flyway on the application datasource, the initial DEV contract uses the direct endpoint rather than introducing a second migration datasource prematurely.
-
-## Spring Boot / Flyway startup contract
-
-The server relies on Spring Boot to run Flyway migrations before normal application operation. In the current Spring Boot 4.1.1 dependency layout, `spring-boot-starter-flyway` plus `flyway-database-postgresql` is the validated dependency contract.
-
-`ApplicationFlywayStartupIntegrationTest` boots the real application against an empty PostgreSQL instance and verifies that `flyway_schema_history`, the expected migration version, and the capability schemas are created. Do not replace the starter with a direct Flyway dependency unless equivalent startup behavior is deliberately re-established and this application-startup regression test remains green.
-
-A provider health check alone is not proof that migrations ran. For a new or reset DEV database, verify both `/actuator/health` and the expected latest successful Flyway version in the database.
+For a selected DEV database, verify both application health and the latest successful Flyway version. A healthy HTTP endpoint alone is not migration evidence.
 
 ## Deployment ownership
 
-Cloudflare, Railway, and Neon deployment/configuration are external operator/provider actions. `.github/workflows/dev-cd.yml` validates the repository deployment contract but does not deploy, provision, mutate DNS, or materialize secrets.
+GitHub workflows validate repository contracts; they do not create cloud infrastructure, mutate DNS, or materialize deployment secrets.
 
-Provider Git integrations deploy reviewed `main` revisions under the controls above. The managed DEV environment does not consume the GHCR release images as its deployment mechanism: Cloudflare Pages and Railway build from the reviewed repository revision. GHCR images and signed release manifests remain controlled release artifacts for staging/production and optional standalone-host/reference environments.
+Core CI verifies the server. The DEV Deployment Contract currently validates the console/Pages repository contract and this topology status only. A new server-provider gate should be added only after that provider becomes an intentional current target.
 
-Rollback uses provider deployment history for application revisions; database down-migrations remain out of scope, so schema changes follow expand/contract compatibility.
+## Retired Railway path
 
-## Managed DEV recovery posture
+Railway Serverless, `apps/server/railway.json`, Railway Wait for CI, Railway deployment history, and Railway-specific serverless pool/sleep guidance are retired implementation details and are not current deployment requirements.
 
-The active Neon-backed DEV environment uses provider-native restore/history capabilities as its first recovery path rather than the standalone-host `pg_dump` timer. The exact restore window and controls are plan/provider-state dependent; verify the actual `wyrmgate-iam-dev` project configuration in Neon before destructive tests or risky data/schema changes.
+Historical commits retain the prior configuration if it is ever needed for reference. Do not restore it as a current contract without a new verified deployment decision.
 
-Provider-native recovery is not an independently retained logical backup. If DEV needs longer retention, cross-provider portability, or protection against provider-account loss, add an independently protected `pg_dump`/`pg_restore` process.
-
-See [`../operations/backup-recovery.md`](../operations/backup-recovery.md) for the managed-DEV versus standalone-host recovery boundary.
-
-## Superseded host-based DEV path
-
-The former OCI/SSH/Caddy/Docker-Compose DEV deployment is no longer the active first DEV target. OCI/OpenTofu, Ansible, Caddy, and host Compose material are retained only as optional/reference infrastructure for a future standalone environment. They must not be described as the canonical current DEV activation path.
-
-See [`../operations/dev-managed-activation.md`](../operations/dev-managed-activation.md) for the activation checklist.
+See [`../operations/dev-managed-activation.md`](../operations/dev-managed-activation.md) for the current activation status.

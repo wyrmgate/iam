@@ -77,6 +77,24 @@ iam:
       batch-size: ${IAM_AUDIT_ARCHIVE_BATCH_SIZE:10}
       max-attempts: ${IAM_AUDIT_ARCHIVE_MAX_ATTEMPTS:5}
       retry-delay: ${IAM_AUDIT_ARCHIVE_RETRY_DELAY:PT5S}
+    purge:
+      enabled: ${IAM_AUDIT_PURGE_ENABLED:false}
+      poll-interval: ${IAM_AUDIT_PURGE_POLL_INTERVAL:PT5S}
+      claim-lease: ${IAM_AUDIT_PURGE_CLAIM_LEASE:PT30S}
+      batch-size: ${IAM_AUDIT_PURGE_BATCH_SIZE:5}
+      max-attempts: ${IAM_AUDIT_PURGE_MAX_ATTEMPTS:3}
+      retry-delay: ${IAM_AUDIT_PURGE_RETRY_DELAY:PT30S}
+    siem:
+      enabled: ${IAM_AUDIT_SIEM_ENABLED:false}
+      endpoint: ${IAM_AUDIT_SIEM_ENDPOINT:}
+      secret-base64: ${IAM_AUDIT_SIEM_SECRET_BASE64:}
+      poll-interval: ${IAM_AUDIT_SIEM_POLL_INTERVAL:PT1S}
+      claim-lease: ${IAM_AUDIT_SIEM_CLAIM_LEASE:PT30S}
+      batch-size: ${IAM_AUDIT_SIEM_BATCH_SIZE:50}
+      max-attempts: ${IAM_AUDIT_SIEM_MAX_ATTEMPTS:8}
+      retry-delay: ${IAM_AUDIT_SIEM_RETRY_DELAY:PT5S}
+      connect-timeout: ${IAM_AUDIT_SIEM_CONNECT_TIMEOUT:PT5S}
+      request-timeout: ${IAM_AUDIT_SIEM_REQUEST_TIMEOUT:PT10S}
   integration:
     worker-auth:
       enabled: ${IAM_CONNECTOR_WORKER_AUTH_ENABLED:false}

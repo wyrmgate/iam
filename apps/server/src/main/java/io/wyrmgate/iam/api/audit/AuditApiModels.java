@@ -8,6 +8,21 @@ final class AuditApiModels {
     private AuditApiModels() {
     }
 
+    record AuditMaterialSnapshotResource(
+            String schemaVersion,
+            String actorDisplayLabel,
+            String resourceDisplayLabel,
+            Long resourceRevision,
+            String resourceState) {
+    }
+
+    record AuditIntegrityMetadataResource(
+            String schemaVersion,
+            String algorithm,
+            String contentSha256,
+            String materialSnapshotSha256) {
+    }
+
     record AuditRecordResource(
             UUID id,
             Instant occurredAt,
@@ -18,7 +33,9 @@ final class AuditApiModels {
             UUID resourceId,
             String outcome,
             UUID correlationId,
-            UUID causationId) {
+            UUID causationId,
+            AuditMaterialSnapshotResource materialSnapshot,
+            AuditIntegrityMetadataResource integrityMetadata) {
     }
 
     record AuditRecordPage(
@@ -60,6 +77,92 @@ final class AuditApiModels {
             Instant completedAt,
             Instant createdAt,
             Instant updatedAt) {
+    }
+
+    record AuditSelectionRequest(
+            Instant occurredFrom,
+            Instant occurredUntil,
+            UUID actorId,
+            String actionType,
+            String resourceType,
+            UUID resourceId,
+            String outcome,
+            UUID correlationId) {
+    }
+
+    record AuditLegalHoldCreateRequest(
+            AuditSelectionRequest selection,
+            String reasonCode,
+            String caseReference) {
+    }
+
+    record AuditLegalHoldResource(
+            UUID id,
+            AuditSelectionRequest selection,
+            String reasonCode,
+            String caseReference,
+            String state,
+            UUID createdByIdentityId,
+            UUID releasedByIdentityId,
+            UUID correlationId,
+            UUID causationId,
+            long revision,
+            Instant createdAt,
+            Instant releasedAt,
+            Instant updatedAt) {
+    }
+
+    record AuditPurgeCreateRequest(
+            UUID archiveSegmentId,
+            AuditSelectionRequest selection,
+            String reasonCode) {
+    }
+
+    record AuditPurgeResource(
+            UUID id,
+            UUID retentionPolicyVersionId,
+            UUID archiveSegmentId,
+            UUID requestedByIdentityId,
+            UUID approvedByIdentityId,
+            AuditSelectionRequest selection,
+            Instant snapshotRecordedAt,
+            String reasonCode,
+            String state,
+            long deletedRecordCount,
+            String failureCode,
+            UUID correlationId,
+            UUID causationId,
+            long revision,
+            Instant approvedAt,
+            Instant completedAt,
+            Instant createdAt,
+            Instant updatedAt) {
+    }
+
+    record EvidenceReferenceResource(
+            String resourceType,
+            UUID resourceId,
+            Long revision,
+            String displayLabel) {
+    }
+
+    record EvidenceSnapshotResource(
+            UUID id,
+            Instant occurredAt,
+            Instant recordedAt,
+            UUID actorId,
+            String snapshotType,
+            EvidenceReferenceResource subject,
+            EvidenceReferenceResource policy,
+            EvidenceReferenceResource related,
+            String decisionLabel,
+            UUID correlationId,
+            UUID causationId) {
+    }
+
+    record EvidenceSnapshotPage(
+            List<EvidenceSnapshotResource> items,
+            String nextCursor) {
     }
 
     record FieldError(

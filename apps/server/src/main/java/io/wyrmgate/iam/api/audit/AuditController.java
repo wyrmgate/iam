@@ -4,6 +4,8 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationSer
 import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
+import io.wyrmgate.iam.api.audit.AuditApiModels.AuditIntegrityMetadataResource;
+import io.wyrmgate.iam.api.audit.AuditApiModels.AuditMaterialSnapshotResource;
 import io.wyrmgate.iam.api.audit.AuditApiModels.AuditRecordPage;
 import io.wyrmgate.iam.api.audit.AuditApiModels.AuditRecordResource;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
@@ -222,6 +224,21 @@ public final class AuditController {
                 value.resourceId(),
                 value.outcome().name(),
                 value.correlationId(),
-                value.causationId());
+                value.causationId(),
+                value.materialSnapshot() == null
+                        ? null
+                        : new AuditMaterialSnapshotResource(
+                                io.wyrmgate.iam.audit.domain.AuditMaterialSnapshot.SCHEMA_VERSION,
+                                value.materialSnapshot().actorDisplayLabel(),
+                                value.materialSnapshot().resourceDisplayLabel(),
+                                value.materialSnapshot().resourceRevision(),
+                                value.materialSnapshot().resourceState()),
+                value.integrityMetadata() == null
+                        ? null
+                        : new AuditIntegrityMetadataResource(
+                                io.wyrmgate.iam.audit.domain.AuditIntegrityMetadata.SCHEMA_VERSION,
+                                io.wyrmgate.iam.audit.domain.AuditIntegrityMetadata.ALGORITHM,
+                                value.integrityMetadata().contentSha256(),
+                                value.integrityMetadata().materialSnapshotSha256()));
     }
 }

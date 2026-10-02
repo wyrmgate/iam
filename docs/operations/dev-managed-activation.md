@@ -1,118 +1,68 @@
 # Managed DEV Activation Runbook
 
-## Purpose
+## Status
 
-Activate the first Wyrmgate IAM DEV/testing/demo environment on Cloudflare Pages, Railway Serverless, and Neon PostgreSQL without changing IAM domain architecture. This runbook contains no live credentials and performs no deployment by itself.
+The former Cloudflare Pages + Railway Serverless + Neon end-to-end DEV topology is no longer active because the Railway server is retired.
 
-## 1. Select a reviewed revision
+There is currently no canonical replacement managed server target. This runbook therefore defines the gate for the next managed DEV activation instead of instructing operators to recreate Railway.
 
-Use a full commit SHA from `main` whose required CI checks are green. Do not activate an unreviewed feature-branch revision as the shared DEV baseline.
+## Preconditions for a new managed DEV target
 
-## 2. Create Neon DEV database
+Before declaring a replacement managed DEV environment active:
 
-Create a DEV-only Neon project/database and obtain a direct PostgreSQL connection string from Neon with TLS required. The application currently runs Flyway on its main datasource at startup, so use the direct Neon endpoint for the initial DEV contract rather than a pooled endpoint.
+1. select a reviewed `main` commit with required CI green;
+2. name the server/runtime provider and database target explicitly;
+3. document provider-specific secret/configuration ownership without committing credentials;
+4. prove the checked-in `apps/server/Dockerfile` or equivalent reviewed artifact is what is deployed;
+5. verify `/actuator/health`;
+6. verify Flyway completed to the repository current migration version;
+7. verify tenant isolation with non-production data;
+8. document rollback and database recovery controls;
+9. verify the console/API routing target is the intended isolated environment;
+10. update this runbook and `docs/engineering/dev-cd.md` in the same reviewed change.
 
-Convert the connection to JDBC form for `IAM_DB_URL` while retaining Neon TLS query parameters. Store `IAM_DB_URL`, `IAM_DB_USER`, and `IAM_DB_PASSWORD` only in Railway service configuration. Never commit them or reuse production data/credentials.
+## Cloudflare Pages
 
-## 3. Configure Railway iam-server
+The repository still supports the existing Pages build/function contract. If Pages is used for the console:
 
-Connect the repository to Railway and configure the server service to build with `apps/server/Dockerfile` from **repository root**. Leave Railway Root Directory unset (repository root). Do not set it to `apps/server`, because the Dockerfile uses repository-root `COPY apps/server/...` paths.
+- production branch may be `main`;
+- root directory is `apps/console`;
+- build command is `npm run build`;
+- output directory is `dist`;
+- only `/api/*` executes the Pages Function;
+- `IAM_BACKEND_ORIGIN` is server-side only.
 
-Use `apps/server/railway.json` as the checked-in service contract. It pins the Dockerfile path, `/actuator/health` deployment health check, and change detection for both `apps/server/**` and the repository-root `.dockerignore` build input.
+Do not point `IAM_BACKEND_ORIGIN` at an unreviewed, personal, or production backend merely to make the console usable.
 
-Configure the Git source to deploy `main`, keep automatic deployment enabled, and enable **Wait for CI** so Railway does not begin deployment until the commit's GitHub check suites have completed successfully.
+## Server/runtime requirements
 
-Set deployment variables:
+The replacement server environment must provide:
 
-- `IAM_DB_URL`
-- `IAM_DB_USER`
-- `IAM_DB_PASSWORD`
-- `IAM_DEPLOYMENT_ENVIRONMENT=dev`
-- `IAM_OTEL_ENABLED=false`
-- `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0`
-- `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`
-- `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5`
+- `IAM_DB_URL`;
+- `IAM_DB_USER`;
+- `IAM_DB_PASSWORD`;
+- `IAM_DEPLOYMENT_ENVIRONMENT=dev`;
+- any optional integration-event/SIEM/notification secrets through provider secret storage only.
 
-Enable Railway Serverless for the DEV service. Do not set `PORT`; Railway supplies it. Verify the service starts, Flyway completes successfully, and `/actuator/health` is healthy over the Railway HTTPS service domain.
+Do not assume Railway-specific port, health, build-context, sleep, pool-size, or deployment-history semantics. Capture provider-specific behavior only after the replacement is selected.
 
-The maximum pool size of `5` is part of the validated initial DEV posture. During activation an effective pool size of `2` caused Flyway startup timeout. Keep `5` unless measured DEV behavior justifies a deliberate change. This is not production sizing guidance.
+## Flyway verification
 
-If the service does not sleep during idle periods, inspect outbound traffic first. Database connections and telemetry can keep Railway Serverless awake; do not weaken application correctness merely to force sleeping.
+For a new or reset DEV database, verify both:
 
-### Flyway startup verification
+1. the deployed server reports healthy;
+2. `public.flyway_schema_history` records the repository latest migration successfully.
 
-For the current Spring Boot 4.1.1 server, the validated Flyway auto-configuration contract is `spring-boot-starter-flyway` plus the PostgreSQL Flyway database module.
+The application-startup regression test remains the repository-level proof that Spring Boot and Flyway wiring works against an empty PostgreSQL database.
 
-The repository contains an application-startup regression test that boots the real application against an empty PostgreSQL database and verifies `flyway_schema_history`, the expected migration version, and the capability schemas. Keep that test green whenever Spring Boot or Flyway dependencies change.
+## Recovery
 
-For a new or reset managed DEV database, verify both:
+Before destructive tests or risky migrations, document and exercise the recovery mechanism of the selected DEV database/provider. Provider-native recovery is not automatically an independently retained backup.
 
-1. Railway `/actuator/health` is `UP`;
-2. the latest successful version in `public.flyway_schema_history` matches the repository's current migration set.
+For production recovery requirements, use [`production-readiness.md`](production-readiness.md); DEV mechanics do not close OD-005.
 
-A green HTTP health check by itself is not migration evidence.
+## Completion criteria
 
-## 4. Configure Cloudflare Pages
+Managed DEV activation is complete only after a replacement server target is intentionally selected, documented, deployed from a green reviewed revision, migration/health/tenant checks pass, console routing points to that environment, recovery controls are verified, and no real secret exists in Git.
 
-Create the IAM console Pages project connected to the repository with:
-
-- production branch: `main`
-- automatic production deployment: enabled
-- Preview branch deployments: `None` / disabled initially
-- root directory: `apps/console`
-- build command: `npm run build`
-- build output: `dist`
-
-Preview deployments stay disabled until a future design provides isolated backend and database state for feature-branch previews. A feature-branch console must not silently use the shared Railway/Neon DEV backend.
-
-Set the Pages Function server-side variable `IAM_BACKEND_ORIGIN` to the HTTPS Railway service origin, with no `/api` suffix and no credentials embedded in the URL.
-
-Do not create a browser-exposed `VITE_IAM_BACKEND_ORIGIN`. Browser code remains same-origin.
-
-The IAM console Pages project is distinct from any Pages project used to publish curated public documentation. Do not configure the docs publication workflow to deploy into this application project.
-
-## 5. Verify routing behavior
-
-After provider deployments complete, verify:
-
-1. the Pages root and static assets load normally;
-2. `/api/system/info` succeeds through the Pages Function;
-3. a static asset request does not execute the API Function path;
-4. direct Railway `/actuator/health` remains healthy;
-5. the browser does not need CORS access to the Railway origin because API traffic is same-origin through Pages;
-6. no secrets or database values appear in Pages build output, browser JavaScript, repository files, or CI logs.
-
-Cloudflare Pages routing must continue to use `_routes.json` with only `/api/*` included so static requests do not consume Pages Function invocations.
-
-## 6. Custom domain and DNS
-
-A custom DEV hostname is optional for initial activation. If used, configure it through Cloudflare Pages after the provider deployments are healthy. No repository workflow should change DNS.
-
-## 7. Observability
-
-Keep `IAM_OTEL_ENABLED=false` initially. Evaluate Grafana Cloud free-tier behavior separately before enabling remote telemetry. Any later observability activation must preserve the existing secret-redaction and data-minimization rules and should be checked for its effect on Railway Serverless sleeping.
-
-## 8. Rollback and recovery
-
-Use Cloudflare Pages and Railway deployment history to roll application revisions back to a previously green `main` SHA. Do not automatically down-migrate Neon. Database migrations must remain backward-compatible under expand/contract practices.
-
-The active managed DEV database uses provider-native Neon recovery rather than the standalone-host backup timer. The exact recovery window and controls depend on the actual provider plan/configuration and can change independently of this repository.
-
-Before declaring a newly created or materially changed DEV project recoverable:
-
-1. record the active provider plan and configured recovery window in the operator environment inventory, not application secrets;
-2. confirm the provider recovery controls are available for the project;
-3. create harmless test state and verify a recovery can be created/restored to an isolation-safe target without overwriting the active environment unexpectedly;
-4. verify the recovered schema/data state;
-5. remove disposable recovery objects after verification;
-6. repeat a recovery drill after material provider-plan changes or before destructive migration testing.
-
-For additional logical portability or longer retention than the provider plan offers, use an independent `pg_dump`/`pg_restore` process to protected external storage. Do not assume provider-native recovery is a substitute for every future production backup requirement.
-
-See [`backup-recovery.md`](backup-recovery.md) for the managed-DEV versus standalone-host recovery boundary.
-
-## 9. Completion criteria
-
-DEV activation is complete only when the console loads from Pages, `/api/system/info` succeeds through the same-origin Function, Railway health is green, Neon connectivity is TLS-protected, Railway **Wait for CI** is enabled, Cloudflare preview branch deployments are disabled, no real secret exists in Git, the selected revision is traceable to green `main` CI, Flyway startup is proven against the target database, and the active provider recovery window/control has been verified.
-
-This topology is DEV/demo only and is not a production HA/DR decision.
+Until then, the managed DEV topology is **not active**.
