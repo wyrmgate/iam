@@ -2,14 +2,17 @@
 
 ## Scope
 
-The implemented public Audit control-plane slice exposes immutable `AuditRecord` evidence under ADR-0031 without turning Audit into business authority, an event store, or an observability log. ADR-0034 defines the next durable export/archive boundary; that export runtime is not yet implemented in this document's current API surface.
+The implemented public Audit control-plane exposes immutable `AuditRecord` evidence under ADR-0031 plus the first durable ADR-0034 export runtime. Audit remains evidence rather than business authority, an event store, or an observability log. Immutable archive-segment and retention-policy runtime remain deferred.
 
 Base path: `/api/v1`.
 
 Public operations:
 
 - `GET /audit-records` — bounded deterministic AuditRecord search;
-- `GET /audit-records/{auditRecordId}` — tenant-scoped AuditRecord read.
+- `GET /audit-records/{auditRecordId}` — tenant-scoped AuditRecord read;
+- `POST /audit-exports` — request one durable asynchronous closed-schema export;
+- `GET /audit-exports/{auditExportId}` — read export process/artifact metadata without exposing storage references;
+- `POST /audit-exports/{auditExportId}:download` — re-authorized no-store streaming download after success.
 
 Machine-readable contract:
 
@@ -21,11 +24,7 @@ The implemented read/search operations require the default-deny semantic permiss
 
 - `audit:read`.
 
-ADR-0034 reserves a separate semantic permission for the future durable export operation:
-
-- `audit:export`.
-
-`audit:read` does not imply `audit:export`, and INITIAL_TENANT_ADMIN is not silently expanded.
+The durable export operations require the separate semantic permission `audit:export`. `audit:read` does not imply `audit:export`, and INITIAL_TENANT_ADMIN is not silently expanded.
 
 Collection search requires authority applicable to the AuditRecord collection. A specific-resource grant may authorize one AuditRecord read but does not authorize collection search.
 
@@ -72,17 +71,18 @@ The public record contains only:
 
 AuditRecord remains immutable evidence. Reading Audit does not mutate or reconstruct capability authority.
 
-## ADR-0034 export/archive direction
+## Durable export runtime
 
-The next Audit implementation slice is a durable asynchronous `AuditExportOperation`, not an unbounded synchronous search response. Export membership is frozen by exact tenant/filter/time-window context plus an Audit-owned `recordedAt` cutoff, then emitted in deterministic bounded pages to a closed UTF-8 NDJSON schema containing only the currently public AuditRecord fields.
+`AuditExportOperation` is now implemented as a durable asynchronous Audit process. Create requires an exact occurrence-time window `[occurredFrom, occurredUntil)`, optional exact AuditRecord filters, and `Idempotency-Key`. The accepted request captures `snapshotRecordedAt`; later records with an older `occurredAt` but a newer `recordedAt` do not enter that export.
 
-Large artifact bytes belong behind a typed external artifact-store adapter; only opaque artifact metadata, byte/record counts, SHA-256 digest, completion state and configured artifact expiry belong in Audit process state. External storage calls remain outside authoritative Audit transactions.
+Workers page the frozen membership in deterministic `occurredAt ASC, id ASC` order and write closed UTF-8 NDJSON v1 containing only the public AuditRecord fields. Bounded continuation/count progress is persisted while the external artifact is rebuilt deterministically on retry. Artifact bytes remain outside PostgreSQL behind `AuditExportArtifactStore`; Audit stores only the opaque internal reference, byte/record counts, SHA-256 digest and optional configured expiry.
 
-The first archive mechanism defined by ADR-0034 creates immutable verified archive segments without deleting or updating source `audit_record` rows. Public read/search therefore remains online-store backed in this tranche. Destructive AuditRecord purge remains fail-closed pending a separate accepted legal-hold/purge decision.
+The first concrete adapter is a deployment-configured filesystem path and is disabled by default. The path must itself provide the durability/shared-storage properties required by its deployment; an ephemeral instance filesystem is not production HA/DR evidence. Public representations never expose the internal artifact reference. Download is re-authorized at request time and uses `Cache-Control: no-store`.
+
+The immutable archive-segment mechanism defined by ADR-0034 is not yet implemented. Public AuditRecord read/search remains online-store backed. Destructive purge remains fail-closed pending a separate legal-hold/purge decision.
 
 ## Deferred
 
-- ADR-0034 durable export/download runtime and machine-readable API surface;
 - archive-segment runtime and versioned retention-policy runtime;
 - destructive AuditRecord purge/legal-hold semantics;
 - transparent archived-record query after any future online removal;
