@@ -31,6 +31,7 @@ public final class AuditArchiveService {
     private static final String INVALID_WORK = "audit_archive_invalid_work";
 
     private final AuditArchiveRepository archives;
+    private final AuditEvidenceLifecycleRepository lifecycle;
     private final AuditRetentionPolicyRepository policies;
     private final AuditExportArtifactStore artifactStore;
     private final JdbcScheduledWorkRepository scheduledWork;
@@ -60,6 +61,39 @@ public final class AuditArchiveService {
             Duration retryDelay) {
         this(
                 archives,
+                null,
+                policies,
+                artifactStore,
+                scheduledWork,
+                transactions,
+                ids,
+                objectMapper,
+                enabled,
+                claimLease,
+                batchSize,
+                maxAttempts,
+                retryDelay,
+                Clock.systemUTC(),
+                "audit-archive-" + UUID.randomUUID());
+    }
+
+    public AuditArchiveService(
+            AuditArchiveRepository archives,
+            AuditEvidenceLifecycleRepository lifecycle,
+            AuditRetentionPolicyRepository policies,
+            AuditExportArtifactStore artifactStore,
+            JdbcScheduledWorkRepository scheduledWork,
+            TransactionExecutor transactions,
+            IdGenerator ids,
+            ObjectMapper objectMapper,
+            boolean enabled,
+            Duration claimLease,
+            int batchSize,
+            int maxAttempts,
+            Duration retryDelay) {
+        this(
+                archives,
+                lifecycle,
                 policies,
                 artifactStore,
                 scheduledWork,
@@ -90,7 +124,42 @@ public final class AuditArchiveService {
             Duration retryDelay,
             Clock clock,
             String leaseOwner) {
+        this(
+                archives,
+                null,
+                policies,
+                artifactStore,
+                scheduledWork,
+                transactions,
+                ids,
+                objectMapper,
+                enabled,
+                claimLease,
+                batchSize,
+                maxAttempts,
+                retryDelay,
+                clock,
+                leaseOwner);
+    }
+
+    private AuditArchiveService(
+            AuditArchiveRepository archives,
+            AuditEvidenceLifecycleRepository lifecycle,
+            AuditRetentionPolicyRepository policies,
+            AuditExportArtifactStore artifactStore,
+            JdbcScheduledWorkRepository scheduledWork,
+            TransactionExecutor transactions,
+            IdGenerator ids,
+            ObjectMapper objectMapper,
+            boolean enabled,
+            Duration claimLease,
+            int batchSize,
+            int maxAttempts,
+            Duration retryDelay,
+            Clock clock,
+            String leaseOwner) {
         this.archives = Objects.requireNonNull(archives, "archives");
+        this.lifecycle = lifecycle;
         this.policies = Objects.requireNonNull(policies, "policies");
         this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
         this.scheduledWork = Objects.requireNonNull(scheduledWork, "scheduledWork");
@@ -331,6 +400,9 @@ public final class AuditArchiveService {
             }
 
             Instant completedAt = clock.instant();
+            if (lifecycle != null) {
+                indexArchivedRecords(item, running, completedAt);
+            }
             Instant minimumRetainUntil = completedAt.plus(policy.minimumArchiveRetention());
             transactions.required(() ->
                     archives.complete(
@@ -375,6 +447,39 @@ public final class AuditArchiveService {
             scheduledWork.markCompleted(
                     item.tenant(), item.work().id(), leaseOwner, FAILURE_CODE, now);
             return Outcome.FAILED;
+        }
+    }
+
+    private void indexArchivedRecords(
+            ClaimedTenantWork item,
+            AuditArchiveSegment segment,
+            Instant archivedAt) {
+        Instant afterOccurredAt = null;
+        UUID afterId = null;
+        while (true) {
+            scheduledWork.renewLease(
+                    item.tenant(),
+                    item.work().id(),
+                    leaseOwner,
+                    clock.instant(),
+                    claimLease);
+            List<AuditRecord> page = archives.findSourcePage(
+                    item.tenant(),
+                    segment.occurredFrom(),
+                    segment.occurredUntil(),
+                    segment.snapshotRecordedAt(),
+                    afterOccurredAt,
+                    afterId,
+                    SOURCE_PAGE_SIZE);
+            if (page.isEmpty()) return;
+            transactions.required(() -> {
+                lifecycle.indexArchivedRecords(item.tenant(), segment, page, archivedAt);
+                return null;
+            });
+            AuditRecord last = page.get(page.size() - 1);
+            afterOccurredAt = last.occurredAt();
+            afterId = last.id();
+            if (page.size() < SOURCE_PAGE_SIZE) return;
         }
     }
 
