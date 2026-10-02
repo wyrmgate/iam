@@ -363,8 +363,9 @@ public final class JdbcAuditEvidenceLifecycleRepository implements AuditEvidence
                         tenant_id, record_id, archive_segment_id,
                         occurred_at, recorded_at, actor_id, action_type,
                         resource_type, resource_id, outcome,
-                        correlation_id, causation_id, archived_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        correlation_id, causation_id, archived_at,
+                        material_snapshot, integrity_metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb)
                     ON CONFLICT (tenant_id, archive_segment_id, record_id) DO NOTHING
                     """,
                     tenant.tenantId(),
@@ -379,7 +380,9 @@ public final class JdbcAuditEvidenceLifecycleRepository implements AuditEvidence
                     record.outcome().name(),
                     record.correlationId(),
                     record.causationId(),
-                    Timestamp.from(archivedAt));
+                    Timestamp.from(archivedAt),
+                    AuditRecordPersistenceMapper.materialJson(record.materialSnapshot()),
+                    AuditRecordPersistenceMapper.integrityJson(record.integrityMetadata()));
         }
     }
 
