@@ -321,3 +321,50 @@ BEGIN
     RETURN OLD;
 END;
 $audit$;
+
+
+CREATE OR REPLACE FUNCTION audit.reject_immutable_evidence_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $audit$
+BEGIN
+    RAISE EXCEPTION 'immutable Audit evidence cannot be updated or deleted';
+END;
+$audit$;
+
+CREATE OR REPLACE FUNCTION audit.reject_evidence_history_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $audit$
+BEGIN
+    RAISE EXCEPTION 'Audit evidence/process history cannot be deleted';
+END;
+$audit$;
+
+CREATE TRIGGER audit_retention_policy_immutable_trg
+BEFORE UPDATE OR DELETE ON audit.audit_retention_policy_version
+FOR EACH ROW EXECUTE FUNCTION audit.reject_immutable_evidence_mutation();
+
+CREATE TRIGGER audit_archived_record_index_immutable_trg
+BEFORE UPDATE OR DELETE ON audit.audit_archived_record_index
+FOR EACH ROW EXECUTE FUNCTION audit.reject_immutable_evidence_mutation();
+
+CREATE TRIGGER evidence_snapshot_immutable_trg
+BEFORE UPDATE OR DELETE ON audit.evidence_snapshot
+FOR EACH ROW EXECUTE FUNCTION audit.reject_immutable_evidence_mutation();
+
+CREATE TRIGGER audit_export_history_delete_trg
+BEFORE DELETE ON audit.audit_export_operation
+FOR EACH ROW EXECUTE FUNCTION audit.reject_evidence_history_delete();
+
+CREATE TRIGGER audit_archive_history_delete_trg
+BEFORE DELETE ON audit.audit_archive_segment
+FOR EACH ROW EXECUTE FUNCTION audit.reject_evidence_history_delete();
+
+CREATE TRIGGER audit_legal_hold_history_delete_trg
+BEFORE DELETE ON audit.audit_legal_hold
+FOR EACH ROW EXECUTE FUNCTION audit.reject_evidence_history_delete();
+
+CREATE TRIGGER audit_purge_history_delete_trg
+BEFORE DELETE ON audit.audit_purge_operation
+FOR EACH ROW EXECUTE FUNCTION audit.reject_evidence_history_delete();
