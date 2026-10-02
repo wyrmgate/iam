@@ -37,6 +37,27 @@ public final class AdministrativeBreakGlassService {
             GovernedActorStatusQuery governedActors,
             AdministrativeBreakGlassPolicy policy,
             AdministrativeBreakGlassAuditSink audit,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        this(
+                repository,
+                authority,
+                authorization,
+                governedActors,
+                policy,
+                audit,
+                (tenant, obligationId, operationId, operationRevision, now) -> { },
+                ids,
+                transactions);
+    }
+
+    public AdministrativeBreakGlassService(
+            AdministrativeBreakGlassRepository repository,
+            AdministrativeAuthorityRepository authority,
+            AdministrativeAuthorizationService authorization,
+            GovernedActorStatusQuery governedActors,
+            AdministrativeBreakGlassPolicy policy,
+            AdministrativeBreakGlassAuditSink audit,
             AdministrativeBreakGlassNotificationScheduler notificationScheduler,
             IdGenerator ids,
             TransactionExecutor transactions) {
