@@ -945,6 +945,67 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
         return count != null && count > 0;
     }
 
+    @Override
+    public void recordSourceSuspensionTransitionEvidence(
+            TenantContext tenant,
+            UUID evidenceId,
+            UUID sourceSystemId,
+            UUID sourceRecordId,
+            UUID identityLinkId,
+            UUID identityId,
+            UUID lifecyclePolicyVersionId,
+            long preIdentityRevision,
+            long postIdentityRevision,
+            Instant suspendedAt) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO identity.source_suspension_transition_evidence (
+                    id, tenant_id, source_system_id, source_record_id, identity_link_id,
+                    identity_id, lifecycle_policy_version_id,
+                    pre_identity_revision, post_identity_revision, suspended_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (
+                    tenant_id, source_record_id, identity_id, post_identity_revision)
+                DO NOTHING
+                """,
+                evidenceId,
+                tenant.tenantId(),
+                sourceSystemId,
+                sourceRecordId,
+                identityLinkId,
+                identityId,
+                lifecyclePolicyVersionId,
+                preIdentityRevision,
+                postIdentityRevision,
+                Timestamp.from(suspendedAt));
+    }
+
+    @Override
+    public boolean hasCurrentSourceSuspensionTransitionEvidence(
+            TenantContext tenant,
+            UUID sourceRecordId,
+            UUID identityLinkId,
+            UUID identityId,
+            long currentIdentityRevision) {
+        Long count = jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM identity.source_suspension_transition_evidence
+                WHERE tenant_id = ?
+                  AND source_record_id = ?
+                  AND identity_link_id = ?
+                  AND identity_id = ?
+                  AND post_identity_revision = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                sourceRecordId,
+                identityLinkId,
+                identityId,
+                currentIdentityRevision);
+        return count != null && count > 0;
+    }
+
     private Optional<SourceAbsenceInference> queryAbsenceInference(
             String whereClause, Object... args) {
         return jdbcTemplate.query(
