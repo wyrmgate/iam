@@ -943,6 +943,8 @@ Migration V39 adds Access-owned immutable `access.lifecycle_access_policy_versio
 
 Flyway V58 extends `access.lifecycle_access_policy_rule` with typed `expected_decimal numeric(38,12)`, `expected_date date` and `expected_datetime timestamptz` columns plus closed predicate-shape constraints. The application rejects decimal expectations that would require numeric rounding and DATETIME expectations finer than microsecond persistence precision; no range/operator payload or arbitrary JSON expression is introduced.
 
+Flyway V59 expands only the closed `predicate_kind` / typed-shape constraints to add seven `CANONICAL_*_CONTAINS` variants for governed MULTI membership. It reuses the existing typed expected-value columns; collection values remain Identity-owned normalized canonical rows and no Access-owned JSON/set payload is introduced. Cardinality compatibility is validated through the Identity semantic query at policy activation.
+
 Migration V40 adds immutable Governance-owned `governance.lifecycle_access_evaluation` and `governance.lifecycle_access_sod_conflict` evidence. Each automatic privilege-increase guard attempt records the lifecycle rule/Identity/target, active Governance PolicyVersion when available, decision/code, matched SoD rules, exact exception coverage and causal correlation metadata. These rows are evidence only and never become Access authority.
 
 ### Identity merge/split persistence
