@@ -12,6 +12,7 @@ import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.audit.persistence.JdbcEvidenceSnapshotRepository;
 import io.wyrmgate.iam.audit.siem.AuditSiemDeliveryException;
 import io.wyrmgate.iam.audit.siem.AuditSiemDeliveryService;
+import io.wyrmgate.iam.audit.siem.ScheduledWorkAuditSiemEnqueuer;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
@@ -209,8 +210,7 @@ class AuditEvidenceSnapshotSiemPersistenceIntegrationTest {
                 records,
                 transactions,
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                work,
-                true);
+                new ScheduledWorkAuditSiemEnqueuer(work));
         AuditRecordDraft draft = new AuditRecordDraft(
                 ids.nextId(),
                 NOW.minusSeconds(1),
@@ -264,8 +264,7 @@ class AuditEvidenceSnapshotSiemPersistenceIntegrationTest {
                 records,
                 transactions,
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                work,
-                true);
+                new ScheduledWorkAuditSiemEnqueuer(work));
         AuditRecord record = commands.append(
                 tenant,
                 new AuditRecordDraft(
