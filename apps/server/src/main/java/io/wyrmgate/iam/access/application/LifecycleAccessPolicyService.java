@@ -45,11 +45,16 @@ public final class LifecycleAccessPolicyService {
             throw new IllegalArgumentException("policy requires between 1 and 100 rules");
         }
         for (var rule:rules) {
-            if (rule.predicateKind()!=LifecycleAccessPolicyVersion.PredicateKind.ALWAYS
-                    && !identities.supportsPolicyScalarAttribute(
-                            tenant, rule.canonicalKey(), scalarType(rule.predicateKind()))) {
-                throw new IllegalArgumentException(
-                        "canonical predicate must reference matching active policy-addressable supported SINGLE attribute");
+            if (rule.predicateKind()!=LifecycleAccessPolicyVersion.PredicateKind.ALWAYS) {
+                boolean supported = isMultiPredicate(rule.predicateKind())
+                        ? identities.supportsPolicyMultiAttribute(
+                                tenant, rule.canonicalKey(), scalarType(rule.predicateKind()))
+                        : identities.supportsPolicyScalarAttribute(
+                                tenant, rule.canonicalKey(), scalarType(rule.predicateKind()));
+                if (!supported) {
+                    throw new IllegalArgumentException(
+                            "canonical predicate must reference matching active policy-addressable supported attribute/cardinality");
+                }
             }
             if (rule.targetKind()==AccessAssignment.TargetKind.ENTITLEMENT) {
                 if (catalog.resolveActiveEntitlement(tenant,rule.targetId()).status()
@@ -67,16 +72,37 @@ public final class LifecycleAccessPolicyService {
         return transactions.required(() -> policies.replaceActive(
                 tenant,immutable,now,ids.nextId()));
     }
+    private static boolean isMultiPredicate(
+            LifecycleAccessPolicyVersion.PredicateKind kind) {
+        return switch (kind) {
+            case CANONICAL_STRING_CONTAINS,
+                    CANONICAL_BOOLEAN_CONTAINS,
+                    CANONICAL_INTEGER_CONTAINS,
+                    CANONICAL_DECIMAL_CONTAINS,
+                    CANONICAL_DATE_CONTAINS,
+                    CANONICAL_DATETIME_CONTAINS,
+                    CANONICAL_ENUM_CONTAINS -> true;
+            default -> false;
+        };
+    }
+
     private static IdentityLifecycleAccessQuery.ScalarType scalarType(
             LifecycleAccessPolicyVersion.PredicateKind kind) {
         return switch (kind) {
-            case CANONICAL_STRING_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.STRING;
-            case CANONICAL_BOOLEAN_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.BOOLEAN;
-            case CANONICAL_INTEGER_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.INTEGER;
-            case CANONICAL_DECIMAL_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.DECIMAL;
-            case CANONICAL_DATE_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.DATE;
-            case CANONICAL_DATETIME_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.DATETIME;
-            case CANONICAL_ENUM_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.ENUM;
+            case CANONICAL_STRING_EQUALS, CANONICAL_STRING_CONTAINS ->
+                    IdentityLifecycleAccessQuery.ScalarType.STRING;
+            case CANONICAL_BOOLEAN_EQUALS, CANONICAL_BOOLEAN_CONTAINS ->
+                    IdentityLifecycleAccessQuery.ScalarType.BOOLEAN;
+            case CANONICAL_INTEGER_EQUALS, CANONICAL_INTEGER_CONTAINS ->
+                    IdentityLifecycleAccessQuery.ScalarType.INTEGER;
+            case CANONICAL_DECIMAL_EQUALS, CANONICAL_DECIMAL_CONTAINS ->
+                    IdentityLifecycleAccessQuery.ScalarType.DECIMAL;
+            case CANONICAL_DATE_EQUALS, CANONICAL_DATE_CONTAINS ->
+                    IdentityLifecycleAccessQuery.ScalarType.DATE;
+            case CANONICAL_DATETIME_EQUALS, CANONICAL_DATETIME_CONTAINS ->
+                    IdentityLifecycleAccessQuery.ScalarType.DATETIME;
+            case CANONICAL_ENUM_EQUALS, CANONICAL_ENUM_CONTAINS ->
+                    IdentityLifecycleAccessQuery.ScalarType.ENUM;
             case ALWAYS -> throw new IllegalArgumentException("ALWAYS has no scalar type");
         };
     }
