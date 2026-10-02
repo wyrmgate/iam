@@ -21,7 +21,7 @@ import java.util.UUID;
 public final class SignedHttpsBreakGlassNotificationPublisher
         implements AdministrativeBreakGlassNotificationPublisher {
 
-    private final HttpClient client;
+    private final BreakGlassHttpTransport transport;
     private final URI endpoint;
     private final Duration requestTimeout;
     private final BreakGlassNotificationSigner signer;
@@ -34,22 +34,41 @@ public final class SignedHttpsBreakGlassNotificationPublisher
             Duration requestTimeout,
             byte[] secret,
             ObjectMapper json) {
-        this(client, endpoint, requestTimeout, secret, json, Clock.systemUTC());
+        this(
+                httpTransport(client),
+                endpoint,
+                requestTimeout,
+                secret,
+                json,
+                Clock.systemUTC());
     }
 
     SignedHttpsBreakGlassNotificationPublisher(
-            HttpClient client,
+            BreakGlassHttpTransport transport,
             URI endpoint,
             Duration requestTimeout,
             byte[] secret,
             ObjectMapper json,
             Clock clock) {
-        this.client = Objects.requireNonNull(client, "client");
+        this.transport = Objects.requireNonNull(transport, "transport");
         this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
         this.requestTimeout = Objects.requireNonNull(requestTimeout, "requestTimeout");
+        if (!"https".equalsIgnoreCase(endpoint.getScheme())) {
+            throw new IllegalArgumentException("notification endpoint must use https");
+        }
+        if (requestTimeout.isZero() || requestTimeout.isNegative()) {
+            throw new IllegalArgumentException("requestTimeout must be positive");
+        }
         this.signer = new BreakGlassNotificationSigner(secret);
         this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
+    }
+
+    private static BreakGlassHttpTransport httpTransport(HttpClient client) {
+        Objects.requireNonNull(client, "client");
+        return (request, body) -> client
+                .send(request, HttpResponse.BodyHandlers.discarding())
+                .statusCode();
     }
 
     @Override
@@ -75,7 +94,7 @@ public final class SignedHttpsBreakGlassNotificationPublisher
                 .build();
 
         try {
-            int status = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+            int status = transport.send(request, body);
             if (status >= 200 && status < 300) return;
             boolean retryable = status == 408 || status == 425 || status == 429 || status >= 500;
             throw new AdministrativeBreakGlassNotificationDeliveryException(
@@ -90,6 +109,11 @@ public final class SignedHttpsBreakGlassNotificationPublisher
             throw new AdministrativeBreakGlassNotificationDeliveryException(
                     true, "break_glass_notification_io_retryable", exception);
         }
+    }
+
+    @FunctionalInterface
+    interface BreakGlassHttpTransport {
+        int send(HttpRequest request, byte[] body) throws IOException, InterruptedException;
     }
 
     private record WireNotification(
