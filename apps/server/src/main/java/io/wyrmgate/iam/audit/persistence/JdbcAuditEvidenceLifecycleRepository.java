@@ -30,9 +30,8 @@ public final class JdbcAuditEvidenceLifecycleRepository implements AuditEvidence
 
     @Override
     public void lockLifecycle(TenantContext tenant) {
-        jdbc.queryForObject(
+        jdbc.queryForList(
                 "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-                Long.class,
                 tenant.tenantId().toString());
     }
 
@@ -366,7 +365,7 @@ public final class JdbcAuditEvidenceLifecycleRepository implements AuditEvidence
                         resource_type, resource_id, outcome,
                         correlation_id, causation_id, archived_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (tenant_id, record_id) DO NOTHING
+                    ON CONFLICT (tenant_id, archive_segment_id, record_id) DO NOTHING
                     """,
                     tenant.tenantId(),
                     record.id(),
