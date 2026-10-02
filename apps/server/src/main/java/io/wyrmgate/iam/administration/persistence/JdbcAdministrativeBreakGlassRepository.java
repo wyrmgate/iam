@@ -296,6 +296,70 @@ public final class JdbcAdministrativeBreakGlassRepository
     }
 
     @Override
+    public Optional<AdministrativeBreakGlassObligation> findObligation(
+            TenantContext tenant, UUID obligationId) {
+        return jdbc.query(
+                        """
+                        SELECT o.id, o.break_glass_operation_id, o.obligation_type,
+                               o.state, o.completed_at, o.revision, o.created_at, o.updated_at
+                        FROM administration.administrative_break_glass_obligation o
+                        WHERE o.tenant_id = ? AND o.id = ?
+                        """,
+                        (rs, rowNum) -> obligationRow(rs),
+                        tenant.tenantId(),
+                        obligationId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public AdministrativeBreakGlassObligation completeNotificationObligation(
+            TenantContext tenant, UUID obligationId, Instant now) {
+        return updateNotificationObligation(
+                tenant, obligationId, "COMPLETED", true, now);
+    }
+
+    @Override
+    public AdministrativeBreakGlassObligation markNotificationManualRequired(
+            TenantContext tenant, UUID obligationId, Instant now) {
+        return updateNotificationObligation(
+                tenant, obligationId, "MANUAL_REQUIRED", false, now);
+    }
+
+    private AdministrativeBreakGlassObligation updateNotificationObligation(
+            TenantContext tenant,
+            UUID obligationId,
+            String targetState,
+            boolean completed,
+            Instant now) {
+        int updated = jdbc.update(
+                """
+                UPDATE administration.administrative_break_glass_obligation
+                SET state = ?,
+                    completed_at = ?,
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ?
+                  AND id = ?
+                  AND obligation_type = 'SECURITY_NOTIFICATION'
+                  AND state = 'PENDING'
+                """,
+                targetState,
+                completed ? Timestamp.from(now) : null,
+                Timestamp.from(now),
+                tenant.tenantId(),
+                obligationId);
+        if (updated != 1) {
+            return findObligation(tenant, obligationId)
+                    .filter(o -> o.type() == AdministrativeBreakGlassObligationType.SECURITY_NOTIFICATION)
+                    .filter(o -> o.state().name().equals(targetState))
+                    .orElseThrow(() -> new IllegalStateException(
+                            "security notification obligation is not pending"));
+        }
+        return findObligation(tenant, obligationId).orElseThrow();
+    }
+
+    @Override
     public List<AdministrativeBreakGlassObligation> listObligations(
             TenantContext tenant, UUID operationId) {
         return jdbc.query(
@@ -306,17 +370,7 @@ public final class JdbcAdministrativeBreakGlassRepository
                 WHERE o.tenant_id = ? AND o.break_glass_operation_id = ?
                 ORDER BY o.obligation_type, o.id
                 """,
-                (rs, rowNum) -> new AdministrativeBreakGlassObligation(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("break_glass_operation_id", UUID.class),
-                        AdministrativeBreakGlassObligationType.valueOf(
-                                rs.getString("obligation_type")),
-                        AdministrativeBreakGlassObligationState.valueOf(
-                                rs.getString("state")),
-                        instant(rs.getTimestamp("completed_at")),
-                        rs.getLong("revision"),
-                        rs.getTimestamp("created_at").toInstant(),
-                        rs.getTimestamp("updated_at").toInstant()),
+                (rs, rowNum) -> obligationRow(rs),
                 tenant.tenantId(),
                 operationId);
     }
@@ -340,6 +394,21 @@ public final class JdbcAdministrativeBreakGlassRepository
                 type.name(),
                 Timestamp.from(now),
                 Timestamp.from(now));
+    }
+
+    private static AdministrativeBreakGlassObligation obligationRow(
+            java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new AdministrativeBreakGlassObligation(
+                rs.getObject("id", UUID.class),
+                rs.getObject("break_glass_operation_id", UUID.class),
+                AdministrativeBreakGlassObligationType.valueOf(
+                        rs.getString("obligation_type")),
+                AdministrativeBreakGlassObligationState.valueOf(
+                        rs.getString("state")),
+                instant(rs.getTimestamp("completed_at")),
+                rs.getLong("revision"),
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant());
     }
 
     private static String selectOperation() {

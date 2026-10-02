@@ -64,6 +64,15 @@ public interface AdministrativeBreakGlassRepository {
             UUID causationId,
             Instant now);
 
+    Optional<AdministrativeBreakGlassObligation> findObligation(
+            TenantContext tenant, UUID obligationId);
+
+    AdministrativeBreakGlassObligation completeNotificationObligation(
+            TenantContext tenant, UUID obligationId, Instant now);
+
+    AdministrativeBreakGlassObligation markNotificationManualRequired(
+            TenantContext tenant, UUID obligationId, Instant now);
+
     List<AdministrativeBreakGlassObligation> listObligations(
             TenantContext tenant, UUID operationId);
 }

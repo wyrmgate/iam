@@ -89,6 +89,20 @@ iam:
         secret: ${IAM_INTEGRATION_EVENTS_WEBHOOK_SECRET:}
         connect-timeout: ${IAM_INTEGRATION_EVENTS_WEBHOOK_CONNECT_TIMEOUT:PT5S}
         request-timeout: ${IAM_INTEGRATION_EVENTS_WEBHOOK_REQUEST_TIMEOUT:PT10S}
+  administration:
+    break-glass:
+      notification:
+        enabled: ${IAM_BREAK_GLASS_NOTIFICATION_ENABLED:false}
+        endpoint: ${IAM_BREAK_GLASS_NOTIFICATION_ENDPOINT:}
+        secret: ${IAM_BREAK_GLASS_NOTIFICATION_SECRET:}
+        connect-timeout: ${IAM_BREAK_GLASS_NOTIFICATION_CONNECT_TIMEOUT:PT5S}
+        request-timeout: ${IAM_BREAK_GLASS_NOTIFICATION_REQUEST_TIMEOUT:PT10S}
+        poll-interval: ${IAM_BREAK_GLASS_NOTIFICATION_POLL_INTERVAL:PT1S}
+        claim-lease: ${IAM_BREAK_GLASS_NOTIFICATION_CLAIM_LEASE:PT30S}
+        batch-size: ${IAM_BREAK_GLASS_NOTIFICATION_BATCH_SIZE:25}
+        max-attempts: ${IAM_BREAK_GLASS_NOTIFICATION_MAX_ATTEMPTS:8}
+        retry-base-delay: ${IAM_BREAK_GLASS_NOTIFICATION_RETRY_BASE_DELAY:PT5S}
+        retry-max-delay: ${IAM_BREAK_GLASS_NOTIFICATION_RETRY_MAX_DELAY:PT5M}
   bootstrap:
     initial-admin:
       enabled: ${IAM_INITIAL_ADMIN_BOOTSTRAP_ENABLED:false}

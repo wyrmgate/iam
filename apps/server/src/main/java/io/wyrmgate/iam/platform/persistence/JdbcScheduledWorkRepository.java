@@ -184,23 +184,85 @@ public final class JdbcScheduledWorkRepository {
                 JdbcValues.timestamp(now));
     }
 
+    public void reschedule(
+            TenantContext tenant,
+            UUID workId,
+            String leaseOwner,
+            Instant availableAt,
+            Instant now) {
+        reschedule(tenant, workId, leaseOwner, availableAt, null, now);
+    }
+
+    public void reschedule(
+            TenantContext tenant,
+            UUID workId,
+            String leaseOwner,
+            Instant availableAt,
+            String errorCode,
+            Instant now) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(workId, "workId");
+        requireText(leaseOwner, "leaseOwner");
+        Objects.requireNonNull(availableAt, "availableAt");
+        Objects.requireNonNull(now, "now");
+        validateErrorCode(errorCode);
+
+        int affected = jdbcTemplate.update(
+                """
+                UPDATE platform.scheduled_work
+                SET available_at = ?,
+                    lease_owner = NULL,
+                    lease_until = NULL,
+                    last_error_code = ?,
+                    updated_at = ?
+                WHERE tenant_id = ? AND id = ? AND delivery_state = 'READY'
+                  AND lease_owner = ? AND lease_until > ?
+                """,
+                JdbcValues.timestamp(availableAt),
+                errorCode,
+                JdbcValues.timestamp(now),
+                tenant.tenantId(),
+                workId,
+                leaseOwner,
+                JdbcValues.timestamp(now));
+        if (affected != 1) {
+            throw new IllegalStateException(
+                    "Scheduled work is not held by an active lease for the expected owner");
+        }
+    }
+
     public void markCompleted(
             TenantContext tenant,
             UUID workId,
             String leaseOwner,
             Instant now) {
+        markCompleted(tenant, workId, leaseOwner, null, now);
+    }
+
+    public void markCompleted(
+            TenantContext tenant,
+            UUID workId,
+            String leaseOwner,
+            String errorCode,
+            Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(workId, "workId");
         requireText(leaseOwner, "leaseOwner");
         Objects.requireNonNull(now, "now");
+        validateErrorCode(errorCode);
 
         int affected = jdbcTemplate.update(
                 """
                 UPDATE platform.scheduled_work
-                SET delivery_state = 'COMPLETED', lease_owner = NULL, lease_until = NULL, updated_at = ?
+                SET delivery_state = 'COMPLETED',
+                    lease_owner = NULL,
+                    lease_until = NULL,
+                    last_error_code = ?,
+                    updated_at = ?
                 WHERE tenant_id = ? AND id = ? AND delivery_state = 'READY'
                   AND lease_owner = ? AND lease_until > ?
                 """,
+                errorCode,
                 JdbcValues.timestamp(now),
                 tenant.tenantId(),
                 workId,
@@ -208,6 +270,13 @@ public final class JdbcScheduledWorkRepository {
                 JdbcValues.timestamp(now));
         if (affected != 1) {
             throw new IllegalStateException("Scheduled work is not held by an active lease for the expected owner");
+        }
+    }
+
+    private static void validateErrorCode(String errorCode) {
+        if (errorCode != null && (errorCode.isBlank() || errorCode.length() > 128)) {
+            throw new IllegalArgumentException(
+                    "errorCode must be null or contain between 1 and 128 characters");
         }
     }
 

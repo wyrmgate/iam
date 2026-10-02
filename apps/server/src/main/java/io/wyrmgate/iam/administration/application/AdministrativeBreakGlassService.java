@@ -26,6 +26,7 @@ public final class AdministrativeBreakGlassService {
     private final GovernedActorStatusQuery governedActors;
     private final AdministrativeBreakGlassPolicy policy;
     private final AdministrativeBreakGlassAuditSink audit;
+    private final AdministrativeBreakGlassNotificationScheduler notificationScheduler;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
@@ -38,12 +39,35 @@ public final class AdministrativeBreakGlassService {
             AdministrativeBreakGlassAuditSink audit,
             IdGenerator ids,
             TransactionExecutor transactions) {
+        this(
+                repository,
+                authority,
+                authorization,
+                governedActors,
+                policy,
+                audit,
+                (tenant, obligationId, operationId, operationRevision, now) -> { },
+                ids,
+                transactions);
+    }
+
+    public AdministrativeBreakGlassService(
+            AdministrativeBreakGlassRepository repository,
+            AdministrativeAuthorityRepository authority,
+            AdministrativeAuthorizationService authorization,
+            GovernedActorStatusQuery governedActors,
+            AdministrativeBreakGlassPolicy policy,
+            AdministrativeBreakGlassAuditSink audit,
+            AdministrativeBreakGlassNotificationScheduler notificationScheduler,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.authority = Objects.requireNonNull(authority, "authority");
         this.authorization = Objects.requireNonNull(authorization, "authorization");
         this.governedActors = Objects.requireNonNull(governedActors, "governedActors");
         this.policy = Objects.requireNonNull(policy, "policy");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.notificationScheduler = Objects.requireNonNull(notificationScheduler, "notificationScheduler");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -194,22 +218,31 @@ public final class AdministrativeBreakGlassService {
 
         UUID notificationObligationId = ids.nextId();
         UUID reviewObligationId = ids.nextId();
-        return transactions.required(() -> repository.activate(
-                actor.tenant(),
-                operationId,
-                actor.identityId(),
-                role,
-                scope,
-                normalizedReason,
-                normalizedIncident,
-                validUntil,
-                actor.assurance(),
-                decision.maxAssuranceAge(),
-                notificationObligationId,
-                reviewObligationId,
-                correlationId,
-                causationId,
-                now));
+        return transactions.required(() -> {
+            AdministrativeBreakGlassOperation activated = repository.activate(
+                    actor.tenant(),
+                    operationId,
+                    actor.identityId(),
+                    role,
+                    scope,
+                    normalizedReason,
+                    normalizedIncident,
+                    validUntil,
+                    actor.assurance(),
+                    decision.maxAssuranceAge(),
+                    notificationObligationId,
+                    reviewObligationId,
+                    correlationId,
+                    causationId,
+                    now);
+            notificationScheduler.schedule(
+                    actor.tenant(),
+                    notificationObligationId,
+                    activated.id(),
+                    activated.revision(),
+                    now);
+            return activated;
+        });
     }
 
     public AdministrativeBreakGlassOperation revoke(
