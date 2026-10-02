@@ -103,7 +103,11 @@ public interface IdentityLifecycleAccessQuery {
         }
 
         public static CanonicalMulti trusted(ScalarType type, java.util.List<?> values, long revision) {
-            return new CanonicalMulti(true, type, java.util.List.copyOf(values), revision);
+            return new CanonicalMulti(
+                    true,
+                    type,
+                    values.stream().map(value -> (Object) value).toList(),
+                    revision);
         }
 
         public static CanonicalMulti unavailable() {
