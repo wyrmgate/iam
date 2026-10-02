@@ -184,6 +184,37 @@ public final class JdbcScheduledWorkRepository {
                 JdbcValues.timestamp(now));
     }
 
+    public void reschedule(
+            TenantContext tenant,
+            UUID workId,
+            String leaseOwner,
+            Instant availableAt,
+            Instant now) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(workId, "workId");
+        requireText(leaseOwner, "leaseOwner");
+        Objects.requireNonNull(availableAt, "availableAt");
+        Objects.requireNonNull(now, "now");
+
+        int affected = jdbcTemplate.update(
+                """
+                UPDATE platform.scheduled_work
+                SET available_at = ?, lease_owner = NULL, lease_until = NULL, updated_at = ?
+                WHERE tenant_id = ? AND id = ? AND delivery_state = 'READY'
+                  AND lease_owner = ? AND lease_until > ?
+                """,
+                JdbcValues.timestamp(availableAt),
+                JdbcValues.timestamp(now),
+                tenant.tenantId(),
+                workId,
+                leaseOwner,
+                JdbcValues.timestamp(now));
+        if (affected != 1) {
+            throw new IllegalStateException(
+                    "Scheduled work is not held by an active lease for the expected owner");
+        }
+    }
+
     public void markCompleted(
             TenantContext tenant,
             UUID workId,
