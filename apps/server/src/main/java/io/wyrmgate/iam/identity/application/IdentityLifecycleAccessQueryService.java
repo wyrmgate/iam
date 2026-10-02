@@ -48,6 +48,26 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
     }
 
     @Override
+    public boolean supportsPolicyMultiAttribute(
+            TenantContext tenant, String canonicalKey, ScalarType type) {
+        Objects.requireNonNull(tenant, "tenant");
+        if (canonicalKey == null || canonicalKey.isBlank()) {
+            return false;
+        }
+        var schema = canonical.findActiveSchemaVersion(tenant).orElse(null);
+        var definition = canonical.findAttributeDefinitionByKey(tenant, canonicalKey).orElse(null);
+        if (schema == null || definition == null) {
+            return false;
+        }
+        var version = canonical.findAttributeDefinitionVersion(
+                tenant, schema.id(), definition.id()).orElse(null);
+        return version != null
+                && version.dataType().name().equals(type.name())
+                && version.cardinality() == CanonicalAttributeCardinality.MULTI
+                && version.policyAddressable();
+    }
+
+    @Override
     public Context currentContext(
             TenantContext tenant,
             UUID identityId,
@@ -62,9 +82,11 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
         }
 
         Map<String, CanonicalScalar> values = new LinkedHashMap<>();
+        Map<String, CanonicalMulti> multiValues = new LinkedHashMap<>();
         var schema = canonical.findActiveSchemaVersion(tenant).orElse(null);
         for (String key : canonicalKeys) {
             CanonicalScalar value = CanonicalScalar.unavailable();
+            CanonicalMulti multiValue = CanonicalMulti.unavailable();
             if (schema != null) {
                 var definition = canonical.findAttributeDefinitionByKey(tenant, key).orElse(null);
                 if (definition != null) {
@@ -72,27 +94,35 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
                             tenant, schema.id(), definition.id()).orElse(null);
                     if (version != null
                             && supported(version.dataType())
-                            && version.cardinality() == CanonicalAttributeCardinality.SINGLE
                             && version.policyAddressable()) {
                         CanonicalAttributeState state = reads.findState(
                                 tenant, identityId, definition.id()).orElse(null);
                         if (state != null
                                 && (state.resolutionStatus() == CanonicalAttributeState.ResolutionStatus.RESOLVED
-                                    || state.resolutionStatus() == CanonicalAttributeState.ResolutionStatus.OVERRIDDEN)
-                                && state.values().size() == 1) {
-                            value = scalar(state.values().getFirst(), state.valueRevision());
+                                    || state.resolutionStatus() == CanonicalAttributeState.ResolutionStatus.OVERRIDDEN)) {
+                            if (version.cardinality() == CanonicalAttributeCardinality.SINGLE
+                                    && state.values().size() == 1) {
+                                value = scalar(state.values().getFirst(), state.valueRevision());
+                            } else if (version.cardinality() == CanonicalAttributeCardinality.MULTI
+                                    && !state.values().isEmpty()
+                                    && state.values().stream().allMatch(v -> v.type() == version.dataType())) {
+                                multiValue = multi(
+                                        version.dataType(), state.values(), state.valueRevision());
+                            }
                         }
                     }
                 }
             }
             values.put(key, value);
+            multiValues.put(key, multiValue);
         }
 
         return new Context(
                 Status.AVAILABLE,
                 identity.lifecycleState().name(),
                 identity.revision(),
-                values);
+                values,
+                multiValues);
     }
 
     private static boolean supported(CanonicalAttributeType type) {
@@ -103,6 +133,22 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
                 || type == CanonicalAttributeType.DATE
                 || type == CanonicalAttributeType.DATETIME
                 || type == CanonicalAttributeType.ENUM;
+    }
+
+    private static CanonicalMulti multi(
+            CanonicalAttributeType type,
+            java.util.List<CanonicalValue> values,
+            long revision) {
+        java.util.List<Object> normalized = values.stream().map(value -> switch (value) {
+            case CanonicalValue.StringValue v -> v.value();
+            case CanonicalValue.BooleanValue v -> v.value();
+            case CanonicalValue.IntegerValue v -> v.value();
+            case CanonicalValue.DecimalValue v -> v.value();
+            case CanonicalValue.DateValue v -> v.value();
+            case CanonicalValue.DateTimeValue v -> v.value();
+            case CanonicalValue.EnumValue v -> v.key();
+        }).map(value -> (Object) value).toList();
+        return CanonicalMulti.trusted(ScalarType.valueOf(type.name()), normalized, revision);
     }
 
     private static CanonicalScalar scalar(CanonicalValue value, long revision) {
