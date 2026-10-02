@@ -55,7 +55,7 @@ final class AuditExportController {
             HttpServletRequest request) {
         UUID correlationId = AuditApiRequestContext.resolveCorrelationId(request, ids);
         AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
-        requireExport(actor, AdministrativeResource.collection("audit-export"), correlationId);
+        requireExport(actor, AdministrativeResource.collection("audit"), correlationId);
         requireEnabled(correlationId);
 
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
@@ -123,7 +123,7 @@ final class AuditExportController {
         AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
         requireExport(
                 actor,
-                new AdministrativeResource("audit-export", auditExportId),
+                new AdministrativeResource("audit", auditExportId),
                 correlationId);
         AuditExportOperation operation = find(actor, auditExportId, correlationId);
         return ResponseEntity.ok()
