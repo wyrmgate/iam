@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.audit.application;
 
+import io.wyrmgate.iam.audit.domain.AuditMaterialSnapshot;
 import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.audit.domain.AuditRecord.AuditRecordDraftLike;
 import java.time.Instant;
@@ -16,7 +17,8 @@ public record AuditRecordDraft(
         UUID resourceId,
         AuditOutcome outcome,
         UUID correlationId,
-        UUID causationId) implements AuditRecordDraftLike {
+        UUID causationId,
+        AuditMaterialSnapshot materialSnapshot) implements AuditRecordDraftLike {
 
     public AuditRecordDraft {
         Objects.requireNonNull(id, "id");
@@ -24,6 +26,29 @@ public record AuditRecordDraft(
         actionType = boundedType(actionType, "actionType");
         resourceType = boundedType(resourceType, "resourceType");
         Objects.requireNonNull(outcome, "outcome");
+    }
+
+    public AuditRecordDraft(
+            UUID id,
+            Instant occurredAt,
+            UUID actorId,
+            String actionType,
+            String resourceType,
+            UUID resourceId,
+            AuditOutcome outcome,
+            UUID correlationId,
+            UUID causationId) {
+        this(
+                id,
+                occurredAt,
+                actorId,
+                actionType,
+                resourceType,
+                resourceId,
+                outcome,
+                correlationId,
+                causationId,
+                null);
     }
 
     private static String boundedType(String value, String field) {
