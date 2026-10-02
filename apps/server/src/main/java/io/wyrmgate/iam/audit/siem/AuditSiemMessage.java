@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.audit.siem;
 
+import io.wyrmgate.iam.audit.domain.AuditIntegrityMetadata;
 import io.wyrmgate.iam.audit.domain.AuditMaterialSnapshot;
 import java.time.Instant;
 import java.util.UUID;
@@ -19,7 +20,8 @@ public record AuditSiemMessage(
         String outcome,
         UUID correlationId,
         UUID causationId,
-        AuditMaterialSnapshot materialSnapshot) {
+        AuditMaterialSnapshot materialSnapshot,
+        AuditIntegrityMetadata integrityMetadata) {
 
     public static final String VERSION = "audit-siem-v1";
 }
