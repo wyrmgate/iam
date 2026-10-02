@@ -8,11 +8,15 @@ import io.wyrmgate.iam.audit.domain.AuditArchiveSegment;
 import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.audit.domain.AuditRetentionPolicyVersion;
 import io.wyrmgate.iam.audit.export.FileSystemAuditExportArtifactStore;
+import io.wyrmgate.iam.audit.application.AuditQueryModels.AuditFilter;
 import io.wyrmgate.iam.audit.persistence.JdbcAuditArchiveRepository;
+import io.wyrmgate.iam.audit.persistence.JdbcAuditExportRepository;
 import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
+import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
+import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
 import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -181,6 +185,51 @@ class AuditArchivePersistenceIntegrationTest {
                         null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("audit_archive_not_eligible");
+    }
+
+    @Test
+    void retentionPolicyEffectiveAtExportAcceptanceControlsArtifactExpiry() {
+        AuditArchiveService archiveService =
+                service(new FileSystemAuditExportArtifactStore(artifactRoot), 3);
+        archiveService.registerPolicy(
+                tenant,
+                1,
+                Duration.ofDays(7),
+                Duration.ofDays(1),
+                Duration.ofDays(30),
+                Duration.ofDays(365),
+                NOW.minus(Duration.ofDays(30)));
+
+        JdbcAuditExportRepository exportRepository = new JdbcAuditExportRepository(jdbc);
+        AuditExportService exportService = new AuditExportService(
+                exportRepository,
+                archives,
+                new FileSystemAuditExportArtifactStore(artifactRoot),
+                new JdbcIdempotencyRepository(jdbc, ids),
+                new JdbcScheduledWorkRepository(jdbc, ids),
+                transactions,
+                ids,
+                new ObjectMapper().findAndRegisterModules(),
+                true,
+                Duration.ofSeconds(30),
+                10,
+                3,
+                Duration.ofSeconds(5),
+                null);
+
+        append(NOW.minus(Duration.ofHours(2)), NOW.minus(Duration.ofHours(1)), "identity:create");
+        AuditExportOperation requested = exportService.request(
+                tenant,
+                actor,
+                AuditFilter.none(),
+                NOW.minus(Duration.ofDays(1)),
+                NOW.plus(Duration.ofHours(1)),
+                "archive-policy-export",
+                RequestFingerprint.sha256("archive-policy-export".getBytes(StandardCharsets.UTF_8)));
+        assertThat(exportService.executeAvailable().completed()).isEqualTo(1);
+
+        AuditExportOperation completed = exportService.find(tenant, requested.id());
+        assertThat(completed.artifactExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(7)));
     }
 
     @Test
