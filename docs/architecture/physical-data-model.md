@@ -929,6 +929,12 @@ Migration V38 extends the Identity-owned source import model with an explicit ru
 
 `identity.source_absence_inference` is the Identity-owned durable process record keyed uniquely by tenant + SourceImportRun. It stores the selected policy version, frozen transition ceiling, `RUNNING|COMPLETED|SUPERSEDED|MANUAL_REQUIRED` process state, optimistic revision, candidate/transition counters and the paired `after_first_observed_at + after_source_record_id` keyset checkpoint. SourceRecord candidate scans use `(tenant_id, source_system_id, first_observed_at, id)`, are bounded, and re-read the current SourceRecord/link/Identity before destructive action. Lifecycle transition and process checkpoint/count update commit atomically so retry cannot undercount transitions and bypass the configured mass-Leaver ceiling.
 
+### Source lifecycle restoration evidence
+
+Flyway V57 adds immutable Identity-owned `identity.source_suspension_transition_evidence`. A row is written only when explicit source lifecycle policy actually changes an Identity from ACTIVE to SUSPENDED. It binds tenant, SourceSystem, SourceRecord, the then-current accepted IdentityLink, Identity, the causing SourceLifecyclePolicyVersion, exact pre/post Identity revisions and suspension time.
+
+The restoration lookup is keyed by tenant + SourceRecord + current IdentityLink + Identity + exact current post-transition revision. This makes the row provenance evidence rather than generic reactivation authority: relink, cross-source activity or any intervening Identity revision makes historical evidence ineligible. Current source value interpretation still comes from the current active SourceLifecyclePolicyVersion. The evidence table is append-only by application contract and exists separately from trusted-absence transition evidence because explicit suspension and inferred absence have different authority semantics.
+
 ### LifecycleAccess policy persistence
 
 Migration V39 adds Access-owned immutable `access.lifecycle_access_policy_version` and typed child `access.lifecycle_access_policy_rule`. At most one policy version is ACTIVE per tenant. Rules carry a stable logical `rule_id`, bounded predicate shape (ALWAYS or exact canonical STRING/SINGLE key/value), typed ROLE/ENTITLEMENT target and no arbitrary JSON expression payload.
