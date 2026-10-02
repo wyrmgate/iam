@@ -4,6 +4,8 @@ import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationSer
 import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
+import io.wyrmgate.iam.api.audit.AuditApiModels.AuditIntegrityMetadataResource;
+import io.wyrmgate.iam.api.audit.AuditApiModels.AuditMaterialSnapshotResource;
 import io.wyrmgate.iam.api.audit.AuditApiModels.AuditRecordPage;
 import io.wyrmgate.iam.api.audit.AuditApiModels.AuditRecordResource;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
