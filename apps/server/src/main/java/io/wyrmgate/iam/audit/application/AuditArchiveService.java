@@ -1,16 +1,13 @@
 package io.wyrmgate.iam.audit.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.wyrmgate.iam.audit.application.AuditQueryModels.AuditFilter;
-import io.wyrmgate.iam.audit.domain.AuditExportOperation;
+import io.wyrmgate.iam.audit.domain.AuditArchiveSegment;
 import io.wyrmgate.iam.audit.domain.AuditRecord;
+import io.wyrmgate.iam.audit.domain.AuditRetentionPolicyVersion;
 import io.wyrmgate.iam.platform.id.IdGenerator;
-import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository.ClaimedTenantWork;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository.SubjectReference;
-import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.io.InputStream;
@@ -24,20 +21,18 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Durable ADR-0034 export application/process service. */
-public final class AuditExportService {
+/** Durable ADR-0034 archive generation and immutable retention-policy application service. */
+public final class AuditArchiveService {
 
-    public static final String HANDLER_TYPE = "audit.export";
-    private static final String IDEMPOTENCY_NAMESPACE = "api.audit.export.create.v1";
+    public static final String HANDLER_TYPE = "audit.archive";
     private static final int SOURCE_PAGE_SIZE = 500;
-    private static final String RESOURCE_TYPE = "audit-export";
-    private static final String FAILURE_CODE = "audit_export_processing_failed";
-    private static final String INVALID_WORK = "audit_export_invalid_work";
+    private static final String RESOURCE_TYPE = "audit-archive";
+    private static final String FAILURE_CODE = "audit_archive_processing_failed";
+    private static final String INVALID_WORK = "audit_archive_invalid_work";
 
-    private final AuditExportRepository repository;
-    private final AuditRetentionPolicyRepository retentionPolicies;
+    private final AuditArchiveRepository archives;
+    private final AuditRetentionPolicyRepository policies;
     private final AuditExportArtifactStore artifactStore;
-    private final JdbcIdempotencyRepository idempotency;
     private final JdbcScheduledWorkRepository scheduledWork;
     private final TransactionExecutor transactions;
     private final IdGenerator ids;
@@ -48,13 +43,12 @@ public final class AuditExportService {
     private final int batchSize;
     private final int maxAttempts;
     private final Duration retryDelay;
-    private final Duration artifactRetention;
     private final String leaseOwner;
 
-    public AuditExportService(
-            AuditExportRepository repository,
+    public AuditArchiveService(
+            AuditArchiveRepository archives,
+            AuditRetentionPolicyRepository policies,
             AuditExportArtifactStore artifactStore,
-            JdbcIdempotencyRepository idempotency,
             JdbcScheduledWorkRepository scheduledWork,
             TransactionExecutor transactions,
             IdGenerator ids,
@@ -63,18 +57,28 @@ public final class AuditExportService {
             Duration claimLease,
             int batchSize,
             int maxAttempts,
-            Duration retryDelay,
-            Duration artifactRetention) {
-        this(repository, null, artifactStore, idempotency, scheduledWork, transactions, ids, objectMapper,
-                enabled, claimLease, batchSize, maxAttempts, retryDelay, artifactRetention,
-                Clock.systemUTC(), "audit-export-" + UUID.randomUUID());
+            Duration retryDelay) {
+        this(
+                archives,
+                policies,
+                artifactStore,
+                scheduledWork,
+                transactions,
+                ids,
+                objectMapper,
+                enabled,
+                claimLease,
+                batchSize,
+                maxAttempts,
+                retryDelay,
+                Clock.systemUTC(),
+                "audit-archive-" + UUID.randomUUID());
     }
 
-    public AuditExportService(
-            AuditExportRepository repository,
-            AuditRetentionPolicyRepository retentionPolicies,
+    AuditArchiveService(
+            AuditArchiveRepository archives,
+            AuditRetentionPolicyRepository policies,
             AuditExportArtifactStore artifactStore,
-            JdbcIdempotencyRepository idempotency,
             JdbcScheduledWorkRepository scheduledWork,
             TransactionExecutor transactions,
             IdGenerator ids,
@@ -84,53 +88,11 @@ public final class AuditExportService {
             int batchSize,
             int maxAttempts,
             Duration retryDelay,
-            Duration artifactRetention) {
-        this(repository, retentionPolicies, artifactStore, idempotency, scheduledWork, transactions, ids, objectMapper,
-                enabled, claimLease, batchSize, maxAttempts, retryDelay, artifactRetention,
-                Clock.systemUTC(), "audit-export-" + UUID.randomUUID());
-    }
-
-    AuditExportService(
-            AuditExportRepository repository,
-            AuditExportArtifactStore artifactStore,
-            JdbcIdempotencyRepository idempotency,
-            JdbcScheduledWorkRepository scheduledWork,
-            TransactionExecutor transactions,
-            IdGenerator ids,
-            ObjectMapper objectMapper,
-            boolean enabled,
-            Duration claimLease,
-            int batchSize,
-            int maxAttempts,
-            Duration retryDelay,
-            Duration artifactRetention,
             Clock clock,
             String leaseOwner) {
-        this(repository, null, artifactStore, idempotency, scheduledWork, transactions, ids, objectMapper,
-                enabled, claimLease, batchSize, maxAttempts, retryDelay, artifactRetention, clock, leaseOwner);
-    }
-
-    private AuditExportService(
-            AuditExportRepository repository,
-            AuditRetentionPolicyRepository retentionPolicies,
-            AuditExportArtifactStore artifactStore,
-            JdbcIdempotencyRepository idempotency,
-            JdbcScheduledWorkRepository scheduledWork,
-            TransactionExecutor transactions,
-            IdGenerator ids,
-            ObjectMapper objectMapper,
-            boolean enabled,
-            Duration claimLease,
-            int batchSize,
-            int maxAttempts,
-            Duration retryDelay,
-            Duration artifactRetention,
-            Clock clock,
-            String leaseOwner) {
-        this.repository = Objects.requireNonNull(repository, "repository");
-        this.retentionPolicies = retentionPolicies;
+        this.archives = Objects.requireNonNull(archives, "archives");
+        this.policies = Objects.requireNonNull(policies, "policies");
         this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
-        this.idempotency = Objects.requireNonNull(idempotency, "idempotency");
         this.scheduledWork = Objects.requireNonNull(scheduledWork, "scheduledWork");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
         this.ids = Objects.requireNonNull(ids, "ids");
@@ -138,15 +100,17 @@ public final class AuditExportService {
         this.enabled = enabled;
         this.claimLease = positive(claimLease, "claimLease");
         this.retryDelay = positive(retryDelay, "retryDelay");
-        if (batchSize < 1 || batchSize > 200) throw new IllegalArgumentException("batchSize must be between 1 and 200");
-        if (maxAttempts < 1 || maxAttempts > 100) throw new IllegalArgumentException("maxAttempts must be between 1 and 100");
-        if (artifactRetention != null && (artifactRetention.isZero() || artifactRetention.isNegative())) {
-            throw new IllegalArgumentException("artifactRetention must be positive when configured");
+        if (batchSize < 1 || batchSize > 200) {
+            throw new IllegalArgumentException("batchSize must be between 1 and 200");
         }
-        if (leaseOwner == null || leaseOwner.isBlank()) throw new IllegalArgumentException("leaseOwner must not be blank");
+        if (maxAttempts < 1 || maxAttempts > 100) {
+            throw new IllegalArgumentException("maxAttempts must be between 1 and 100");
+        }
+        if (leaseOwner == null || leaseOwner.isBlank()) {
+            throw new IllegalArgumentException("leaseOwner must not be blank");
+        }
         this.batchSize = batchSize;
         this.maxAttempts = maxAttempts;
-        this.artifactRetention = artifactRetention;
         this.clock = Objects.requireNonNull(clock, "clock");
         this.leaseOwner = leaseOwner;
     }
@@ -155,93 +119,94 @@ public final class AuditExportService {
         return enabled;
     }
 
-    public AuditExportOperation request(
+    public AuditRetentionPolicyVersion registerPolicy(
             TenantContext tenant,
-            UUID requestedByIdentityId,
-            AuditFilter filter,
+            long version,
+            Duration exportArtifactRetention,
+            Duration archiveEligibleAfter,
+            Duration minimumOnlineRetention,
+            Duration minimumArchiveRetention,
+            Instant effectiveFrom) {
+        Objects.requireNonNull(tenant, "tenant");
+        Instant now = clock.instant();
+        AuditRetentionPolicyVersion requested = new AuditRetentionPolicyVersion(
+                ids.nextId(),
+                version,
+                exportArtifactRetention,
+                archiveEligibleAfter,
+                minimumOnlineRetention,
+                minimumArchiveRetention,
+                effectiveFrom,
+                now);
+        AuditRetentionPolicyVersion persisted = transactions.required(() ->
+                policies.create(
+                        tenant,
+                        requested.id(),
+                        requested.version(),
+                        requested.exportArtifactRetention(),
+                        requested.archiveEligibleAfter(),
+                        requested.minimumOnlineRetention(),
+                        requested.minimumArchiveRetention(),
+                        requested.effectiveFrom(),
+                        requested.createdAt()));
+        if (!samePolicy(requested, persisted)) {
+            throw new IllegalStateException("audit_retention_policy_version_conflict");
+        }
+        return persisted;
+    }
+
+    public AuditRetentionPolicyVersion currentPolicy(TenantContext tenant) {
+        return policies.findCurrent(tenant, clock.instant())
+                .orElseThrow(() -> new IllegalStateException("audit_retention_policy_unconfigured"));
+    }
+
+    public AuditArchiveSegment request(
+            TenantContext tenant,
             Instant occurredFrom,
             Instant occurredUntil,
-            String idempotencyKey,
-            RequestFingerprint fingerprint) {
-        if (!enabled) throw new IllegalStateException("audit_export_unavailable");
+            UUID correlationId,
+            UUID causationId) {
+        if (!enabled) throw new IllegalStateException("audit_archive_unavailable");
         Objects.requireNonNull(tenant, "tenant");
-        Objects.requireNonNull(requestedByIdentityId, "requestedByIdentityId");
-        Objects.requireNonNull(filter, "filter");
         Objects.requireNonNull(occurredFrom, "occurredFrom");
         Objects.requireNonNull(occurredUntil, "occurredUntil");
         if (!occurredUntil.isAfter(occurredFrom)) {
             throw new IllegalArgumentException("occurredUntil must be after occurredFrom");
         }
-        Instant now = clock.instant();
-        return transactions.required(() -> {
-            var registration = idempotency.register(
-                    tenant, IDEMPOTENCY_NAMESPACE, idempotencyKey, fingerprint, now, null);
-            if (registration.kind() == RegistrationKind.REPLAY) {
-                if (!"COMPLETED".equals(registration.operationState())
-                        || !RESOURCE_TYPE.equals(registration.resourceType())
-                        || registration.resourceId() == null) {
-                    throw new IllegalStateException("audit_export_idempotency_in_progress");
-                }
-                return repository.find(tenant, registration.resourceId())
-                        .orElseThrow(() -> new IllegalStateException("completed audit export is missing"));
-            }
 
-            UUID operationId = ids.nextId();
-            AuditExportOperation.Filter exportFilter = new AuditExportOperation.Filter(
-                    filter.actorId(),
-                    filter.actionType(),
-                    filter.resourceType(),
-                    filter.resourceId(),
-                    filter.outcome(),
-                    filter.correlationId());
-            AuditExportOperation operation = repository.create(
+        Instant now = clock.instant();
+        AuditRetentionPolicyVersion policy = policies.findCurrent(tenant, now)
+                .orElseThrow(() -> new IllegalStateException("audit_retention_policy_unconfigured"));
+        if (occurredUntil.isAfter(now.minus(policy.archiveEligibleAfter()))) {
+            throw new IllegalStateException("audit_archive_not_eligible");
+        }
+
+        return transactions.required(() -> {
+            AuditArchiveSegment segment = archives.createOrFind(
                     tenant,
-                    operationId,
-                    requestedByIdentityId,
-                    exportFilter,
+                    ids.nextId(),
+                    policy.id(),
                     occurredFrom,
                     occurredUntil,
                     now,
-                    AuditExportOperation.NDJSON_V1,
+                    AuditArchiveSegment.NDJSON_V1,
+                    correlationId,
+                    causationId,
                     now);
             scheduledWork.enqueue(
                     tenant,
                     HANDLER_TYPE,
-                    operationId.toString(),
-                    new SubjectReference(RESOURCE_TYPE, operationId, operation.revision()),
+                    segment.id().toString(),
+                    new SubjectReference(RESOURCE_TYPE, segment.id(), segment.revision()),
                     now,
                     now);
-            idempotency.complete(
-                    tenant,
-                    IDEMPOTENCY_NAMESPACE,
-                    idempotencyKey,
-                    fingerprint,
-                    RESOURCE_TYPE,
-                    operationId,
-                    now);
-            return operation;
+            return segment;
         });
     }
 
-    public AuditExportOperation find(TenantContext tenant, UUID operationId) {
-        return repository.find(tenant, operationId)
-                .orElseThrow(() -> new IllegalArgumentException("audit export does not exist"));
-    }
-
-    public Download openDownload(TenantContext tenant, UUID operationId) {
-        AuditExportOperation operation = find(tenant, operationId);
-        Instant now = clock.instant();
-        if (operation.state() != AuditExportOperation.State.SUCCEEDED) {
-            throw new IllegalStateException("audit_export_not_ready");
-        }
-        if (operation.artifactExpiredAt(now)) {
-            throw new IllegalStateException("audit_export_artifact_expired");
-        }
-        return new Download(
-                operation,
-                artifactStore.open(tenant, operation.artifactReference()),
-                "application/x-ndjson",
-                "audit-export-" + operation.id() + ".ndjson");
+    public AuditArchiveSegment find(TenantContext tenant, UUID segmentId) {
+        return archives.find(tenant, segmentId)
+                .orElseThrow(() -> new IllegalArgumentException("audit archive segment does not exist"));
     }
 
     public BatchResult executeAvailable() {
@@ -263,39 +228,47 @@ public final class AuditExportService {
     }
 
     private Outcome executeOne(ClaimedTenantWork item) {
-        UUID exportId;
+        UUID segmentId;
         try {
-            exportId = UUID.fromString(item.work().workKey());
+            segmentId = UUID.fromString(item.work().workKey());
         } catch (IllegalArgumentException malformed) {
             scheduledWork.markCompleted(
                     item.tenant(), item.work().id(), leaseOwner, INVALID_WORK, clock.instant());
             return Outcome.FAILED;
         }
 
-        AuditExportOperation existing = repository.find(item.tenant(), exportId).orElse(null);
+        AuditArchiveSegment existing = archives.find(item.tenant(), segmentId).orElse(null);
         if (existing == null) {
             scheduledWork.markCompleted(
                     item.tenant(), item.work().id(), leaseOwner, INVALID_WORK, clock.instant());
             return Outcome.FAILED;
         }
-        if (existing.state() == AuditExportOperation.State.SUCCEEDED
-                || existing.state() == AuditExportOperation.State.FAILED) {
+        if (existing.state() == AuditArchiveSegment.State.SUCCEEDED
+                || existing.state() == AuditArchiveSegment.State.FAILED) {
             scheduledWork.markCompleted(item.tenant(), item.work().id(), leaseOwner, clock.instant());
-            return existing.state() == AuditExportOperation.State.SUCCEEDED
+            return existing.state() == AuditArchiveSegment.State.SUCCEEDED
                     ? Outcome.COMPLETED : Outcome.FAILED;
         }
 
+        AuditRetentionPolicyVersion policy = policies.findById(
+                        item.tenant(), existing.retentionPolicyVersionId())
+                .orElse(null);
+        if (policy == null) {
+            failTerminal(item, existing, "audit_archive_policy_missing");
+            return Outcome.FAILED;
+        }
+
         try {
-            AuditExportOperation running = transactions.required(() ->
-                    repository.beginRun(
-                            item.tenant(), exportId, existing.revision(), clock.instant()));
-            AuditExportOperation[] current = new AuditExportOperation[] { running };
+            AuditArchiveSegment running = transactions.required(() ->
+                    archives.beginRun(
+                            item.tenant(), segmentId, existing.revision(), clock.instant()));
+            AuditArchiveSegment[] current = new AuditArchiveSegment[] { running };
             MessageDigest digest = sha256();
             long[] counts = new long[] { 0L, 0L };
 
-            String artifactReference = artifactStore.write(
+            String artifactReference = artifactStore.writeArchive(
                     item.tenant(),
-                    exportId,
+                    segmentId,
                     output -> {
                         Instant afterOccurredAt = null;
                         UUID afterId = null;
@@ -306,9 +279,8 @@ public final class AuditExportService {
                                     leaseOwner,
                                     clock.instant(),
                                     claimLease);
-                            List<AuditRecord> page = repository.findSourcePage(
+                            List<AuditRecord> page = archives.findSourcePage(
                                     item.tenant(),
-                                    running.filter(),
                                     running.occurredFrom(),
                                     running.occurredUntil(),
                                     running.snapshotRecordedAt(),
@@ -318,7 +290,7 @@ public final class AuditExportService {
                             if (page.isEmpty()) break;
 
                             for (AuditRecord record : page) {
-                                byte[] line = objectMapper.writeValueAsBytes(ExportRecord.from(record));
+                                byte[] line = objectMapper.writeValueAsBytes(ArchiveRecord.from(record));
                                 output.write(line);
                                 output.write('\n');
                                 digest.update(line);
@@ -335,9 +307,9 @@ public final class AuditExportService {
                                     clock.instant(),
                                     claimLease);
                             current[0] = transactions.required(() ->
-                                    repository.checkpoint(
+                                    archives.checkpoint(
                                             item.tenant(),
-                                            exportId,
+                                            segmentId,
                                             current[0].revision(),
                                             last.occurredAt(),
                                             last.id(),
@@ -350,27 +322,27 @@ public final class AuditExportService {
                         }
                     });
 
-            Instant completedAt = clock.instant();
-            Duration effectiveRetention = artifactRetention;
-            if (retentionPolicies != null) {
-                effectiveRetention = retentionPolicies
-                        .findCurrent(item.tenant(), running.snapshotRecordedAt())
-                        .map(policy -> policy.exportArtifactRetention())
-                        .orElse(artifactRetention);
+            String generatedSha = HexFormat.of().formatHex(digest.digest());
+            Verification verification = verifyArtifact(item.tenant(), artifactReference);
+            if (verification.recordCount() != counts[0]
+                    || verification.byteCount() != counts[1]
+                    || !verification.sha256Hex().equals(generatedSha)) {
+                throw new IllegalStateException("audit_archive_verification_failed");
             }
-            Instant expiresAt = effectiveRetention == null
-                    ? null : completedAt.plus(effectiveRetention);
-            String sha = HexFormat.of().formatHex(digest.digest());
+
+            Instant completedAt = clock.instant();
+            Instant minimumRetainUntil = completedAt.plus(policy.minimumArchiveRetention());
             transactions.required(() ->
-                    repository.complete(
+                    archives.complete(
                             item.tenant(),
-                            exportId,
+                            segmentId,
                             current[0].revision(),
                             artifactReference,
                             counts[0],
                             counts[1],
-                            sha,
-                            expiresAt,
+                            generatedSha,
+                            completedAt,
+                            minimumRetainUntil,
                             completedAt));
             scheduledWork.markCompleted(
                     item.tenant(), item.work().id(), leaseOwner, completedAt);
@@ -388,14 +360,14 @@ public final class AuditExportService {
                 return Outcome.RETRYING;
             }
 
-            AuditExportOperation current = repository.find(item.tenant(), exportId).orElse(null);
+            AuditArchiveSegment current = archives.find(item.tenant(), segmentId).orElse(null);
             if (current != null
-                    && current.state() != AuditExportOperation.State.SUCCEEDED
-                    && current.state() != AuditExportOperation.State.FAILED) {
+                    && current.state() != AuditArchiveSegment.State.SUCCEEDED
+                    && current.state() != AuditArchiveSegment.State.FAILED) {
                 transactions.required(() ->
-                        repository.fail(
+                        archives.fail(
                                 item.tenant(),
-                                exportId,
+                                segmentId,
                                 current.revision(),
                                 FAILURE_CODE,
                                 now));
@@ -404,6 +376,57 @@ public final class AuditExportService {
                     item.tenant(), item.work().id(), leaseOwner, FAILURE_CODE, now);
             return Outcome.FAILED;
         }
+    }
+
+    private void failTerminal(
+            ClaimedTenantWork item,
+            AuditArchiveSegment segment,
+            String code) {
+        Instant now = clock.instant();
+        transactions.required(() ->
+                archives.fail(
+                        item.tenant(),
+                        segment.id(),
+                        segment.revision(),
+                        code,
+                        now));
+        scheduledWork.markCompleted(
+                item.tenant(), item.work().id(), leaseOwner, code, now);
+    }
+
+    private Verification verifyArtifact(
+            TenantContext tenant,
+            String artifactReference) {
+        MessageDigest digest = sha256();
+        long bytes = 0;
+        long records = 0;
+        byte[] buffer = new byte[8192];
+        try (InputStream input = artifactStore.open(tenant, artifactReference)) {
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read == 0) continue;
+                digest.update(buffer, 0, read);
+                bytes += read;
+                for (int index = 0; index < read; index++) {
+                    if (buffer[index] == (byte) '\n') records++;
+                }
+            }
+        } catch (Exception failure) {
+            if (failure instanceof RuntimeException runtime) throw runtime;
+            throw new IllegalStateException("audit archive verification failed", failure);
+        }
+        return new Verification(records, bytes, HexFormat.of().formatHex(digest.digest()));
+    }
+
+    private static boolean samePolicy(
+            AuditRetentionPolicyVersion requested,
+            AuditRetentionPolicyVersion persisted) {
+        return requested.version() == persisted.version()
+                && requested.exportArtifactRetention().equals(persisted.exportArtifactRetention())
+                && requested.archiveEligibleAfter().equals(persisted.archiveEligibleAfter())
+                && requested.minimumOnlineRetention().equals(persisted.minimumOnlineRetention())
+                && requested.minimumArchiveRetention().equals(persisted.minimumArchiveRetention())
+                && requested.effectiveFrom().equals(persisted.effectiveFrom());
     }
 
     private static MessageDigest sha256() {
@@ -428,29 +451,22 @@ public final class AuditExportService {
         FAILED
     }
 
-    public record Download(
-            AuditExportOperation operation,
-            InputStream stream,
-            String contentType,
-            String filename) {
-        public Download {
-            Objects.requireNonNull(operation, "operation");
-            Objects.requireNonNull(stream, "stream");
-            Objects.requireNonNull(contentType, "contentType");
-            Objects.requireNonNull(filename, "filename");
-        }
-    }
-
     public record BatchResult(int claimed, int completed, int retrying, int failed) {
         public BatchResult {
             if (claimed < 0 || completed < 0 || retrying < 0 || failed < 0
                     || completed + retrying + failed != claimed) {
-                throw new IllegalArgumentException("invalid audit export batch counts");
+                throw new IllegalArgumentException("invalid audit archive batch counts");
             }
         }
     }
 
-    private record ExportRecord(
+    private record Verification(
+            long recordCount,
+            long byteCount,
+            String sha256Hex) {
+    }
+
+    private record ArchiveRecord(
             UUID id,
             Instant occurredAt,
             Instant recordedAt,
@@ -461,8 +477,8 @@ public final class AuditExportService {
             String outcome,
             UUID correlationId,
             UUID causationId) {
-        static ExportRecord from(AuditRecord record) {
-            return new ExportRecord(
+        static ArchiveRecord from(AuditRecord record) {
+            return new ArchiveRecord(
                     record.id(),
                     record.occurredAt(),
                     record.recordedAt(),

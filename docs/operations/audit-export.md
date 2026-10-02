@@ -20,7 +20,7 @@ Optional tuning:
 - `IAM_AUDIT_EXPORT_BATCH_SIZE` — default `10`
 - `IAM_AUDIT_EXPORT_MAX_ATTEMPTS` — default `5`
 - `IAM_AUDIT_EXPORT_RETRY_DELAY` — default `PT5S`
-- `IAM_AUDIT_EXPORT_ARTIFACT_RETENTION` — optional duration; blank means no runtime expiry is assigned
+- `IAM_AUDIT_EXPORT_ARTIFACT_RETENTION` — compatibility fallback duration when no immutable Audit retention policy was effective at export acceptance; blank means no fallback expiry
 
 The first adapter writes to a configured filesystem root. That root is merely an implementation adapter. For production, the path must itself be backed by storage whose durability, sharing, encryption, access control, backup and recovery characteristics satisfy the selected production design. Local ephemeral instance files are not production evidence.
 
@@ -48,7 +48,7 @@ The worker:
 5. writes only the public AuditRecord fields as one JSON object per line;
 6. persists bounded continuation/count progress after each page;
 7. atomically replaces the deterministic artifact only after the stream completes;
-8. records record count, byte count, SHA-256 and optional expiry in Audit;
+8. records record count, byte count, SHA-256 and optional expiry in Audit; when an immutable retention-policy version was effective at the export's acceptance cutoff, its export-artifact lifetime governs the expiry;
 9. marks the operation SUCCEEDED and the technical work complete.
 
 If processing fails before the configured attempt ceiling, technical work is rescheduled. A later attempt rewrites the artifact from the frozen snapshot rather than trusting a partial external object. Retry exhaustion records normalized FAILED process evidence.
@@ -93,4 +93,4 @@ When export is enabled:
 7. verify the internal artifact reference/path never appears in the public resource, logs or AuditRecord payload;
 8. include the configured artifact root in environment backup/recovery and access-control review if the deployment depends on it.
 
-Archive/retention policy and destructive evidence purge remain separate later work.
+Immutable archive-segment generation and the retention-policy foundation are implemented in V54 and documented in `audit-archive.md`. Destructive evidence purge/legal-hold semantics remain separate later work.

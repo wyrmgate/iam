@@ -70,6 +70,13 @@ iam:
       max-attempts: ${IAM_AUDIT_EXPORT_MAX_ATTEMPTS:5}
       retry-delay: ${IAM_AUDIT_EXPORT_RETRY_DELAY:PT5S}
       artifact-retention: ${IAM_AUDIT_EXPORT_ARTIFACT_RETENTION:}
+    archive:
+      enabled: ${IAM_AUDIT_ARCHIVE_ENABLED:false}
+      poll-interval: ${IAM_AUDIT_ARCHIVE_POLL_INTERVAL:PT1S}
+      claim-lease: ${IAM_AUDIT_ARCHIVE_CLAIM_LEASE:PT30S}
+      batch-size: ${IAM_AUDIT_ARCHIVE_BATCH_SIZE:10}
+      max-attempts: ${IAM_AUDIT_ARCHIVE_MAX_ATTEMPTS:5}
+      retry-delay: ${IAM_AUDIT_ARCHIVE_RETRY_DELAY:PT5S}
   integration:
     worker-auth:
       enabled: ${IAM_CONNECTOR_WORKER_AUTH_ENABLED:false}
