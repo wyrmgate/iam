@@ -79,11 +79,10 @@ Workers page the frozen membership in deterministic `occurredAt ASC, id ASC` ord
 
 The first concrete adapter is a deployment-configured filesystem path and is disabled by default. The path must itself provide the durability/shared-storage properties required by its deployment; an ephemeral instance filesystem is not production HA/DR evidence. Public representations never expose the internal artifact reference. Download is re-authorized at request time and uses `Cache-Control: no-store`.
 
-The immutable archive-segment mechanism defined by ADR-0034 is not yet implemented. Public AuditRecord read/search remains online-store backed. Destructive purge remains fail-closed pending a separate legal-hold/purge decision.
+Flyway V54 implements the internal archive-segment and retention-policy foundation defined by ADR-0034. Archive generation is not exposed as arbitrary public CRUD: an internal typed Audit command selects an exact eligible occurrence range under the current immutable tenant policy, captures `snapshotRecordedAt`, and produces one verified external artifact through bounded durable work. Policy values are tenant-scoped, immutable/versioned inputs rather than client-owned status fields. Public AuditRecord read/search remains online-store backed, and source AuditRecords remain append-only. Destructive purge remains fail-closed pending a separate accepted legal-hold/purge decision.
 
 ## Deferred
 
-- archive-segment runtime and versioned retention-policy runtime;
 - destructive AuditRecord purge/legal-hold semantics;
 - transparent archived-record query after any future online removal;
 - EvidenceSnapshot;
