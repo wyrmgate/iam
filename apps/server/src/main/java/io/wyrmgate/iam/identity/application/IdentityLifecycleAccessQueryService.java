@@ -99,6 +99,9 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
         return type == CanonicalAttributeType.STRING
                 || type == CanonicalAttributeType.BOOLEAN
                 || type == CanonicalAttributeType.INTEGER
+                || type == CanonicalAttributeType.DECIMAL
+                || type == CanonicalAttributeType.DATE
+                || type == CanonicalAttributeType.DATETIME
                 || type == CanonicalAttributeType.ENUM;
     }
 
@@ -107,6 +110,9 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
             case CanonicalValue.StringValue v -> CanonicalScalar.trusted(ScalarType.STRING, v.value(), revision);
             case CanonicalValue.BooleanValue v -> CanonicalScalar.trusted(ScalarType.BOOLEAN, v.value(), revision);
             case CanonicalValue.IntegerValue v -> CanonicalScalar.trusted(ScalarType.INTEGER, v.value(), revision);
+            case CanonicalValue.DecimalValue v -> CanonicalScalar.trusted(ScalarType.DECIMAL, v.value(), revision);
+            case CanonicalValue.DateValue v -> CanonicalScalar.trusted(ScalarType.DATE, v.value(), revision);
+            case CanonicalValue.DateTimeValue v -> CanonicalScalar.trusted(ScalarType.DATETIME, v.value(), revision);
             case CanonicalValue.EnumValue v -> CanonicalScalar.trusted(ScalarType.ENUM, v.key(), revision);
             default -> CanonicalScalar.unavailable();
         };
