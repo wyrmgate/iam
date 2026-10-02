@@ -32,8 +32,8 @@ public final class JdbcAuditRecordRepository implements AuditRecordRepository {
                 INSERT INTO audit.audit_record (
                     id, tenant_id, occurred_at, recorded_at, actor_id,
                     action_type, resource_type, resource_id, outcome,
-                    correlation_id, causation_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    correlation_id, causation_id, material_snapshot, integrity_metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb)
                 ON CONFLICT (id) DO NOTHING
                 """,
                 record.id(),
@@ -46,7 +46,9 @@ public final class JdbcAuditRecordRepository implements AuditRecordRepository {
                 record.resourceId(),
                 record.outcome().name(),
                 record.correlationId(),
-                record.causationId()) == 1;
+                record.causationId(),
+                AuditRecordPersistenceMapper.materialJson(record.materialSnapshot()),
+                AuditRecordPersistenceMapper.integrityJson(record.integrityMetadata())) == 1;
     }
 
     @Override
@@ -56,11 +58,12 @@ public final class JdbcAuditRecordRepository implements AuditRecordRepository {
         List<AuditRecord> rows = jdbc.query(
                 """
                 SELECT id, occurred_at, recorded_at, actor_id, action_type,
-                       resource_type, resource_id, outcome, correlation_id, causation_id
+                       resource_type, resource_id, outcome, correlation_id, causation_id,
+                       material_snapshot, integrity_metadata
                 FROM audit.audit_record_query
                 WHERE tenant_id = ? AND id = ?
                 """,
-                (rs, rowNum) -> row(rs),
+                (rs, rowNum) -> AuditRecordPersistenceMapper.row(rs),
                 tenant.tenantId(),
                 recordId);
         return rows.stream().findFirst();
@@ -78,7 +81,8 @@ public final class JdbcAuditRecordRepository implements AuditRecordRepository {
 
         StringBuilder sql = new StringBuilder("""
                 SELECT id, occurred_at, recorded_at, actor_id, action_type,
-                       resource_type, resource_id, outcome, correlation_id, causation_id
+                       resource_type, resource_id, outcome, correlation_id, causation_id,
+                       material_snapshot, integrity_metadata
                 FROM audit.audit_record_query
                 WHERE tenant_id = ?
                 """);
@@ -117,20 +121,7 @@ public final class JdbcAuditRecordRepository implements AuditRecordRepository {
         }
         sql.append(" ORDER BY occurred_at DESC, id DESC LIMIT ?");
         args.add(limit);
-        return jdbc.query(sql.toString(), (rs, rowNum) -> row(rs), args.toArray());
+        return jdbc.query(sql.toString(), (rs, rowNum) -> AuditRecordPersistenceMapper.row(rs), args.toArray());
     }
 
-    private static AuditRecord row(ResultSet rs) throws SQLException {
-        return new AuditRecord(
-                rs.getObject("id", UUID.class),
-                rs.getTimestamp("occurred_at").toInstant(),
-                rs.getTimestamp("recorded_at").toInstant(),
-                rs.getObject("actor_id", UUID.class),
-                rs.getString("action_type"),
-                rs.getString("resource_type"),
-                rs.getObject("resource_id", UUID.class),
-                AuditOutcome.valueOf(rs.getString("outcome")),
-                rs.getObject("correlation_id", UUID.class),
-                rs.getObject("causation_id", UUID.class));
-    }
 }
