@@ -22,15 +22,27 @@
         <springdoc-openapi.version>3.1.1</springdoc-openapi.version>
         <archunit.version>1.4.1</archunit.version>
         <!-- Security patch overrides for CVE-2026-68497 until the parent BOM catches up. -->
+        <jackson2-core.version>2.21.7</jackson2-core.version>
         <jackson2-databind.version>2.21.7</jackson2-databind.version>
+        <jackson3-core.version>3.1.7</jackson3-core.version>
         <jackson3-databind.version>3.1.7</jackson3-databind.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson2-core.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson2-databind.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson3-core.version}</version>
         </dependency>
         <dependency>
             <groupId>tools.jackson.core</groupId>
