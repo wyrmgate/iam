@@ -116,6 +116,12 @@ public final class AdministrativePermissions {
             new AdministrativePermission("audit", "read");
     public static final AdministrativePermission AUDIT_EXPORT =
             new AdministrativePermission("audit", "export");
+    public static final AdministrativePermission AUDIT_HOLD =
+            new AdministrativePermission("audit", "hold");
+    public static final AdministrativePermission AUDIT_PURGE =
+            new AdministrativePermission("audit", "purge");
+    public static final AdministrativePermission EVIDENCE_SNAPSHOT_READ =
+            new AdministrativePermission("evidence-snapshot", "read");
 
     public static final AdministrativePermission CONNECTOR_READ =
             new AdministrativePermission("connector", "read");
