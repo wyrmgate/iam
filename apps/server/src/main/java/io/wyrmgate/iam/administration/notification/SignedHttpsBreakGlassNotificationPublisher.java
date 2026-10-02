@@ -2,9 +2,10 @@ package io.wyrmgate.iam.administration.notification;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassNotification;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassNotificationDeliveryException;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassNotificationPublisher;
+import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassSecurityNotification;
+import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -12,7 +13,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 
 /** ADR-0033 single-destination signed HTTPS security-notification adapter. */
 public final class SignedHttpsBreakGlassNotificationPublisher
@@ -50,10 +53,11 @@ public final class SignedHttpsBreakGlassNotificationPublisher
     }
 
     @Override
-    public void publish(AdministrativeBreakGlassNotification notification) {
+    public void publish(AdministrativeBreakGlassSecurityNotification notification) {
+        WireNotification wire = WireNotification.from(notification);
         final byte[] body;
         try {
-            body = json.writeValueAsBytes(notification);
+            body = json.writeValueAsBytes(wire);
         } catch (JsonProcessingException exception) {
             throw new AdministrativeBreakGlassNotificationDeliveryException(
                     false, "break_glass_notification_encoding_failed", exception);
@@ -63,8 +67,8 @@ public final class SignedHttpsBreakGlassNotificationPublisher
         HttpRequest request = HttpRequest.newBuilder(endpoint)
                 .timeout(requestTimeout)
                 .header("Content-Type", "application/json")
-                .header("X-Wyrmgate-Notification-Id", notification.obligationId().toString())
-                .header("X-Wyrmgate-Notification-Type", notification.type())
+                .header("X-Wyrmgate-Notification-Id", notification.notificationId().toString())
+                .header("X-Wyrmgate-Notification-Type", AdministrativeBreakGlassSecurityNotification.TYPE)
                 .header("X-Wyrmgate-Delivery-Timestamp", Long.toString(unixSeconds))
                 .header("X-Wyrmgate-Signature", signer.sign(unixSeconds, body))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body))
@@ -85,6 +89,39 @@ public final class SignedHttpsBreakGlassNotificationPublisher
         } catch (IOException exception) {
             throw new AdministrativeBreakGlassNotificationDeliveryException(
                     true, "break_glass_notification_io_retryable", exception);
+        }
+    }
+
+    private record WireNotification(
+            String version,
+            String type,
+            UUID notificationId,
+            UUID tenantId,
+            UUID breakGlassOperationId,
+            UUID actorIdentityId,
+            UUID roleId,
+            AdministrativeScope scope,
+            String incidentReference,
+            Instant activatedAt,
+            Instant validUntil,
+            UUID correlationId,
+            UUID causationId) {
+
+        static WireNotification from(AdministrativeBreakGlassSecurityNotification source) {
+            return new WireNotification(
+                    "1",
+                    AdministrativeBreakGlassSecurityNotification.TYPE,
+                    source.notificationId(),
+                    source.tenantId(),
+                    source.breakGlassOperationId(),
+                    source.actorIdentityId(),
+                    source.roleId(),
+                    source.scope(),
+                    source.incidentReference(),
+                    source.activatedAt(),
+                    source.validUntil(),
+                    source.correlationId(),
+                    source.causationId());
         }
     }
 }
