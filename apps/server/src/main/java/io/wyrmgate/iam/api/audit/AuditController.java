@@ -224,6 +224,21 @@ public final class AuditController {
                 value.resourceId(),
                 value.outcome().name(),
                 value.correlationId(),
-                value.causationId());
+                value.causationId(),
+                value.materialSnapshot() == null
+                        ? null
+                        : new AuditMaterialSnapshotResource(
+                                io.wyrmgate.iam.audit.domain.AuditMaterialSnapshot.SCHEMA_VERSION,
+                                value.materialSnapshot().actorDisplayLabel(),
+                                value.materialSnapshot().resourceDisplayLabel(),
+                                value.materialSnapshot().resourceRevision(),
+                                value.materialSnapshot().resourceState()),
+                value.integrityMetadata() == null
+                        ? null
+                        : new AuditIntegrityMetadataResource(
+                                io.wyrmgate.iam.audit.domain.AuditIntegrityMetadata.SCHEMA_VERSION,
+                                io.wyrmgate.iam.audit.domain.AuditIntegrityMetadata.ALGORITHM,
+                                value.integrityMetadata().contentSha256(),
+                                value.integrityMetadata().materialSnapshotSha256()));
     }
 }
