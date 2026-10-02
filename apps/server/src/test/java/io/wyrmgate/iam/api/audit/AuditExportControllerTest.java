@@ -154,7 +154,7 @@ class AuditExportControllerTest {
                 UUID.randomUUID(),
                 AdministrativeScope.global(),
                 AdministrativeGrantState.ACTIVE,
-                NOW.minusSeconds(60),
+                Instant.EPOCH,
                 null,
                 1,
                 NOW.minusSeconds(60),
