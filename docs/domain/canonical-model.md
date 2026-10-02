@@ -112,3 +112,15 @@ EffectiveAccess, DesiredPrincipalState, DesiredGrantState, AssignmentFulfillment
 AdministrativeBreakGlassOperation is a first-class Administration-owned emergency authority/process object, distinct from direct AdministrativeGrant, AdministrativeDelegation and AdministrativeElevation. It records the exact governed actor/beneficiary, requested AdministrativeRole and typed scope, finite validity, reason/incident evidence, provider-neutral activation assurance, lifecycle/revision, correlation/causation and durable obligation references.
 
 Break-glass authority contributes to control-plane authorization only while the operation is ACTIVE, semantically time-valid, the governed actor remains administratively eligible, and current STRONG assurance satisfies the stored policy-bounded assurance-age requirement. SECURITY_NOTIFICATION and POST_USE_REVIEW are durable obligations/evidence, not authority. AuditRecord remains a separate Audit-owned data-minimized evidence stream.
+
+
+## Audit evidence lifecycle completion
+
+Audit owns four distinct evidence-lifecycle concepts that must not be collapsed:
+
+- `AuditRecord` — immutable semantic occurrence evidence; optional closed material display snapshot and derived integrity metadata do not create authority.
+- `EvidenceSnapshot` — immutable decision-time contextual references with typed subject/policy/related resource identities and revisions; never current-state mutation authority.
+- `AuditArchiveSegment` / archived-record index — immutable external evidence artifact plus an Audit-owned query projection used to keep bounded reads coherent after permitted online purge.
+- `AuditLegalHold` / `AuditPurgeOperation` — explicit evidence-lifecycle control/process state. Retention age is input, not deletion authority; ACTIVE hold always dominates purge.
+
+SIEM delivery is a separate outbound technical transport of data-minimized Audit evidence. It is neither a public integration event nor authoritative Audit state.
