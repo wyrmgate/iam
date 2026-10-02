@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.audit.application;
 
-import io.wyrmgate.iam.audit.application.AuditQueryModels.AuditFilter;
 import io.wyrmgate.iam.audit.domain.AuditExportOperation;
 import io.wyrmgate.iam.audit.domain.AuditRecord;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -15,7 +14,7 @@ public interface AuditExportRepository {
             TenantContext tenant,
             UUID operationId,
             UUID requestedByIdentityId,
-            AuditFilter filter,
+            AuditExportOperation.Filter filter,
             Instant occurredFrom,
             Instant occurredUntil,
             Instant snapshotRecordedAt,
@@ -60,7 +59,7 @@ public interface AuditExportRepository {
 
     List<AuditRecord> findSourcePage(
             TenantContext tenant,
-            AuditFilter filter,
+            AuditExportOperation.Filter filter,
             Instant occurredFrom,
             Instant occurredUntil,
             Instant snapshotRecordedAt,
