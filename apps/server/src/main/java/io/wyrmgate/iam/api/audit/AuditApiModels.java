@@ -62,6 +62,32 @@ final class AuditApiModels {
             Instant updatedAt) {
     }
 
+    record EvidenceReferenceResource(
+            String resourceType,
+            UUID resourceId,
+            Long revision,
+            String displayLabel) {
+    }
+
+    record EvidenceSnapshotResource(
+            UUID id,
+            Instant occurredAt,
+            Instant recordedAt,
+            UUID actorId,
+            String snapshotType,
+            EvidenceReferenceResource subject,
+            EvidenceReferenceResource policy,
+            EvidenceReferenceResource related,
+            String decisionLabel,
+            UUID correlationId,
+            UUID causationId) {
+    }
+
+    record EvidenceSnapshotPage(
+            List<EvidenceSnapshotResource> items,
+            String nextCursor) {
+    }
+
     record FieldError(
             String field,
             String code,
