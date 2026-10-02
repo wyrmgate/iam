@@ -125,7 +125,7 @@ class SourceDrivenIdentityProcessingIntegrationTest {
                 transactions,
                 json);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("51");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("52");
     }
 
     @AfterAll
