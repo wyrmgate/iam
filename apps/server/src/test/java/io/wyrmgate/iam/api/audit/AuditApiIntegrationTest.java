@@ -89,7 +89,7 @@ class AuditApiIntegrationTest {
                         .current()
                         .getVersion()
                         .getVersion())
-                .isEqualTo("53");
+                .isEqualTo("54");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
