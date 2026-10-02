@@ -501,8 +501,7 @@ class GovernanceApiIntegrationTest {
                 FROM audit.audit_record
                 WHERE tenant_id = ?
                   AND resource_type IN ('access-request', 'approval-case')
-                  AND (material_snapshot IS NOT NULL
-                       OR integrity_metadata IS NOT NULL)
+                  AND material_snapshot IS NOT NULL
                 """,
                 Integer.class,
                 tenant.tenantId());
