@@ -86,7 +86,7 @@ A direct AdministrativeGrant is standing authority and explicitly records whethe
 
 IAM is event-driven where useful but does not require event sourcing as its authoritative persistence model.
 
-ADR-0031 implements the first Audit-owned runtime foundation. `AuditRecord` is immutable append-only evidence with stable record identity, occurrence/recording time, optional governed actor, semantic action/resource reference, normalized `SUCCESS`/`DENIED`/`FAILURE` outcome and correlation/causation. Producer replay is idempotent by stable record ID plus semantic content; conflicting reuse is rejected. Bounded Audit queries order by `occurredAt DESC, id DESC`. EvidenceSnapshot, material snapshots, archive/retention and public Audit APIs remain deferred.
+ADR-0031 implements the Audit-owned runtime foundation. `AuditRecord` is immutable append-only evidence with stable record identity, occurrence/recording time, optional governed actor, semantic action/resource reference, normalized `SUCCESS`/`DENIED`/`FAILURE` outcome and correlation/causation. Producer replay is idempotent by stable record ID plus semantic content; conflicting reuse is rejected. Bounded Audit queries order by `occurredAt DESC, id DESC`, and public tenant-scoped read/search is implemented. ADR-0034 adds the next canonical process concepts: `AuditExportOperation` freezes a bounded record set with an Audit-owned recording-time cutoff and produces a short-lived external artifact, while `AuditArchiveSegment` is immutable verified evidence copy metadata. Neither concept mutates source AuditRecords. EvidenceSnapshot, material snapshots/integrity metadata, destructive purge/legal-hold semantics and SIEM transport remain separate/deferred.
 
 ## Canonical classification
 
