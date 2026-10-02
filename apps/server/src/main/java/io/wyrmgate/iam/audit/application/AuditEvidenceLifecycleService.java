@@ -180,14 +180,14 @@ public final class AuditEvidenceLifecycleService {
                 .orElseThrow(() -> new IllegalStateException("audit_retention_policy_unconfigured"));
         AuditArchiveSegment archive = archives.find(tenant, archiveSegmentId)
                 .orElseThrow(() -> new IllegalArgumentException("audit archive segment does not exist"));
-        requireArchiveCoverage(archive, selection, now);
+        requireArchiveCoverage(archive, selection, archive.snapshotRecordedAt());
         if (selection.occurredUntil().isAfter(now.minus(policy.minimumOnlineRetention()))) {
             throw new IllegalStateException("audit_purge_minimum_online_retention_not_elapsed");
         }
 
         return transactions.required(() -> {
             lifecycle.lockLifecycle(tenant);
-            if (lifecycle.hasMatchingActiveHold(tenant, selection, now)) {
+            if (lifecycle.hasMatchingActiveHold(tenant, selection, archive.snapshotRecordedAt())) {
                 throw new IllegalStateException("audit_purge_blocked_by_legal_hold");
             }
             return lifecycle.createPurge(
@@ -197,7 +197,7 @@ public final class AuditEvidenceLifecycleService {
                     archive.id(),
                     requestedByIdentityId,
                     selection,
-                    now,
+                    archive.snapshotRecordedAt(),
                     reasonCode,
                     correlationId,
                     causationId,
