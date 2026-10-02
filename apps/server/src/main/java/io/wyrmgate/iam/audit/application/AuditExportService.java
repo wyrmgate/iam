@@ -257,6 +257,12 @@ public final class AuditExportService {
                         Instant afterOccurredAt = null;
                         UUID afterId = null;
                         while (true) {
+                            scheduledWork.renewLease(
+                                    item.tenant(),
+                                    item.work().id(),
+                                    leaseOwner,
+                                    clock.instant(),
+                                    claimLease);
                             List<AuditRecord> page = repository.findSourcePage(
                                     item.tenant(),
                                     running.filter(),
@@ -279,6 +285,12 @@ public final class AuditExportService {
                             }
 
                             AuditRecord last = page.get(page.size() - 1);
+                            scheduledWork.renewLease(
+                                    item.tenant(),
+                                    item.work().id(),
+                                    leaseOwner,
+                                    clock.instant(),
+                                    claimLease);
                             current[0] = transactions.required(() ->
                                     repository.checkpoint(
                                             item.tenant(),
