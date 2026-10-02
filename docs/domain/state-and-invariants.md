@@ -250,3 +250,16 @@ Invariant set:
 - obligation state cannot extend or restore emergency authority;
 - explicit revocation is optimistic-revision guarded and ends authority immediately;
 - Audit failure never rewrites a committed Administration result.
+
+
+## Audit retention, integrity and SIEM invariants
+
+- AuditRecord remains append-only by default; arbitrary UPDATE/DELETE is rejected in PostgreSQL.
+- Destructive AuditRecord deletion requires a RUNNING AuditPurgeOperation fenced in the same transaction and is permitted only for exact rows proven archived, old enough under the pinned policy and not protected by any ACTIVE matching legal hold.
+- Purge requester and approver are different governed Identities; approval does not bypass execution-time revalidation.
+- A verified archive artifact and archived-record query index are evidence/query state, never business authority.
+- Public AuditRecord detail/search remains deterministic across online and purged-but-archived records; the online row wins while overlap exists.
+- Audit material snapshot is explanatory only. Stable IDs and owning-capability evidence remain the references of record.
+- Audit integrity metadata is deterministic tamper-detection metadata, not authorization, ordering, consensus or a global hash chain.
+- EvidenceSnapshot is immutable and cannot authorize mutation of current capability state.
+- Audit/SIEM delivery is at-least-once. SIEM scheduling or delivery failure cannot roll back or reinterpret an AuditRecord or the business action it describes.
