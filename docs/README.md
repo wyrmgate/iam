@@ -40,6 +40,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`engineering/dev-cd.md`](engineering/dev-cd.md) — active managed DEV deployment topology: Cloudflare Pages, Railway, and Neon.
 - [`operations/dev-managed-activation.md`](operations/dev-managed-activation.md) — managed DEV activation checklist and recovery verification.
 - [`operations/backup-recovery.md`](operations/backup-recovery.md) — managed Neon DEV and standalone PostgreSQL recovery boundaries.
+- [`operations/audit-export.md`](operations/audit-export.md) — durable Audit NDJSON export activation, artifact storage, retry, download and verification runbook.
 - [`operations/production-readiness.md`](operations/production-readiness.md) — OD-005 production SLI/SLO/RPO/RTO decision register, failure model, topology gate and service re-entry criteria.
 - [`operations/production-recovery-drill.md`](operations/production-recovery-drill.md) — isolation-safe measured production recovery verification and evidence procedure.
 - [`operations/public-event-webhook.md`](operations/public-event-webhook.md) — signed public-event webhook activation, receiver, retry, rotation, and failure runbook.
