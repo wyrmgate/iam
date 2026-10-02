@@ -202,3 +202,122 @@ COMMENT ON COLUMN audit.audit_record.integrity_metadata IS
     'Derived ADR-0036 audit-integrity-v1 SHA-256 tamper-detection metadata; never authorization or ordering authority.';
 COMMENT ON TABLE audit.evidence_snapshot IS
     'Audit-owned immutable ADR-0036 decision-time contextual reference snapshot. Capability-owned decision evidence remains with its owner.';
+
+
+DROP FUNCTION audit.audit_row_matches_purge(
+    uuid, uuid, timestamptz, timestamptz, uuid, varchar, varchar, uuid, varchar, uuid, uuid);
+
+CREATE FUNCTION audit.audit_row_matches_purge(
+    p_tenant_id uuid,
+    p_record_id uuid,
+    p_occurred_at timestamptz,
+    p_recorded_at timestamptz,
+    p_actor_id uuid,
+    p_action_type varchar,
+    p_resource_type varchar,
+    p_resource_id uuid,
+    p_outcome varchar,
+    p_correlation_id uuid,
+    p_material_snapshot jsonb,
+    p_integrity_metadata jsonb,
+    p_purge_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $audit$
+    SELECT EXISTS (
+        SELECT 1
+        FROM audit.audit_purge_operation p
+        JOIN audit.audit_retention_policy_version policy
+          ON policy.tenant_id = p.tenant_id
+         AND policy.id = p.retention_policy_version_id
+        JOIN audit.audit_archive_segment segment
+          ON segment.tenant_id = p.tenant_id
+         AND segment.id = p.archive_segment_id
+        JOIN audit.audit_archived_record_index archived
+          ON archived.tenant_id = p.tenant_id
+         AND archived.record_id = p_record_id
+         AND archived.archive_segment_id = p.archive_segment_id
+        WHERE p.id = p_purge_id
+          AND p.tenant_id = p_tenant_id
+          AND p.state = 'RUNNING'
+          AND p.approved_by_identity_id IS NOT NULL
+          AND p.approved_by_identity_id <> p.requested_by_identity_id
+          AND segment.state = 'SUCCEEDED'
+          AND segment.verified_at IS NOT NULL
+          AND segment.occurred_from <= p.occurred_from
+          AND segment.occurred_until >= p.occurred_until
+          AND segment.snapshot_recorded_at >= p.snapshot_recorded_at
+          AND p_occurred_at >= p.occurred_from
+          AND p_occurred_at < p.occurred_until
+          AND p_recorded_at <= p.snapshot_recorded_at
+          AND p_occurred_at <= clock_timestamp()
+                - (policy.minimum_online_retention_seconds * interval '1 second')
+          AND archived.material_snapshot IS NOT DISTINCT FROM p_material_snapshot
+          AND archived.integrity_metadata IS NOT DISTINCT FROM p_integrity_metadata
+          AND (p.actor_filter_id IS NULL OR p_actor_id = p.actor_filter_id)
+          AND (p.action_type_filter IS NULL OR p_action_type = p.action_type_filter)
+          AND (p.resource_type_filter IS NULL OR p_resource_type = p.resource_type_filter)
+          AND (p.resource_id_filter IS NULL OR p_resource_id = p.resource_id_filter)
+          AND (p.outcome_filter IS NULL OR p_outcome = p.outcome_filter)
+          AND (p.correlation_id_filter IS NULL OR p_correlation_id = p.correlation_id_filter)
+          AND NOT EXISTS (
+              SELECT 1
+              FROM audit.audit_legal_hold h
+              WHERE h.tenant_id = p_tenant_id
+                AND h.state = 'ACTIVE'
+                AND p_occurred_at >= h.occurred_from
+                AND p_occurred_at < h.occurred_until
+                AND (h.actor_filter_id IS NULL OR p_actor_id = h.actor_filter_id)
+                AND (h.action_type_filter IS NULL OR p_action_type = h.action_type_filter)
+                AND (h.resource_type_filter IS NULL OR p_resource_type = h.resource_type_filter)
+                AND (h.resource_id_filter IS NULL OR p_resource_id = h.resource_id_filter)
+                AND (h.outcome_filter IS NULL OR p_outcome = h.outcome_filter)
+                AND (h.correlation_id_filter IS NULL OR p_correlation_id = h.correlation_id_filter)
+          )
+    );
+$audit$;
+
+CREATE OR REPLACE FUNCTION audit.reject_audit_record_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $audit$
+DECLARE
+    purge_setting text;
+    purge_id uuid;
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        RAISE EXCEPTION 'AuditRecord is append-only';
+    END IF;
+
+    purge_setting := current_setting('wyrmgate.audit_purge_operation_id', true);
+    IF purge_setting IS NULL OR btrim(purge_setting) = '' THEN
+        RAISE EXCEPTION 'AuditRecord is append-only';
+    END IF;
+
+    BEGIN
+        purge_id := purge_setting::uuid;
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE EXCEPTION 'invalid Audit purge fence';
+    END;
+
+    IF NOT audit.audit_row_matches_purge(
+        OLD.tenant_id,
+        OLD.id,
+        OLD.occurred_at,
+        OLD.recorded_at,
+        OLD.actor_id,
+        OLD.action_type,
+        OLD.resource_type,
+        OLD.resource_id,
+        OLD.outcome,
+        OLD.correlation_id,
+        OLD.material_snapshot,
+        OLD.integrity_metadata,
+        purge_id) THEN
+        RAISE EXCEPTION 'AuditRecord purge prerequisites are not satisfied';
+    END IF;
+
+    RETURN OLD;
+END;
+$audit$;
