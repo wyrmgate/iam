@@ -61,7 +61,7 @@ CREATE TABLE audit.audit_archived_record_index (
     correlation_id uuid NULL,
     causation_id uuid NULL,
     archived_at timestamptz NOT NULL,
-    PRIMARY KEY (tenant_id, record_id),
+    PRIMARY KEY (tenant_id, archive_segment_id, record_id),
     CONSTRAINT audit_archived_record_tenant_fk
         FOREIGN KEY (tenant_id) REFERENCES platform.tenant (id),
     CONSTRAINT audit_archived_record_segment_fk
@@ -72,6 +72,8 @@ CREATE TABLE audit.audit_archived_record_index (
     CONSTRAINT audit_archived_record_outcome_ck CHECK (outcome IN ('SUCCESS','DENIED','FAILURE'))
 );
 
+CREATE INDEX audit_archived_record_record_idx
+    ON audit.audit_archived_record_index (tenant_id, record_id);
 CREATE INDEX audit_archived_record_time_idx
     ON audit.audit_archived_record_index (tenant_id, occurred_at DESC, record_id DESC);
 CREATE INDEX audit_archived_record_actor_time_idx
@@ -202,7 +204,7 @@ AS $audit$
           AND p_occurred_at < p.occurred_until
           AND p_recorded_at <= p.snapshot_recorded_at
           AND p_occurred_at <= clock_timestamp()
-                - make_interval(secs => policy.minimum_online_retention_seconds::int)
+                - (policy.minimum_online_retention_seconds * interval '1 second')
           AND (p.actor_filter_id IS NULL OR p_actor_id = p.actor_filter_id)
           AND (p.action_type_filter IS NULL OR p_action_type = p.action_type_filter)
           AND (p.resource_type_filter IS NULL OR p_resource_type = p.resource_type_filter)
