@@ -146,6 +146,10 @@ Break-glass is a separate typed Administration emergency process and a generic G
 
 The control-plane security context uses typed provider-neutral assurance such as BASELINE/STRONG plus relevant authentication/step-up time. Provider adapters may map their own signals into this contract, but bearer possession and raw OIDC claim names are not canonical assurance semantics. Notification/review delivery is durable process work and does not define authority validity; break-glass expiry/revocation takes effect immediately from Administration state/time.
 
+ADR-0033 completes the remaining process semantics. SECURITY_NOTIFICATION uses one deployment-configured signed HTTPS destination in the first concrete adapter, with a closed data-minimized payload that excludes free-form reason and provider-native assurance claims. Delivery is leased/retryable technical work outside the activation transaction; retry exhaustion or terminal delivery failure becomes MANUAL_REQUIRED rather than changing emergency authority.
+
+POST_USE_REVIEW becomes actionable only after the operation is revoked or semantic time reaches validUntil. Administration owns append-once typed review evidence; the break-glass actor cannot review their own operation. The first review completion path requires current `administration:manage-authorization` plus explicit self-review denial so INITIAL_TENANT_ADMIN permission membership is not silently expanded. Review completion never retroactively authorizes emergency use.
+
 ## Implemented assurance-aware break-glass foundation
 
 Flyway V50 implements `AdministrativeBreakGlassOperation` as a distinct Administration-owned emergency authority source. The first bounded slice is self-use only: the exact governed actor is the beneficiary, initiation still requires existing `administration:manage-authorization`, and emergency role/scope authority is permitted only by an explicitly configured fail-closed `AdministrativeBreakGlassPolicy`. No direct AdministrativeGrant or ordinary elevation is synthesized.
