@@ -7,6 +7,8 @@ import io.wyrmgate.iam.audit.application.AuditExportRepository;
 import io.wyrmgate.iam.audit.application.AuditQueryService;
 import io.wyrmgate.iam.audit.application.AuditRecordRepository;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
+import io.wyrmgate.iam.audit.application.EvidenceSnapshotRepository;
+import io.wyrmgate.iam.audit.application.EvidenceSnapshotService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
@@ -35,6 +37,18 @@ public class AuditPersistenceConfiguration {
     @Bean
     JdbcAuditEvidenceLifecycleRepository auditEvidenceLifecycleRepository(JdbcTemplate jdbc) {
         return new JdbcAuditEvidenceLifecycleRepository(jdbc);
+    }
+
+    @Bean
+    EvidenceSnapshotRepository evidenceSnapshotRepository(JdbcTemplate jdbc) {
+        return new JdbcEvidenceSnapshotRepository(jdbc);
+    }
+
+    @Bean
+    EvidenceSnapshotService evidenceSnapshotService(
+            EvidenceSnapshotRepository repository,
+            TransactionExecutor transactions) {
+        return new EvidenceSnapshotService(repository, transactions, Clock.systemUTC());
     }
 
     @Bean
