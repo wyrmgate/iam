@@ -62,6 +62,66 @@ final class AuditApiModels {
             Instant updatedAt) {
     }
 
+    record AuditSelectionRequest(
+            Instant occurredFrom,
+            Instant occurredUntil,
+            UUID actorId,
+            String actionType,
+            String resourceType,
+            UUID resourceId,
+            String outcome,
+            UUID correlationId) {
+    }
+
+    record AuditLegalHoldCreateRequest(
+            AuditSelectionRequest selection,
+            String reasonCode,
+            String caseReference) {
+    }
+
+    record AuditLegalHoldResource(
+            UUID id,
+            AuditSelectionRequest selection,
+            String reasonCode,
+            String caseReference,
+            String state,
+            UUID createdByIdentityId,
+            UUID releasedByIdentityId,
+            UUID correlationId,
+            UUID causationId,
+            long revision,
+            Instant createdAt,
+            Instant releasedAt,
+            Instant updatedAt) {
+    }
+
+    record AuditPurgeCreateRequest(
+            UUID archiveSegmentId,
+            AuditSelectionRequest selection,
+            String reasonCode) {
+    }
+
+    record AuditPurgeResource(
+            UUID id,
+            UUID retentionPolicyVersionId,
+            UUID archiveSegmentId,
+            UUID requestedByIdentityId,
+            UUID approvedByIdentityId,
+            AuditSelectionRequest selection,
+            Instant snapshotRecordedAt,
+            String reasonCode,
+            String state,
+            long deletedRecordCount,
+            String failureCode,
+            UUID correlationId,
+            UUID causationId,
+            long revision,
+            Instant approvedAt,
+            Instant completedAt,
+            Instant createdAt,
+            Instant updatedAt) {
+    }
+
     record EvidenceReferenceResource(
             String resourceType,
             UUID resourceId,
