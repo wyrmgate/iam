@@ -20,7 +20,9 @@ import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -129,7 +131,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler = new LifecycleAccessReconciliationService(
                 outbox, policies, assignments, commands, identityPolicy, guard, approval);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("57");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("58");
     }
 
     @AfterAll
@@ -228,11 +230,11 @@ class LifecycleAccessReconciliationIntegrationTest {
                 tenant,
                 java.util.List.of(
                         typedEntitlement(booleanRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_BOOLEAN_EQUALS,
-                                "employee", null, true, null, null, booleanEntitlement),
+                                "employee", null, true, null, null, null, null, null, booleanEntitlement),
                         typedEntitlement(integerRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_INTEGER_EQUALS,
-                                "level", null, null, 7L, null, integerEntitlement),
+                                "level", null, null, 7L, null, null, null, null, integerEntitlement),
                         typedEntitlement(enumRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_ENUM_EQUALS,
-                                "workerClass", null, null, null, "EMPLOYEE", enumEntitlement)),
+                                "workerClass", null, null, null, null, null, null, "EMPLOYEE", enumEntitlement)),
                 NOW.plusSeconds(1));
 
         reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
@@ -244,6 +246,115 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
 
         assertThat(currentPolicyAssignmentCount(tenant, identityId)).isZero();
+    }
+
+    @Test
+    void temporalAndDecimalMoverPredicatesRoundTripAndAddRemoveAccess() {
+        TenantContext tenant = tenant("Temporal decimal mover");
+        UUID identityId = activeIdentity();
+        UUID decimalEntitlement = ids.nextId();
+        UUID dateEntitlement = ids.nextId();
+        UUID dateTimeEntitlement = ids.nextId();
+        UUID decimalRule = ids.nextId();
+        UUID dateRule = ids.nextId();
+        UUID dateTimeRule = ids.nextId();
+
+        BigDecimal expectedDecimal = new BigDecimal("1250.5000");
+        LocalDate expectedDate = LocalDate.parse("2026-10-15");
+        Instant expectedDateTime = Instant.parse("2026-10-15T09:30:00.123456Z");
+
+        identityPolicy.setScalar(
+                identityId, "costLimit", IdentityLifecycleAccessQuery.ScalarType.DECIMAL,
+                new BigDecimal("1250.50"), 1);
+        identityPolicy.setScalar(
+                identityId, "startDate", IdentityLifecycleAccessQuery.ScalarType.DATE,
+                expectedDate, 1);
+        identityPolicy.setScalar(
+                identityId, "cutoverAt", IdentityLifecycleAccessQuery.ScalarType.DATETIME,
+                expectedDateTime, 1);
+
+        policyService.activate(
+                tenant,
+                java.util.List.of(
+                        typedEntitlement(
+                                decimalRule,
+                                LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DECIMAL_EQUALS,
+                                "costLimit", null, null, null, expectedDecimal, null, null, null,
+                                decimalEntitlement),
+                        typedEntitlement(
+                                dateRule,
+                                LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DATE_EQUALS,
+                                "startDate", null, null, null, null, expectedDate, null, null,
+                                dateEntitlement),
+                        typedEntitlement(
+                                dateTimeRule,
+                                LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DATETIME_EQUALS,
+                                "cutoverAt", null, null, null, null, null, expectedDateTime, null,
+                                dateTimeEntitlement)),
+                NOW.plusSeconds(1));
+
+        LifecycleAccessPolicyVersion persisted = policies.findActive(tenant).orElseThrow();
+        assertThat(persisted.rules()).hasSize(3);
+        assertThat(persisted.rules().stream()
+                        .filter(rule -> rule.ruleId().equals(decimalRule))
+                        .findFirst().orElseThrow().expectedDecimal())
+                .isEqualByComparingTo("1250.5");
+        assertThat(persisted.rules().stream()
+                        .filter(rule -> rule.ruleId().equals(dateRule))
+                        .findFirst().orElseThrow().expectedDate())
+                .isEqualTo(expectedDate);
+        assertThat(persisted.rules().stream()
+                        .filter(rule -> rule.ruleId().equals(dateTimeRule))
+                        .findFirst().orElseThrow().expectedDateTime())
+                .isEqualTo(expectedDateTime);
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isEqualTo(3);
+
+        identityPolicy.setScalar(
+                identityId, "costLimit", IdentityLifecycleAccessQuery.ScalarType.DECIMAL,
+                new BigDecimal("1250.500"), 2);
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isEqualTo(3);
+
+        identityPolicy.setScalar(
+                identityId, "costLimit", IdentityLifecycleAccessQuery.ScalarType.DECIMAL,
+                new BigDecimal("1251"), 3);
+        identityPolicy.setScalar(
+                identityId, "startDate", IdentityLifecycleAccessQuery.ScalarType.DATE,
+                expectedDate.plusDays(1), 2);
+        identityPolicy.setScalar(
+                identityId, "cutoverAt", IdentityLifecycleAccessQuery.ScalarType.DATETIME,
+                expectedDateTime.plusSeconds(1), 2);
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(4));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isZero();
+    }
+
+    @Test
+    void temporalAndDecimalPredicatePrecisionGuardsFailClosed() {
+        UUID entitlementId = ids.nextId();
+        UUID ruleId = ids.nextId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                typedEntitlement(
+                        ruleId,
+                        LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DECIMAL_EQUALS,
+                        "costLimit", null, null, null,
+                        new BigDecimal("0.1234567890123"), null, null, null,
+                        entitlementId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("numeric(38,12)");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                typedEntitlement(
+                        ruleId,
+                        LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DATETIME_EQUALS,
+                        "cutoverAt", null, null, null, null, null,
+                        Instant.parse("2026-10-15T09:30:00.123456789Z"), null,
+                        entitlementId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("microsecond precision");
     }
 
     @Test
@@ -407,6 +518,9 @@ class LifecycleAccessReconciliationIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 entitlementId);
     }
@@ -421,6 +535,9 @@ class LifecycleAccessReconciliationIntegrationTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 entitlementId);
     }
@@ -432,10 +549,14 @@ class LifecycleAccessReconciliationIntegrationTest {
             String stringValue,
             Boolean booleanValue,
             Long integerValue,
+            BigDecimal decimalValue,
+            LocalDate dateValue,
+            Instant dateTimeValue,
             String enumValue,
             UUID entitlementId) {
         return new LifecycleAccessPolicyVersion.Rule(
-                ruleId, kind, key, stringValue, booleanValue, integerValue, enumValue,
+                ruleId, kind, key, stringValue, booleanValue, integerValue,
+                decimalValue, dateValue, dateTimeValue, enumValue,
                 AccessAssignment.TargetKind.ENTITLEMENT, entitlementId);
     }
 
