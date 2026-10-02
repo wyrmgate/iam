@@ -2,7 +2,7 @@
 
 ## Scope
 
-The implemented public Audit control-plane exposes immutable `AuditRecord` evidence under ADR-0031 plus the first durable ADR-0034 export runtime. Audit remains evidence rather than business authority, an event store, or an observability log. Immutable archive-segment and retention-policy runtime remain deferred.
+The implemented public Audit control-plane exposes immutable `AuditRecord` evidence under ADR-0031 plus the durable ADR-0034 export runtime. Audit remains evidence rather than business authority, an event store, or an observability log. The internal immutable archive-segment and retention-policy foundation is implemented, but it intentionally adds no arbitrary public archive/retention CRUD surface.
 
 Base path: `/api/v1`.
 
@@ -79,11 +79,10 @@ Workers page the frozen membership in deterministic `occurredAt ASC, id ASC` ord
 
 The first concrete adapter is a deployment-configured filesystem path and is disabled by default. The path must itself provide the durability/shared-storage properties required by its deployment; an ephemeral instance filesystem is not production HA/DR evidence. Public representations never expose the internal artifact reference. Download is re-authorized at request time and uses `Cache-Control: no-store`.
 
-The immutable archive-segment mechanism defined by ADR-0034 is not yet implemented. Public AuditRecord read/search remains online-store backed. Destructive purge remains fail-closed pending a separate legal-hold/purge decision.
+The immutable archive-segment mechanism defined by ADR-0034 is implemented as an internal Audit-owned durable process. Segment membership is frozen by tenant, `[occurredFrom, occurredUntil)` and `snapshotRecordedAt`; generation is deterministic and bounded, and the stored artifact is re-opened to verify record count, byte count and SHA-256 before success is committed. Immutable retention-policy versions provide the configured export lifetime/archive eligibility/minimum-retention inputs. No public archive/retention CRUD surface is introduced in this tranche. Public AuditRecord read/search remains online-store backed, and destructive purge remains fail-closed pending a separate legal-hold/purge decision.
 
 ## Deferred
 
-- archive-segment runtime and versioned retention-policy runtime;
 - destructive AuditRecord purge/legal-hold semantics;
 - transparent archived-record query after any future online removal;
 - EvidenceSnapshot;
