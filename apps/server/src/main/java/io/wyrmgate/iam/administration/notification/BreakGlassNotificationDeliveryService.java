@@ -152,14 +152,17 @@ public final class BreakGlassNotificationDeliveryService {
 
         try {
             publisher.publish(notification);
-            breakGlass.completeNotificationObligation(item.tenant(), obligationId, clock.instant());
-            scheduledWork.markCompleted(item.tenant(), work.id(), leaseOwner, clock.instant());
-            return DeliveryOutcome.COMPLETED;
         } catch (AdministrativeBreakGlassNotificationDeliveryException failure) {
             return handleFailure(item, obligationId, failure.retryable(), failure.errorCode());
         } catch (RuntimeException failure) {
             return handleFailure(item, obligationId, true, UNKNOWN_FAILURE);
         }
+
+        // Persistence/lease failures are not transport failures. Leave the technical lease to expire
+        // so a replay can converge from the current Administration obligation state.
+        breakGlass.completeNotificationObligation(item.tenant(), obligationId, clock.instant());
+        scheduledWork.markCompleted(item.tenant(), work.id(), leaseOwner, clock.instant());
+        return DeliveryOutcome.COMPLETED;
     }
 
     private DeliveryOutcome handleFailure(
