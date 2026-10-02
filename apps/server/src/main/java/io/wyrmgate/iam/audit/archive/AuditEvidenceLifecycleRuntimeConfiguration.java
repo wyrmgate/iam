@@ -6,6 +6,7 @@ import io.wyrmgate.iam.audit.application.AuditEvidenceLifecycleService;
 import io.wyrmgate.iam.audit.application.AuditExportArtifactStore;
 import io.wyrmgate.iam.audit.application.AuditRetentionPolicyRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
+import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Duration;
@@ -24,6 +25,7 @@ class AuditEvidenceLifecycleRuntimeConfiguration {
             AuditArchiveRepository archives,
             AuditRetentionPolicyRepository policies,
             AuditExportArtifactStore artifactStore,
+            JdbcIdempotencyRepository idempotency,
             JdbcScheduledWorkRepository scheduledWork,
             TransactionExecutor transactions,
             IdGenerator ids,
@@ -37,6 +39,7 @@ class AuditEvidenceLifecycleRuntimeConfiguration {
                 archives,
                 policies,
                 artifactStore,
+                idempotency,
                 scheduledWork,
                 transactions,
                 ids,
