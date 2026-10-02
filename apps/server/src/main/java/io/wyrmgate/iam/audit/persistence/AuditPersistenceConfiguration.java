@@ -28,6 +28,11 @@ public class AuditPersistenceConfiguration {
     }
 
     @Bean
+    JdbcAuditArchiveRepository auditArchiveRepository(JdbcTemplate jdbc) {
+        return new JdbcAuditArchiveRepository(jdbc);
+    }
+
+    @Bean
     SecurityAuditPort securityAuditPort(
             AuditRecordRepository repository,
             TransactionExecutor transactions) {
