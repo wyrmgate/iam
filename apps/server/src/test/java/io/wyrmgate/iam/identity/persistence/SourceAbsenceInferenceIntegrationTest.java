@@ -97,7 +97,7 @@ class SourceAbsenceInferenceIntegrationTest {
                 transactions,
                 new ObjectMapper());
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("54");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("56");
     }
 
     @AfterAll
