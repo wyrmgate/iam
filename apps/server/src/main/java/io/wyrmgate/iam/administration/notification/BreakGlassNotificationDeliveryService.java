@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.DoubleSupplier;
 
 /** Durable at-least-once SECURITY_NOTIFICATION delivery outside break-glass activation transactions. */
 public final class BreakGlassNotificationDeliveryService {
@@ -20,12 +21,13 @@ public final class BreakGlassNotificationDeliveryService {
     private final AdministrativeBreakGlassNotificationPublisher publisher;
     private final BreakGlassNotificationProperties properties;
     private final Clock clock;
+    private final DoubleSupplier jitter;
 
     public BreakGlassNotificationDeliveryService(
             AdministrativeBreakGlassNotificationRepository repository,
             AdministrativeBreakGlassNotificationPublisher publisher,
             BreakGlassNotificationProperties properties) {
-        this(repository, publisher, properties, Clock.systemUTC());
+        this(repository, publisher, properties, Clock.systemUTC(), Math::random);
     }
 
     BreakGlassNotificationDeliveryService(
@@ -33,10 +35,20 @@ public final class BreakGlassNotificationDeliveryService {
             AdministrativeBreakGlassNotificationPublisher publisher,
             BreakGlassNotificationProperties properties,
             Clock clock) {
+        this(repository, publisher, properties, clock, Math::random);
+    }
+
+    BreakGlassNotificationDeliveryService(
+            AdministrativeBreakGlassNotificationRepository repository,
+            AdministrativeBreakGlassNotificationPublisher publisher,
+            BreakGlassNotificationProperties properties,
+            Clock clock,
+            DoubleSupplier jitter) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.publisher = Objects.requireNonNull(publisher, "publisher");
         this.properties = Objects.requireNonNull(properties, "properties");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.jitter = Objects.requireNonNull(jitter, "jitter");
     }
 
     public DeliveryBatchResult deliverAvailable() {
@@ -106,7 +118,13 @@ public final class BreakGlassNotificationDeliveryService {
         for (int index = 1; index < attemptCount && delay < max; index++) {
             delay = delay > max / 2 ? max : delay * 2;
         }
-        return Duration.ofMillis(Math.min(delay, max));
+        double random = jitter.getAsDouble();
+        if (Double.isNaN(random) || random < 0.0 || random >= 1.0) {
+            random = 0.5;
+        }
+        double factor = 0.5 + random;
+        long jittered = Math.max(1L, Math.round(delay * factor));
+        return Duration.ofMillis(Math.min(max, jittered));
     }
 
     public record DeliveryBatchResult(
