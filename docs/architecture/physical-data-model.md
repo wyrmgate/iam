@@ -445,6 +445,8 @@ audit.audit_record
 
 Audit rows are append-only. V46 implements `audit.audit_record` with normalized `SUCCESS`/`DENIED`/`FAILURE` outcomes, stable replay identity and bounded indexes for time/actor/resource/correlation queries. `material_snapshot` and `integrity_metadata` remain nullable and unused until their later governed contracts are implemented. Material snapshots are used only where needed to preserve historical explainability after rename/retirement; they are data-minimized and secret-filtered.
 
+ADR-0034 defines the next Audit persistence direction without yet selecting concrete table DDL. `AuditExportOperation` is Audit-owned durable process state with immutable tenant/request/filter/time-window/schema/snapshot-cutoff context, bounded continuation, process state, causal idempotency identity, and final external-artifact metadata (opaque reference, content type/schema version, byte size, record count, SHA-256, completion/expiry timestamps). Large artifact bytes remain outside the relational authoritative store behind a typed adapter. `AuditArchiveSegment` is append-oriented immutable metadata for a verified external archive artifact created from a frozen AuditRecord range. Archive generation does not update/delete source `audit_record` rows in this tranche. Any later destructive purge requires a separate accepted legal-hold/purge design; the existing AuditRecord update/delete rejection remains authoritative until then.
+
 ## 7. Dynamic/custom attribute physical model
 
 Dynamic canonical attributes are governed typed state, not a universal EAV/JSON replacement for IAM semantics.
@@ -788,7 +790,7 @@ Exact durations are policy/deployment configuration; semantic treatment is fixed
 | Data | Treatment |
 | --- | --- |
 | Authoritative business/process state | retain while active plus policy-defined history; represent business deletion with terminal state; purge only when references/evidence/legal policy permit |
-| Governance/audit evidence | long-lived append-only; may archive to cheaper immutable/searchable storage; purge only by explicit retention/legal policy |
+| Governance/audit evidence | long-lived append-only; ADR-0034 permits immutable verified archive copies without deleting online AuditRecord rows; destructive purge remains fail-closed until explicit legal-hold/purge semantics are accepted |
 | Current source/provider observation | retain current truth plus provenance; bounded historical observation may archive/purge separately |
 | Provisioning attempt evidence | retain for security/operational evidence horizon; archive before purge where required |
 | Raw/native payload | shortest practical retention, size-bounded, encrypted as required and aggressively secret-filtered |
@@ -917,7 +919,7 @@ Persistence implementation should now proceed in bounded vertical slices rather 
 7. validate indexes against high-cardinality query plans/performance tests;
 8. introduce partitioning only when the documented operational thresholds are observed.
 
-OD-003 (concrete OpenAPI/AsyncAPI schemas) is partially implemented across the current public control-plane surfaces, including Administration and bounded Audit read/search. Remaining OD-003 work is limited to explicitly deferred public/JML/policy extensions, Audit export/download and other deferred interfaces; public contracts remain semantic and must not expose these tables as APIs.
+OD-003 (concrete OpenAPI/AsyncAPI schemas) is partially implemented across the current public control-plane surfaces, including Administration and bounded Audit read/search. ADR-0034 now resolves the architecture direction for durable Audit export/download and immutable archive segments; the runtime/machine-readable export surface and other explicitly deferred public/JML/policy interfaces remain to be implemented. Public contracts remain semantic and must not expose these tables as APIs.
 
 ### Source absence inference persistence
 
