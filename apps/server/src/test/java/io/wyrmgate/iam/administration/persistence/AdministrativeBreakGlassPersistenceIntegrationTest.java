@@ -13,6 +13,7 @@ import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeAct
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapService;
 import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.domain.AdministrativeAuthoritySource;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReviewOutcome;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceContext;
@@ -76,7 +77,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("50");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("51");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
@@ -397,6 +398,86 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
                         null,
                         now.plusSeconds(6)))
                 .isInstanceOf(io.wyrmgate.iam.platform.persistence.StaleWriteException.class);
+    }
+
+    @Test
+    void postUseReviewRequiresEndedAuthorityAndIndependentReviewer() {
+        Instant now = Instant.parse("2026-10-01T14:00:00Z");
+        TenantContext tenant = tenant("Break glass review");
+        EmergencyActor emergency = emergencyActor(tenant, now);
+        var targetRole = authority.createRole(
+                emergency.rootActor(),
+                "review-reader",
+                "Review Reader",
+                Set.of(AdministrativePermissions.IDENTITY_READ),
+                now.plusSeconds(2));
+        var service = service(
+                (t, actorId, role, scope, validUntil, at) ->
+                        AdministrativeBreakGlassPolicy.Decision.allow(
+                                Duration.ofMinutes(10), Duration.ofMinutes(5)),
+                realAudit(now));
+        var strongActor = emergency.actor().withAssurance(
+                AuthenticationAssuranceContext.strong(now, now.plusSeconds(1)));
+
+        var operation = service.activate(
+                strongActor,
+                targetRole.id(),
+                AdministrativeScope.global(),
+                now.plusSeconds(60),
+                "Emergency",
+                "INC-REVIEW",
+                ids.nextId(),
+                null,
+                now.plusSeconds(3));
+
+        assertThatThrownBy(() -> service.completeReview(
+                        emergency.rootActor(),
+                        operation.id(),
+                        operation.revision(),
+                        AdministrativeBreakGlassReviewOutcome.APPROVED_USE,
+                        "Reviewed while still active",
+                        ids.nextId(),
+                        null,
+                        now.plusSeconds(30)))
+                .isInstanceOf(AdministrativeAuthorityException.class)
+                .extracting(e -> ((AdministrativeAuthorityException) e).code())
+                .isEqualTo("break_glass_review_not_actionable");
+
+        assertThatThrownBy(() -> service.completeReview(
+                        strongActor,
+                        operation.id(),
+                        operation.revision(),
+                        AdministrativeBreakGlassReviewOutcome.APPROVED_USE,
+                        "Self review",
+                        ids.nextId(),
+                        null,
+                        now.plusSeconds(61)))
+                .isInstanceOf(AdministrativeAuthorityException.class)
+                .extracting(e -> ((AdministrativeAuthorityException) e).code())
+                .isEqualTo("break_glass_self_review_denied");
+
+        var review = service.completeReview(
+                emergency.rootActor(),
+                operation.id(),
+                operation.revision(),
+                AdministrativeBreakGlassReviewOutcome.POLICY_CONCERN,
+                "Emergency use was valid but policy follow-up is required.",
+                ids.nextId(),
+                null,
+                now.plusSeconds(61));
+
+        assertThat(review.breakGlassOperationId()).isEqualTo(operation.id());
+        assertThat(review.reviewerIdentityId()).isEqualTo(emergency.rootActor().identityId());
+        assertThat(review.outcome()).isEqualTo(AdministrativeBreakGlassReviewOutcome.POLICY_CONCERN);
+        assertThat(breakGlassRepository.listObligations(tenant, operation.id()))
+                .filteredOn(o -> o.type().name().equals("POST_USE_REVIEW"))
+                .singleElement()
+                .satisfies(o -> {
+                    assertThat(o.state().name()).isEqualTo("COMPLETED");
+                    assertThat(o.completedAt()).isEqualTo(now.plusSeconds(61));
+                });
+        assertThat(breakGlassRepository.find(tenant, operation.id()).orElseThrow().revision())
+                .isEqualTo(operation.revision() + 1);
     }
 
     private static AdministrativeBreakGlassService service(

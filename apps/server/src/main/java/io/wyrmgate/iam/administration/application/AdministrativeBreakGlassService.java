@@ -1,6 +1,9 @@
 package io.wyrmgate.iam.administration.application;
 
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassOperation;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReview;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReviewOutcome;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassState;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.AdministrativeRole;
 import io.wyrmgate.iam.administration.domain.AdministrativeScope;
@@ -258,6 +261,92 @@ public final class AdministrativeBreakGlassService {
                     now);
             throw failure;
         }
+    }
+
+    public AdministrativeBreakGlassReview completeReview(
+            AuthenticatedAdministrativeActor actor,
+            UUID operationId,
+            long expectedRevision,
+            AdministrativeBreakGlassReviewOutcome outcome,
+            String summary,
+            UUID correlationId,
+            UUID causationId,
+            Instant now) {
+        Objects.requireNonNull(actor, "actor");
+        Objects.requireNonNull(operationId, "operationId");
+        Objects.requireNonNull(outcome, "outcome");
+        Objects.requireNonNull(now, "now");
+        String normalizedSummary = bounded(summary, "summary", 2048);
+        try {
+            requireManagement(actor, now);
+            AdministrativeBreakGlassOperation operation = repository.find(actor.tenant(), operationId)
+                    .orElseThrow(() -> failure(
+                            "administrative_break_glass_not_found",
+                            "Break-glass operation does not exist."));
+            if (operation.actorIdentityId().equals(actor.identityId())) {
+                throw failure(
+                        "break_glass_self_review_denied",
+                        "The break-glass actor may not complete their own post-use review.");
+            }
+            if (operation.state() == AdministrativeBreakGlassState.ACTIVE
+                    && now.isBefore(operation.validUntil())) {
+                throw failure(
+                        "break_glass_review_not_actionable",
+                        "Post-use review cannot complete while emergency authority is still effective.");
+            }
+            AdministrativeBreakGlassReview review = transactions.required(() ->
+                    repository.completeReview(
+                            actor.tenant(),
+                            ids.nextId(),
+                            operationId,
+                            actor.identityId(),
+                            expectedRevision,
+                            outcome,
+                            normalizedSummary,
+                            correlationId,
+                            causationId,
+                            now));
+            auditSafely(
+                    actor,
+                    "administration.break-glass.complete-review",
+                    review.id(),
+                    AdministrativeBreakGlassAuditSink.Outcome.SUCCESS,
+                    correlationId,
+                    causationId,
+                    now);
+            return review;
+        } catch (AdministrativeAuthorityException | IllegalArgumentException denied) {
+            auditSafely(
+                    actor,
+                    "administration.break-glass.complete-review",
+                    operationId,
+                    AdministrativeBreakGlassAuditSink.Outcome.DENIED,
+                    correlationId,
+                    causationId,
+                    now);
+            throw denied;
+        } catch (RuntimeException failure) {
+            auditSafely(
+                    actor,
+                    "administration.break-glass.complete-review",
+                    operationId,
+                    AdministrativeBreakGlassAuditSink.Outcome.FAILURE,
+                    correlationId,
+                    causationId,
+                    now);
+            throw failure;
+        }
+    }
+
+    public AdministrativeBreakGlassReview getReview(
+            AuthenticatedAdministrativeActor actor,
+            UUID operationId,
+            Instant now) {
+        requireManagement(actor, now);
+        return repository.findReview(actor.tenant(), operationId)
+                .orElseThrow(() -> failure(
+                        "administrative_break_glass_review_not_found",
+                        "Break-glass post-use review does not exist."));
     }
 
     public AdministrativeBreakGlassOperation get(

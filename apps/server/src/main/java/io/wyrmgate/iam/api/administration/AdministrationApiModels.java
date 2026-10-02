@@ -33,6 +33,12 @@ final class AdministrationApiModels {
             Instant validFrom, Instant validUntil, String state, String incidentReference,
             long revision, Instant createdAt, Instant updatedAt) {}
 
+    record AdministrativeBreakGlassReviewResource(
+            UUID id, UUID breakGlassOperationId, UUID reviewerIdentityId,
+            String outcome, String summary, Instant reviewedAt,
+            UUID correlationId, UUID causationId, Instant createdAt) {}
+
+
     record RolePage(List<AdministrativeRoleResource> items, String nextCursor) {}
     record GrantPage(List<AdministrativeGrantResource> items, String nextCursor) {}
     record DelegationPage(List<AdministrativeDelegationResource> items, String nextCursor) {}

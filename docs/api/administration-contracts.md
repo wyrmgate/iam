@@ -50,7 +50,7 @@ The public resource deliberately excludes reason text, provider-native authentic
 
 Notification and post-use-review obligations remain durable Administration process evidence and never affect authority validity.
 
-ADR-0033 fixes the completion contract. SECURITY_NOTIFICATION is delivered through one deployment-configured signed HTTPS security-notification adapter with a closed data-minimized payload; retry/terminal failure is durable technical process state and cannot rewrite activation. POST_USE_REVIEW becomes completable only after revocation or semantic expiry. The public API will add the explicit semantic operation `POST /api/v1/administrative-break-glass-operations/{id}:complete-review`, requiring causal idempotency, revision protection, current `administration:manage-authorization`, and reviewer != break-glass actor. Arbitrary obligation-state PATCH remains prohibited.
+ADR-0033 fixes the completion contract. POST_USE_REVIEW is implemented as immutable Administration-owned evidence and becomes completable only after revocation or semantic expiry. The public API exposes the explicit semantic operation `POST /api/v1/administrative-break-glass-operations/{id}:complete-review`, requiring causal idempotency, a strong current revision ETag, current `administration:manage-authorization`, reviewer != break-glass actor, a typed outcome and bounded review summary. Completion atomically appends review evidence, completes the POST_USE_REVIEW obligation and advances the break-glass process revision; arbitrary obligation-state PATCH remains prohibited. SECURITY_NOTIFICATION concrete signed-HTTPS delivery remains the deferred ADR-0033 runtime slice.
 
 ## Audit
 

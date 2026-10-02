@@ -23,8 +23,8 @@ public record AdministrativeBreakGlassObligation(
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
         if (revision <= 0) throw new IllegalArgumentException("revision must be positive");
-        if (state == AdministrativeBreakGlassObligationState.PENDING && completedAt != null) {
-            throw new IllegalArgumentException("PENDING obligation must not be completed");
+        if (state != AdministrativeBreakGlassObligationState.COMPLETED && completedAt != null) {
+            throw new IllegalArgumentException("only COMPLETED obligation may have completedAt");
         }
         if (state == AdministrativeBreakGlassObligationState.COMPLETED && completedAt == null) {
             throw new IllegalArgumentException("COMPLETED obligation requires completedAt");

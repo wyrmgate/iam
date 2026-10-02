@@ -2,5 +2,6 @@ package io.wyrmgate.iam.administration.domain;
 
 public enum AdministrativeBreakGlassObligationState {
     PENDING,
-    COMPLETED
+    COMPLETED,
+    MANUAL_REQUIRED
 }
