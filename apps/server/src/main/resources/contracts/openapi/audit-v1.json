@@ -2,8 +2,8 @@
   "openapi": "3.1.2",
   "info": {
     "title": "Wyrmgate IAM Audit API",
-    "version": "0.2.0",
-    "description": "Bounded tenant-scoped AuditRecord read/search plus durable ADR-0034 Audit export operations."
+    "version": "0.3.0",
+    "description": "Bounded tenant-scoped AuditRecord read/search, durable export/archive-aware evidence reads, EvidenceSnapshot reads, and governed legal-hold/purge operations."
   },
   "servers": [
     {
@@ -240,6 +240,376 @@
           }
         }
       }
+    },
+    "/evidence-snapshots": {
+      "get": {
+        "operationId": "listEvidenceSnapshots",
+        "summary": "Search immutable EvidenceSnapshots",
+        "x-wyrmgate-administrative-permission": "evidence-snapshot:read",
+        "parameters": [
+          {
+            "name": "snapshotType",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          {
+            "name": "subjectResourceType",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "subjectResourceId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "correlationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded EvidenceSnapshot page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceSnapshotPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/evidence-snapshots/{evidenceSnapshotId}": {
+      "get": {
+        "operationId": "getEvidenceSnapshot",
+        "summary": "Read one immutable EvidenceSnapshot",
+        "x-wyrmgate-administrative-permission": "evidence-snapshot:read",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/EvidenceSnapshotId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EvidenceSnapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceSnapshot"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/audit-evidence-lifecycle/legal-holds": {
+      "post": {
+        "operationId": "createAuditLegalHold",
+        "summary": "Create an Audit legal hold",
+        "x-wyrmgate-administrative-permission": "audit:hold",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditLegalHoldCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Legal hold created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLegalHold"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/audit-evidence-lifecycle/legal-holds/{holdId}": {
+      "get": {
+        "operationId": "getAuditLegalHold",
+        "summary": "Read one Audit legal hold",
+        "x-wyrmgate-administrative-permission": "audit:hold",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuditLegalHoldId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Legal hold",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLegalHold"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/audit-evidence-lifecycle/legal-holds/{holdId}:release": {
+      "post": {
+        "operationId": "releaseAuditLegalHold",
+        "summary": "Release an active Audit legal hold",
+        "x-wyrmgate-administrative-permission": "audit:hold",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuditLegalHoldId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Released legal hold",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLegalHold"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/audit-evidence-lifecycle/purges": {
+      "post": {
+        "operationId": "createAuditPurge",
+        "summary": "Request a governed destructive Audit purge",
+        "x-wyrmgate-administrative-permission": "audit:purge",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditPurgeCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Purge request accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPurgeOperation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/audit-evidence-lifecycle/purges/{purgeId}": {
+      "get": {
+        "operationId": "getAuditPurge",
+        "summary": "Read one Audit purge operation",
+        "x-wyrmgate-administrative-permission": "audit:purge",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuditPurgeId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purge operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPurgeOperation"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/audit-evidence-lifecycle/purges/{purgeId}:approve": {
+      "post": {
+        "operationId": "approveAuditPurge",
+        "summary": "Approve a purge requested by a different governed Identity",
+        "x-wyrmgate-administrative-permission": "audit:purge",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuditPurgeId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Purge approved for asynchronous execution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPurgeOperation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -366,6 +736,43 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 255
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "Current optimistic revision ETag, for example \"rev-2\".",
+        "schema": {
+          "type": "string",
+          "pattern": "^\"rev-[1-9][0-9]*\"$"
+        }
+      },
+      "EvidenceSnapshotId": {
+        "name": "evidenceSnapshotId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "AuditLegalHoldId": {
+        "name": "holdId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "AuditPurgeId": {
+        "name": "purgeId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
         }
       }
     },
@@ -509,6 +916,12 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "materialSnapshot": {
+            "$ref": "#/components/schemas/AuditMaterialSnapshot"
+          },
+          "integrityMetadata": {
+            "$ref": "#/components/schemas/AuditIntegrityMetadata"
           }
         }
       },
@@ -795,6 +1208,532 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "AuditMaterialSnapshot": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "audit-material-v1"
+          },
+          "actorDisplayLabel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          },
+          "resourceDisplayLabel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          },
+          "resourceRevision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1
+          },
+          "resourceState": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          }
+        }
+      },
+      "AuditIntegrityMetadata": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "algorithm",
+          "contentSha256"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "audit-integrity-v1"
+          },
+          "algorithm": {
+            "type": "string",
+            "const": "SHA-256"
+          },
+          "contentSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "materialSnapshotSha256": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "AuditSelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "occurredFrom",
+          "occurredUntil"
+        ],
+        "properties": {
+          "occurredFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "occurredUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actorId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "actionType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "resourceType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "resourceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "SUCCESS",
+              "DENIED",
+              "FAILURE",
+              null
+            ]
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "AuditLegalHoldCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "selection",
+          "reasonCode",
+          "caseReference"
+        ],
+        "properties": {
+          "selection": {
+            "$ref": "#/components/schemas/AuditSelection"
+          },
+          "reasonCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "caseReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "AuditLegalHold": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "selection",
+          "reasonCode",
+          "caseReference",
+          "state",
+          "createdByIdentityId",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/AuditSelection"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "caseReference": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "RELEASED"
+            ]
+          },
+          "createdByIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "releasedByIdentityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "causationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "releasedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuditPurgeCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "archiveSegmentId",
+          "selection",
+          "reasonCode"
+        ],
+        "properties": {
+          "archiveSegmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/AuditSelection"
+          },
+          "reasonCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "AuditPurgeOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "retentionPolicyVersionId",
+          "archiveSegmentId",
+          "requestedByIdentityId",
+          "selection",
+          "snapshotRecordedAt",
+          "reasonCode",
+          "state",
+          "deletedRecordCount",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "retentionPolicyVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "archiveSegmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestedByIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approvedByIdentityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/AuditSelection"
+          },
+          "snapshotRecordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "REQUESTED",
+              "APPROVED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED",
+              "BLOCKED"
+            ]
+          },
+          "deletedRecordCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "failureCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "causationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "approvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EvidenceReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "resourceType",
+          "resourceId"
+        ],
+        "properties": {
+          "resourceType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1
+          },
+          "displayLabel": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 256
+          }
+        }
+      },
+      "EvidenceSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "occurredAt",
+          "recordedAt",
+          "snapshotType",
+          "subject",
+          "decisionLabel"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actorId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "snapshotType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "subject": {
+            "$ref": "#/components/schemas/EvidenceReference"
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "related": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decisionLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "causationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "EvidenceSnapshotPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSnapshot"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }
