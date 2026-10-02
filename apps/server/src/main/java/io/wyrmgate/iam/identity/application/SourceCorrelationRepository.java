@@ -155,6 +155,25 @@ public interface SourceCorrelationRepository {
             UUID identityId,
             long currentIdentityRevision);
 
+    void recordSourceSuspensionTransitionEvidence(
+            TenantContext tenant,
+            UUID evidenceId,
+            UUID sourceSystemId,
+            UUID sourceRecordId,
+            UUID identityLinkId,
+            UUID identityId,
+            UUID lifecyclePolicyVersionId,
+            long preIdentityRevision,
+            long postIdentityRevision,
+            Instant suspendedAt);
+
+    boolean hasCurrentSourceSuspensionTransitionEvidence(
+            TenantContext tenant,
+            UUID sourceRecordId,
+            UUID identityLinkId,
+            UUID identityId,
+            long currentIdentityRevision);
+
     record LinkReplacement(IdentityLink link, boolean changed, UUID previousIdentityId) {
     }
 }

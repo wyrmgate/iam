@@ -112,11 +112,21 @@ public final class SourceLifecyclePolicyService {
                             link.get().id(),
                             current.id(),
                             current.revision());
-            if (!shouldApply(current.lifecycleState(), target) && !inferredAbsenceRestoration) {
+            boolean sourceSuspensionRestoration = target == IdentityLifecycleState.ACTIVE
+                    && current.lifecycleState() == IdentityLifecycleState.SUSPENDED
+                    && sources.hasCurrentSourceSuspensionTransitionEvidence(
+                            tenant,
+                            record.id(),
+                            link.get().id(),
+                            current.id(),
+                            current.revision());
+            if (!shouldApply(current.lifecycleState(), target)
+                    && !inferredAbsenceRestoration
+                    && !sourceSuspensionRestoration) {
                 return null;
             }
             Instant transitionTime = now.isBefore(current.updatedAt()) ? current.updatedAt() : now;
-            commands.changeLifecycle(
+            Identity updated = commands.changeLifecycle(
                     tenant,
                     current.id(),
                     target,
@@ -124,6 +134,20 @@ public final class SourceLifecyclePolicyService {
                     transitionTime,
                     correlationId,
                     causationId);
+            if (target == IdentityLifecycleState.SUSPENDED
+                    && current.lifecycleState() == IdentityLifecycleState.ACTIVE) {
+                sources.recordSourceSuspensionTransitionEvidence(
+                        tenant,
+                        ids.nextId(),
+                        record.sourceSystemId(),
+                        record.id(),
+                        link.get().id(),
+                        current.id(),
+                        policy.id(),
+                        current.revision(),
+                        updated.revision(),
+                        transitionTime);
+            }
             return null;
         });
     }

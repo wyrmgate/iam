@@ -45,5 +45,6 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0035 Audit legal hold, destructive purge and archived query continuity](0035-audit-legal-hold-purge-archived-query.md)
 - [ADR-0036 Audit EvidenceSnapshot, material display snapshot and integrity metadata](0036-audit-evidence-snapshot-material-integrity.md)
 - [ADR-0037 Audit SIEM delivery boundary](0037-audit-siem-delivery.md)
+- [ADR-0038 Provenance-fenced source suspension restoration](0038-provenance-fenced-source-suspension-restoration.md)
 
-Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.7, which carries forward v0.6 and folds ADR-0033 through ADR-0037 plus the completed Audit and break-glass implementation evidence into the formal specification set. A later accepted ADR may amend that baseline between controlled document revisions and must be folded into the next formal revision.
+Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.7, which carries forward v0.6 and folds ADR-0033 through ADR-0037 plus the completed Audit and break-glass implementation evidence into the formal specification set. ADR-0038 is a newer accepted repository amendment for provenance-fenced source suspension restoration and must be folded into the next meaningful controlled formal revision. A later accepted ADR may likewise amend that baseline between controlled document revisions.

@@ -83,7 +83,7 @@ class SourceLifecyclePolicyIntegrationTest {
                 ids,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("56");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("57");
     }
 
     @AfterAll
@@ -191,37 +191,208 @@ class SourceLifecyclePolicyIntegrationTest {
     }
 
     @Test
-    void mappedActiveDoesNotReactivateSuspendedOrInactiveIdentity() {
+    void sourceCausedSuspensionRecordsEvidenceAndRestoresExactCurrentRevision() {
         Instant now = Instant.now();
-        TenantContext tenant = tenant("No Reactivation", now);
+        TenantContext tenant = tenant("Source suspension restoration", now);
         SourceSystem source = source(tenant, "hr", now);
         policies.activate(
                 tenant,
                 source.id(),
                 "$.employmentStatus",
-                Map.of("ACTIVE", IdentityLifecycleState.ACTIVE),
+                Map.of(
+                        "ACTIVE", IdentityLifecycleState.ACTIVE,
+                        "SUSPENDED", IdentityLifecycleState.SUSPENDED),
                 now.plusSeconds(1));
 
-        Identity suspended = identity(
-                tenant, "Suspended", IdentityLifecycleState.SUSPENDED, now.plusSeconds(2));
-        SourceRecord suspendedRecord = linkedRecord(
-                tenant, source, suspended, "employee-3",
+        Identity identity = identity(
+                tenant, "Source Suspended", IdentityLifecycleState.ACTIVE, now.plusSeconds(2));
+        SourceRecord record = linkedRecord(
+                tenant, source, identity, "employee-3",
+                "{\"employmentStatus\":\"SUSPENDED\"}", now.plusSeconds(3));
+
+        policies.applyCurrentObservation(
+                tenant, record.id(), now.plusSeconds(4), ids.nextId(), ids.nextId());
+
+        Identity suspended = identityRepository.findById(tenant, identity.id()).orElseThrow();
+        assertThat(suspended.lifecycleState()).isEqualTo(IdentityLifecycleState.SUSPENDED);
+        Long evidenceAfterSuspend = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM identity.source_suspension_transition_evidence
+                WHERE tenant_id = ? AND source_record_id = ? AND identity_id = ?
+                  AND post_identity_revision = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                record.id(),
+                identity.id(),
+                suspended.revision());
+        assertThat(evidenceAfterSuspend).isEqualTo(1L);
+
+        SourceImportRun returning = sources.startImport(tenant, source.id(), now.plusSeconds(5));
+        SourceRecord activeObservation = sources.observe(
+                tenant,
+                returning.id(),
+                "employee-3",
+                "{\"employmentStatus\":\"ACTIVE\"}",
+                now.plusSeconds(6),
+                now.plusSeconds(6),
+                ids.nextId(),
+                null);
+        policies.applyCurrentObservation(
+                tenant, activeObservation.id(), now.plusSeconds(7), ids.nextId(), ids.nextId());
+
+        Identity restored = identityRepository.findById(tenant, identity.id()).orElseThrow();
+        assertThat(restored.lifecycleState()).isEqualTo(IdentityLifecycleState.ACTIVE);
+        assertThat(restored.revision()).isEqualTo(suspended.revision() + 1);
+
+        policies.applyCurrentObservation(
+                tenant, activeObservation.id(), now.plusSeconds(8), ids.nextId(), ids.nextId());
+        assertThat(identityRepository.findById(tenant, identity.id()).orElseThrow().revision())
+                .isEqualTo(restored.revision());
+
+        SourceImportRun suspendedAgain = sources.startImport(tenant, source.id(), now.plusSeconds(9));
+        SourceRecord secondSuspension = sources.observe(
+                tenant,
+                suspendedAgain.id(),
+                "employee-3",
+                "{\"employmentStatus\":\"SUSPENDED\"}",
+                now.plusSeconds(10),
+                now.plusSeconds(10),
+                ids.nextId(),
+                null);
+        policies.applyCurrentObservation(
+                tenant, secondSuspension.id(), now.plusSeconds(11), ids.nextId(), ids.nextId());
+
+        Identity resuspended = identityRepository.findById(tenant, identity.id()).orElseThrow();
+        assertThat(resuspended.lifecycleState()).isEqualTo(IdentityLifecycleState.SUSPENDED);
+        Long allEvidence = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM identity.source_suspension_transition_evidence
+                WHERE tenant_id = ? AND source_record_id = ? AND identity_id = ?
+                """,
+                Long.class,
+                tenant.tenantId(),
+                record.id(),
+                identity.id());
+        assertThat(allEvidence).isEqualTo(2L);
+    }
+
+    @Test
+    void mappedActiveCannotRestoreManualRelinkedOrInterveningSuspension() {
+        Instant now = Instant.now();
+        TenantContext tenant = tenant("Protected suspension", now);
+        SourceSystem source = source(tenant, "hr", now);
+        policies.activate(
+                tenant,
+                source.id(),
+                "$.employmentStatus",
+                Map.of(
+                        "ACTIVE", IdentityLifecycleState.ACTIVE,
+                        "SUSPENDED", IdentityLifecycleState.SUSPENDED),
+                now.plusSeconds(1));
+
+        Identity manual = identity(
+                tenant, "Manual suspension", IdentityLifecycleState.SUSPENDED, now.plusSeconds(2));
+        SourceRecord manualRecord = linkedRecord(
+                tenant, source, manual, "employee-manual",
                 "{\"employmentStatus\":\"ACTIVE\"}", now.plusSeconds(3));
         policies.applyCurrentObservation(
-                tenant, suspendedRecord.id(), now.plusSeconds(4), ids.nextId(), ids.nextId());
-
-        Identity inactive = identity(
-                tenant, "Inactive", IdentityLifecycleState.INACTIVE, now.plusSeconds(5));
-        SourceRecord inactiveRecord = linkedRecord(
-                tenant, source, inactive, "employee-4",
-                "{\"employmentStatus\":\"ACTIVE\"}", now.plusSeconds(6));
-        policies.applyCurrentObservation(
-                tenant, inactiveRecord.id(), now.plusSeconds(7), ids.nextId(), ids.nextId());
-
-        assertThat(identityRepository.findById(tenant, suspended.id()).orElseThrow().lifecycleState())
+                tenant, manualRecord.id(), now.plusSeconds(4), ids.nextId(), ids.nextId());
+        assertThat(identityRepository.findById(tenant, manual.id()).orElseThrow().lifecycleState())
                 .isEqualTo(IdentityLifecycleState.SUSPENDED);
-        assertThat(identityRepository.findById(tenant, inactive.id()).orElseThrow().lifecycleState())
-                .isEqualTo(IdentityLifecycleState.INACTIVE);
+
+        Identity sourceSuspended = identity(
+                tenant, "Relink source", IdentityLifecycleState.ACTIVE, now.plusSeconds(5));
+        SourceRecord record = linkedRecord(
+                tenant, source, sourceSuspended, "employee-relink",
+                "{\"employmentStatus\":\"SUSPENDED\"}", now.plusSeconds(6));
+        policies.applyCurrentObservation(
+                tenant, record.id(), now.plusSeconds(7), ids.nextId(), ids.nextId());
+        assertThat(identityRepository.findById(tenant, sourceSuspended.id()).orElseThrow().lifecycleState())
+                .isEqualTo(IdentityLifecycleState.SUSPENDED);
+
+        Identity replacement = identity(
+                tenant, "Replacement", IdentityLifecycleState.SUSPENDED, now.plusSeconds(8));
+        sources.acceptCorrelation(
+                tenant,
+                record.id(),
+                replacement.id(),
+                "operator relink",
+                now.plusSeconds(9),
+                ids.nextId(),
+                null);
+        SourceImportRun relinkRun = sources.startImport(tenant, source.id(), now.plusSeconds(10));
+        SourceRecord relinkActive = sources.observe(
+                tenant,
+                relinkRun.id(),
+                "employee-relink",
+                "{\"employmentStatus\":\"ACTIVE\"}",
+                now.plusSeconds(11),
+                now.plusSeconds(11),
+                ids.nextId(),
+                null);
+        policies.applyCurrentObservation(
+                tenant, relinkActive.id(), now.plusSeconds(12), ids.nextId(), ids.nextId());
+
+        assertThat(identityRepository.findById(tenant, replacement.id()).orElseThrow().lifecycleState())
+                .isEqualTo(IdentityLifecycleState.SUSPENDED);
+        assertThat(identityRepository.findById(tenant, sourceSuspended.id()).orElseThrow().lifecycleState())
+                .isEqualTo(IdentityLifecycleState.SUSPENDED);
+
+        Identity intervening = identity(
+                tenant, "Intervening revision", IdentityLifecycleState.ACTIVE, now.plusSeconds(13));
+        SourceRecord interveningRecord = linkedRecord(
+                tenant, source, intervening, "employee-intervening",
+                "{\"employmentStatus\":\"SUSPENDED\"}", now.plusSeconds(14));
+        policies.applyCurrentObservation(
+                tenant, interveningRecord.id(), now.plusSeconds(15), ids.nextId(), ids.nextId());
+        Identity firstSuspension =
+                identityRepository.findById(tenant, intervening.id()).orElseThrow();
+
+        Identity madeInactive = identities.changeLifecycle(
+                tenant,
+                intervening.id(),
+                IdentityLifecycleState.INACTIVE,
+                firstSuspension.revision(),
+                now.plusSeconds(16),
+                ids.nextId(),
+                ids.nextId());
+        Identity madeActive = identities.changeLifecycle(
+                tenant,
+                intervening.id(),
+                IdentityLifecycleState.ACTIVE,
+                madeInactive.revision(),
+                now.plusSeconds(17),
+                ids.nextId(),
+                ids.nextId());
+        Identity manualResuspension = identities.changeLifecycle(
+                tenant,
+                intervening.id(),
+                IdentityLifecycleState.SUSPENDED,
+                madeActive.revision(),
+                now.plusSeconds(18),
+                ids.nextId(),
+                ids.nextId());
+
+        SourceImportRun interveningRun = sources.startImport(tenant, source.id(), now.plusSeconds(19));
+        SourceRecord currentActive = sources.observe(
+                tenant,
+                interveningRun.id(),
+                "employee-intervening",
+                "{\"employmentStatus\":\"ACTIVE\"}",
+                now.plusSeconds(20),
+                now.plusSeconds(20),
+                ids.nextId(),
+                null);
+        policies.applyCurrentObservation(
+                tenant, currentActive.id(), now.plusSeconds(21), ids.nextId(), ids.nextId());
+
+        Identity protectedCurrent =
+                identityRepository.findById(tenant, intervening.id()).orElseThrow();
+        assertThat(protectedCurrent.lifecycleState()).isEqualTo(IdentityLifecycleState.SUSPENDED);
+        assertThat(protectedCurrent.revision()).isEqualTo(manualResuspension.revision());
     }
 
     @Test
