@@ -33,14 +33,38 @@ public final class FileSystemAuditExportArtifactStore implements AuditExportArti
             TenantContext tenant,
             UUID exportId,
             ArtifactWriter writer) {
-        Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(exportId, "exportId");
+        return writeReference(
+                tenant,
+                tenant.tenantId() + "/" + exportId + ".ndjson",
+                exportId + ".tmp",
+                writer);
+    }
+
+    @Override
+    public String writeArchive(
+            TenantContext tenant,
+            UUID archiveSegmentId,
+            ArtifactWriter writer) {
+        Objects.requireNonNull(archiveSegmentId, "archiveSegmentId");
+        return writeReference(
+                tenant,
+                tenant.tenantId() + "/archive/" + archiveSegmentId + ".ndjson",
+                archiveSegmentId + ".tmp",
+                writer);
+    }
+
+    private String writeReference(
+            TenantContext tenant,
+            String reference,
+            String temporaryName,
+            ArtifactWriter writer) {
+        Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(writer, "writer");
 
-        String reference = tenant.tenantId() + "/" + exportId + ".ndjson";
         Path target = resolve(reference);
         Path directory = target.getParent();
-        Path temporary = directory.resolve(exportId + ".tmp");
+        Path temporary = directory.resolve(temporaryName);
         try {
             Files.createDirectories(directory);
             try (OutputStream output = Files.newOutputStream(
@@ -65,11 +89,11 @@ public final class FileSystemAuditExportArtifactStore implements AuditExportArti
             try {
                 Files.deleteIfExists(temporary);
             } catch (IOException ignored) {
-                // Preserve the original export failure; stale temp cleanup is operational work.
+                // Preserve the original artifact failure; stale temp cleanup is operational work.
             }
             if (failure instanceof RuntimeException runtime) throw runtime;
             if (failure instanceof IOException io) throw new UncheckedIOException(io);
-            throw new IllegalStateException("audit export artifact write failed", failure);
+            throw new IllegalStateException("audit artifact write failed", failure);
         }
     }
 
@@ -88,7 +112,7 @@ public final class FileSystemAuditExportArtifactStore implements AuditExportArti
         try {
             return Files.newInputStream(resolve(artifactReference), StandardOpenOption.READ);
         } catch (IOException error) {
-            throw new UncheckedIOException("audit export artifact is unavailable", error);
+            throw new UncheckedIOException("audit artifact is unavailable", error);
         }
     }
 
