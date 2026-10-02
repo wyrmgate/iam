@@ -237,7 +237,7 @@ class AuditEvidenceSnapshotSiemPersistenceIntegrationTest {
         AtomicInteger published = new AtomicInteger();
         AuditSiemDeliveryService delivery = new AuditSiemDeliveryService(
                 work,
-                records,
+                new AuditQueryService(records),
                 message -> published.incrementAndGet(),
                 Duration.ofSeconds(30),
                 10,
@@ -275,7 +275,7 @@ class AuditEvidenceSnapshotSiemPersistenceIntegrationTest {
 
         AuditSiemDeliveryService delivery = new AuditSiemDeliveryService(
                 work,
-                records,
+                new AuditQueryService(records),
                 message -> { throw new AuditSiemDeliveryException(true, "temporary_siem_failure"); },
                 Duration.ofSeconds(30),
                 10,
