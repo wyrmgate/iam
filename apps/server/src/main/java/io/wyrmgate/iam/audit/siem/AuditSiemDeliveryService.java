@@ -1,6 +1,6 @@
 package io.wyrmgate.iam.audit.siem;
 
-import io.wyrmgate.iam.audit.application.AuditRecordRepository;
+import io.wyrmgate.iam.audit.application.AuditQueryService;
 import io.wyrmgate.iam.audit.domain.AuditRecord;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository.ClaimedTenantWork;
@@ -18,7 +18,7 @@ public final class AuditSiemDeliveryService {
     public static final String SUBJECT_TYPE = "audit-record";
 
     private final JdbcScheduledWorkRepository scheduledWork;
-    private final AuditRecordRepository records;
+    private final AuditQueryService records;
     private final AuditSiemPublisher publisher;
     private final Duration claimLease;
     private final int batchSize;
@@ -29,7 +29,7 @@ public final class AuditSiemDeliveryService {
 
     public AuditSiemDeliveryService(
             JdbcScheduledWorkRepository scheduledWork,
-            AuditRecordRepository records,
+            AuditQueryService records,
             AuditSiemPublisher publisher,
             Duration claimLease,
             int batchSize,
@@ -49,7 +49,7 @@ public final class AuditSiemDeliveryService {
 
     AuditSiemDeliveryService(
             JdbcScheduledWorkRepository scheduledWork,
-            AuditRecordRepository records,
+            AuditQueryService records,
             AuditSiemPublisher publisher,
             Duration claimLease,
             int batchSize,
