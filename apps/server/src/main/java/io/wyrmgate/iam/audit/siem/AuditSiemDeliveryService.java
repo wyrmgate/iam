@@ -124,7 +124,8 @@ public final class AuditSiemDeliveryService {
                 record.outcome().name(),
                 record.correlationId(),
                 record.causationId(),
-                record.materialSnapshot());
+                record.materialSnapshot(),
+                record.integrityMetadata());
         try {
             publisher.publish(message);
         } catch (AuditSiemDeliveryException failure) {
