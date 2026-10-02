@@ -32,6 +32,7 @@ import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
+import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -66,6 +67,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
     private static AdministrativeAuthorizationService authorization;
     private static JdbcAdministrativeAuthorityRepository authorityRepository;
     private static JdbcAdministrativeBreakGlassRepository breakGlassRepository;
+    private static JdbcScheduledWorkRepository scheduledWork;
     private static IdentityGovernedActorStatusQuery governedActors;
     private static TransactionExecutor transactions;
 
@@ -93,6 +95,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
         authority = new AdministrativeAuthorityService(
                 authorityRepository, authorization, governedActors, ids, transactions);
         breakGlassRepository = new JdbcAdministrativeBreakGlassRepository(jdbc);
+        scheduledWork = new JdbcScheduledWorkRepository(jdbc, ids);
         bootstrap = new InitialAdminBootstrapService(
                 new JdbcInitialAdminBootstrapRepository(jdbc),
                 new JdbcControlPlaneActorBindingRepository(jdbc),
@@ -172,6 +175,20 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
         assertThat(breakGlassRepository.listObligations(tenant, operation.id()))
                 .extracting(o -> o.type().name())
                 .containsExactlyInAnyOrder("SECURITY_NOTIFICATION", "POST_USE_REVIEW");
+
+        assertThat(jdbc.queryForObject(
+                        """
+                        SELECT count(*)
+                        FROM platform.scheduled_work
+                        WHERE tenant_id = ?
+                          AND handler_type = 'administration.break-glass.security-notification'
+                          AND subject_id = ?
+                          AND delivery_state = 'READY'
+                        """,
+                        Integer.class,
+                        tenant.tenantId(),
+                        operation.id()))
+                .isEqualTo(1);
 
         var decision = authorization.authorize(
                 strongActor,
@@ -490,6 +507,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
                 governedActors,
                 policy,
                 audit,
+                new JdbcAdministrativeBreakGlassNotificationScheduler(scheduledWork),
                 ids,
                 transactions);
     }
