@@ -509,6 +509,9 @@ def verify_audit_openapi(document: dict) -> None:
     assert set(paths) == {
         "/audit-records",
         "/audit-records/{auditRecordId}",
+        "/audit-exports",
+        "/audit-exports/{auditExportId}",
+        "/audit-exports/{auditExportId}:download",
     }
 
     listing = paths["/audit-records"]["get"]
@@ -527,6 +530,23 @@ def verify_audit_openapi(document: dict) -> None:
 
     detail = paths["/audit-records/{auditRecordId}"]["get"]
     assert detail.get("x-wyrmgate-administrative-permission") == "audit:read"
+
+    export_create = paths["/audit-exports"]["post"]
+    assert export_create.get("x-wyrmgate-administrative-permission") == "audit:export"
+    assert "IdempotencyKey" in ref_names(export_create), (
+        "Audit export creation must require causal idempotency"
+    )
+    export_request_ref = export_create["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+    assert export_request_ref.endswith("/AuditExportCreateRequest")
+
+    export_detail = paths["/audit-exports/{auditExportId}"]["get"]
+    assert export_detail.get("x-wyrmgate-administrative-permission") == "audit:export"
+
+    export_download = paths["/audit-exports/{auditExportId}:download"]["post"]
+    assert export_download.get("x-wyrmgate-administrative-permission") == "audit:export"
+    assert "requestBody" not in export_download, (
+        "Audit export download must not accept provider-native artifact state"
+    )
 
     schemas = document["components"]["schemas"]
     audit = schemas["AuditRecord"]
@@ -547,6 +567,42 @@ def verify_audit_openapi(document: dict) -> None:
         "SUCCESS",
         "DENIED",
         "FAILURE",
+    }
+
+    export_request = schemas["AuditExportCreateRequest"]
+    assert export_request.get("additionalProperties") is False
+    assert {"occurredFrom", "occurredUntil"} == set(export_request.get("required", []))
+    assert set(export_request["properties"]) == {
+        "actorId",
+        "actionType",
+        "resourceType",
+        "resourceId",
+        "outcome",
+        "correlationId",
+        "occurredFrom",
+        "occurredUntil",
+    }
+
+    export_resource = schemas["AuditExport"]
+    assert export_resource.get("additionalProperties") is False
+    assert "artifactReference" not in export_resource["properties"], (
+        "Audit export public state must not expose internal artifact references"
+    )
+    assert {
+        "snapshotRecordedAt",
+        "schemaVersion",
+        "state",
+        "recordCount",
+        "byteCount",
+        "sha256",
+        "artifactExpiresAt",
+        "revision",
+    }.issubset(export_resource["properties"])
+    assert set(export_resource["properties"]["state"]["enum"]) == {
+        "REQUESTED",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
     }
 
     serialized = json.dumps(document, sort_keys=True).lower()

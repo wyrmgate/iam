@@ -63,7 +63,7 @@ class PersistenceFoundationIntegrationTest {
         scheduledWork = new JdbcScheduledWorkRepository(jdbc, idGenerator);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("52");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("53");
     }
 
     @AfterAll
@@ -237,6 +237,48 @@ class PersistenceFoundationIntegrationTest {
         assertThat(reclaimed.id()).isEqualTo(firstClaim.id());
         assertThat(reclaimed.attemptCount()).isEqualTo(2);
         scheduledWork.markCompleted(context, reclaimed.id(), "worker-b", afterExpiry.plusSeconds(1));
+    }
+
+    @Test
+    void activeWorkerCanRenewLeaseAndPreventPrematureReclaim() {
+        Instant now = Instant.now();
+        JdbcTenantRepository.Tenant tenant = tenants.create("Lease Renewal Tenant", now);
+        TenantContext context = new TenantContext(tenant.id());
+        assertThat(scheduledWork.enqueue(
+                        context,
+                        "audit.export",
+                        "renewable-work",
+                        null,
+                        now.minusSeconds(1),
+                        now))
+                .isTrue();
+
+        ClaimedWork claim = scheduledWork
+                .claimDue(context, "worker-a", now, Duration.ofSeconds(2), 1)
+                .getFirst();
+
+        Instant renewalAt = now.plusSeconds(1);
+        scheduledWork.renewLease(
+                context, claim.id(), "worker-a", renewalAt, Duration.ofSeconds(5));
+
+        assertThat(scheduledWork.claimDue(
+                        context,
+                        "worker-b",
+                        now.plusSeconds(3),
+                        Duration.ofMinutes(1),
+                        1))
+                .isEmpty();
+
+        assertThatThrownBy(() -> scheduledWork.renewLease(
+                        context,
+                        claim.id(),
+                        "worker-b",
+                        renewalAt,
+                        Duration.ofSeconds(5)))
+                .isInstanceOf(IllegalStateException.class);
+
+        scheduledWork.markCompleted(
+                context, claim.id(), "worker-a", now.plusSeconds(4));
     }
 
     @Test

@@ -26,6 +26,42 @@ final class AuditApiModels {
             String nextCursor) {
     }
 
+    record AuditExportCreateRequest(
+            UUID actorId,
+            String actionType,
+            String resourceType,
+            UUID resourceId,
+            String outcome,
+            UUID correlationId,
+            Instant occurredFrom,
+            Instant occurredUntil) {
+    }
+
+    record AuditExportResource(
+            UUID id,
+            UUID requestedByIdentityId,
+            UUID actorId,
+            String actionType,
+            String resourceType,
+            UUID resourceId,
+            String outcome,
+            UUID correlationId,
+            Instant occurredFrom,
+            Instant occurredUntil,
+            Instant snapshotRecordedAt,
+            String schemaVersion,
+            String state,
+            long recordCount,
+            long byteCount,
+            String sha256,
+            Instant artifactExpiresAt,
+            String failureCode,
+            long revision,
+            Instant completedAt,
+            Instant createdAt,
+            Instant updatedAt) {
+    }
+
     record FieldError(
             String field,
             String code,

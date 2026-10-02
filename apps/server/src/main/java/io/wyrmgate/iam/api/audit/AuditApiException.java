@@ -67,7 +67,43 @@ final class AuditApiException extends RuntimeException {
         return new AuditApiException(
                 HttpStatus.NOT_FOUND,
                 "not_found",
-                "The requested AuditRecord was not found.",
+                "The requested Audit resource was not found.",
+                correlationId,
+                List.of());
+    }
+
+    static AuditApiException conflict(
+            UUID correlationId,
+            String code,
+            String message) {
+        return new AuditApiException(
+                HttpStatus.CONFLICT,
+                code,
+                message,
+                correlationId,
+                List.of());
+    }
+
+    static AuditApiException gone(
+            UUID correlationId,
+            String code,
+            String message) {
+        return new AuditApiException(
+                HttpStatus.GONE,
+                code,
+                message,
+                correlationId,
+                List.of());
+    }
+
+    static AuditApiException unavailable(
+            UUID correlationId,
+            String code,
+            String message) {
+        return new AuditApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                code,
+                message,
                 correlationId,
                 List.of());
     }

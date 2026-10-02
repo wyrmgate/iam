@@ -79,7 +79,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("52");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("53");
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();

@@ -3,6 +3,7 @@ package io.wyrmgate.iam.audit.persistence;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassAuditSink;
 import io.wyrmgate.iam.audit.application.AuditAdministrativeBreakGlassAuditSink;
 import io.wyrmgate.iam.audit.application.AuditCommandService;
+import io.wyrmgate.iam.audit.application.AuditExportRepository;
 import io.wyrmgate.iam.audit.application.AuditQueryService;
 import io.wyrmgate.iam.audit.application.AuditRecordRepository;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
@@ -19,6 +20,11 @@ public class AuditPersistenceConfiguration {
     @Bean
     AuditRecordRepository auditRecordRepository(JdbcTemplate jdbc) {
         return new JdbcAuditRecordRepository(jdbc);
+    }
+
+    @Bean
+    AuditExportRepository auditExportRepository(JdbcTemplate jdbc) {
+        return new JdbcAuditExportRepository(jdbc);
     }
 
     @Bean

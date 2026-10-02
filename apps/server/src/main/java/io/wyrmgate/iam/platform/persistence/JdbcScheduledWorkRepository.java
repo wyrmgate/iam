@@ -184,6 +184,42 @@ public final class JdbcScheduledWorkRepository {
                 JdbcValues.timestamp(now));
     }
 
+    public void renewLease(
+            TenantContext tenant,
+            UUID workId,
+            String leaseOwner,
+            Instant now,
+            Duration leaseDuration) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(workId, "workId");
+        requireText(leaseOwner, "leaseOwner");
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(leaseDuration, "leaseDuration");
+        if (leaseDuration.isZero() || leaseDuration.isNegative()) {
+            throw new IllegalArgumentException("leaseDuration must be positive");
+        }
+
+        Instant leaseUntil = now.plus(leaseDuration);
+        int affected = jdbcTemplate.update(
+                """
+                UPDATE platform.scheduled_work
+                SET lease_until = ?,
+                    updated_at = ?
+                WHERE tenant_id = ? AND id = ? AND delivery_state = 'READY'
+                  AND lease_owner = ? AND lease_until > ?
+                """,
+                JdbcValues.timestamp(leaseUntil),
+                JdbcValues.timestamp(now),
+                tenant.tenantId(),
+                workId,
+                leaseOwner,
+                JdbcValues.timestamp(now));
+        if (affected != 1) {
+            throw new IllegalStateException(
+                    "Scheduled work lease cannot be renewed for the expected owner");
+        }
+    }
+
     public void reschedule(
             TenantContext tenant,
             UUID workId,
