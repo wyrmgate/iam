@@ -1,7 +1,7 @@
 package io.wyrmgate.iam.audit.siem;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.wyrmgate.iam.audit.application.AuditRecordRepository;
+import io.wyrmgate.iam.audit.application.AuditQueryService;
 import io.wyrmgate.iam.audit.application.AuditSiemEnqueuer;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import java.net.URI;
@@ -52,7 +52,7 @@ class AuditSiemConfiguration {
     @Bean
     AuditSiemDeliveryService auditSiemDeliveryService(
             JdbcScheduledWorkRepository scheduledWork,
-            AuditRecordRepository records,
+            AuditQueryService records,
             AuditSiemPublisher publisher,
             @Value("${iam.audit.siem.claim-lease:PT30S}") Duration claimLease,
             @Value("${iam.audit.siem.batch-size:50}") int batchSize,
