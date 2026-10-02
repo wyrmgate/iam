@@ -6,7 +6,10 @@ import io.wyrmgate.iam.audit.domain.AuditPurgeOperation;
 import io.wyrmgate.iam.audit.domain.AuditRetentionPolicyVersion;
 import io.wyrmgate.iam.audit.domain.AuditSelection;
 import io.wyrmgate.iam.platform.id.IdGenerator;
+import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
+import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
+import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository.ClaimedTenantWork;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository.SubjectReference;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -33,7 +36,11 @@ public final class AuditEvidenceLifecycleService {
     private final AuditEvidenceLifecycleRepository lifecycle;
     private final AuditArchiveRepository archives;
     private final AuditRetentionPolicyRepository policies;
+    private static final String HOLD_IDEMPOTENCY = "api.audit.legal-hold.create.v1";
+    private static final String PURGE_IDEMPOTENCY = "api.audit.purge.create.v1";
+
     private final AuditExportArtifactStore artifactStore;
+    private final JdbcIdempotencyRepository idempotency;
     private final JdbcScheduledWorkRepository scheduledWork;
     private final TransactionExecutor transactions;
     private final IdGenerator ids;
@@ -63,6 +70,39 @@ public final class AuditEvidenceLifecycleService {
                 archives,
                 policies,
                 artifactStore,
+                null,
+                scheduledWork,
+                transactions,
+                ids,
+                purgeEnabled,
+                claimLease,
+                batchSize,
+                maxAttempts,
+                retryDelay,
+                Clock.systemUTC(),
+                "audit-purge-" + UUID.randomUUID());
+    }
+
+    public AuditEvidenceLifecycleService(
+            AuditEvidenceLifecycleRepository lifecycle,
+            AuditArchiveRepository archives,
+            AuditRetentionPolicyRepository policies,
+            AuditExportArtifactStore artifactStore,
+            JdbcIdempotencyRepository idempotency,
+            JdbcScheduledWorkRepository scheduledWork,
+            TransactionExecutor transactions,
+            IdGenerator ids,
+            boolean purgeEnabled,
+            Duration claimLease,
+            int batchSize,
+            int maxAttempts,
+            Duration retryDelay) {
+        this(
+                lifecycle,
+                archives,
+                policies,
+                artifactStore,
+                idempotency,
                 scheduledWork,
                 transactions,
                 ids,
@@ -90,10 +130,45 @@ public final class AuditEvidenceLifecycleService {
             Duration retryDelay,
             Clock clock,
             String leaseOwner) {
+        this(
+                lifecycle,
+                archives,
+                policies,
+                artifactStore,
+                null,
+                scheduledWork,
+                transactions,
+                ids,
+                purgeEnabled,
+                claimLease,
+                batchSize,
+                maxAttempts,
+                retryDelay,
+                clock,
+                leaseOwner);
+    }
+
+    private AuditEvidenceLifecycleService(
+            AuditEvidenceLifecycleRepository lifecycle,
+            AuditArchiveRepository archives,
+            AuditRetentionPolicyRepository policies,
+            AuditExportArtifactStore artifactStore,
+            JdbcIdempotencyRepository idempotency,
+            JdbcScheduledWorkRepository scheduledWork,
+            TransactionExecutor transactions,
+            IdGenerator ids,
+            boolean purgeEnabled,
+            Duration claimLease,
+            int batchSize,
+            int maxAttempts,
+            Duration retryDelay,
+            Clock clock,
+            String leaseOwner) {
         this.lifecycle = Objects.requireNonNull(lifecycle, "lifecycle");
         this.archives = Objects.requireNonNull(archives, "archives");
         this.policies = Objects.requireNonNull(policies, "policies");
         this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
+        this.idempotency = idempotency;
         this.scheduledWork = Objects.requireNonNull(scheduledWork, "scheduledWork");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
         this.ids = Objects.requireNonNull(ids, "ids");
@@ -138,6 +213,51 @@ public final class AuditEvidenceLifecycleService {
                         correlationId,
                         causationId,
                         now));
+    }
+
+    public AuditLegalHold createHold(
+            TenantContext tenant,
+            AuditSelection selection,
+            String reasonCode,
+            String caseReference,
+            UUID createdByIdentityId,
+            UUID correlationId,
+            UUID causationId,
+            String idempotencyKey,
+            RequestFingerprint fingerprint) {
+        if (idempotency == null) {
+            return createHold(
+                    tenant, selection, reasonCode, caseReference,
+                    createdByIdentityId, correlationId, causationId);
+        }
+        Instant now = clock.instant();
+        return transactions.required(() -> {
+            var registration = idempotency.register(
+                    tenant, HOLD_IDEMPOTENCY, idempotencyKey, fingerprint, now, null);
+            if (registration.kind() == RegistrationKind.REPLAY) {
+                if (!"COMPLETED".equals(registration.operationState())
+                        || !"audit-legal-hold".equals(registration.resourceType())
+                        || registration.resourceId() == null) {
+                    throw new IllegalStateException("audit_legal_hold_idempotency_in_progress");
+                }
+                return lifecycle.findHold(tenant, registration.resourceId())
+                        .orElseThrow(() -> new IllegalStateException("completed audit legal hold is missing"));
+            }
+            AuditLegalHold hold = lifecycle.createHold(
+                    tenant,
+                    ids.nextId(),
+                    selection,
+                    reasonCode,
+                    caseReference,
+                    createdByIdentityId,
+                    correlationId,
+                    causationId,
+                    now);
+            idempotency.complete(
+                    tenant, HOLD_IDEMPOTENCY, idempotencyKey, fingerprint,
+                    "audit-legal-hold", hold.id(), now);
+            return hold;
+        });
     }
 
     public AuditLegalHold findHold(TenantContext tenant, UUID holdId) {
@@ -202,6 +322,61 @@ public final class AuditEvidenceLifecycleService {
                     correlationId,
                     causationId,
                     now);
+        });
+    }
+
+    public AuditPurgeOperation requestPurge(
+            TenantContext tenant,
+            UUID requestedByIdentityId,
+            UUID archiveSegmentId,
+            AuditSelection selection,
+            String reasonCode,
+            UUID correlationId,
+            UUID causationId,
+            String idempotencyKey,
+            RequestFingerprint fingerprint) {
+        if (idempotency == null) {
+            return requestPurge(
+                    tenant, requestedByIdentityId, archiveSegmentId, selection,
+                    reasonCode, correlationId, causationId);
+        }
+        if (!purgeEnabled) throw new IllegalStateException("audit_purge_unavailable");
+        Objects.requireNonNull(requestedByIdentityId, "requestedByIdentityId");
+        Objects.requireNonNull(archiveSegmentId, "archiveSegmentId");
+        Objects.requireNonNull(selection, "selection");
+        Instant now = clock.instant();
+        AuditRetentionPolicyVersion policy = policies.findCurrent(tenant, now)
+                .orElseThrow(() -> new IllegalStateException("audit_retention_policy_unconfigured"));
+        AuditArchiveSegment archive = archives.find(tenant, archiveSegmentId)
+                .orElseThrow(() -> new IllegalArgumentException("audit archive segment does not exist"));
+        requireArchiveCoverage(archive, selection, archive.snapshotRecordedAt());
+        if (selection.occurredUntil().isAfter(now.minus(policy.minimumOnlineRetention()))) {
+            throw new IllegalStateException("audit_purge_minimum_online_retention_not_elapsed");
+        }
+        return transactions.required(() -> {
+            var registration = idempotency.register(
+                    tenant, PURGE_IDEMPOTENCY, idempotencyKey, fingerprint, now, null);
+            if (registration.kind() == RegistrationKind.REPLAY) {
+                if (!"COMPLETED".equals(registration.operationState())
+                        || !"audit-purge".equals(registration.resourceType())
+                        || registration.resourceId() == null) {
+                    throw new IllegalStateException("audit_purge_idempotency_in_progress");
+                }
+                return lifecycle.findPurge(tenant, registration.resourceId())
+                        .orElseThrow(() -> new IllegalStateException("completed audit purge is missing"));
+            }
+            lifecycle.lockLifecycle(tenant);
+            if (lifecycle.hasMatchingActiveHold(tenant, selection, archive.snapshotRecordedAt())) {
+                throw new IllegalStateException("audit_purge_blocked_by_legal_hold");
+            }
+            AuditPurgeOperation purge = lifecycle.createPurge(
+                    tenant, ids.nextId(), policy.id(), archive.id(), requestedByIdentityId,
+                    selection, archive.snapshotRecordedAt(), reasonCode,
+                    correlationId, causationId, now);
+            idempotency.complete(
+                    tenant, PURGE_IDEMPOTENCY, idempotencyKey, fingerprint,
+                    "audit-purge", purge.id(), now);
+            return purge;
         });
     }
 
