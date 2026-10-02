@@ -144,11 +144,18 @@ public final class AuditExportService {
             }
 
             UUID operationId = ids.nextId();
+            AuditExportOperation.Filter exportFilter = new AuditExportOperation.Filter(
+                    filter.actorId(),
+                    filter.actionType(),
+                    filter.resourceType(),
+                    filter.resourceId(),
+                    filter.outcome(),
+                    filter.correlationId());
             AuditExportOperation operation = repository.create(
                     tenant,
                     operationId,
                     requestedByIdentityId,
-                    filter,
+                    exportFilter,
                     occurredFrom,
                     occurredUntil,
                     now,
