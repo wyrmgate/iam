@@ -33,6 +33,11 @@ public class AuditPersistenceConfiguration {
     }
 
     @Bean
+    JdbcAuditEvidenceLifecycleRepository auditEvidenceLifecycleRepository(JdbcTemplate jdbc) {
+        return new JdbcAuditEvidenceLifecycleRepository(jdbc);
+    }
+
+    @Bean
     SecurityAuditPort securityAuditPort(
             AuditRecordRepository repository,
             TransactionExecutor transactions) {
