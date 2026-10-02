@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.audit.domain;
 
-import io.wyrmgate.iam.audit.application.AuditQueryModels.AuditFilter;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -9,7 +8,7 @@ import java.util.UUID;
 public record AuditExportOperation(
         UUID id,
         UUID requestedByIdentityId,
-        AuditFilter filter,
+        Filter filter,
         Instant occurredFrom,
         Instant occurredUntil,
         Instant snapshotRecordedAt,
@@ -36,6 +35,31 @@ public record AuditExportOperation(
         SUCCEEDED,
         FAILED
     }
+
+    public record Filter(
+            UUID actorId,
+            String actionType,
+            String resourceType,
+            UUID resourceId,
+            AuditOutcome outcome,
+            UUID correlationId) {
+
+        public Filter {
+            actionType = bounded(actionType, "actionType");
+            resourceType = bounded(resourceType, "resourceType");
+        }
+
+        private static String bounded(String value, String field) {
+            if (value == null) return null;
+            String normalized = value.trim();
+            if (normalized.isEmpty()) throw new IllegalArgumentException(field + " must not be blank");
+            if (normalized.length() > 128) {
+                throw new IllegalArgumentException(field + " must not exceed 128 characters");
+            }
+            return normalized;
+        }
+    }
+
 
     public AuditExportOperation {
         Objects.requireNonNull(id, "id");
