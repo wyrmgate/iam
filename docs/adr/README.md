@@ -35,7 +35,7 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0025 Access-owned lifecycle policy and governed Joiner/Mover reconciliation](0025-access-owned-lifecycle-policy-joiner-mover-reconciliation.md)
 - [ADR-0026 Explicit Identity merge/split with historical reference preservation](0026-explicit-identity-merge-split-history-preservation.md)
 - [ADR-0027 Provenance-fenced source reactivation after trusted absence inference](0027-provenance-fenced-source-reactivation.md)
-- [ADR-0028 Governance approval for lifecycle-policy privilege increases](0028-governance-approval-lifecycle-privilege-increase.md)
+- [ADR-0028 Governance approval for lifecycle-policy privilege increases](0028-governance-approval-lifecycle-policy-privilege-increase.md)
 - [ADR-0029 Typed scalar equality for lifecycle-access policy predicates](0029-typed-scalar-lifecycle-policy-predicates.md)
 - [ADR-0030 Classification-scoped canonical attribute value authorization](0030-classification-scoped-canonical-value-authorization.md)
 - [ADR-0031 Append-only AuditRecord foundation and replay semantics](0031-append-only-audit-record-foundation.md)
