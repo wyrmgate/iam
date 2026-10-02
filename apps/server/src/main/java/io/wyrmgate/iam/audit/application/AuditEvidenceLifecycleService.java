@@ -417,7 +417,7 @@ public final class AuditEvidenceLifecycleService {
     }
 
     public BatchResult executeAvailable() {
-        if (!purgeEnabled) return new BatchResult(0, 0, 0, 0);
+        if (!purgeEnabled) return new BatchResult(0, 0, 0, 0, 0);
         List<ClaimedTenantWork> claimed = scheduledWork.claimDueByHandler(
                 PURGE_HANDLER_TYPE,
                 leaseOwner,
