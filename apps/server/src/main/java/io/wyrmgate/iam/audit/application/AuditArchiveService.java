@@ -258,7 +258,7 @@ public final class AuditArchiveService {
                     occurredFrom,
                     occurredUntil,
                     now,
-                    AuditArchiveSegment.NDJSON_V1,
+                    AuditArchiveSegment.NDJSON_V2,
                     correlationId,
                     causationId,
                     now);
@@ -581,7 +581,9 @@ public final class AuditArchiveService {
             UUID resourceId,
             String outcome,
             UUID correlationId,
-            UUID causationId) {
+            UUID causationId,
+            io.wyrmgate.iam.audit.domain.AuditMaterialSnapshot materialSnapshot,
+            io.wyrmgate.iam.audit.domain.AuditIntegrityMetadata integrityMetadata) {
         static ArchiveRecord from(AuditRecord record) {
             return new ArchiveRecord(
                     record.id(),
@@ -593,7 +595,9 @@ public final class AuditArchiveService {
                     record.resourceId(),
                     record.outcome().name(),
                     record.correlationId(),
-                    record.causationId());
+                    record.causationId(),
+                    record.materialSnapshot(),
+                    record.integrityMetadata());
         }
     }
 }
