@@ -11,8 +11,6 @@ import java.util.UUID;
 final class JdbcAdministrativeBreakGlassNotificationScheduler
         implements AdministrativeBreakGlassNotificationScheduler {
 
-    static final String HANDLER_TYPE = "administration.break-glass.security-notification";
-
     private final JdbcScheduledWorkRepository work;
 
     JdbcAdministrativeBreakGlassNotificationScheduler(JdbcScheduledWorkRepository work) {
@@ -28,7 +26,7 @@ final class JdbcAdministrativeBreakGlassNotificationScheduler
             Instant now) {
         work.enqueue(
                 tenant,
-                HANDLER_TYPE,
+                AdministrativeBreakGlassNotificationScheduler.HANDLER_TYPE,
                 obligationId.toString(),
                 new SubjectReference("administrative-break-glass-operation", operationId, operationRevision),
                 now,
