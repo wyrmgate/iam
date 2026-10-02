@@ -250,3 +250,18 @@ Invariant set:
 - obligation state cannot extend or restore emergency authority;
 - explicit revocation is optimistic-revision guarded and ends authority immediately;
 - Audit failure never rewrites a committed Administration result.
+
+
+## Audit archive and retention invariants
+
+AuditRecord remains append-only authoritative evidence even after an archive copy exists. Archive success never mutates, deletes, shortens the semantic lifetime of, or becomes the current authority for a source AuditRecord.
+
+AuditArchiveSegment process state is REQUESTED -> RUNNING -> SUCCEEDED or FAILED.
+
+Its membership inputs are frozen at request acceptance: tenant, closed occurrence range, Audit-owned snapshotRecordedAt, archive schema version and effective retention-policy version. Source paging is bounded and deterministic by occurredAt ASC, id ASC; only rows with recordedAt <= snapshotRecordedAt belong to the segment. Retry may rebuild the deterministic external artifact but cannot expand the frozen membership.
+
+A segment may become SUCCEEDED only after the external artifact is re-opened and its record count, byte count and SHA-256 are independently recomputed and match generation evidence. Verification failure fails closed. Terminal SUCCEEDED/FAILED segment evidence is immutable and segments cannot be deleted.
+
+AuditRetentionPolicyVersion is immutable successor-version state. It records reviewed values for export artifact lifetime, archive eligibility, minimum online AuditRecord retention and minimum archive retention. No duration is canonical in domain code, and no retention-policy version grants authority to delete AuditRecord evidence.
+
+Destructive AuditRecord purge, legal/retention hold, archived-record hydration, EvidenceSnapshot, material snapshot/integrity metadata and SIEM transport remain separate concerns. Physical AuditRecord deletion remains unavailable until a later accepted decision defines those semantics.
