@@ -19,7 +19,7 @@ public record AdministrativeBreakGlassSecurityNotification(
         UUID correlationId,
         UUID causationId) {
 
-    public static final String TYPE = "iam.administration.break-glass.activated.v1";
+    public static final String TYPE = "iam.administration.break-glass.security-notification.v1";
 
     public AdministrativeBreakGlassSecurityNotification {
         Objects.requireNonNull(notificationId, "notificationId");
