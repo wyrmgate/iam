@@ -147,7 +147,7 @@ The following is the initial physical table-family contract. Additional subordin
 | `administration` | administrative permission/role/grant/delegation/elevation | Administration | Authoritative/process |
 
 Migration V49 materializes `administration.administrative_elevation` as a distinct finite process/authority table. It stores stable beneficiary/initiator Identity IDs, one same-tenant direct authority-basis grant, target AdministrativeRole, typed scope columns, finite validity, immutable request fingerprint, optional Governance ApprovalCase/fingerprint evidence references, semantic process state/revision, activation/denial/cancellation/revocation timestamps and correlation/causation. The Governance case is deliberately not a database foreign key: cross-capability evidence is consumed through a semantic contract. Beneficiary/state and Role/state indexes support bounded authorization/process reads; time validity is still evaluated semantically rather than delegated to a cleanup scheduler.
-| `audit` | audit record, evidence snapshot | Audit | Evidence |
+| `audit` | audit record, evidence snapshot, legal hold, purge operation, archive segment | Audit | Evidence/process |
 | `platform` | tenant, outbox, inbox/dedup, idempotency, scheduled delivery/work claim, projection checkpoint | Platform | Technical infrastructure |
 
 Platform infrastructure may reference a domain subject to deliver work, but it does not own the subject's lifecycle/process state.
@@ -960,3 +960,17 @@ Delegation authority is source-dependent by semantics: persistence does not copy
 Flyway V50 adds Administration-owned `administrative_break_glass_operation` and `administrative_break_glass_obligation` tables. Operation rows carry tenant-safe Role ownership, typed scope columns, finite validity, strong-assurance evidence metadata, lifecycle/revision, revocation evidence and correlation/causation. Reason and incident/reference remain Administration evidence and are not copied into AuditRecord payloads.
 
 Each operation has at most one durable obligation of each typed kind through the tenant + operation + obligation-type uniqueness constraint. Current obligation kinds are SECURITY_NOTIFICATION and POST_USE_REVIEW. Their PENDING/COMPLETED state is operational evidence only and has no authority semantics. Indexes support actor/state validity evaluation, Role/state lookup and bounded pending-obligation work.
+
+
+### Audit evidence lifecycle physical slice
+
+Flyway V55/V56 extend the Audit schema beyond the V46 AuditRecord and V53/V54 export/archive foundation:
+
+- `audit.audit_legal_hold` — mutable ACTIVE/RELEASED Audit-owned lifecycle control with exact bounded selection and immutable creation/release evidence;
+- `audit.audit_purge_operation` — revisioned REQUESTED -> APPROVED -> RUNNING -> SUCCEEDED | FAILED | BLOCKED dual-control process;
+- `audit.audit_archived_record_index` — segment-specific immutable derived query projection preserving closed AuditRecord fields and material/integrity metadata;
+- `audit.audit_record_query` — logical online-first/archived-fallback read view used by bounded Audit queries and evidence generation;
+- `audit.evidence_snapshot` — relational immutable typed decision-time evidence snapshot;
+- `audit.audit_record.material_snapshot` / `integrity_metadata` — closed versioned JSON shapes only; they are not extension bags.
+
+The AuditRecord mutation trigger remains the destructive-write fence. A DELETE is accepted only when the same transaction sets the purge-operation fence and the database function proves the row belongs to a RUNNING dual-approved purge, is covered by the selected SUCCEEDED archive segment/index, satisfies minimum-online retention, matches immutable selection/cutoff and has no ACTIVE matching legal hold.
