@@ -15,7 +15,9 @@ public record AuditRecord(
         UUID resourceId,
         AuditOutcome outcome,
         UUID correlationId,
-        UUID causationId) {
+        UUID causationId,
+        AuditMaterialSnapshot materialSnapshot,
+        AuditIntegrityMetadata integrityMetadata) {
 
     public AuditRecord {
         Objects.requireNonNull(id, "id");
@@ -24,6 +26,32 @@ public record AuditRecord(
         actionType = boundedType(actionType, "actionType");
         resourceType = boundedType(resourceType, "resourceType");
         Objects.requireNonNull(outcome, "outcome");
+    }
+
+    public AuditRecord(
+            UUID id,
+            Instant occurredAt,
+            Instant recordedAt,
+            UUID actorId,
+            String actionType,
+            String resourceType,
+            UUID resourceId,
+            AuditOutcome outcome,
+            UUID correlationId,
+            UUID causationId) {
+        this(
+                id,
+                occurredAt,
+                recordedAt,
+                actorId,
+                actionType,
+                resourceType,
+                resourceId,
+                outcome,
+                correlationId,
+                causationId,
+                null,
+                null);
     }
 
     private static String boundedType(String value, String field) {
@@ -46,7 +74,8 @@ public record AuditRecord(
                 && Objects.equals(resourceId, other.resourceId())
                 && outcome == other.outcome()
                 && Objects.equals(correlationId, other.correlationId())
-                && Objects.equals(causationId, other.causationId());
+                && Objects.equals(causationId, other.causationId())
+                && Objects.equals(materialSnapshot, other.materialSnapshot());
     }
 
     /** Minimal structural view used to compare replay input without coupling domain to application packages. */
@@ -60,5 +89,9 @@ public record AuditRecord(
         AuditOutcome outcome();
         UUID correlationId();
         UUID causationId();
+
+        default AuditMaterialSnapshot materialSnapshot() {
+            return null;
+        }
     }
 }
