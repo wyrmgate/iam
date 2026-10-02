@@ -114,6 +114,8 @@ public final class AdministrativePermissions {
 
     public static final AdministrativePermission AUDIT_READ =
             new AdministrativePermission("audit", "read");
+    public static final AdministrativePermission AUDIT_EXPORT =
+            new AdministrativePermission("audit", "export");
 
     public static final AdministrativePermission CONNECTOR_READ =
             new AdministrativePermission("connector", "read");
