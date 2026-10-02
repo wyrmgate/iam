@@ -5,18 +5,14 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/dev-cd.yml'
-      - '.dockerignore'
       - 'apps/console/**'
-      - 'apps/server/**'
       - 'docs/engineering/dev-cd.md'
       - 'docs/operations/dev-managed-activation.md'
   push:
     branches: [main]
     paths:
       - '.github/workflows/dev-cd.yml'
-      - '.dockerignore'
       - 'apps/console/**'
-      - 'apps/server/**'
       - 'docs/engineering/dev-cd.md'
       - 'docs/operations/dev-managed-activation.md'
   workflow_dispatch:
@@ -69,74 +65,19 @@ jobs:
               raise SystemExit('Pages proxy must use IAM_BACKEND_ORIGIN.')
           PY
 
-  server:
-    name: railway-server-contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: maven
-          cache-dependency-path: apps/server/pom.xml
-
-      - name: Verify server
-        run: make server-build
-
-      - name: Validate managed-runtime configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq 'port: ${PORT:8080}' apps/server/src/main/resources/application.yml
-          grep -Fq '${IAM_DB_URL:' apps/server/src/main/resources/application.yml
-          grep -Fq '${IAM_DB_USER:' apps/server/src/main/resources/application.yml
-          grep -Fq '${IAM_DB_PASSWORD:' apps/server/src/main/resources/application.yml
-          grep -Fq 'COPY apps/server/pom.xml' apps/server/Dockerfile
-          grep -Fq 'COPY apps/server ' apps/server/Dockerfile
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          config = json.loads(Path('apps/server/railway.json').read_text())
-          build = config.get('build', {})
-          deploy = config.get('deploy', {})
-          watch_patterns = build.get('watchPatterns', [])
-
-          if build.get('builder') != 'DOCKERFILE':
-              raise SystemExit('Railway must use the checked-in server Dockerfile.')
-          if build.get('dockerfilePath') != 'apps/server/Dockerfile':
-              raise SystemExit('Railway Dockerfile path must be repository-root relative.')
-          if 'apps/server/**' not in watch_patterns:
-              raise SystemExit('Railway must redeploy for server source changes.')
-          if '.dockerignore' not in watch_patterns:
-              raise SystemExit('Railway must redeploy when the repository-root Docker build input .dockerignore changes.')
-          if deploy.get('healthcheckPath') != '/actuator/health':
-              raise SystemExit('Railway health check must use /actuator/health.')
-          PY
-
   docs:
-    name: managed-dev-docs
+    name: dev-topology-docs
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Require one active DEV topology
+      - name: Require current DEV topology statement
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'Cloudflare Pages' docs/engineering/dev-cd.md
-          grep -Fq 'Railway' docs/engineering/dev-cd.md
-          grep -Fq 'Neon' docs/engineering/dev-cd.md
-          grep -Fq 'repository root' docs/engineering/dev-cd.md
-          grep -Fq 'Wait for CI' docs/engineering/dev-cd.md
-          grep -Fq 'Preview branch deployments' docs/engineering/dev-cd.md
-          grep -Fq 'optional/reference' infra/opentofu/README.md
-          test -f apps/server/railway.json
+          grep -Fq 'Railway backend is retired' docs/engineering/dev-cd.md
+          grep -Fq 'No replacement managed server target is currently canonical' docs/engineering/dev-cd.md
+          grep -Fq 'Core CI' docs/engineering/dev-cd.md
           test -f docs/operations/dev-managed-activation.md
