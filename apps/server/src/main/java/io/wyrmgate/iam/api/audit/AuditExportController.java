@@ -141,7 +141,7 @@ final class AuditExportController {
         AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
         requireExport(
                 actor,
-                new AdministrativeResource("audit-export", auditExportId),
+                new AdministrativeResource("audit", auditExportId),
                 correlationId);
 
         AuditExportService.Download download;
