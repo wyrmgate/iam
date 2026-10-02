@@ -87,6 +87,65 @@ CREATE INDEX audit_archived_record_correlation_time_idx
         (tenant_id, correlation_id, occurred_at DESC, record_id DESC)
     WHERE correlation_id IS NOT NULL;
 
+CREATE VIEW audit.audit_record_query AS
+SELECT
+    r.tenant_id,
+    r.id,
+    r.occurred_at,
+    r.recorded_at,
+    r.actor_id,
+    r.action_type,
+    r.resource_type,
+    r.resource_id,
+    r.outcome,
+    r.correlation_id,
+    r.causation_id
+FROM audit.audit_record r
+UNION ALL
+SELECT
+    archived.tenant_id,
+    archived.record_id AS id,
+    archived.occurred_at,
+    archived.recorded_at,
+    archived.actor_id,
+    archived.action_type,
+    archived.resource_type,
+    archived.resource_id,
+    archived.outcome,
+    archived.correlation_id,
+    archived.causation_id
+FROM (
+    SELECT DISTINCT ON (i.tenant_id, i.record_id)
+        i.tenant_id,
+        i.record_id,
+        i.occurred_at,
+        i.recorded_at,
+        i.actor_id,
+        i.action_type,
+        i.resource_type,
+        i.resource_id,
+        i.outcome,
+        i.correlation_id,
+        i.causation_id,
+        s.completed_at,
+        s.id AS segment_id
+    FROM audit.audit_archived_record_index i
+    JOIN audit.audit_archive_segment s
+      ON s.tenant_id = i.tenant_id
+     AND s.id = i.archive_segment_id
+     AND s.state = 'SUCCEEDED'
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM audit.audit_record online
+        WHERE online.tenant_id = i.tenant_id
+          AND online.id = i.record_id
+    )
+    ORDER BY i.tenant_id, i.record_id, s.completed_at DESC, s.id DESC
+) archived;
+
+COMMENT ON VIEW audit.audit_record_query IS
+    'Logical tenant-scoped AuditRecord read source: online record when present, otherwise one verified archived projection row.';
+
 CREATE TABLE audit.audit_purge_operation (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
