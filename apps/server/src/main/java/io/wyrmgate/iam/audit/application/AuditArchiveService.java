@@ -359,6 +359,9 @@ public final class AuditArchiveService {
                             if (page.isEmpty()) break;
 
                             for (AuditRecord record : page) {
+                                if (!AuditRecordIntegrity.verifies(item.tenant(), record)) {
+                                    throw new AuditIntegrityException(record.id());
+                                }
                                 byte[] line = objectMapper.writeValueAsBytes(ArchiveRecord.from(record));
                                 output.write(line);
                                 output.write('\n');
