@@ -16,6 +16,10 @@ ALTER TABLE administration.administrative_break_glass_obligation
         (state = 'COMPLETED' AND completed_at IS NOT NULL)
     );
 
+ALTER TABLE administration.administrative_break_glass_obligation
+    ADD CONSTRAINT administrative_break_glass_obligation_tenant_id_uq
+        UNIQUE (tenant_id, id);
+
 CREATE TABLE administration.administrative_break_glass_review (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
