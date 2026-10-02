@@ -48,7 +48,9 @@ Break-glass is distinct from GLOBAL grants and ordinary elevation. Activation re
 
 The public resource deliberately excludes reason text, provider-native authentication claims, activation assurance timestamps, and internal policy detail. The owning Administration record retains that evidence. The incident/reference identifier is surfaced for operational correlation.
 
-Notification and post-use-review obligations remain durable Administration process evidence. Concrete notification transport and the detailed post-use-review workflow remain deferred.
+Notification and post-use-review obligations remain durable Administration process evidence and never affect authority validity.
+
+ADR-0033 fixes the completion contract. SECURITY_NOTIFICATION is delivered through one deployment-configured signed HTTPS security-notification adapter with a closed data-minimized payload; retry/terminal failure is durable technical process state and cannot rewrite activation. POST_USE_REVIEW becomes completable only after revocation or semantic expiry. The public API will add the explicit semantic operation `POST /api/v1/administrative-break-glass-operations/{id}:complete-review`, requiring causal idempotency, revision protection, current `administration:manage-authorization`, and reviewer != break-glass actor. Arbitrary obligation-state PATCH remains prohibited.
 
 ## Audit
 
