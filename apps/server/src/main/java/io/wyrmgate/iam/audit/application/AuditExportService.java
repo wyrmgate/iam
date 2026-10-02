@@ -113,7 +113,6 @@ public final class AuditExportService {
     private AuditExportService(
             AuditExportRepository repository,
             AuditRetentionPolicyRepository retentionPolicies,
-            AuditExportRepository repository,
             AuditExportArtifactStore artifactStore,
             JdbcIdempotencyRepository idempotency,
             JdbcScheduledWorkRepository scheduledWork,
