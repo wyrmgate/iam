@@ -49,7 +49,8 @@ class SignedHttpsAuditSiemPublisherTest {
                 "SUCCESS",
                 UUID.randomUUID(),
                 null,
-                new AuditMaterialSnapshot(null, "Example", 2L, "ACTIVE")));
+                new AuditMaterialSnapshot(null, "Example", 2L, "ACTIVE"),
+                null));
 
         assertThat(request.get()).isNotNull();
         assertThat(request.get().headers().firstValue("X-Wyrmgate-SIEM-Message-Id"))
@@ -75,6 +76,7 @@ class SignedHttpsAuditSiemPublisherTest {
                 "identity",
                 UUID.randomUUID(),
                 "SUCCESS",
+                null,
                 null,
                 null,
                 null);
