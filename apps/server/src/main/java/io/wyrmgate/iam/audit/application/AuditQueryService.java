@@ -22,7 +22,15 @@ public final class AuditQueryService {
     public Optional<AuditRecord> findById(TenantContext tenant, UUID recordId) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(recordId, "recordId");
-        return repository.findById(tenant, recordId);
+        Optional<AuditRecord> record = repository.findById(tenant, recordId);
+        record.ifPresent(value -> requireIntegrity(tenant, value));
+        return record;
+    }
+
+    private static void requireIntegrity(TenantContext tenant, AuditRecord record) {
+        if (!AuditRecordIntegrity.verifies(tenant, record)) {
+            throw new AuditIntegrityException(record.id());
+        }
     }
 
     public AuditPage list(
@@ -36,6 +44,7 @@ public final class AuditQueryService {
             throw new IllegalArgumentException("limit must be between 1 and " + MAX_PAGE_SIZE);
         }
         List<AuditRecord> fetched = repository.findPage(tenant, filter, after, limit + 1);
+        fetched.forEach(record -> requireIntegrity(tenant, record));
         boolean hasMore = fetched.size() > limit;
         List<AuditRecord> items = hasMore ? List.copyOf(fetched.subList(0, limit)) : List.copyOf(fetched);
         AuditPagePosition next = hasMore
