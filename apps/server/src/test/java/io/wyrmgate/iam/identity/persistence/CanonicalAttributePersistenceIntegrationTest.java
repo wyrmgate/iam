@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeConfigurationService;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeFactSink;
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
+import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
+import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQueryService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.SourceCorrelationService;
 import io.wyrmgate.iam.identity.domain.AttributeDefinitionVersion;
@@ -291,6 +293,29 @@ class CanonicalAttributePersistenceIntegrationTest {
                 WHERE s.tenant_id = ? AND s.identity_id = ? AND d.canonical_key = 'skills'
                 """, Integer.class, tenant.tenantId(), identity.id());
         assertThat(skillRows).isEqualTo(2);
+
+        IdentityLifecycleAccessQuery policyInputs = new IdentityLifecycleAccessQueryService(
+                identities, attributes, new JdbcCanonicalAttributeReadRepository(jdbc));
+        assertThat(policyInputs.supportsPolicyScalarAttribute(
+                tenant, "d", IdentityLifecycleAccessQuery.ScalarType.DECIMAL)).isTrue();
+        assertThat(policyInputs.supportsPolicyScalarAttribute(
+                tenant, "date", IdentityLifecycleAccessQuery.ScalarType.DATE)).isTrue();
+        assertThat(policyInputs.supportsPolicyScalarAttribute(
+                tenant, "dt", IdentityLifecycleAccessQuery.ScalarType.DATETIME)).isTrue();
+        assertThat(policyInputs.supportsPolicyScalarAttribute(
+                tenant, "skills", IdentityLifecycleAccessQuery.ScalarType.ENUM)).isFalse();
+
+        IdentityLifecycleAccessQuery.Context policyContext = policyInputs.currentContext(
+                tenant, identity.id(), Set.of("d", "date", "dt", "skills"));
+        assertThat(policyContext.canonicalScalars().get("d").type())
+                .isEqualTo(IdentityLifecycleAccessQuery.ScalarType.DECIMAL);
+        assertThat((BigDecimal) policyContext.canonicalScalars().get("d").value())
+                .isEqualByComparingTo("12.34");
+        assertThat(policyContext.canonicalScalars().get("date").value())
+                .isEqualTo(LocalDate.of(2026, 8, 21));
+        assertThat(policyContext.canonicalScalars().get("dt").value())
+                .isEqualTo(Instant.parse("2026-08-21T15:30:00Z"));
+        assertThat(policyContext.canonicalScalars().get("skills").trusted()).isFalse();
     }
 
     @Test
