@@ -919,7 +919,7 @@ Persistence implementation should now proceed in bounded vertical slices rather 
 7. validate indexes against high-cardinality query plans/performance tests;
 8. introduce partitioning only when the documented operational thresholds are observed.
 
-OD-003 (concrete OpenAPI/AsyncAPI schemas) is partially implemented across the current public control-plane surfaces, including Administration and bounded Audit read/search. ADR-0034 durable Audit export/download is implemented through V53 and the machine-readable Audit API; immutable archive-segment/retention runtime and other explicitly deferred public/JML/policy interfaces remain to be implemented. Public contracts remain semantic and must not expose these tables as APIs.
+OD-003 (concrete OpenAPI/AsyncAPI schemas) is partially implemented across the current public control-plane surfaces, including Administration and bounded Audit read/search. ADR-0034 durable Audit export/download is implemented through V53 and the machine-readable Audit API; V54 implements the internal immutable archive-segment/retention-policy runtime without adding arbitrary public archive CRUD. Other explicitly deferred public/JML/policy interfaces remain to be implemented. Public contracts remain semantic and must not expose these tables as APIs.
 
 ### Source absence inference persistence
 
