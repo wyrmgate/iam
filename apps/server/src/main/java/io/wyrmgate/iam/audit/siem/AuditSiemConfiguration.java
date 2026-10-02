@@ -2,6 +2,7 @@ package io.wyrmgate.iam.audit.siem;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.audit.application.AuditRecordRepository;
+import io.wyrmgate.iam.audit.application.AuditSiemEnqueuer;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -17,6 +18,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @ConditionalOnProperty(name = "iam.audit.siem.enabled", havingValue = "true")
 class AuditSiemConfiguration {
+
+    @Bean
+    AuditSiemEnqueuer auditSiemEnqueuer(JdbcScheduledWorkRepository scheduledWork) {
+        return new ScheduledWorkAuditSiemEnqueuer(scheduledWork);
+    }
 
     @Bean
     AuditSiemPublisher auditSiemPublisher(
