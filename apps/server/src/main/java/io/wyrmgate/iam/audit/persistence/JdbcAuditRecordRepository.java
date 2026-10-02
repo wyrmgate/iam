@@ -57,7 +57,7 @@ public final class JdbcAuditRecordRepository implements AuditRecordRepository {
                 """
                 SELECT id, occurred_at, recorded_at, actor_id, action_type,
                        resource_type, resource_id, outcome, correlation_id, causation_id
-                FROM audit.audit_record
+                FROM audit.audit_record_query
                 WHERE tenant_id = ? AND id = ?
                 """,
                 (rs, rowNum) -> row(rs),
@@ -79,7 +79,7 @@ public final class JdbcAuditRecordRepository implements AuditRecordRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT id, occurred_at, recorded_at, actor_id, action_type,
                        resource_type, resource_id, outcome, correlation_id, causation_id
-                FROM audit.audit_record
+                FROM audit.audit_record_query
                 WHERE tenant_id = ?
                 """);
         List<Object> args = new ArrayList<>();
