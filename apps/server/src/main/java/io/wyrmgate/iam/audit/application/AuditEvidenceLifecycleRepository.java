@@ -13,6 +13,8 @@ import java.util.UUID;
 
 public interface AuditEvidenceLifecycleRepository {
 
+    void lockLifecycle(TenantContext tenant);
+
     AuditLegalHold createHold(
             TenantContext tenant,
             UUID holdId,
@@ -58,6 +60,13 @@ public interface AuditEvidenceLifecycleRepository {
             UUID purgeId,
             long expectedRevision,
             UUID approvedByIdentityId,
+            Instant now);
+
+    AuditPurgeOperation blockApprovedPurge(
+            TenantContext tenant,
+            UUID purgeId,
+            long expectedRevision,
+            String failureCode,
             Instant now);
 
     AuditPurgeOperation beginPurge(
