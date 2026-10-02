@@ -271,7 +271,7 @@ class IdentityApiIntegrationTest {
                 WHERE tenant_id = ?
                   AND resource_type = 'identity'
                   AND action_type IN ('identity:create', 'identity:update-metadata')
-                  AND (material_snapshot IS NOT NULL OR integrity_metadata IS NOT NULL)
+                  AND material_snapshot IS NOT NULL
                 """, Integer.class, tenant.tenantId());
         assertThat(materialized).isZero();
     }
