@@ -231,7 +231,7 @@ public final class JdbcAuditExportRepository implements AuditExportRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT id, occurred_at, recorded_at, actor_id, action_type,
                        resource_type, resource_id, outcome, correlation_id, causation_id
-                FROM audit.audit_record
+                FROM audit.audit_record_query
                 WHERE tenant_id = ?
                   AND occurred_at >= ?
                   AND occurred_at < ?
