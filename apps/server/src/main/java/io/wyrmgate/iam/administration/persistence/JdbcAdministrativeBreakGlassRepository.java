@@ -385,18 +385,13 @@ public final class JdbcAdministrativeBreakGlassRepository
                 """
                 INSERT INTO administration.administrative_break_glass_obligation (
                     id, tenant_id, break_glass_operation_id,
-                    obligation_type, state,
-                    notification_next_attempt_at,
-                    revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'PENDING', ?, 1, ?, ?)
+                    obligation_type, state, revision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'PENDING', 1, ?, ?)
                 """,
                 obligationId,
                 tenant.tenantId(),
                 operationId,
                 type.name(),
-                type == AdministrativeBreakGlassObligationType.SECURITY_NOTIFICATION
-                        ? Timestamp.from(now)
-                        : null,
                 Timestamp.from(now),
                 Timestamp.from(now));
     }
