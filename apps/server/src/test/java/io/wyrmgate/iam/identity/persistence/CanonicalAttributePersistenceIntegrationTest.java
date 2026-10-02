@@ -94,7 +94,7 @@ class CanonicalAttributePersistenceIntegrationTest {
         resolution = new CanonicalAttributeResolutionService(
                 attributes, sources, identities, facts, ids, transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("58");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("59");
     }
 
     @AfterAll
@@ -305,6 +305,10 @@ class CanonicalAttributePersistenceIntegrationTest {
                 tenant, "dt", IdentityLifecycleAccessQuery.ScalarType.DATETIME)).isTrue();
         assertThat(policyInputs.supportsPolicyScalarAttribute(
                 tenant, "skills", IdentityLifecycleAccessQuery.ScalarType.ENUM)).isFalse();
+        assertThat(policyInputs.supportsPolicyMultiAttribute(
+                tenant, "skills", IdentityLifecycleAccessQuery.ScalarType.ENUM)).isTrue();
+        assertThat(policyInputs.supportsPolicyMultiAttribute(
+                tenant, "d", IdentityLifecycleAccessQuery.ScalarType.DECIMAL)).isFalse();
 
         IdentityLifecycleAccessQuery.Context policyContext = policyInputs.currentContext(
                 tenant, identity.id(), Set.of("d", "date", "dt", "skills"));
@@ -317,6 +321,12 @@ class CanonicalAttributePersistenceIntegrationTest {
         assertThat(policyContext.canonicalScalars().get("dt").value())
                 .isEqualTo(Instant.parse("2026-08-21T15:30:00Z"));
         assertThat(policyContext.canonicalScalars().get("skills").trusted()).isFalse();
+        assertThat(policyContext.canonicalMultis().get("skills").trusted()).isTrue();
+        assertThat(policyContext.canonicalMultis().get("skills").type())
+                .isEqualTo(IdentityLifecycleAccessQuery.ScalarType.ENUM);
+        assertThat(policyContext.canonicalMultis().get("skills").values())
+                .containsExactly("JAVA", "SQL");
+        assertThat(policyContext.canonicalMultis().get("d").trusted()).isFalse();
     }
 
     @Test

@@ -131,7 +131,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler = new LifecycleAccessReconciliationService(
                 outbox, policies, assignments, commands, identityPolicy, guard, approval);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("58");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("59");
     }
 
     @AfterAll
@@ -151,6 +151,7 @@ class LifecycleAccessReconciliationIntegrationTest {
                 CASCADE
                 """);
         identityPolicy.contexts.clear();
+        identityPolicy.multiSupported = true;
         guard.decision = LifecycleAccessPrivilegeGuard.Result.authorize();
         guard.calls = 0;
         approval.satisfied = false;
@@ -355,6 +356,111 @@ class LifecycleAccessReconciliationIntegrationTest {
                         entitlementId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("microsecond precision");
+    }
+
+    @Test
+    void typedMultiContainsPredicatesRoundTripAndAddRemoveAccess() {
+        TenantContext tenant = tenant("Typed multi mover");
+        UUID identityId = activeIdentity();
+
+        UUID stringEntitlement = ids.nextId();
+        UUID booleanEntitlement = ids.nextId();
+        UUID integerEntitlement = ids.nextId();
+        UUID decimalEntitlement = ids.nextId();
+        UUID dateEntitlement = ids.nextId();
+        UUID dateTimeEntitlement = ids.nextId();
+        UUID enumEntitlement = ids.nextId();
+
+        UUID stringRule = ids.nextId();
+        UUID booleanRule = ids.nextId();
+        UUID integerRule = ids.nextId();
+        UUID decimalRule = ids.nextId();
+        UUID dateRule = ids.nextId();
+        UUID dateTimeRule = ids.nextId();
+        UUID enumRule = ids.nextId();
+
+        LocalDate expectedDate = LocalDate.parse("2026-11-01");
+        Instant expectedDateTime = Instant.parse("2026-11-01T09:15:30.123456Z");
+
+        identityPolicy.setMulti(identityId, "regions", IdentityLifecycleAccessQuery.ScalarType.STRING,
+                java.util.List.of("APAC", "EMEA"), 1);
+        identityPolicy.setMulti(identityId, "flags", IdentityLifecycleAccessQuery.ScalarType.BOOLEAN,
+                java.util.List.of(false, true), 1);
+        identityPolicy.setMulti(identityId, "levels", IdentityLifecycleAccessQuery.ScalarType.INTEGER,
+                java.util.List.of(3L, 7L), 1);
+        identityPolicy.setMulti(identityId, "limits", IdentityLifecycleAccessQuery.ScalarType.DECIMAL,
+                java.util.List.of(new BigDecimal("10.0"), new BigDecimal("12.340")), 1);
+        identityPolicy.setMulti(identityId, "dates", IdentityLifecycleAccessQuery.ScalarType.DATE,
+                java.util.List.of(expectedDate.minusDays(1), expectedDate), 1);
+        identityPolicy.setMulti(identityId, "moments", IdentityLifecycleAccessQuery.ScalarType.DATETIME,
+                java.util.List.of(expectedDateTime.minusSeconds(1), expectedDateTime), 1);
+        identityPolicy.setMulti(identityId, "skills", IdentityLifecycleAccessQuery.ScalarType.ENUM,
+                java.util.List.of("SQL", "JAVA"), 1);
+
+        policyService.activate(
+                tenant,
+                java.util.List.of(
+                        typedEntitlement(stringRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_STRING_CONTAINS,
+                                "regions", "APAC", null, null, null, null, null, null, stringEntitlement),
+                        typedEntitlement(booleanRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_BOOLEAN_CONTAINS,
+                                "flags", null, true, null, null, null, null, null, booleanEntitlement),
+                        typedEntitlement(integerRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_INTEGER_CONTAINS,
+                                "levels", null, null, 7L, null, null, null, null, integerEntitlement),
+                        typedEntitlement(decimalRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DECIMAL_CONTAINS,
+                                "limits", null, null, null, new BigDecimal("12.3400"), null, null, null,
+                                decimalEntitlement),
+                        typedEntitlement(dateRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DATE_CONTAINS,
+                                "dates", null, null, null, null, expectedDate, null, null, dateEntitlement),
+                        typedEntitlement(dateTimeRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DATETIME_CONTAINS,
+                                "moments", null, null, null, null, null, expectedDateTime, null, dateTimeEntitlement),
+                        typedEntitlement(enumRule, LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_ENUM_CONTAINS,
+                                "skills", null, null, null, null, null, null, "JAVA", enumEntitlement)),
+                NOW.plusSeconds(1));
+
+        LifecycleAccessPolicyVersion persisted = policies.findActive(tenant).orElseThrow();
+        assertThat(persisted.rules()).hasSize(7);
+        assertThat(persisted.rules().stream()
+                        .filter(rule -> rule.ruleId().equals(decimalRule))
+                        .findFirst().orElseThrow().expectedDecimal())
+                .isEqualByComparingTo("12.34");
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isEqualTo(7);
+
+        identityPolicy.setMulti(identityId, "regions", IdentityLifecycleAccessQuery.ScalarType.STRING,
+                java.util.List.of("EMEA"), 2);
+        identityPolicy.setMulti(identityId, "flags", IdentityLifecycleAccessQuery.ScalarType.BOOLEAN,
+                java.util.List.of(false), 2);
+        identityPolicy.setMulti(identityId, "levels", IdentityLifecycleAccessQuery.ScalarType.INTEGER,
+                java.util.List.of(3L), 2);
+        identityPolicy.setMulti(identityId, "limits", IdentityLifecycleAccessQuery.ScalarType.DECIMAL,
+                java.util.List.of(new BigDecimal("10.0")), 2);
+        identityPolicy.setMulti(identityId, "dates", IdentityLifecycleAccessQuery.ScalarType.DATE,
+                java.util.List.of(expectedDate.minusDays(1)), 2);
+        identityPolicy.setMulti(identityId, "moments", IdentityLifecycleAccessQuery.ScalarType.DATETIME,
+                java.util.List.of(expectedDateTime.minusSeconds(1)), 2);
+        identityPolicy.setMulti(identityId, "skills", IdentityLifecycleAccessQuery.ScalarType.ENUM,
+                java.util.List.of("SQL"), 2);
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isZero();
+    }
+
+    @Test
+    void multiContainsDoesNotActivateAgainstScalarPolicyInput() {
+        TenantContext tenant = tenant("Multi cardinality guard");
+        identityPolicy.multiSupported = false;
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                policyService.activate(
+                        tenant,
+                        java.util.List.of(typedEntitlement(
+                                ids.nextId(),
+                                LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_ENUM_CONTAINS,
+                                "skills", null, null, null, null, null, null, "JAVA", ids.nextId())),
+                        NOW.plusSeconds(1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("attribute/cardinality");
     }
 
     @Test
@@ -621,11 +727,18 @@ class LifecycleAccessReconciliationIntegrationTest {
     private static final class MutableIdentityPolicyQuery
             implements IdentityLifecycleAccessQuery {
         private final Map<UUID, Context> contexts = new LinkedHashMap<>();
+        private boolean multiSupported = true;
 
         @Override
         public boolean supportsPolicyScalarAttribute(
                 TenantContext tenant, String canonicalKey, ScalarType type) {
             return canonicalKey != null && !canonicalKey.isBlank();
+        }
+
+        @Override
+        public boolean supportsPolicyMultiAttribute(
+                TenantContext tenant, String canonicalKey, ScalarType type) {
+            return multiSupported && canonicalKey != null && !canonicalKey.isBlank();
         }
 
         @Override
@@ -636,15 +749,19 @@ class LifecycleAccessReconciliationIntegrationTest {
             Context base = contexts.get(identityId);
             if (base == null) return Context.notFound();
             Map<String, CanonicalScalar> values = new LinkedHashMap<>();
+            Map<String, CanonicalMulti> multiValues = new LinkedHashMap<>();
             for (String key : canonicalKeys) {
                 values.put(key, base.canonicalScalars().getOrDefault(
                         key, CanonicalScalar.unavailable()));
+                multiValues.put(key, base.canonicalMultis().getOrDefault(
+                        key, CanonicalMulti.unavailable()));
             }
             return new Context(
                     base.status(),
                     base.lifecycleState(),
                     base.identityRevision(),
-                    values);
+                    values,
+                    multiValues);
         }
 
         void setContext(UUID identityId, String lifecycleState, long revision) {
@@ -655,7 +772,8 @@ class LifecycleAccessReconciliationIntegrationTest {
                             Status.AVAILABLE,
                             lifecycleState,
                             revision,
-                            current == null ? Map.of() : current.canonicalScalars()));
+                            current == null ? Map.of() : current.canonicalScalars(),
+                            current == null ? Map.of() : current.canonicalMultis()));
         }
 
         void setString(UUID identityId, String key, String value, long revision) {
@@ -676,7 +794,25 @@ class LifecycleAccessReconciliationIntegrationTest {
                             Status.AVAILABLE,
                             current.lifecycleState(),
                             current.identityRevision(),
-                            values));
+                            values,
+                            current.canonicalMultis()));
+        }
+
+        void setMulti(UUID identityId, String key, ScalarType type, java.util.List<?> values, long revision) {
+            Context current = contexts.get(identityId);
+            if (current == null) {
+                current = new Context(Status.AVAILABLE, "ACTIVE", 1, Map.of(), Map.of());
+            }
+            Map<String, CanonicalMulti> multiValues = new LinkedHashMap<>(current.canonicalMultis());
+            multiValues.put(key, CanonicalMulti.trusted(type, values, revision));
+            contexts.put(
+                    identityId,
+                    new Context(
+                            Status.AVAILABLE,
+                            current.lifecycleState(),
+                            current.identityRevision(),
+                            current.canonicalScalars(),
+                            multiValues));
         }
     }
 }

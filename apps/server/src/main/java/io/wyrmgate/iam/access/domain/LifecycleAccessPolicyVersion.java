@@ -31,7 +31,14 @@ public record LifecycleAccessPolicyVersion(
         CANONICAL_DECIMAL_EQUALS,
         CANONICAL_DATE_EQUALS,
         CANONICAL_DATETIME_EQUALS,
-        CANONICAL_ENUM_EQUALS
+        CANONICAL_ENUM_EQUALS,
+        CANONICAL_STRING_CONTAINS,
+        CANONICAL_BOOLEAN_CONTAINS,
+        CANONICAL_INTEGER_CONTAINS,
+        CANONICAL_DECIMAL_CONTAINS,
+        CANONICAL_DATE_CONTAINS,
+        CANONICAL_DATETIME_CONTAINS,
+        CANONICAL_ENUM_CONTAINS
     }
 
     public record Rule(
@@ -70,13 +77,13 @@ public record LifecycleAccessPolicyVersion(
                         + (expectedDateTime == null ? 0 : 1)
                         + (expectedEnum == null ? 0 : 1);
                 if (expectedValues != 1
-                        || (predicateKind == PredicateKind.CANONICAL_STRING_EQUALS) != (expectedString != null)
-                        || (predicateKind == PredicateKind.CANONICAL_BOOLEAN_EQUALS) != (expectedBoolean != null)
-                        || (predicateKind == PredicateKind.CANONICAL_INTEGER_EQUALS) != (expectedInteger != null)
-                        || (predicateKind == PredicateKind.CANONICAL_DECIMAL_EQUALS) != (expectedDecimal != null)
-                        || (predicateKind == PredicateKind.CANONICAL_DATE_EQUALS) != (expectedDate != null)
-                        || (predicateKind == PredicateKind.CANONICAL_DATETIME_EQUALS) != (expectedDateTime != null)
-                        || (predicateKind == PredicateKind.CANONICAL_ENUM_EQUALS) != (expectedEnum != null)) {
+                        || expectsString(predicateKind) != (expectedString != null)
+                        || expectsBoolean(predicateKind) != (expectedBoolean != null)
+                        || expectsInteger(predicateKind) != (expectedInteger != null)
+                        || expectsDecimal(predicateKind) != (expectedDecimal != null)
+                        || expectsDate(predicateKind) != (expectedDate != null)
+                        || expectsDateTime(predicateKind) != (expectedDateTime != null)
+                        || expectsEnum(predicateKind) != (expectedEnum != null)) {
                     throw new IllegalArgumentException("predicate kind must carry exactly its matching typed expected value");
                 }
                 if (expectedDecimal != null) {
@@ -95,6 +102,41 @@ public record LifecycleAccessPolicyVersion(
                 }
             }
         }
+    }
+
+    private static boolean expectsString(PredicateKind kind) {
+        return kind == PredicateKind.CANONICAL_STRING_EQUALS
+                || kind == PredicateKind.CANONICAL_STRING_CONTAINS;
+    }
+
+    private static boolean expectsBoolean(PredicateKind kind) {
+        return kind == PredicateKind.CANONICAL_BOOLEAN_EQUALS
+                || kind == PredicateKind.CANONICAL_BOOLEAN_CONTAINS;
+    }
+
+    private static boolean expectsInteger(PredicateKind kind) {
+        return kind == PredicateKind.CANONICAL_INTEGER_EQUALS
+                || kind == PredicateKind.CANONICAL_INTEGER_CONTAINS;
+    }
+
+    private static boolean expectsDecimal(PredicateKind kind) {
+        return kind == PredicateKind.CANONICAL_DECIMAL_EQUALS
+                || kind == PredicateKind.CANONICAL_DECIMAL_CONTAINS;
+    }
+
+    private static boolean expectsDate(PredicateKind kind) {
+        return kind == PredicateKind.CANONICAL_DATE_EQUALS
+                || kind == PredicateKind.CANONICAL_DATE_CONTAINS;
+    }
+
+    private static boolean expectsDateTime(PredicateKind kind) {
+        return kind == PredicateKind.CANONICAL_DATETIME_EQUALS
+                || kind == PredicateKind.CANONICAL_DATETIME_CONTAINS;
+    }
+
+    private static boolean expectsEnum(PredicateKind kind) {
+        return kind == PredicateKind.CANONICAL_ENUM_EQUALS
+                || kind == PredicateKind.CANONICAL_ENUM_CONTAINS;
     }
 
     public LifecycleAccessPolicyVersion {
