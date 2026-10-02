@@ -35,6 +35,7 @@ public final class AuditExportService {
     private static final String INVALID_WORK = "audit_export_invalid_work";
 
     private final AuditExportRepository repository;
+    private final AuditRetentionPolicyRepository retentionPolicies;
     private final AuditExportArtifactStore artifactStore;
     private final JdbcIdempotencyRepository idempotency;
     private final JdbcScheduledWorkRepository scheduledWork;
@@ -64,7 +65,27 @@ public final class AuditExportService {
             int maxAttempts,
             Duration retryDelay,
             Duration artifactRetention) {
-        this(repository, artifactStore, idempotency, scheduledWork, transactions, ids, objectMapper,
+        this(repository, null, artifactStore, idempotency, scheduledWork, transactions, ids, objectMapper,
+                enabled, claimLease, batchSize, maxAttempts, retryDelay, artifactRetention,
+                Clock.systemUTC(), "audit-export-" + UUID.randomUUID());
+    }
+
+    public AuditExportService(
+            AuditExportRepository repository,
+            AuditRetentionPolicyRepository retentionPolicies,
+            AuditExportArtifactStore artifactStore,
+            JdbcIdempotencyRepository idempotency,
+            JdbcScheduledWorkRepository scheduledWork,
+            TransactionExecutor transactions,
+            IdGenerator ids,
+            ObjectMapper objectMapper,
+            boolean enabled,
+            Duration claimLease,
+            int batchSize,
+            int maxAttempts,
+            Duration retryDelay,
+            Duration artifactRetention) {
+        this(repository, retentionPolicies, artifactStore, idempotency, scheduledWork, transactions, ids, objectMapper,
                 enabled, claimLease, batchSize, maxAttempts, retryDelay, artifactRetention,
                 Clock.systemUTC(), "audit-export-" + UUID.randomUUID());
     }
@@ -85,7 +106,30 @@ public final class AuditExportService {
             Duration artifactRetention,
             Clock clock,
             String leaseOwner) {
+        this(repository, null, artifactStore, idempotency, scheduledWork, transactions, ids, objectMapper,
+                enabled, claimLease, batchSize, maxAttempts, retryDelay, artifactRetention, clock, leaseOwner);
+    }
+
+    private AuditExportService(
+            AuditExportRepository repository,
+            AuditRetentionPolicyRepository retentionPolicies,
+            AuditExportRepository repository,
+            AuditExportArtifactStore artifactStore,
+            JdbcIdempotencyRepository idempotency,
+            JdbcScheduledWorkRepository scheduledWork,
+            TransactionExecutor transactions,
+            IdGenerator ids,
+            ObjectMapper objectMapper,
+            boolean enabled,
+            Duration claimLease,
+            int batchSize,
+            int maxAttempts,
+            Duration retryDelay,
+            Duration artifactRetention,
+            Clock clock,
+            String leaseOwner) {
         this.repository = Objects.requireNonNull(repository, "repository");
+        this.retentionPolicies = retentionPolicies;
         this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
         this.idempotency = Objects.requireNonNull(idempotency, "idempotency");
         this.scheduledWork = Objects.requireNonNull(scheduledWork, "scheduledWork");
@@ -308,8 +352,15 @@ public final class AuditExportService {
                     });
 
             Instant completedAt = clock.instant();
-            Instant expiresAt = artifactRetention == null
-                    ? null : completedAt.plus(artifactRetention);
+            Duration effectiveRetention = artifactRetention;
+            if (retentionPolicies != null) {
+                effectiveRetention = retentionPolicies
+                        .findCurrent(item.tenant(), running.snapshotRecordedAt())
+                        .map(policy -> policy.exportArtifactRetention())
+                        .orElse(artifactRetention);
+            }
+            Instant expiresAt = effectiveRetention == null
+                    ? null : completedAt.plus(effectiveRetention);
             String sha = HexFormat.of().formatHex(digest.digest());
             transactions.required(() ->
                     repository.complete(
