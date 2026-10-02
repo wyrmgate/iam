@@ -4,8 +4,11 @@ import io.wyrmgate.iam.access.application.LifecycleAccessPolicyRepository;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.domain.LifecycleAccessPolicyVersion;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.math.BigDecimal;
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,12 +46,16 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
             jdbc.update("""
                     INSERT INTO access.lifecycle_access_policy_rule
                         (policy_version_id,tenant_id,rule_id,predicate_kind,
-                         canonical_key,expected_string,expected_boolean,expected_integer,expected_enum,target_kind,target_id)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                         canonical_key,expected_string,expected_boolean,expected_integer,
+                         expected_decimal,expected_date,expected_datetime,expected_enum,target_kind,target_id)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     policyVersionId, tenant.tenantId(), rule.ruleId(), rule.predicateKind().name(),
                     rule.canonicalKey(), rule.expectedString(), rule.expectedBoolean(),
-                    rule.expectedInteger(), rule.expectedEnum(), rule.targetKind().name(), rule.targetId());
+                    rule.expectedInteger(), rule.expectedDecimal(),
+                    rule.expectedDate() == null ? null : Date.valueOf(rule.expectedDate()),
+                    rule.expectedDateTime() == null ? null : Timestamp.from(rule.expectedDateTime()),
+                    rule.expectedEnum(), rule.targetKind().name(), rule.targetId());
         }
         return findActive(tenant).orElseThrow();
     }
@@ -64,7 +71,8 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
                     UUID id=rs.getObject("id",UUID.class);
                     List<LifecycleAccessPolicyVersion.Rule> rules=jdbc.query("""
                             SELECT rule_id,predicate_kind,canonical_key,expected_string,
-                                   expected_boolean,expected_integer,expected_enum,target_kind,target_id
+                                   expected_boolean,expected_integer,expected_decimal,
+                                   expected_date,expected_datetime,expected_enum,target_kind,target_id
                             FROM access.lifecycle_access_policy_rule
                             WHERE tenant_id=? AND policy_version_id=?
                             ORDER BY rule_id
@@ -76,6 +84,11 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
                                     rr.getString("expected_string"),
                                     rr.getObject("expected_boolean", Boolean.class),
                                     rr.getObject("expected_integer", Long.class),
+                                    rr.getObject("expected_decimal", BigDecimal.class),
+                                    rr.getObject("expected_date", LocalDate.class),
+                                    rr.getTimestamp("expected_datetime") == null
+                                            ? null
+                                            : rr.getTimestamp("expected_datetime").toInstant(),
                                     rr.getString("expected_enum"),
                                     AccessAssignment.TargetKind.valueOf(rr.getString("target_kind")),
                                     rr.getObject("target_id",UUID.class)),

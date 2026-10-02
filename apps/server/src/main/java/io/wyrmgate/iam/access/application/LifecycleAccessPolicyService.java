@@ -73,6 +73,9 @@ public final class LifecycleAccessPolicyService {
             case CANONICAL_STRING_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.STRING;
             case CANONICAL_BOOLEAN_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.BOOLEAN;
             case CANONICAL_INTEGER_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.INTEGER;
+            case CANONICAL_DECIMAL_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.DECIMAL;
+            case CANONICAL_DATE_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.DATE;
+            case CANONICAL_DATETIME_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.DATETIME;
             case CANONICAL_ENUM_EQUALS -> IdentityLifecycleAccessQuery.ScalarType.ENUM;
             case ALWAYS -> throw new IllegalArgumentException("ALWAYS has no scalar type");
         };

@@ -941,6 +941,8 @@ Migration V39 adds Access-owned immutable `access.lifecycle_access_policy_versio
 
 `access.access_assignment` adds provenance kind `LIFECYCLE_POLICY_RULE`. Its provenance reference is the stable logical rule UUID. A partial unique index on tenant + Identity + rule UUID applies only to non-terminal policy assignments, allowing one current rule-owned intent while retaining terminal assignment history and permitting a later new assignment after a prior policy assignment becomes terminal.
 
+Flyway V58 extends `access.lifecycle_access_policy_rule` with typed `expected_decimal numeric(38,12)`, `expected_date date` and `expected_datetime timestamptz` columns plus closed predicate-shape constraints. The application rejects decimal expectations that would require numeric rounding and DATETIME expectations finer than microsecond persistence precision; no range/operator payload or arbitrary JSON expression is introduced.
+
 Migration V40 adds immutable Governance-owned `governance.lifecycle_access_evaluation` and `governance.lifecycle_access_sod_conflict` evidence. Each automatic privilege-increase guard attempt records the lifecycle rule/Identity/target, active Governance PolicyVersion when available, decision/code, matched SoD rules, exact exception coverage and causal correlation metadata. These rows are evidence only and never become Access authority.
 
 ### Identity merge/split persistence

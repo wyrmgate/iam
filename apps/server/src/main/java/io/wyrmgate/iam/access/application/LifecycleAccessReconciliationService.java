@@ -246,6 +246,15 @@ public final class LifecycleAccessReconciliationService {
             case CANONICAL_INTEGER_EQUALS ->
                     value.type()==IdentityLifecycleAccessQuery.ScalarType.INTEGER
                             && Objects.equals(value.value(),rule.expectedInteger());
+            case CANONICAL_DECIMAL_EQUALS ->
+                    value.type()==IdentityLifecycleAccessQuery.ScalarType.DECIMAL
+                            && ((java.math.BigDecimal) value.value()).compareTo(rule.expectedDecimal()) == 0;
+            case CANONICAL_DATE_EQUALS ->
+                    value.type()==IdentityLifecycleAccessQuery.ScalarType.DATE
+                            && Objects.equals(value.value(),rule.expectedDate());
+            case CANONICAL_DATETIME_EQUALS ->
+                    value.type()==IdentityLifecycleAccessQuery.ScalarType.DATETIME
+                            && Objects.equals(value.value(),rule.expectedDateTime());
             case CANONICAL_ENUM_EQUALS ->
                     value.type()==IdentityLifecycleAccessQuery.ScalarType.ENUM
                             && Objects.equals(value.value(),rule.expectedEnum());

@@ -26,6 +26,9 @@ public interface IdentityLifecycleAccessQuery {
         STRING,
         BOOLEAN,
         INTEGER,
+        DECIMAL,
+        DATE,
+        DATETIME,
         ENUM
     }
 
@@ -42,6 +45,9 @@ public interface IdentityLifecycleAccessQuery {
                     case STRING, ENUM -> value instanceof String;
                     case BOOLEAN -> value instanceof Boolean;
                     case INTEGER -> value instanceof Long;
+                    case DECIMAL -> value instanceof java.math.BigDecimal;
+                    case DATE -> value instanceof java.time.LocalDate;
+                    case DATETIME -> value instanceof java.time.Instant;
                 };
                 if (!valid || valueRevision < 1) {
                     throw new IllegalArgumentException("trusted scalar requires matching typed value/revision");
