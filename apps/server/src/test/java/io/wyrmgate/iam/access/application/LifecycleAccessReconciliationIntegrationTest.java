@@ -151,6 +151,7 @@ class LifecycleAccessReconciliationIntegrationTest {
                 CASCADE
                 """);
         identityPolicy.contexts.clear();
+        identityPolicy.multiSupported = true;
         guard.decision = LifecycleAccessPrivilegeGuard.Result.authorize();
         guard.calls = 0;
         approval.satisfied = false;
