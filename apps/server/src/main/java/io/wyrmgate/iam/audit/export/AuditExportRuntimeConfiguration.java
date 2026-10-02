@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.audit.application.AuditExportArtifactStore;
 import io.wyrmgate.iam.audit.application.AuditExportRepository;
 import io.wyrmgate.iam.audit.application.AuditExportService;
+import io.wyrmgate.iam.audit.application.AuditRetentionPolicyRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
@@ -28,6 +29,7 @@ class AuditExportRuntimeConfiguration {
     @Bean
     AuditExportService auditExportService(
             AuditExportRepository repository,
+            AuditRetentionPolicyRepository retentionPolicies,
             AuditExportArtifactStore artifactStore,
             JdbcIdempotencyRepository idempotency,
             JdbcScheduledWorkRepository scheduledWork,
@@ -45,6 +47,7 @@ class AuditExportRuntimeConfiguration {
                 : Duration.parse(artifactRetention);
         return new AuditExportService(
                 repository,
+                retentionPolicies,
                 artifactStore,
                 idempotency,
                 scheduledWork,
