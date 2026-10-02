@@ -338,7 +338,7 @@ final class AdministrationApiMutationService {
                 AdministrativeBreakGlassReview existing = breakGlass.getReview(actor, id, now);
                 transactions.required(() -> {
                     complete(actor, namespace, key, fingerprint,
-                            "administrative-break-glass-review", existing.id(), now);
+                            "administrative-break-glass-review", id, now);
                     return null;
                 });
                 return existing;
@@ -352,7 +352,7 @@ final class AdministrationApiMutationService {
                 actor, id, revision, outcome, summary, correlationId, null, now);
         transactions.required(() -> {
             complete(actor, namespace, key, fingerprint,
-                    "administrative-break-glass-review", value.id(), now);
+                    "administrative-break-glass-review", id, now);
             return null;
         });
         return value;
@@ -469,13 +469,7 @@ final class AdministrationApiMutationService {
     private AdministrativeBreakGlassReview replayBreakGlassReview(
             AuthenticatedAdministrativeActor actor, Registration r, Instant now, UUID correlationId) {
         requireCompleted(r, "administrative-break-glass-review", correlationId);
-        return breakGlass.getReview(actor, idFromReviewRegistration(r, actor, now), now);
-    }
-
-    private UUID idFromReviewRegistration(
-            Registration r, AuthenticatedAdministrativeActor actor, Instant now) {
-        AdministrativeBreakGlassReview existing = breakGlass.getReviewByReviewId(actor, r.resourceId(), now);
-        return existing.breakGlassOperationId();
+        return breakGlass.getReview(actor, r.resourceId(), now);
     }
 
 
