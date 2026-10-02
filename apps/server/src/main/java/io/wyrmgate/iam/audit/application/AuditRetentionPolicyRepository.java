@@ -9,6 +9,8 @@ import java.util.UUID;
 
 public interface AuditRetentionPolicyRepository {
 
+    long nextVersion(TenantContext tenant);
+
     AuditRetentionPolicyVersion create(
             TenantContext tenant,
             UUID id,
