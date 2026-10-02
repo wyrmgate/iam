@@ -1,7 +1,6 @@
 package io.wyrmgate.iam.audit.persistence;
 
 import io.wyrmgate.iam.audit.application.AuditExportRepository;
-import io.wyrmgate.iam.audit.application.AuditQueryModels.AuditFilter;
 import io.wyrmgate.iam.audit.domain.AuditExportOperation;
 import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.audit.domain.AuditRecord;
@@ -31,7 +30,7 @@ public final class JdbcAuditExportRepository implements AuditExportRepository {
             TenantContext tenant,
             UUID operationId,
             UUID requestedByIdentityId,
-            AuditFilter filter,
+            AuditExportOperation.Filter filter,
             Instant occurredFrom,
             Instant occurredUntil,
             Instant snapshotRecordedAt,
@@ -215,7 +214,7 @@ public final class JdbcAuditExportRepository implements AuditExportRepository {
     @Override
     public List<AuditRecord> findSourcePage(
             TenantContext tenant,
-            AuditFilter filter,
+            AuditExportOperation.Filter filter,
             Instant occurredFrom,
             Instant occurredUntil,
             Instant snapshotRecordedAt,
@@ -300,7 +299,7 @@ public final class JdbcAuditExportRepository implements AuditExportRepository {
         return new AuditExportOperation(
                 rs.getObject("id", UUID.class),
                 rs.getObject("requested_by_identity_id", UUID.class),
-                new AuditFilter(
+                new AuditExportOperation.Filter(
                         rs.getObject("actor_filter_id", UUID.class),
                         rs.getString("action_type_filter"),
                         rs.getString("resource_type_filter"),
