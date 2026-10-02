@@ -20,6 +20,8 @@ public interface AuditRetentionPolicyRepository {
             Instant effectiveFrom,
             Instant createdAt);
 
+    Optional<AuditRetentionPolicyVersion> findById(TenantContext tenant, UUID id);
+
     Optional<AuditRetentionPolicyVersion> findByVersion(TenantContext tenant, long version);
 
     Optional<AuditRetentionPolicyVersion> findCurrent(TenantContext tenant, Instant at);
