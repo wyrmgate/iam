@@ -8,6 +8,21 @@ final class AuditApiModels {
     private AuditApiModels() {
     }
 
+    record AuditMaterialSnapshotResource(
+            String schemaVersion,
+            String actorDisplayLabel,
+            String resourceDisplayLabel,
+            Long resourceRevision,
+            String resourceState) {
+    }
+
+    record AuditIntegrityMetadataResource(
+            String schemaVersion,
+            String algorithm,
+            String contentSha256,
+            String materialSnapshotSha256) {
+    }
+
     record AuditRecordResource(
             UUID id,
             Instant occurredAt,
@@ -18,7 +33,9 @@ final class AuditApiModels {
             UUID resourceId,
             String outcome,
             UUID correlationId,
-            UUID causationId) {
+            UUID causationId,
+            AuditMaterialSnapshotResource materialSnapshot,
+            AuditIntegrityMetadataResource integrityMetadata) {
     }
 
     record AuditRecordPage(
