@@ -121,7 +121,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                         transactions,
                         Clock.systemUTC()),
                 ids);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("50");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("51");
     }
 
     @AfterAll
