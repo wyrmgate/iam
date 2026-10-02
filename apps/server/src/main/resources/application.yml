@@ -77,6 +77,14 @@ iam:
       batch-size: ${IAM_AUDIT_ARCHIVE_BATCH_SIZE:10}
       max-attempts: ${IAM_AUDIT_ARCHIVE_MAX_ATTEMPTS:5}
       retry-delay: ${IAM_AUDIT_ARCHIVE_RETRY_DELAY:PT5S}
+    retention:
+      tenant-id: ${IAM_AUDIT_RETENTION_TENANT_ID:}
+      version: ${IAM_AUDIT_RETENTION_VERSION:}
+      export-artifact-retention: ${IAM_AUDIT_RETENTION_EXPORT_ARTIFACT_RETENTION:}
+      archive-eligible-after: ${IAM_AUDIT_RETENTION_ARCHIVE_ELIGIBLE_AFTER:}
+      minimum-online-retention: ${IAM_AUDIT_RETENTION_MINIMUM_ONLINE_RETENTION:}
+      minimum-archive-retention: ${IAM_AUDIT_RETENTION_MINIMUM_ARCHIVE_RETENTION:}
+      effective-from: ${IAM_AUDIT_RETENTION_EFFECTIVE_FROM:}
   integration:
     worker-auth:
       enabled: ${IAM_CONNECTOR_WORKER_AUTH_ENABLED:false}
