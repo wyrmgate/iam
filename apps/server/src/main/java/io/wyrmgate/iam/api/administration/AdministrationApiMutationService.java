@@ -6,6 +6,8 @@ import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassServic
 import io.wyrmgate.iam.administration.application.AdministrativeElevationService;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassOperation;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReview;
+import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassReviewOutcome;
 import io.wyrmgate.iam.administration.domain.AdministrativeBreakGlassState;
 import io.wyrmgate.iam.administration.domain.AdministrativeDelegation;
 import io.wyrmgate.iam.administration.domain.AdministrativeElevation;
@@ -316,6 +318,46 @@ final class AdministrationApiMutationService {
         return value;
     }
 
+    AdministrativeBreakGlassReview completeBreakGlassReview(
+            AuthenticatedAdministrativeActor actor,
+            UUID id,
+            long revision,
+            AdministrativeBreakGlassReviewOutcome outcome,
+            String summary,
+            String key,
+            RequestFingerprint fingerprint,
+            Instant now,
+            UUID correlationId) {
+        String namespace = "api.administration.break-glass.complete-review.v1";
+        Registration r = transactions.required(() -> register(actor, namespace, key, fingerprint, now));
+        if (r.kind() == RegistrationKind.REPLAY && "COMPLETED".equals(r.operationState())) {
+            return replayBreakGlassReview(actor, r, now, correlationId);
+        }
+        if (r.kind() == RegistrationKind.REPLAY) {
+            try {
+                AdministrativeBreakGlassReview existing = breakGlass.getReview(actor, id, now);
+                transactions.required(() -> {
+                    complete(actor, namespace, key, fingerprint,
+                            "administrative-break-glass-review", existing.id(), now);
+                    return null;
+                });
+                return existing;
+            } catch (AdministrativeAuthorityException notFound) {
+                if (!"administrative_break_glass_review_not_found".equals(notFound.code())) {
+                    throw notFound;
+                }
+            }
+        }
+        AdministrativeBreakGlassReview value = breakGlass.completeReview(
+                actor, id, revision, outcome, summary, correlationId, null, now);
+        transactions.required(() -> {
+            complete(actor, namespace, key, fingerprint,
+                    "administrative-break-glass-review", value.id(), now);
+            return null;
+        });
+        return value;
+    }
+
     AdministrativeBreakGlassOperation revokeBreakGlass(
             AuthenticatedAdministrativeActor actor, UUID id, long revision,
             String key, RequestFingerprint fingerprint, Instant now, UUID correlationId) {
@@ -424,6 +466,18 @@ final class AdministrationApiMutationService {
         requireCompleted(r, "administrative-break-glass", correlationId);
         return breakGlass.get(actor, r.resourceId(), now);
     }
+    private AdministrativeBreakGlassReview replayBreakGlassReview(
+            AuthenticatedAdministrativeActor actor, Registration r, Instant now, UUID correlationId) {
+        requireCompleted(r, "administrative-break-glass-review", correlationId);
+        return breakGlass.getReview(actor, idFromReviewRegistration(r, actor, now), now);
+    }
+
+    private UUID idFromReviewRegistration(
+            Registration r, AuthenticatedAdministrativeActor actor, Instant now) {
+        AdministrativeBreakGlassReview existing = breakGlass.getReviewByReviewId(actor, r.resourceId(), now);
+        return existing.breakGlassOperationId();
+    }
+
 
     private static void requireCompleted(Registration r, String resourceType, UUID correlationId) {
         if (!"COMPLETED".equals(r.operationState())) {
