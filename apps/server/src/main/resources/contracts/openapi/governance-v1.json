@@ -1093,6 +1093,161 @@
         "x-wyrmgate-administrative-permission": "governance-policy:cancel",
         "x-wyrmgate-idempotency": "Required"
       }
+    },
+    "/governance/exceptions": {
+      "post": {
+        "operationId": "requestGovernanceException",
+        "summary": "Request a scoped time-bound Governance exception",
+        "description": "Creates a PENDING_APPROVAL IDENTITY_SOD_RULE exception and starts the supplied typed reusable ApprovalCase. The authenticated actor is the requester; approval evidence never directly creates Access authority.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGovernanceExceptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "GovernanceException requested",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceException"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-wyrmgate-authority": "Governance authoritative exception",
+        "x-wyrmgate-administrative-permission": "governance-exception:create",
+        "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/governance/exceptions/{governanceExceptionId}": {
+      "get": {
+        "operationId": "getGovernanceException",
+        "summary": "Get one Governance exception",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GovernanceExceptionId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GovernanceException",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceException"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-wyrmgate-authority": "Governance authoritative exception",
+        "x-wyrmgate-administrative-permission": "governance-exception:read"
+      }
+    },
+    "/governance/exceptions/{governanceExceptionId}:revoke": {
+      "post": {
+        "operationId": "revokeGovernanceException",
+        "summary": "Revoke an approved Governance exception",
+        "description": "Explicit authority reduction. If validity has already elapsed, the service materializes EXPIRED instead. Revocation does not mutate Access directly.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/GovernanceExceptionId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GovernanceException revoked or expired",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceException"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-wyrmgate-authority": "Governance authoritative exception",
+        "x-wyrmgate-administrative-permission": "governance-exception:revoke",
+        "x-wyrmgate-idempotency": "Required"
+      }
     }
   },
   "components": {
@@ -1208,6 +1363,16 @@
           "format": "uuid"
         },
         "description": "Stable Governance ACCESS_REQUEST PolicyVersion identifier."
+      },
+      "GovernanceExceptionId": {
+        "name": "governanceExceptionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Stable GovernanceException identifier."
       }
     },
     "headers": {
@@ -2566,6 +2731,170 @@
             "items": {
               "$ref": "#/components/schemas/GovernanceSoDRuleInput"
             }
+          },
+          "approvalPlan": {
+            "$ref": "#/components/schemas/GovernanceApprovalPlanInput"
+          }
+        }
+      },
+      "GovernanceException": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "scopeKind",
+          "subjectIdentityId",
+          "sodRuleId",
+          "requesterIdentityId",
+          "businessReason",
+          "validFrom",
+          "validUntil",
+          "lifecycleState",
+          "approvalCaseId",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scopeKind": {
+            "type": "string",
+            "enum": [
+              "IDENTITY_SOD_RULE"
+            ]
+          },
+          "subjectIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sodRuleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requesterIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "REJECTED",
+              "REVOKED",
+              "EXPIRED"
+            ]
+          },
+          "approvalCaseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "predecessorExceptionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rejectedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "expiredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateGovernanceExceptionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subjectIdentityId",
+          "sodRuleId",
+          "businessReason",
+          "validFrom",
+          "validUntil",
+          "predecessorExceptionId",
+          "approvalPlan"
+        ],
+        "properties": {
+          "subjectIdentityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sodRuleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "businessReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "predecessorExceptionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           },
           "approvalPlan": {
             "$ref": "#/components/schemas/GovernanceApprovalPlanInput"
