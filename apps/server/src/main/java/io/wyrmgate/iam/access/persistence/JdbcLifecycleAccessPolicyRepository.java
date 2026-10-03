@@ -60,11 +60,12 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
             for (var expected : rule.expectedSet()) {
                 jdbc.update("""
                         INSERT INTO access.lifecycle_access_policy_rule_expected_value
-                            (tenant_id,policy_version_id,rule_id,value_ordinal,value_type,
+                            (tenant_id,policy_version_id,rule_id,predicate_kind,value_ordinal,value_type,
                              value_string,value_boolean,value_integer,value_decimal,value_date,value_datetime,value_enum)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """,
-                        tenant.tenantId(), policyVersionId, rule.ruleId(), ordinal++, expected.type().name(),
+                        tenant.tenantId(), policyVersionId, rule.ruleId(), rule.predicateKind().name(),
+                        ordinal++, expected.type().name(),
                         expected.stringValue(), expected.booleanValue(), expected.integerValue(),
                         expected.decimalValue(),
                         expected.dateValue() == null ? null : Date.valueOf(expected.dateValue()),
