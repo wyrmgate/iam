@@ -123,6 +123,17 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission CREDENTIAL_ROTATION_READ =
             new AdministrativePermission("credential-rotation", "read");
 
+    public static final AdministrativePermission GOVERNANCE_POLICY_READ =
+            new AdministrativePermission("governance-policy", "read");
+    public static final AdministrativePermission GOVERNANCE_POLICY_CREATE =
+            new AdministrativePermission("governance-policy", "create");
+    public static final AdministrativePermission GOVERNANCE_POLICY_READY =
+            new AdministrativePermission("governance-policy", "ready");
+    public static final AdministrativePermission GOVERNANCE_POLICY_ACTIVATE =
+            new AdministrativePermission("governance-policy", "activate");
+    public static final AdministrativePermission GOVERNANCE_POLICY_CANCEL =
+            new AdministrativePermission("governance-policy", "cancel");
+
     public static final AdministrativePermission REVIEW_CAMPAIGN_READ =
             new AdministrativePermission("review-campaign", "read");
     public static final AdministrativePermission REVIEW_CAMPAIGN_CREATE =
