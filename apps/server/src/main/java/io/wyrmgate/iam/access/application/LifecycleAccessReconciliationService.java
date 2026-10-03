@@ -260,6 +260,22 @@ public final class LifecycleAccessReconciliationService {
                 case CANONICAL_ENUM_CONTAINS ->
                         multi.type()==IdentityLifecycleAccessQuery.ScalarType.ENUM
                                 && multi.values().stream().anyMatch(v -> Objects.equals(v,rule.expectedEnum()));
+                case CANONICAL_STRING_CONTAINS_ANY,
+                        CANONICAL_BOOLEAN_CONTAINS_ANY,
+                        CANONICAL_INTEGER_CONTAINS_ANY,
+                        CANONICAL_DECIMAL_CONTAINS_ANY,
+                        CANONICAL_DATE_CONTAINS_ANY,
+                        CANONICAL_DATETIME_CONTAINS_ANY,
+                        CANONICAL_ENUM_CONTAINS_ANY ->
+                        setMatchesAny(rule, multi);
+                case CANONICAL_STRING_CONTAINS_ALL,
+                        CANONICAL_BOOLEAN_CONTAINS_ALL,
+                        CANONICAL_INTEGER_CONTAINS_ALL,
+                        CANONICAL_DECIMAL_CONTAINS_ALL,
+                        CANONICAL_DATE_CONTAINS_ALL,
+                        CANONICAL_DATETIME_CONTAINS_ALL,
+                        CANONICAL_ENUM_CONTAINS_ALL ->
+                        setMatchesAll(rule, multi);
                 default -> false;
             };
         }
@@ -293,6 +309,33 @@ public final class LifecycleAccessReconciliationService {
         };
     }
 
+    private static boolean setMatchesAny(
+            LifecycleAccessPolicyVersion.Rule rule,
+            IdentityLifecycleAccessQuery.CanonicalMulti multi) {
+        return rule.expectedSet().stream().anyMatch(expected -> containsExpected(multi, expected));
+    }
+
+    private static boolean setMatchesAll(
+            LifecycleAccessPolicyVersion.Rule rule,
+            IdentityLifecycleAccessQuery.CanonicalMulti multi) {
+        return rule.expectedSet().stream().allMatch(expected -> containsExpected(multi, expected));
+    }
+
+    private static boolean containsExpected(
+            IdentityLifecycleAccessQuery.CanonicalMulti multi,
+            LifecycleAccessPolicyVersion.ExpectedValue expected) {
+        if (!multi.type().name().equals(expected.type().name())) {
+            return false;
+        }
+        if (expected.type() == LifecycleAccessPolicyVersion.ExpectedValue.Type.DECIMAL) {
+            java.math.BigDecimal target = (java.math.BigDecimal) expected.value();
+            return multi.values().stream()
+                    .map(java.math.BigDecimal.class::cast)
+                    .anyMatch(value -> value.compareTo(target) == 0);
+        }
+        return multi.values().stream().anyMatch(value -> Objects.equals(value, expected.value()));
+    }
+
     private static boolean isMultiPredicate(
             LifecycleAccessPolicyVersion.PredicateKind kind) {
         return switch (kind) {
@@ -302,7 +345,21 @@ public final class LifecycleAccessReconciliationService {
                     CANONICAL_DECIMAL_CONTAINS,
                     CANONICAL_DATE_CONTAINS,
                     CANONICAL_DATETIME_CONTAINS,
-                    CANONICAL_ENUM_CONTAINS -> true;
+                    CANONICAL_ENUM_CONTAINS,
+                    CANONICAL_STRING_CONTAINS_ANY,
+                    CANONICAL_BOOLEAN_CONTAINS_ANY,
+                    CANONICAL_INTEGER_CONTAINS_ANY,
+                    CANONICAL_DECIMAL_CONTAINS_ANY,
+                    CANONICAL_DATE_CONTAINS_ANY,
+                    CANONICAL_DATETIME_CONTAINS_ANY,
+                    CANONICAL_ENUM_CONTAINS_ANY,
+                    CANONICAL_STRING_CONTAINS_ALL,
+                    CANONICAL_BOOLEAN_CONTAINS_ALL,
+                    CANONICAL_INTEGER_CONTAINS_ALL,
+                    CANONICAL_DECIMAL_CONTAINS_ALL,
+                    CANONICAL_DATE_CONTAINS_ALL,
+                    CANONICAL_DATETIME_CONTAINS_ALL,
+                    CANONICAL_ENUM_CONTAINS_ALL -> true;
             default -> false;
         };
     }

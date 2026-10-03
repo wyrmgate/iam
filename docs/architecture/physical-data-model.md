@@ -945,6 +945,8 @@ Flyway V58 extends `access.lifecycle_access_policy_rule` with typed `expected_de
 
 Flyway V59 expands only the closed `predicate_kind` / typed-shape constraints to add seven `CANONICAL_*_CONTAINS` variants for governed MULTI membership. It reuses the existing typed expected-value columns; collection values remain Identity-owned normalized canonical rows and no Access-owned JSON/set payload is introduced. Cardinality compatibility is validated through the Identity semantic query at policy activation.
 
+Flyway V60 adds `access.lifecycle_access_policy_rule_expected_value`, a typed relational child table for bounded `CONTAINS_ANY` / `CONTAINS_ALL` expected sets. Parent rules carry no scalar expected field for set predicates; child rows use one typed value per ordinal with database shape constraints, while the application enforces 2-20 distinct homogeneous values and ADR-0039 precision semantics. The ordinal is deterministic storage/readback only and has no policy meaning.
+
 Migration V40 adds immutable Governance-owned `governance.lifecycle_access_evaluation` and `governance.lifecycle_access_sod_conflict` evidence. Each automatic privilege-increase guard attempt records the lifecycle rule/Identity/target, active Governance PolicyVersion when available, decision/code, matched SoD rules, exact exception coverage and causal correlation metadata. These rows are evidence only and never become Access authority.
 
 ### Identity merge/split persistence

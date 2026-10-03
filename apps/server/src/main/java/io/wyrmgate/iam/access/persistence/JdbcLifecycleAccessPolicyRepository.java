@@ -56,6 +56,22 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
                     rule.expectedDate() == null ? null : Date.valueOf(rule.expectedDate()),
                     rule.expectedDateTime() == null ? null : Timestamp.from(rule.expectedDateTime()),
                     rule.expectedEnum(), rule.targetKind().name(), rule.targetId());
+            int ordinal = 0;
+            for (var expected : rule.expectedSet()) {
+                jdbc.update("""
+                        INSERT INTO access.lifecycle_access_policy_rule_expected_value
+                            (tenant_id,policy_version_id,rule_id,predicate_kind,value_ordinal,value_type,
+                             value_string,value_boolean,value_integer,value_decimal,value_date,value_datetime,value_enum)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        """,
+                        tenant.tenantId(), policyVersionId, rule.ruleId(), rule.predicateKind().name(),
+                        ordinal++, expected.type().name(),
+                        expected.stringValue(), expected.booleanValue(), expected.integerValue(),
+                        expected.decimalValue(),
+                        expected.dateValue() == null ? null : Date.valueOf(expected.dateValue()),
+                        expected.dateTimeValue() == null ? null : Timestamp.from(expected.dateTimeValue()),
+                        expected.enumValue());
+            }
         }
         return findActive(tenant).orElseThrow();
     }
@@ -90,6 +106,10 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
                                             ? null
                                             : rr.getTimestamp("expected_datetime").toInstant(),
                                     rr.getString("expected_enum"),
+                                    readExpectedValues(
+                                            tenant,
+                                            id,
+                                            rr.getObject("rule_id",UUID.class)),
                                     AccessAssignment.TargetKind.valueOf(rr.getString("target_kind")),
                                     rr.getObject("target_id",UUID.class)),
                             tenant.tenantId(),id);
@@ -100,5 +120,30 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
                             rs.getTimestamp("activated_at").toInstant(),
                             rs.getTimestamp("superseded_at")==null?null:rs.getTimestamp("superseded_at").toInstant());
                 },tenant.tenantId()).stream().findFirst();
+    }
+
+    private List<LifecycleAccessPolicyVersion.ExpectedValue> readExpectedValues(
+            TenantContext tenant,
+            UUID policyVersionId,
+            UUID ruleId) {
+        return jdbc.query("""
+                SELECT value_type,value_string,value_boolean,value_integer,value_decimal,
+                       value_date,value_datetime,value_enum
+                FROM access.lifecycle_access_policy_rule_expected_value
+                WHERE tenant_id=? AND policy_version_id=? AND rule_id=?
+                ORDER BY value_ordinal
+                """,
+                (rs,row) -> new LifecycleAccessPolicyVersion.ExpectedValue(
+                        LifecycleAccessPolicyVersion.ExpectedValue.Type.valueOf(rs.getString("value_type")),
+                        rs.getString("value_string"),
+                        rs.getObject("value_boolean", Boolean.class),
+                        rs.getObject("value_integer", Long.class),
+                        rs.getObject("value_decimal", BigDecimal.class),
+                        rs.getObject("value_date", LocalDate.class),
+                        rs.getTimestamp("value_datetime") == null
+                                ? null
+                                : rs.getTimestamp("value_datetime").toInstant(),
+                        rs.getString("value_enum")),
+                tenant.tenantId(), policyVersionId, ruleId);
     }
 }

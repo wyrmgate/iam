@@ -131,7 +131,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         reconciler = new LifecycleAccessReconciliationService(
                 outbox, policies, assignments, commands, identityPolicy, guard, approval);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("59");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
     }
 
     @AfterAll
@@ -464,6 +464,143 @@ class LifecycleAccessReconciliationIntegrationTest {
     }
 
     @Test
+    void multiExpectedSetAnyAllRoundTripAndReconcile() {
+        TenantContext tenant = tenant("Multi expected set");
+        UUID identityId = activeIdentity();
+        UUID anyEntitlement = ids.nextId();
+        UUID allEntitlement = ids.nextId();
+        UUID decimalEntitlement = ids.nextId();
+        UUID anyRule = ids.nextId();
+        UUID allRule = ids.nextId();
+        UUID decimalRule = ids.nextId();
+
+        identityPolicy.setMulti(
+                identityId,
+                "skills",
+                IdentityLifecycleAccessQuery.ScalarType.ENUM,
+                java.util.List.of("SQL", "PYTHON"),
+                1);
+        identityPolicy.setMulti(
+                identityId,
+                "regions",
+                IdentityLifecycleAccessQuery.ScalarType.STRING,
+                java.util.List.of("APAC", "EMEA", "NA"),
+                1);
+        identityPolicy.setMulti(
+                identityId,
+                "limits",
+                IdentityLifecycleAccessQuery.ScalarType.DECIMAL,
+                java.util.List.of(new BigDecimal("12.340"), new BigDecimal("9.10")),
+                1);
+
+        policyService.activate(
+                tenant,
+                java.util.List.of(
+                        setEntitlement(
+                                anyRule,
+                                LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_ENUM_CONTAINS_ANY,
+                                "skills",
+                                java.util.List.of(
+                                        LifecycleAccessPolicyVersion.ExpectedValue.enumKey("JAVA"),
+                                        LifecycleAccessPolicyVersion.ExpectedValue.enumKey("SQL")),
+                                anyEntitlement),
+                        setEntitlement(
+                                allRule,
+                                LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_STRING_CONTAINS_ALL,
+                                "regions",
+                                java.util.List.of(
+                                        LifecycleAccessPolicyVersion.ExpectedValue.string("APAC"),
+                                        LifecycleAccessPolicyVersion.ExpectedValue.string("EMEA")),
+                                allEntitlement),
+                        setEntitlement(
+                                decimalRule,
+                                LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DECIMAL_CONTAINS_ALL,
+                                "limits",
+                                java.util.List.of(
+                                        LifecycleAccessPolicyVersion.ExpectedValue.decimal(new BigDecimal("12.3400")),
+                                        LifecycleAccessPolicyVersion.ExpectedValue.decimal(new BigDecimal("9.100"))),
+                                decimalEntitlement)),
+                NOW.plusSeconds(1));
+
+        LifecycleAccessPolicyVersion persisted = policies.findActive(tenant).orElseThrow();
+        assertThat(persisted.rules()).hasSize(3);
+        LifecycleAccessPolicyVersion.Rule persistedDecimal = persisted.rules().stream()
+                .filter(rule -> rule.ruleId().equals(decimalRule))
+                .findFirst()
+                .orElseThrow();
+        assertThat(persistedDecimal.expectedSet()).hasSize(2);
+        assertThat((BigDecimal) persistedDecimal.expectedSet().get(0).value())
+                .isEqualByComparingTo("12.34");
+        assertThat((BigDecimal) persistedDecimal.expectedSet().get(1).value())
+                .isEqualByComparingTo("9.1");
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isEqualTo(3);
+
+        identityPolicy.setMulti(
+                identityId,
+                "skills",
+                IdentityLifecycleAccessQuery.ScalarType.ENUM,
+                java.util.List.of("PYTHON"),
+                2);
+        identityPolicy.setMulti(
+                identityId,
+                "regions",
+                IdentityLifecycleAccessQuery.ScalarType.STRING,
+                java.util.List.of("APAC", "NA"),
+                2);
+        identityPolicy.setMulti(
+                identityId,
+                "limits",
+                IdentityLifecycleAccessQuery.ScalarType.DECIMAL,
+                java.util.List.of(new BigDecimal("12.34")),
+                2);
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
+        assertThat(currentPolicyAssignmentCount(tenant, identityId)).isZero();
+    }
+
+    @Test
+    void multiExpectedSetShapeGuardsRejectSingletonMixedAndDuplicates() {
+        UUID entitlementId = ids.nextId();
+        UUID ruleId = ids.nextId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                setEntitlement(
+                        ruleId,
+                        LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_ENUM_CONTAINS_ANY,
+                        "skills",
+                        java.util.List.of(LifecycleAccessPolicyVersion.ExpectedValue.enumKey("JAVA")),
+                        entitlementId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("2 to 20");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                setEntitlement(
+                        ruleId,
+                        LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_ENUM_CONTAINS_ANY,
+                        "skills",
+                        java.util.List.of(
+                                LifecycleAccessPolicyVersion.ExpectedValue.enumKey("JAVA"),
+                                LifecycleAccessPolicyVersion.ExpectedValue.string("SQL")),
+                        entitlementId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("match predicate type");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                setEntitlement(
+                        ruleId,
+                        LifecycleAccessPolicyVersion.PredicateKind.CANONICAL_DECIMAL_CONTAINS_ALL,
+                        "limits",
+                        java.util.List.of(
+                                LifecycleAccessPolicyVersion.ExpectedValue.decimal(new BigDecimal("12.34")),
+                                LifecycleAccessPolicyVersion.ExpectedValue.decimal(new BigDecimal("12.3400"))),
+                        entitlementId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("distinct");
+    }
+
+    @Test
     void sameLogicalRuleTargetChangeRemovesOldBeforeFailClosedIncrease() {
         TenantContext tenant = tenant("Target change");
         UUID identityId = activeIdentity();
@@ -667,6 +804,28 @@ class LifecycleAccessReconciliationIntegrationTest {
                 ruleId, kind, key, stringValue, booleanValue, integerValue,
                 decimalValue, dateValue, dateTimeValue, enumValue,
                 AccessAssignment.TargetKind.ENTITLEMENT, entitlementId);
+    }
+
+    private static LifecycleAccessPolicyVersion.Rule setEntitlement(
+            UUID ruleId,
+            LifecycleAccessPolicyVersion.PredicateKind kind,
+            String key,
+            java.util.List<LifecycleAccessPolicyVersion.ExpectedValue> expectedSet,
+            UUID entitlementId) {
+        return new LifecycleAccessPolicyVersion.Rule(
+                ruleId,
+                kind,
+                key,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                expectedSet,
+                AccessAssignment.TargetKind.ENTITLEMENT,
+                entitlementId);
     }
 
     private static long currentPolicyAssignmentCount(
