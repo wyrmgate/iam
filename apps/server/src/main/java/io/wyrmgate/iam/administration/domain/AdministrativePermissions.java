@@ -35,6 +35,19 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission PRINCIPAL_CORRELATE =
             new AdministrativePermission("principal", "correlate");
 
+    public static final AdministrativePermission SOURCE_CORRELATION_POLICY_READ =
+            new AdministrativePermission("source-correlation-policy", "read");
+    public static final AdministrativePermission SOURCE_CORRELATION_POLICY_ACTIVATE =
+            new AdministrativePermission("source-correlation-policy", "activate");
+    public static final AdministrativePermission SOURCE_LIFECYCLE_POLICY_READ =
+            new AdministrativePermission("source-lifecycle-policy", "read");
+    public static final AdministrativePermission SOURCE_LIFECYCLE_POLICY_ACTIVATE =
+            new AdministrativePermission("source-lifecycle-policy", "activate");
+    public static final AdministrativePermission SOURCE_ABSENCE_POLICY_READ =
+            new AdministrativePermission("source-absence-policy", "read");
+    public static final AdministrativePermission SOURCE_ABSENCE_POLICY_ACTIVATE =
+            new AdministrativePermission("source-absence-policy", "activate");
+
 
     public static final AdministrativePermission APPLICATION_READ =
             new AdministrativePermission("application", "read");
