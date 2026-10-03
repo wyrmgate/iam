@@ -15,11 +15,14 @@ import io.wyrmgate.iam.access.application.DesiredStateDerivationService;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
+import io.wyrmgate.iam.access.application.LifecycleAccessPolicyRepository;
+import io.wyrmgate.iam.access.application.LifecycleAccessPolicyService;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentBoundaryScheduler;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentFactSink;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentRepository;
 import io.wyrmgate.iam.access.persistence.JdbcDesiredStateProjectionRepository;
 import io.wyrmgate.iam.access.persistence.JdbcEffectiveAccessRepository;
+import io.wyrmgate.iam.access.persistence.JdbcLifecycleAccessPolicyRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
@@ -41,6 +44,7 @@ import io.wyrmgate.iam.catalog.persistence.JdbcRoleRepository;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityFactSink;
+import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
@@ -108,6 +112,8 @@ class AccessApiIntegrationTest {
     private static AccessAssignmentQueryService assignmentQueries;
     private static EffectiveAccessReadService effectiveReads;
     private static DesiredStateDerivationService desiredDerivation;
+    private static LifecycleAccessPolicyRepository lifecyclePolicyRepository;
+    private static LifecycleAccessPolicyService lifecyclePolicyService;
 
     private final ObjectMapper json = new ObjectMapper();
     private TenantContext tenant;
@@ -228,6 +234,35 @@ class AccessApiIntegrationTest {
                         identityReferences,
                         (tenant, state) -> { },
                         transactions);
+
+        lifecyclePolicyRepository =
+                new JdbcLifecycleAccessPolicyRepository(jdbc);
+        IdentityLifecycleAccessQuery policyIdentityQuery =
+                new IdentityLifecycleAccessQuery() {
+                    @Override
+                    public boolean supportsPolicyScalarAttribute(
+                            TenantContext tenant,
+                            String canonicalKey,
+                            ScalarType type) {
+                        return false;
+                    }
+
+                    @Override
+                    public Context currentContext(
+                            TenantContext tenant,
+                            UUID identityId,
+                            java.util.Set<String> canonicalKeys) {
+                        return Context.notFound();
+                    }
+                };
+        lifecyclePolicyService =
+                new LifecycleAccessPolicyService(
+                        lifecyclePolicyRepository,
+                        policyIdentityQuery,
+                        catalogQueries,
+                        expansion,
+                        ids,
+                        transactions);
     }
 
     @AfterAll
@@ -239,6 +274,9 @@ class AccessApiIntegrationTest {
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    access.lifecycle_access_policy_rule_expected_value,
+                    access.lifecycle_access_policy_rule,
+                    access.lifecycle_access_policy_version,
                     access.effective_access_support_role_version,
                     access.effective_access_support,
                     access.effective_access,
@@ -268,6 +306,114 @@ class AccessApiIntegrationTest {
         actor = new AuthenticatedAdministrativeActor(
                 tenant, ids.nextId());
         authorized = mockMvc(authorization(true));
+    }
+
+    @Test
+    void lifecyclePolicyApiIsVersionedAuthorizedAndReplaySafe()
+            throws Exception {
+        var app = catalog.createApplication(
+                tenant, "policy-app", "Policy App", NOW);
+        var target = catalog.createTarget(
+                tenant, app.id(), "prod", NOW);
+        var entitlement = catalog.createEntitlement(
+                tenant,
+                app.id(),
+                target.id(),
+                "member",
+                "Member",
+                "GROUP",
+                NOW);
+
+        UUID ruleOne = ids.nextId();
+        String firstBody = """
+                {
+                  "rules":[{
+                    "ruleId":"%s",
+                    "predicateKind":"ALWAYS",
+                    "targetKind":"ENTITLEMENT",
+                    "targetId":"%s"
+                  }]
+                }
+                """.formatted(ruleOne, entitlement.id());
+
+        String firstJson = authorized.perform(
+                        post("/api/v1/lifecycle-access-policy:activate")
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("Idempotency-Key", "lifecycle-policy-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(firstBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.state").value("ACTIVE"))
+                .andExpect(jsonPath("$.rules[0].ruleId").value(ruleOne.toString()))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID firstId = UUID.fromString(json.readTree(firstJson).get("id").asText());
+
+        authorized.perform(get("/api/v1/lifecycle-access-policy")
+                        .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(firstId.toString()));
+
+        UUID ruleTwo = ids.nextId();
+        String secondBody = """
+                {
+                  "rules":[{
+                    "ruleId":"%s",
+                    "predicateKind":"ALWAYS",
+                    "targetKind":"ENTITLEMENT",
+                    "targetId":"%s"
+                  }]
+                }
+                """.formatted(ruleTwo, entitlement.id());
+
+        String secondJson = authorized.perform(
+                        post("/api/v1/lifecycle-access-policy:activate")
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("Idempotency-Key", "lifecycle-policy-0002")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(secondBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNumber").value(2))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID secondId = UUID.fromString(json.readTree(secondJson).get("id").asText());
+
+        authorized.perform(
+                        post("/api/v1/lifecycle-access-policy:activate")
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("Idempotency-Key", "lifecycle-policy-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(firstBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(firstId.toString()))
+                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.state").value("SUPERSEDED"));
+
+        authorized.perform(get("/api/v1/lifecycle-access-policy")
+                        .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(secondId.toString()))
+                .andExpect(jsonPath("$.versionNumber").value(2));
+
+        mockMvc(authorization(false)).perform(
+                        get("/api/v1/lifecycle-access-policy")
+                                .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isForbidden());
+
+        Integer auditCount = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND action_type = 'lifecycle-access-policy:activate'
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId());
+        assertThat(auditCount).isEqualTo(3);
     }
 
     @Test
@@ -964,8 +1110,23 @@ class AccessApiIntegrationTest {
                         authorization,
                         ids,
                         testCursorCodec());
+        LifecycleAccessPolicyApiMutationService policyMutations =
+                new LifecycleAccessPolicyApiMutationService(
+                        authorization,
+                        lifecyclePolicyService,
+                        lifecyclePolicyRepository,
+                        idempotency,
+                        transactions,
+                        audit,
+                        ids);
+        LifecycleAccessPolicyController policyController =
+                new LifecycleAccessPolicyController(
+                        lifecyclePolicyRepository,
+                        policyMutations,
+                        authorization,
+                        ids);
         return MockMvcBuilders
-                .standaloneSetup(controller)
+                .standaloneSetup(controller, policyController)
                 .setControllerAdvice(
                         new AccessApiErrorHandler(ids))
                 .build();
