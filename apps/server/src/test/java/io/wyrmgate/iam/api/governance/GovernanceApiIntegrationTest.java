@@ -206,10 +206,7 @@ class GovernanceApiIntegrationTest {
         policyService = new GovernancePolicyService(
                 policyRepository,
                 (requestedTenant, entitlementId) ->
-                        new io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery.EntitlementReference(
-                                io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery.Status.NOT_FOUND,
-                                null,
-                                null),
+                        io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery.EntitlementReference.notFound(),
                 new io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery() {
                     @Override
                     public boolean identityExists(
@@ -219,17 +216,18 @@ class GovernanceApiIntegrationTest {
                     }
 
                     @Override
-                    public boolean identityAccessEligible(
-                            TenantContext requestedTenant,
-                            UUID identityId) {
-                        return true;
-                    }
-
-                    @Override
-                    public PrincipalReference principalReference(
+                    public PrincipalReference principal(
                             TenantContext requestedTenant,
                             UUID principalId) {
                         return PrincipalReference.notFound();
+                    }
+
+                    @Override
+                    public PrincipalSelection selectUniqueActivePrincipal(
+                            TenantContext requestedTenant,
+                            UUID identityId,
+                            UUID applicationTargetId) {
+                        return PrincipalSelection.none();
                     }
                 },
                 ids,
