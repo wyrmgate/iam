@@ -542,6 +542,40 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     }
 
     @Override
+    public Optional<SourceCorrelationPolicyVersion> findCorrelationPolicyById(
+            TenantContext tenant, UUID policyVersionId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, match_attribute_definition_version_id,
+                       match_mapping_version_id, version_number,
+                       create_identity_on_no_match, created_identity_type,
+                       display_name_source_path, state, created_at,
+                       activated_at, superseded_at
+                FROM identity.source_correlation_policy_version
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs, rowNum) -> new SourceCorrelationPolicyVersion(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("source_system_id", UUID.class),
+                        rs.getObject("match_attribute_definition_version_id", UUID.class),
+                        rs.getObject("match_mapping_version_id", UUID.class),
+                        rs.getLong("version_number"),
+                        rs.getBoolean("create_identity_on_no_match"),
+                        rs.getString("created_identity_type") == null
+                                ? null
+                                : IdentityType.valueOf(rs.getString("created_identity_type")),
+                        rs.getString("display_name_source_path"),
+                        SourceCorrelationPolicyVersion.State.valueOf(rs.getString("state")),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("activated_at").toInstant(),
+                        instant(rs.getTimestamp("superseded_at"))),
+                tenant.tenantId(),
+                policyVersionId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public SourceLifecyclePolicyVersion replaceActiveLifecyclePolicy(
             TenantContext tenant,
             UUID sourceSystemId,
