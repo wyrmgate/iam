@@ -30,6 +30,7 @@ import io.wyrmgate.iam.governance.application.ApprovalQueryService;
 import io.wyrmgate.iam.governance.persistence.JdbcAccessRequestRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcApprovalRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcGovernancePolicyRepository;
+import io.wyrmgate.iam.governance.persistence.JdbcGovernanceExceptionRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcAuthorizedAccessIntentSink;
 import io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
@@ -93,6 +94,8 @@ class GovernanceApiIntegrationTest {
     private AccessRequestEvaluationProcessingService evaluator;
     private GovernancePolicyService policyService;
     private JdbcGovernancePolicyRepository policyRepository;
+    private GovernanceExceptionService exceptionService;
+    private JdbcGovernanceExceptionRepository exceptionRepository;
     private MockMvc mvc;
 
     @BeforeAll
@@ -131,6 +134,7 @@ class GovernanceApiIntegrationTest {
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    governance.governance_exception,
                     governance.policy_approval_approver,
                     governance.policy_approval_stage,
                     governance.sod_rule,
@@ -206,7 +210,8 @@ class GovernanceApiIntegrationTest {
         policyService = new GovernancePolicyService(
                 policyRepository,
                 (requestedTenant, entitlementId) ->
-                        io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery.EntitlementReference.notFound(),
+                        io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery.EntitlementReference.valid(
+                                UUID.fromString("00000000-0000-0000-0000-000000000001")),
                 new io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery() {
                     @Override
                     public boolean identityExists(
@@ -230,6 +235,39 @@ class GovernanceApiIntegrationTest {
                         return PrincipalSelection.none();
                     }
                 },
+                ids,
+                transactions);
+
+        exceptionRepository = new JdbcGovernanceExceptionRepository(jdbc);
+        exceptionService = new GovernanceExceptionService(
+                exceptionRepository,
+                policyRepository,
+                new io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery() {
+                    @Override
+                    public boolean identityExists(
+                            TenantContext requestedTenant,
+                            UUID identityId) {
+                        return true;
+                    }
+
+                    @Override
+                    public PrincipalReference principal(
+                            TenantContext requestedTenant,
+                            UUID principalId) {
+                        return PrincipalReference.notFound();
+                    }
+
+                    @Override
+                    public PrincipalSelection selectUniqueActivePrincipal(
+                            TenantContext requestedTenant,
+                            UUID identityId,
+                            UUID applicationTargetId) {
+                        return PrincipalSelection.none();
+                    }
+                },
+                new ApprovalCaseStartService(approvalRepository, ids, transactions),
+                (requestedTenant, exception) -> { },
+                (requestedTenant, exception, scheduledAt) -> { },
                 ids,
                 transactions);
 
@@ -787,6 +825,122 @@ class GovernanceApiIntegrationTest {
     }
 
     @Test
+    void governanceExceptionApiBindsActiveRuleAndRevokesExplicitly()
+            throws Exception {
+        Instant base = Instant.now().plusSeconds(60);
+        UUID left = ids.nextId();
+        UUID right = ids.nextId();
+
+        var draft = policyService.createDraft(
+                tenant,
+                PolicyKind.ACCESS_REQUEST,
+                PolicyDecision.AUTHORIZE,
+                List.of(new SoDRuleSpec(
+                        "API-SOD-1",
+                        left,
+                        right,
+                        RiskSeverity.HIGH,
+                        SoDAction.REQUIRE_APPROVAL)),
+                new PlanSpec(List.of(new StageSpec(
+                        DecisionMode.ANY_ONE,
+                        List.of(approverId)))),
+                base);
+        var ready = policyService.markReady(
+                tenant, draft.id(), draft.revision(), base.plusSeconds(1));
+        policyService.activate(
+                tenant, ready.id(), ready.revision(), base.plusSeconds(2));
+        UUID ruleId = policyRepository.findRules(tenant, draft.id())
+                .getFirst()
+                .id();
+
+        String body = """
+                {
+                  "subjectIdentityId":"%s",
+                  "sodRuleId":"%s",
+                  "businessReason":"Temporary approved business need",
+                  "validFrom":"%s",
+                  "validUntil":"%s",
+                  "predecessorExceptionId":null,
+                  "approvalPlan":{
+                    "stages":[{
+                      "decisionMode":"ANY_ONE",
+                      "approverIdentityIds":["%s"]
+                    }]
+                  }
+                }
+                """.formatted(
+                requesterId,
+                ruleId,
+                base.plusSeconds(10),
+                base.plusSeconds(3600),
+                approverId);
+
+        String created = mvc.perform(
+                        post("/api/v1/governance/exceptions")
+                                .requestAttr(ACTOR_ATTRIBUTE, requester)
+                                .header("Idempotency-Key", "governance-exception-create-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("ETag", "\"rev-1\""))
+                .andExpect(jsonPath("$.scopeKind").value("IDENTITY_SOD_RULE"))
+                .andExpect(jsonPath("$.lifecycleState").value("PENDING_APPROVAL"))
+                .andExpect(jsonPath("$.sodRuleId").value(ruleId.toString()))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        UUID exceptionId = UUID.fromString(JSON.readTree(created).get("id").asText());
+
+        mvc.perform(
+                        post("/api/v1/governance/exceptions")
+                                .requestAttr(ACTOR_ATTRIBUTE, requester)
+                                .header("Idempotency-Key", "governance-exception-create-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(exceptionId.toString()));
+
+        mvc.perform(
+                        get("/api/v1/governance/exceptions/{id}", exceptionId)
+                                .requestAttr(ACTOR_ATTRIBUTE, requester))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.businessReason")
+                        .value("Temporary approved business need"));
+
+        var current = exceptionRepository.findById(tenant, exceptionId).orElseThrow();
+        var approved = exceptionRepository.updateState(
+                tenant,
+                exceptionId,
+                LifecycleState.APPROVED,
+                current.revision(),
+                base.plusSeconds(5),
+                base.plusSeconds(5),
+                null,
+                null,
+                null);
+
+        mvc.perform(
+                        post("/api/v1/governance/exceptions/{id}:revoke", exceptionId)
+                                .requestAttr(ACTOR_ATTRIBUTE, requester)
+                                .header("If-Match", "\"rev-" + approved.revision() + "\"")
+                                .header("Idempotency-Key", "governance-exception-revoke-0001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lifecycleState").value("REVOKED"))
+                .andExpect(jsonPath("$.revision").value(approved.revision() + 1));
+
+        mockMvc(
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()),
+                policyAuthorization(false))
+                .perform(get("/api/v1/governance/exceptions/{id}", exceptionId)
+                        .requestAttr(ACTOR_ATTRIBUTE, requester))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void auditFailureDoesNotRewriteSuccessfulRequestOutcome()
             throws Exception {
         SecurityAuditPort unavailableAudit =
@@ -858,8 +1012,22 @@ class GovernanceApiIntegrationTest {
                         policyMutations,
                         policyAuthorization,
                         ids);
+        GovernanceExceptionApiMutationService exceptionMutations =
+                new GovernanceExceptionApiMutationService(
+                        policyAuthorization,
+                        exceptionService,
+                        idempotency,
+                        transactions,
+                        audit,
+                        ids);
+        GovernanceExceptionController exceptionController =
+                new GovernanceExceptionController(
+                        exceptionService,
+                        exceptionMutations,
+                        policyAuthorization,
+                        ids);
         return MockMvcBuilders
-                .standaloneSetup(controller, policyController)
+                .standaloneSetup(controller, policyController, exceptionController)
                 .setControllerAdvice(
                         new GovernanceApiErrorHandler(ids))
                 .build();
