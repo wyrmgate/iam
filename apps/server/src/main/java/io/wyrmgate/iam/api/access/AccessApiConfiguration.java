@@ -2,6 +2,8 @@ package io.wyrmgate.iam.api.access;
 
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
+import io.wyrmgate.iam.access.application.LifecycleAccessPolicyRepository;
+import io.wyrmgate.iam.access.application.LifecycleAccessPolicyService;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
@@ -34,6 +36,25 @@ class AccessApiConfiguration {
                 authorization,
                 commands,
                 assignments,
+                idempotency,
+                transactions,
+                audit,
+                ids);
+    }
+
+    @Bean
+    LifecycleAccessPolicyApiMutationService lifecycleAccessPolicyApiMutationService(
+            AdministrativeAuthorizationService authorization,
+            LifecycleAccessPolicyService service,
+            LifecycleAccessPolicyRepository repository,
+            JdbcIdempotencyRepository idempotency,
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
+        return new LifecycleAccessPolicyApiMutationService(
+                authorization,
+                service,
+                repository,
                 idempotency,
                 transactions,
                 audit,
