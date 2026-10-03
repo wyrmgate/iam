@@ -9,7 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
+import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
+import io.wyrmgate.iam.administration.domain.AdministrativeGrantState;
+import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.audit.application.AuditCommandService;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
@@ -25,6 +29,7 @@ import io.wyrmgate.iam.governance.application.ApprovalModels.StageSpec;
 import io.wyrmgate.iam.governance.application.ApprovalQueryService;
 import io.wyrmgate.iam.governance.persistence.JdbcAccessRequestRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcApprovalRepository;
+import io.wyrmgate.iam.governance.persistence.JdbcGovernancePolicyRepository;
 import io.wyrmgate.iam.governance.persistence.JdbcAuthorizedAccessIntentSink;
 import io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
@@ -86,6 +91,8 @@ class GovernanceApiIntegrationTest {
     private ApprovalCommandService approvalCommands;
     private ApprovalQueryService approvalQueries;
     private AccessRequestEvaluationProcessingService evaluator;
+    private GovernancePolicyService policyService;
+    private JdbcGovernancePolicyRepository policyRepository;
     private MockMvc mvc;
 
     @BeforeAll
@@ -124,6 +131,11 @@ class GovernanceApiIntegrationTest {
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE
+                    governance.policy_approval_approver,
+                    governance.policy_approval_stage,
+                    governance.sod_rule,
+                    governance.policy_version,
+                    governance.policy,
                     governance.approval_decision,
                     governance.approval_approver,
                     governance.approval_stage,
@@ -189,6 +201,39 @@ class GovernanceApiIntegrationTest {
                         outbox,
                         requests,
                         requestCommands);
+
+        policyRepository = new JdbcGovernancePolicyRepository(jdbc);
+        policyService = new GovernancePolicyService(
+                policyRepository,
+                (requestedTenant, entitlementId) ->
+                        new io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery.EntitlementReference(
+                                io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery.Status.NOT_FOUND,
+                                null,
+                                null),
+                new io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery() {
+                    @Override
+                    public boolean identityExists(
+                            TenantContext requestedTenant,
+                            UUID identityId) {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean identityAccessEligible(
+                            TenantContext requestedTenant,
+                            UUID identityId) {
+                        return true;
+                    }
+
+                    @Override
+                    public PrincipalReference principalReference(
+                            TenantContext requestedTenant,
+                            UUID principalId) {
+                        return PrincipalReference.notFound();
+                    }
+                },
+                ids,
+                transactions);
 
         mvc = mockMvc(
                 new AuditCommandService(
@@ -666,6 +711,84 @@ class GovernanceApiIntegrationTest {
     }
 
     @Test
+    void accessRequestPolicyLifecycleIsPublicAndRevisionGuarded()
+            throws Exception {
+        String body = """
+                {
+                  "defaultDecision":"AUTHORIZE",
+                  "rules":[],
+                  "approvalPlan":null
+                }
+                """;
+
+        String createdJson = mvc.perform(
+                        post("/api/v1/governance/policies/access-request/versions")
+                                .requestAttr(ACTOR_ATTRIBUTE, requester)
+                                .header("Idempotency-Key", "governance-policy-create-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("ETag", "\"rev-1\""))
+                .andExpect(jsonPath("$.state").value("DRAFT"))
+                .andExpect(jsonPath("$.defaultDecision").value("AUTHORIZE"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        UUID versionId = UUID.fromString(JSON.readTree(createdJson).get("id").asText());
+
+        mvc.perform(
+                        post("/api/v1/governance/policies/access-request/versions")
+                                .requestAttr(ACTOR_ATTRIBUTE, requester)
+                                .header("Idempotency-Key", "governance-policy-create-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(versionId.toString()));
+
+        mvc.perform(
+                        post("/api/v1/governance/policies/access-request/versions/{id}:ready", versionId)
+                                .requestAttr(ACTOR_ATTRIBUTE, requester)
+                                .header("If-Match", "\"rev-1\"")
+                                .header("Idempotency-Key", "governance-policy-ready-0001"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "\"rev-2\""))
+                .andExpect(jsonPath("$.state").value("READY"));
+
+        mvc.perform(
+                        post("/api/v1/governance/policies/access-request/versions/{id}:activate", versionId)
+                                .requestAttr(ACTOR_ATTRIBUTE, requester)
+                                .header("If-Match", "\"rev-2\"")
+                                .header("Idempotency-Key", "governance-policy-activate-0001"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "\"rev-3\""))
+                .andExpect(jsonPath("$.state").value("ACTIVE"));
+
+        mvc.perform(
+                        get("/api/v1/governance/policies/access-request/active")
+                                .requestAttr(ACTOR_ATTRIBUTE, requester))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(versionId.toString()))
+                .andExpect(jsonPath("$.state").value("ACTIVE"));
+
+        mvc.perform(
+                        get("/api/v1/governance/policies/access-request/versions/{id}", versionId)
+                                .requestAttr(ACTOR_ATTRIBUTE, requester))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(3));
+
+        mockMvc(
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()),
+                policyAuthorization(false))
+                .perform(get("/api/v1/governance/policies/access-request/active")
+                        .requestAttr(ACTOR_ATTRIBUTE, requester))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void auditFailureDoesNotRewriteSuccessfulRequestOutcome()
             throws Exception {
         SecurityAuditPort unavailableAudit =
@@ -700,6 +823,12 @@ class GovernanceApiIntegrationTest {
     }
 
     private MockMvc mockMvc(SecurityAuditPort audit) {
+        return mockMvc(audit, policyAuthorization(true));
+    }
+
+    private MockMvc mockMvc(
+            SecurityAuditPort audit,
+            AdministrativeAuthorizationService policyAuthorization) {
         GovernanceApiMutationService mutations =
                 new GovernanceApiMutationService(
                         requestCommands,
@@ -717,8 +846,22 @@ class GovernanceApiIntegrationTest {
                         mutations,
                         ids,
                         cursorCodec());
+        GovernancePolicyApiMutationService policyMutations =
+                new GovernancePolicyApiMutationService(
+                        policyAuthorization,
+                        policyService,
+                        idempotency,
+                        transactions,
+                        audit,
+                        ids);
+        GovernancePolicyController policyController =
+                new GovernancePolicyController(
+                        policyService,
+                        policyMutations,
+                        policyAuthorization,
+                        ids);
         return MockMvcBuilders
-                .standaloneSetup(controller)
+                .standaloneSetup(controller, policyController)
                 .setControllerAdvice(
                         new GovernanceApiErrorHandler(ids))
                 .build();
@@ -788,6 +931,31 @@ class GovernanceApiIntegrationTest {
                 """.formatted(
                 beneficiaryId,
                 entitlementId);
+    }
+
+    private AdministrativeAuthorizationService policyAuthorization(boolean allow) {
+        Instant created = Instant.parse("2026-01-01T00:00:00Z");
+        AdministrativeGrant grant = new AdministrativeGrant(
+                ids.nextId(),
+                requesterId,
+                ids.nextId(),
+                AdministrativeScope.global(),
+                AdministrativeGrantState.ACTIVE,
+                created,
+                null,
+                1,
+                created,
+                created);
+        return new AdministrativeAuthorizationService(
+                (requestedTenant, identityId, permission) ->
+                        allow
+                                && requestedTenant.equals(tenant)
+                                && identityId.equals(requesterId)
+                                ? List.of(grant)
+                                : List.of(),
+                (requestedTenant, identityId) ->
+                        requestedTenant.equals(tenant)
+                                && identityId.equals(requesterId));
     }
 
     private GovernanceCursorCodec cursorCodec() {
