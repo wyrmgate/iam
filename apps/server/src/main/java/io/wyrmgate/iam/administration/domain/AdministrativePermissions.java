@@ -92,6 +92,11 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission EFFECTIVE_ACCESS_READ =
             new AdministrativePermission("effective-access", "read");
 
+    public static final AdministrativePermission LIFECYCLE_ACCESS_POLICY_READ =
+            new AdministrativePermission("lifecycle-access-policy", "read");
+    public static final AdministrativePermission LIFECYCLE_ACCESS_POLICY_ACTIVATE =
+            new AdministrativePermission("lifecycle-access-policy", "activate");
+
     public static final AdministrativePermission CREDENTIAL_READ =
             new AdministrativePermission("credential", "read");
     public static final AdministrativePermission CREDENTIAL_CREATE =
