@@ -134,6 +134,13 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission GOVERNANCE_POLICY_CANCEL =
             new AdministrativePermission("governance-policy", "cancel");
 
+    public static final AdministrativePermission GOVERNANCE_EXCEPTION_READ =
+            new AdministrativePermission("governance-exception", "read");
+    public static final AdministrativePermission GOVERNANCE_EXCEPTION_CREATE =
+            new AdministrativePermission("governance-exception", "create");
+    public static final AdministrativePermission GOVERNANCE_EXCEPTION_REVOKE =
+            new AdministrativePermission("governance-exception", "revoke");
+
     public static final AdministrativePermission REVIEW_CAMPAIGN_READ =
             new AdministrativePermission("review-campaign", "read");
     public static final AdministrativePermission REVIEW_CAMPAIGN_CREATE =
