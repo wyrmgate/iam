@@ -9,14 +9,21 @@ set -euo pipefail
 keep_workflows=("Core CI" "Security CI" "Container CI")
 dry_run="false"
 stale_days="7"
+bad_run_days="1"
 
 if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
   dry_run="${DRY_RUN_INPUT:-true}"
   stale_days="${STALE_DAYS_INPUT:-7}"
+  bad_run_days="${BAD_RUN_DAYS_INPUT:-1}"
 fi
 
 if ! [[ "${stale_days}" =~ ^[0-9]+$ ]] || (( stale_days < 1 || stale_days > 365 )); then
   echo "stale_days must be an integer between 1 and 365" >&2
+  exit 2
+fi
+
+if ! [[ "${bad_run_days}" =~ ^[0-9]+$ ]] || (( bad_run_days < 1 || bad_run_days > 365 )); then
+  echo "bad_run_days must be an integer between 1 and 365" >&2
   exit 2
 fi
 
@@ -47,6 +54,44 @@ branch_has_open_pr() {
   )"
 
   [[ "${count}" != "0" ]]
+}
+
+cleanup_default_branch_bad_runs() {
+  local cutoff_epoch
+  local runs
+  local created_epoch
+
+  cutoff_epoch="$(date -u -d "-${bad_run_days} days" +%s)"
+  echo "cleaning old failed/cancelled default-branch runs older than ${bad_run_days} day(s)"
+
+  runs="$(
+    gh api       --paginate       --method GET       -H "Accept: application/vnd.github+json"       -f branch="${DEFAULT_BRANCH}"       -f status=completed       -f per_page=100       "repos/${GH_REPO}/actions/runs"       --jq '.workflow_runs[] | [.id,.name,.conclusion,.created_at,.head_branch,.head_repository.full_name] | @tsv' |
+      sort -t $'\t' -k4,4r
+  )"
+
+  [[ -z "${runs}" ]] && return
+
+  while IFS=$'\t' read -r run_id run_name conclusion created_at head_branch head_repository; do
+    [[ -z "${run_id}" ]] && continue
+    [[ "${head_branch}" != "${DEFAULT_BRANCH}" ]] && continue
+    [[ "${head_repository}" != "${GH_REPO}" ]] && continue
+    [[ "${run_name}" == "Actions Retention" ]] && continue
+
+    case "${conclusion}" in
+      failure|cancelled|timed_out|stale|action_required)
+        ;;
+      *)
+        continue
+        ;;
+    esac
+
+    created_epoch="$(date -u -d "${created_at}" +%s)"
+    if (( created_epoch > cutoff_epoch )); then
+      continue
+    fi
+
+    delete_run "${run_id}" "${run_name}" "${DEFAULT_BRANCH}" "${conclusion}" "${created_at}"
+  done < <(printf '%s\n' "${runs}")
 }
 
 cleanup_branch() {
@@ -146,8 +191,11 @@ if [[ "${EVENT_NAME}" == "push" ]]; then
     cleanup_branch "${branch_name}"
   done
 
+  cleanup_default_branch_bad_runs
   exit 0
 fi
+
+cleanup_default_branch_bad_runs
 
 cutoff_epoch="$(date -u -d "-${stale_days} days" +%s)"
 
