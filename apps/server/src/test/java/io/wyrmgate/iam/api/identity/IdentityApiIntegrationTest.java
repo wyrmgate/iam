@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
@@ -26,6 +28,10 @@ import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
+import io.wyrmgate.iam.identity.application.SourceAbsencePolicyService;
+import io.wyrmgate.iam.identity.application.SourceCorrelationPolicyService;
+import io.wyrmgate.iam.identity.application.SourceLifecyclePolicyService;
+import io.wyrmgate.iam.identity.application.SourceMappedValueExtractor;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeCardinality;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeType;
 import io.wyrmgate.iam.identity.domain.CanonicalSchemaVersion;
@@ -94,6 +100,7 @@ class IdentityApiIntegrationTest {
     private static CanonicalAttributeConfigurationService canonicalConfiguration;
     private static CanonicalAttributeResolutionService canonicalResolution;
     private static IdentityQueryService queries;
+    private static JdbcSourceCorrelationRepository sourceRepository;
 
     private TenantContext tenant;
     private Identity actorIdentity;
@@ -122,7 +129,7 @@ class IdentityApiIntegrationTest {
                 transactions);
         idempotency = new JdbcIdempotencyRepository(jdbc, ids);
         canonicalAttributes = new JdbcCanonicalAttributeRepository(jdbc, ids);
-        var sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
+        sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
         var canonicalFacts = new JdbcCanonicalAttributeFactSink(outbox, ids);
         canonicalConfiguration = new CanonicalAttributeConfigurationService(
                 canonicalAttributes, sourceRepository, canonicalFacts, ids, transactions);
@@ -990,6 +997,150 @@ class IdentityApiIntegrationTest {
     }
 
     @Test
+    void sourcePolicyApisAreGovernedVersionedAndReplaySafe() throws Exception {
+        Instant now = Instant.parse("2026-10-03T03:15:00Z");
+        UUID sourceSystemId = ids.nextId();
+        sourceRepository.insertSourceSystem(
+                tenant,
+                new io.wyrmgate.iam.identity.domain.SourceSystem(
+                        sourceSystemId,
+                        "hr-source",
+                        "HR Source",
+                        1,
+                        now,
+                        now));
+
+        CanonicalSchemaVersion schema =
+                canonicalConfiguration.createDraftSchema(tenant, 1, now.plusMillis(1));
+        defineCanonical(
+                schema,
+                "employeeNumber",
+                CanonicalAttributeType.STRING,
+                CanonicalAttributeCardinality.SINGLE,
+                "INTERNAL",
+                now.plusMillis(2));
+        canonicalConfiguration.activateSchema(
+                tenant, schema.id(), now.plusMillis(3), ids.nextId(), null);
+        canonicalConfiguration.activateMapping(
+                tenant, sourceSystemId, "employeeNumber", "$.employeeNumber", now.plusMillis(4));
+        canonicalConfiguration.activateAuthority(
+                tenant, sourceSystemId, "employeeNumber", 10, now.plusMillis(5));
+
+        String correlationBody = """
+                {
+                  "canonicalKey":"employeeNumber",
+                  "createIdentityOnNoMatch":true,
+                  "createdIdentityType":"PERSON",
+                  "displayNameSourcePath":"$.displayName"
+                }
+                """;
+        String correlationV1 = authorized.perform(
+                        post("/api/v1/source-systems/{sourceSystemId}/correlation-policy:activate", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("Idempotency-Key", "source-correlation-policy-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(correlationBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.state").value("ACTIVE"))
+                .andExpect(jsonPath("$.createIdentityOnNoMatch").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID correlationV1Id =
+                UUID.fromString(new ObjectMapper().readTree(correlationV1).get("id").asText());
+
+        authorized.perform(
+                        post("/api/v1/source-systems/{sourceSystemId}/correlation-policy:activate", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("Idempotency-Key", "source-correlation-policy-0002")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(correlationBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNumber").value(2));
+
+        authorized.perform(
+                        post("/api/v1/source-systems/{sourceSystemId}/correlation-policy:activate", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("Idempotency-Key", "source-correlation-policy-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(correlationBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(correlationV1Id.toString()))
+                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.state").value("SUPERSEDED"));
+
+        authorized.perform(
+                        get("/api/v1/source-systems/{sourceSystemId}/correlation-policy", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNumber").value(2))
+                .andExpect(jsonPath("$.state").value("ACTIVE"));
+
+        String lifecycleBody = """
+                {
+                  "sourcePath":"$.status",
+                  "rules":[
+                    {"sourceValue":"ACTIVE","targetState":"ACTIVE"},
+                    {"sourceValue":"DISABLED","targetState":"INACTIVE"}
+                  ]
+                }
+                """;
+        authorized.perform(
+                        post("/api/v1/source-systems/{sourceSystemId}/lifecycle-policy:activate", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("Idempotency-Key", "source-lifecycle-policy-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(lifecycleBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.rules[0].sourceValue").value("ACTIVE"))
+                .andExpect(jsonPath("$.rules[1].targetState").value("INACTIVE"));
+
+        authorized.perform(
+                        get("/api/v1/source-systems/{sourceSystemId}/lifecycle-policy", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourcePath").value("$.status"));
+
+        authorized.perform(
+                        post("/api/v1/source-systems/{sourceSystemId}/absence-policy:activate", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .header("Idempotency-Key", "source-absence-policy-0001")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"maxInferredTransitions\":25}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.maxInferredTransitions").value(25));
+
+        authorized.perform(
+                        get("/api/v1/source-systems/{sourceSystemId}/absence-policy", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.maxInferredTransitions").value(25));
+
+        mockMvc(authorization(false)).perform(
+                        get("/api/v1/source-systems/{sourceSystemId}/absence-policy", sourceSystemId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isForbidden());
+
+        Integer auditCount = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM audit.audit_record
+                WHERE tenant_id = ?
+                  AND action_type IN (
+                    'source-correlation-policy:activate',
+                    'source-lifecycle-policy:activate',
+                    'source-absence-policy:activate')
+                  AND outcome = 'SUCCESS'
+                """,
+                Integer.class,
+                tenant.tenantId());
+        assertThat(auditCount).isEqualTo(5);
+    }
+
+    @Test
     void canonicalReadIsAuthorizedAndFailsClosedOnValueVisibility() throws Exception {
         authorized.perform(get("/api/v1/identities/{identityId}/canonical-attributes", actorIdentity.id())
                         .requestAttr(ACTOR_ATTRIBUTE, actor))
@@ -1222,7 +1373,7 @@ class IdentityApiIntegrationTest {
         IdentityApiMutationService mutations = new IdentityApiMutationService(
                 authorization, commands, identities, idempotency, transactions, audit, ids);
         var outbox = new JdbcOutboxRepository(jdbc);
-        var sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
+        var sourceRepository = IdentityApiIntegrationTest.sourceRepository;
         var sourceFacts = new JdbcSourceCorrelationFactSink(outbox, ids);
         var principalFacts = new JdbcPrincipalFactSink(outbox, ids);
         var mergeSplitRepository = new JdbcIdentityMergeSplitRepository(jdbc, identities);
@@ -1250,7 +1401,38 @@ class IdentityApiIntegrationTest {
                 authorization,
                 ids,
                 testCursorCodec());
-        return MockMvcBuilders.standaloneSetup(controller)
+        var correlationPolicies = new SourceCorrelationPolicyService(
+                sourceRepository,
+                canonicalAttributes,
+                ids,
+                transactions);
+        var lifecyclePolicies = new SourceLifecyclePolicyService(
+                sourceRepository,
+                identities,
+                commands,
+                new SourceMappedValueExtractor(new ObjectMapper()),
+                ids,
+                transactions);
+        var absencePolicies = new SourceAbsencePolicyService(
+                sourceRepository,
+                ids,
+                transactions);
+        var sourcePolicyMutations = new SourcePolicyApiMutationService(
+                authorization,
+                correlationPolicies,
+                lifecyclePolicies,
+                absencePolicies,
+                sourceRepository,
+                idempotency,
+                transactions,
+                audit,
+                ids);
+        var sourcePolicyController = new SourcePolicyController(
+                sourceRepository,
+                sourcePolicyMutations,
+                authorization,
+                ids);
+        return MockMvcBuilders.standaloneSetup(controller, sourcePolicyController)
                 .setControllerAdvice(new IdentityApiErrorHandler(ids))
                 .build();
     }
