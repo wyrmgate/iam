@@ -250,6 +250,15 @@ public final class GovernancePolicyService {
                 .map(version -> snapshot(tenant, version));
     }
 
+    public java.util.Optional<PolicySnapshot> findSnapshot(
+            TenantContext tenant,
+            UUID versionId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(versionId, "versionId");
+        return repository.findVersion(tenant, versionId)
+                .map(version -> snapshot(tenant, version));
+    }
+
     private PolicySnapshot snapshot(
             TenantContext tenant,
             PolicyVersion version) {
