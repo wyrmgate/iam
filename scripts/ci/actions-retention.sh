@@ -123,7 +123,6 @@ if [[ "${EVENT_NAME}" == "workflow_dispatch" && -n "${MANUAL_BRANCH:-}" ]]; then
   exit 0
 fi
 
-cutoff_epoch="$(date -u -d "-${stale_days} days" +%s)"
 repo_id="$(gh api "repos/${GH_REPO}" --jq '.id')"
 
 mapfile -t branches < <(
@@ -132,6 +131,25 @@ mapfile -t branches < <(
   sort -k1,1 -k2,2r |
   awk -F '\t' '!seen[$1]++ { print $1 "\t" $2 }'
 )
+
+if [[ "${EVENT_NAME}" == "push" ]]; then
+  echo "bootstrap sweep: cleaning historical non-default branches"
+
+  for entry in "${branches[@]}"; do
+    branch_name="${entry%%$'\t'*}"
+
+    if branch_has_open_pr "${branch_name}"; then
+      echo "skip branch with open PR: ${branch_name}"
+      continue
+    fi
+
+    cleanup_branch "${branch_name}"
+  done
+
+  exit 0
+fi
+
+cutoff_epoch="$(date -u -d "-${stale_days} days" +%s)"
 
 for entry in "${branches[@]}"; do
   branch_name="${entry%%$'\t'*}"

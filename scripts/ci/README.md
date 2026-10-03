@@ -37,6 +37,8 @@ The policy intentionally preserves debugging and audit value while removing obso
 - fork pull-request branches are skipped;
 - the retention workflow never deletes its own runs.
 
+When the retention workflow or its support script changes on `main`, a one-time/bootstrap sweep runs immediately across completed same-repository non-default branches. It skips branches with open pull requests and applies the same keep-newest rule without waiting for the seven-day stale threshold. This is idempotent and exists specifically to clear historical failed, cancelled, superseded, duplicate, and retired-workflow backlog after retention-policy installation or repair.
+
 Manual dispatch defaults to dry-run mode and accepts an optional non-default branch plus a stale-day threshold. Cleanup refuses the default branch and skips branches with an open pull request.
 
 The workflow uses only `actions: write`, `contents: read`, and `pull-requests: read`. No repository-content write permission is granted to the retention job.
