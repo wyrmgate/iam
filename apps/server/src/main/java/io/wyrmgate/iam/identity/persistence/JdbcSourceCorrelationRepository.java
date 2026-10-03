@@ -814,6 +814,31 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     }
 
     @Override
+    public Optional<SourceAbsencePolicyVersion> findAbsencePolicyById(
+            TenantContext tenant, UUID policyVersionId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, version_number, max_inferred_transitions,
+                       state, created_at, activated_at, superseded_at
+                FROM identity.source_absence_policy_version
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs, rowNum) -> new SourceAbsencePolicyVersion(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("source_system_id", UUID.class),
+                        rs.getLong("version_number"),
+                        rs.getInt("max_inferred_transitions"),
+                        SourceAbsencePolicyVersion.State.valueOf(rs.getString("state")),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("activated_at").toInstant(),
+                        instant(rs.getTimestamp("superseded_at"))),
+                tenant.tenantId(),
+                policyVersionId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public SourceAbsenceInference startAbsenceInferenceIfAbsent(
             TenantContext tenant, SourceAbsenceInference candidate) {
         jdbcTemplate.update(
