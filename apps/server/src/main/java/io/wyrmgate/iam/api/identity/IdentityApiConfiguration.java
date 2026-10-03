@@ -9,6 +9,10 @@ import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalRepository;
+import io.wyrmgate.iam.identity.application.SourceAbsencePolicyService;
+import io.wyrmgate.iam.identity.application.SourceCorrelationPolicyService;
+import io.wyrmgate.iam.identity.application.SourceCorrelationRepository;
+import io.wyrmgate.iam.identity.application.SourceLifecyclePolicyService;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
@@ -62,6 +66,29 @@ class IdentityApiConfiguration {
                 authorization,
                 commands,
                 principals,
+                idempotency,
+                transactions,
+                audit,
+                ids);
+    }
+
+    @Bean
+    SourcePolicyApiMutationService sourcePolicyApiMutationService(
+            AdministrativeAuthorizationService authorization,
+            SourceCorrelationPolicyService correlationPolicies,
+            SourceLifecyclePolicyService lifecyclePolicies,
+            SourceAbsencePolicyService absencePolicies,
+            SourceCorrelationRepository repository,
+            JdbcIdempotencyRepository idempotency,
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
+        return new SourcePolicyApiMutationService(
+                authorization,
+                correlationPolicies,
+                lifecyclePolicies,
+                absencePolicies,
+                repository,
                 idempotency,
                 transactions,
                 audit,
