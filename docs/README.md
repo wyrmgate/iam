@@ -47,6 +47,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`operations/audit-siem.md`](operations/audit-siem.md) — signed HTTPS SIEM activation, retry/terminal semantics and receiver requirements.
 - [`operations/production-readiness.md`](operations/production-readiness.md) — OD-005 production SLI/SLO/RPO/RTO decision register, failure model, topology gate and service re-entry criteria.
 - [`operations/production-recovery-drill.md`](operations/production-recovery-drill.md) — isolation-safe measured production recovery verification and evidence procedure.
+- [`migration/legacy-to-v2-discovery-and-cutover.md`](migration/legacy-to-v2-discovery-and-cutover.md) — OD-006 evidence-driven legacy inventory, mapping, rehearsal, cutover and retirement gates.
 - [`operations/public-event-webhook.md`](operations/public-event-webhook.md) — signed public-event webhook activation, receiver, retry, rotation, and failure runbook.
 - [`operations/break-glass-security-notification.md`](operations/break-glass-security-notification.md) — ADR-0033 signed security-notification activation, receiver, retry/manual-remediation and secret-rotation runbook.
 - [`engineering/edge.md`](engineering/edge.md) — standalone-host Caddy reference edge.
@@ -78,6 +79,8 @@ The v0.7 RTM records OD-001, OD-002 and OD-004 as resolved at their architecture
 The former Cloudflare Pages/Functions + Railway Serverless + Neon PostgreSQL end-to-end DEV topology is retired because the Railway server is no longer in use. Historical validation remains implementation evidence, but no replacement managed server target is currently canonical. The console Pages contract remains supported independently; production HA/DR remains open under OD-005.
 
 OD-005 production operations is now being advanced through a provider-neutral readiness contract and repeatable recovery-verification drill. Numeric production SLO/RPO/RTO commitments, the production HA/DR topology, backup retention/protection policy and recovery-drill cadence remain explicit reviewed decisions rather than inherited from DEV provider defaults. OD-005 remains open until those decisions are approved and a measured isolation-safe recovery drill plus production alerting/runbooks provide closure evidence.
+
+OD-006 migration/cutover is now in evidence-driven discovery. The repository defines the legacy inventory, typed mapping, stable-reference, rehearsal, cutover, rollback and retirement gates, but intentionally does not invent a legacy schema or select a migration execution model before real source inventory is available. Initial cutover remains separated from irreversible legacy deletion, and partial migration can never imply current truth or destructive absence.
 
 OD-003 is **partially implemented**. The first Identity OpenAPI/AsyncAPI slice is checked in, Administration has a persisted default-deny direct-grant evaluator, and the control plane now has provider-neutral JWT bearer validation, an Administration-owned server-side issuer+subject binding to tenant + governed Identity, and a burn-once first-administrator bootstrap path. OAuth/OIDC claims do not become Wyrmgate administrative permissions.
 
