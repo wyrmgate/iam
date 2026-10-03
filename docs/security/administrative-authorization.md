@@ -200,3 +200,17 @@ A fresh installation contains no administrative roles or grants and therefore de
 - session lifetime does not extend expired authority;
 - connector/source/credential/audit powers are more tightly separated than normal application governance;
 - sensitive denials and high-impact allowed operations produce security audit evidence.
+
+
+## OD-003 policy administration permissions
+
+The completed public policy/JML control-plane slice adds explicit default-deny permissions without changing INITIAL_TENANT_ADMIN membership:
+
+- `source-correlation-policy:read`, `source-correlation-policy:activate`;
+- `source-lifecycle-policy:read`, `source-lifecycle-policy:activate`;
+- `source-absence-policy:read`, `source-absence-policy:activate`;
+- `lifecycle-access-policy:read`, `lifecycle-access-policy:activate`;
+- `governance-policy:read`, `governance-policy:create`, `governance-policy:ready`, `governance-policy:activate`, `governance-policy:cancel`;
+- `governance-exception:read`, `governance-exception:create`, `governance-exception:revoke`.
+
+Policy-management authority is not business access and does not come from Role/AccessAssignment state. Every operation re-evaluates current Administration authority. Read and activation/mutation authority are separate. GovernanceException approval remains assigned-approver authority through Governance ApprovalCase, not a generic administrative permission.
