@@ -8,6 +8,7 @@ import io.wyrmgate.iam.governance.application.AccessRequestRepository;
 import io.wyrmgate.iam.governance.application.ApprovalCommandService;
 import io.wyrmgate.iam.governance.application.ApprovalQueryService;
 import io.wyrmgate.iam.governance.application.GovernancePolicyService;
+import io.wyrmgate.iam.governance.application.GovernanceExceptionService;
 import io.wyrmgate.iam.governance.application.ReviewQueryService;
 import io.wyrmgate.iam.governance.application.ReviewRepository;
 import io.wyrmgate.iam.governance.application.ReviewService;
@@ -59,6 +60,18 @@ class GovernanceApiConfiguration {
             IdGenerator ids) {
         return new GovernancePolicyApiMutationService(
                 authorization, policies, idempotency, transactions, audit, ids);
+    }
+
+    @Bean
+    GovernanceExceptionApiMutationService governanceExceptionApiMutationService(
+            AdministrativeAuthorizationService authorization,
+            GovernanceExceptionService exceptions,
+            JdbcIdempotencyRepository idempotency,
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
+        return new GovernanceExceptionApiMutationService(
+                authorization, exceptions, idempotency, transactions, audit, ids);
     }
 
     @Bean
