@@ -162,3 +162,17 @@ Common semantic errors include:
 
 Provider failure does not appear as an AccessAssignment lifecycle error and never restores
 revoked/suspended business authority.
+
+
+## Lifecycle-access policy API
+
+Access v1 now exposes the existing Access-owned lifecycle/birthright policy through:
+
+- `GET /lifecycle-access-policy`;
+- `POST /lifecycle-access-policy:activate`.
+
+Activation creates one immutable successor and supersedes the previous active version. The payload is the closed typed predicate model accepted through ADR-0041: ALWAYS; exact SINGLE equality; one-value MULTI CONTAINS; and bounded 2-20-member typed CONTAINS_ANY / CONTAINS_ALL. Typed DECIMAL/DATE/DATETIME semantics remain exact as defined by ADR-0039. Rule IDs remain stable AccessAssignment provenance.
+
+The API does not introduce arbitrary status mutation, JSON expressions, exact-set/subset/count/order operators, compound AND/OR/NOT, relationship predicates or a generic rules engine. Those remain explicit future product semantics, not missing schema coverage.
+
+Activation requires causal idempotency and the explicit `lifecycle-access-policy:activate` permission; read requires `lifecycle-access-policy:read`. Neither permission is silently added to INITIAL_TENANT_ADMIN.
