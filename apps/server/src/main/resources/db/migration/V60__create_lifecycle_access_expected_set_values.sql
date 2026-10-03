@@ -62,10 +62,15 @@ ALTER TABLE access.lifecycle_access_policy_rule
             AND num_nonnulls(expected_string,expected_boolean,expected_integer,expected_decimal,expected_date,expected_datetime,expected_enum)=0)
     );
 
+ALTER TABLE access.lifecycle_access_policy_rule
+    ADD CONSTRAINT lifecycle_access_policy_rule_predicate_ref_uq
+        UNIQUE (tenant_id, policy_version_id, rule_id, predicate_kind);
+
 CREATE TABLE access.lifecycle_access_policy_rule_expected_value (
     tenant_id uuid NOT NULL,
     policy_version_id uuid NOT NULL,
     rule_id uuid NOT NULL,
+    predicate_kind varchar(32) NOT NULL,
     value_ordinal integer NOT NULL,
     value_type varchar(24) NOT NULL,
     value_string varchar(1024) NULL,
@@ -77,8 +82,18 @@ CREATE TABLE access.lifecycle_access_policy_rule_expected_value (
     value_enum varchar(256) NULL,
     PRIMARY KEY (tenant_id, policy_version_id, rule_id, value_ordinal),
     CONSTRAINT lifecycle_access_policy_rule_expected_value_rule_fk
-        FOREIGN KEY (tenant_id, policy_version_id, rule_id)
-        REFERENCES access.lifecycle_access_policy_rule (tenant_id, policy_version_id, rule_id),
+        FOREIGN KEY (tenant_id, policy_version_id, rule_id, predicate_kind)
+        REFERENCES access.lifecycle_access_policy_rule
+            (tenant_id, policy_version_id, rule_id, predicate_kind),
+    CONSTRAINT lifecycle_access_policy_rule_expected_value_predicate_type_ck CHECK (
+        (predicate_kind IN ('CANONICAL_STRING_CONTAINS_ANY','CANONICAL_STRING_CONTAINS_ALL') AND value_type='STRING')
+        OR (predicate_kind IN ('CANONICAL_BOOLEAN_CONTAINS_ANY','CANONICAL_BOOLEAN_CONTAINS_ALL') AND value_type='BOOLEAN')
+        OR (predicate_kind IN ('CANONICAL_INTEGER_CONTAINS_ANY','CANONICAL_INTEGER_CONTAINS_ALL') AND value_type='INTEGER')
+        OR (predicate_kind IN ('CANONICAL_DECIMAL_CONTAINS_ANY','CANONICAL_DECIMAL_CONTAINS_ALL') AND value_type='DECIMAL')
+        OR (predicate_kind IN ('CANONICAL_DATE_CONTAINS_ANY','CANONICAL_DATE_CONTAINS_ALL') AND value_type='DATE')
+        OR (predicate_kind IN ('CANONICAL_DATETIME_CONTAINS_ANY','CANONICAL_DATETIME_CONTAINS_ALL') AND value_type='DATETIME')
+        OR (predicate_kind IN ('CANONICAL_ENUM_CONTAINS_ANY','CANONICAL_ENUM_CONTAINS_ALL') AND value_type='ENUM')
+    ),
     CONSTRAINT lifecycle_access_policy_rule_expected_value_ordinal_ck
         CHECK (value_ordinal >= 0 AND value_ordinal < 20),
     CONSTRAINT lifecycle_access_policy_rule_expected_value_type_ck
