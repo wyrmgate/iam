@@ -694,6 +694,47 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     }
 
     @Override
+    public Optional<SourceLifecyclePolicyVersion> findLifecyclePolicyById(
+            TenantContext tenant, UUID policyVersionId) {
+        List<SourceLifecyclePolicyVersion> policies = jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, source_path, version_number,
+                       state, created_at, activated_at, superseded_at
+                FROM identity.source_lifecycle_policy_version
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs, rowNum) -> {
+                    UUID policyId = rs.getObject("id", UUID.class);
+                    List<SourceLifecyclePolicyVersion.Rule> rules = jdbcTemplate.query(
+                            """
+                            SELECT source_value, target_lifecycle_state
+                            FROM identity.source_lifecycle_policy_rule
+                            WHERE tenant_id = ? AND policy_version_id = ?
+                            ORDER BY source_value
+                            """,
+                            (ruleRs, ruleRow) -> new SourceLifecyclePolicyVersion.Rule(
+                                    ruleRs.getString("source_value"),
+                                    io.wyrmgate.iam.identity.domain.IdentityLifecycleState.valueOf(
+                                            ruleRs.getString("target_lifecycle_state"))),
+                            tenant.tenantId(),
+                            policyId);
+                    return new SourceLifecyclePolicyVersion(
+                            policyId,
+                            rs.getObject("source_system_id", UUID.class),
+                            rs.getString("source_path"),
+                            rs.getLong("version_number"),
+                            rules,
+                            SourceLifecyclePolicyVersion.State.valueOf(rs.getString("state")),
+                            rs.getTimestamp("created_at").toInstant(),
+                            rs.getTimestamp("activated_at").toInstant(),
+                            instant(rs.getTimestamp("superseded_at")));
+                },
+                tenant.tenantId(),
+                policyVersionId);
+        return policies.stream().findFirst();
+    }
+
+    @Override
     public SourceAbsencePolicyVersion replaceActiveAbsencePolicy(
             TenantContext tenant,
             UUID sourceSystemId,
