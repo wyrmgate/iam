@@ -27,6 +27,11 @@ on:
         required: true
         type: number
         default: 7
+      bad_run_days:
+        description: Age threshold for failed/cancelled default-branch run cleanup
+        required: true
+        type: number
+        default: 1
 
 permissions:
   actions: write
@@ -53,6 +58,7 @@ jobs:
       DRY_RUN_INPUT: ${{ inputs.dry_run }}
       MANUAL_BRANCH: ${{ inputs.branch }}
       STALE_DAYS_INPUT: ${{ inputs.stale_days }}
+      BAD_RUN_DAYS_INPUT: ${{ inputs.bad_run_days }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
