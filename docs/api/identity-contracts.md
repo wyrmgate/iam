@@ -215,3 +215,21 @@ The lightweight verifier does not pretend to be a complete OpenAPI/AsyncAPI stan
 The Identity surface now includes governed Identity create/read/list, non-lifecycle metadata update, canonical attribute reads, explicit ADR-0021 lifecycle operations, plus authoritative Principal list/register/read/one-way-correlation administration with signed pagination, optimistic revision where correlation depends on current state, and causal idempotency. The AsyncAPI/publication pipeline remains limited to the existing Identity created/metadata-changed v1 events; Principal correlation remains an internal fact only. OD-003 therefore remains partially implemented only for broader still-deferred JML/policy and public capability surfaces. Explicit Identity merge/split is implemented under ADR-0026. Source-driven Joiner/Mover/Leaver slices through ADR-0029 remain in place, ADR-0038 narrows the protected SUSPENDED -> ACTIVE boundary only for the exact current suspension revision proven to have been caused by the same source lifecycle relationship, ADR-0039 extends the internal Identity lifecycle-access semantic query to exact DECIMAL/DATE/DATETIME SINGLE-value inputs, and ADR-0040 adds separately typed governed MULTI inputs for membership evaluation without exposing canonical persistence, and ADR-0041 reuses that same Identity semantic input for Access-owned bounded CONTAINS_ANY/CONTAINS_ALL expected sets; operator/IAM suspension remains non-restorable by source observation. Later multi-subscriber/broker evolution remains demand-driven.
 
 A later formal-specification checkpoint should fold the accepted ADR amendments and completed OD-003 slices into the Integration/SAD/RTM package rather than updating v0.2 for every incremental contract commit.
+
+
+## Source JML policy administration
+
+The public Identity v1 contract now exposes the existing Identity-owned source policy engines without exposing source persistence or provider-native payloads.
+
+Per SourceSystem:
+
+- `GET /source-systems/{sourceSystemId}/correlation-policy`;
+- `POST /source-systems/{sourceSystemId}/correlation-policy:activate`;
+- `GET /source-systems/{sourceSystemId}/lifecycle-policy`;
+- `POST /source-systems/{sourceSystemId}/lifecycle-policy:activate`;
+- `GET /source-systems/{sourceSystemId}/absence-policy`;
+- `POST /source-systems/{sourceSystemId}/absence-policy:activate`.
+
+Activation creates an immutable successor using the already accepted ADR-0022/0023/0024 semantics. Correlation remains exact governed STRING/SINGLE mapping, explicit lifecycle policy remains bounded source-value mapping, and trusted-absence policy exposes only the positive mass-Leaver ceiling. Public activation uses causal idempotency and default-deny policy-specific Administration permissions. Replaying an older activation key returns that immutable PolicyVersion even after a successor becomes active.
+
+Source records, raw observed attributes, import payloads and provider secrets are not public policy content. SourceSystem provisioning/import execution remains an Integration/operations concern; these endpoints expose only Identity-owned policy authority.
