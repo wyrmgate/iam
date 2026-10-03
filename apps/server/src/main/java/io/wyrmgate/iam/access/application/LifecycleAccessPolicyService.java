@@ -81,7 +81,21 @@ public final class LifecycleAccessPolicyService {
                     CANONICAL_DECIMAL_CONTAINS,
                     CANONICAL_DATE_CONTAINS,
                     CANONICAL_DATETIME_CONTAINS,
-                    CANONICAL_ENUM_CONTAINS -> true;
+                    CANONICAL_ENUM_CONTAINS,
+                    CANONICAL_STRING_CONTAINS_ANY,
+                    CANONICAL_BOOLEAN_CONTAINS_ANY,
+                    CANONICAL_INTEGER_CONTAINS_ANY,
+                    CANONICAL_DECIMAL_CONTAINS_ANY,
+                    CANONICAL_DATE_CONTAINS_ANY,
+                    CANONICAL_DATETIME_CONTAINS_ANY,
+                    CANONICAL_ENUM_CONTAINS_ANY,
+                    CANONICAL_STRING_CONTAINS_ALL,
+                    CANONICAL_BOOLEAN_CONTAINS_ALL,
+                    CANONICAL_INTEGER_CONTAINS_ALL,
+                    CANONICAL_DECIMAL_CONTAINS_ALL,
+                    CANONICAL_DATE_CONTAINS_ALL,
+                    CANONICAL_DATETIME_CONTAINS_ALL,
+                    CANONICAL_ENUM_CONTAINS_ALL -> true;
             default -> false;
         };
     }
@@ -89,19 +103,26 @@ public final class LifecycleAccessPolicyService {
     private static IdentityLifecycleAccessQuery.ScalarType scalarType(
             LifecycleAccessPolicyVersion.PredicateKind kind) {
         return switch (kind) {
-            case CANONICAL_STRING_EQUALS, CANONICAL_STRING_CONTAINS ->
+            case CANONICAL_STRING_EQUALS, CANONICAL_STRING_CONTAINS,
+                    CANONICAL_STRING_CONTAINS_ANY, CANONICAL_STRING_CONTAINS_ALL ->
                     IdentityLifecycleAccessQuery.ScalarType.STRING;
-            case CANONICAL_BOOLEAN_EQUALS, CANONICAL_BOOLEAN_CONTAINS ->
+            case CANONICAL_BOOLEAN_EQUALS, CANONICAL_BOOLEAN_CONTAINS,
+                    CANONICAL_BOOLEAN_CONTAINS_ANY, CANONICAL_BOOLEAN_CONTAINS_ALL ->
                     IdentityLifecycleAccessQuery.ScalarType.BOOLEAN;
-            case CANONICAL_INTEGER_EQUALS, CANONICAL_INTEGER_CONTAINS ->
+            case CANONICAL_INTEGER_EQUALS, CANONICAL_INTEGER_CONTAINS,
+                    CANONICAL_INTEGER_CONTAINS_ANY, CANONICAL_INTEGER_CONTAINS_ALL ->
                     IdentityLifecycleAccessQuery.ScalarType.INTEGER;
-            case CANONICAL_DECIMAL_EQUALS, CANONICAL_DECIMAL_CONTAINS ->
+            case CANONICAL_DECIMAL_EQUALS, CANONICAL_DECIMAL_CONTAINS,
+                    CANONICAL_DECIMAL_CONTAINS_ANY, CANONICAL_DECIMAL_CONTAINS_ALL ->
                     IdentityLifecycleAccessQuery.ScalarType.DECIMAL;
-            case CANONICAL_DATE_EQUALS, CANONICAL_DATE_CONTAINS ->
+            case CANONICAL_DATE_EQUALS, CANONICAL_DATE_CONTAINS,
+                    CANONICAL_DATE_CONTAINS_ANY, CANONICAL_DATE_CONTAINS_ALL ->
                     IdentityLifecycleAccessQuery.ScalarType.DATE;
-            case CANONICAL_DATETIME_EQUALS, CANONICAL_DATETIME_CONTAINS ->
+            case CANONICAL_DATETIME_EQUALS, CANONICAL_DATETIME_CONTAINS,
+                    CANONICAL_DATETIME_CONTAINS_ANY, CANONICAL_DATETIME_CONTAINS_ALL ->
                     IdentityLifecycleAccessQuery.ScalarType.DATETIME;
-            case CANONICAL_ENUM_EQUALS, CANONICAL_ENUM_CONTAINS ->
+            case CANONICAL_ENUM_EQUALS, CANONICAL_ENUM_CONTAINS,
+                    CANONICAL_ENUM_CONTAINS_ANY, CANONICAL_ENUM_CONTAINS_ALL ->
                     IdentityLifecycleAccessQuery.ScalarType.ENUM;
             case ALWAYS -> throw new IllegalArgumentException("ALWAYS has no scalar type");
         };
