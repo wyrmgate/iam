@@ -904,6 +904,285 @@
         "x-wyrmgate-administrative-permission": "identity:split",
         "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
       }
+    },
+    "/source-systems/{sourceSystemId}/correlation-policy": {
+      "get": {
+        "operationId": "getCurrentSourceCorrelationPolicy",
+        "summary": "Get the current source-correlation policy",
+        "description": "Returns the current immutable Identity-owned correlation policy for the SourceSystem.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SourceSystemId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current active policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCorrelationPolicyResource"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative policy",
+        "x-wyrmgate-administrative-permission": "source-correlation-policy:read"
+      }
+    },
+    "/source-systems/{sourceSystemId}/correlation-policy:activate": {
+      "post": {
+        "operationId": "activateSourceCorrelationPolicy",
+        "summary": "Activate a successor source-correlation policy",
+        "description": "Activates the bounded exact STRING/SINGLE governed correlation policy already defined by ADR-0022.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SourceSystemId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateSourceCorrelationPolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Activated source-correlation policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceCorrelationPolicyResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative policy",
+        "x-wyrmgate-administrative-permission": "source-correlation-policy:activate",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
+    },
+    "/source-systems/{sourceSystemId}/lifecycle-policy": {
+      "get": {
+        "operationId": "getCurrentSourceLifecyclePolicy",
+        "summary": "Get the current source-lifecycle policy",
+        "description": "Returns the current immutable Identity-owned explicit source lifecycle mapping policy.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SourceSystemId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current active policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceLifecyclePolicyResource"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative policy",
+        "x-wyrmgate-administrative-permission": "source-lifecycle-policy:read"
+      }
+    },
+    "/source-systems/{sourceSystemId}/lifecycle-policy:activate": {
+      "post": {
+        "operationId": "activateSourceLifecyclePolicy",
+        "summary": "Activate a successor source-lifecycle policy",
+        "description": "Activates bounded source-value to Identity lifecycle intent mapping. PENDING is not a target and source restoration remains provenance-fenced.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SourceSystemId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateSourceLifecyclePolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Activated source-lifecycle policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceLifecyclePolicyResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative policy",
+        "x-wyrmgate-administrative-permission": "source-lifecycle-policy:activate",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
+    },
+    "/source-systems/{sourceSystemId}/absence-policy": {
+      "get": {
+        "operationId": "getCurrentSourceAbsencePolicy",
+        "summary": "Get the current trusted-absence policy",
+        "description": "Returns the current immutable Identity-owned source absence safety policy.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SourceSystemId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current active policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceAbsencePolicyResource"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative policy",
+        "x-wyrmgate-administrative-permission": "source-absence-policy:read"
+      }
+    },
+    "/source-systems/{sourceSystemId}/absence-policy:activate": {
+      "post": {
+        "operationId": "activateSourceAbsencePolicy",
+        "summary": "Activate a successor trusted-absence policy",
+        "description": "Activates the positive mass-Leaver safety ceiling used only with trusted COMPLETE absence inference.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SourceSystemId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateSourceAbsencePolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Activated source-absence policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceAbsencePolicyResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "x-wyrmgate-authority": "Identity authoritative policy",
+        "x-wyrmgate-administrative-permission": "source-absence-policy:activate",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
     }
   },
   "components": {
@@ -986,6 +1265,16 @@
           "format": "uuid"
         },
         "description": "Stable opaque Principal identifier."
+      },
+      "SourceSystemId": {
+        "name": "sourceSystemId",
+        "in": "path",
+        "required": true,
+        "description": "Stable SourceSystem identifier.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
       }
     },
     "headers": {
@@ -1848,6 +2137,300 @@
           "completedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "SourceCorrelationPolicyResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sourceSystemId",
+          "matchAttributeDefinitionVersionId",
+          "matchMappingVersionId",
+          "versionNumber",
+          "createIdentityOnNoMatch",
+          "state",
+          "createdAt",
+          "activatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceSystemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "matchAttributeDefinitionVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "matchMappingVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "versionNumber": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createIdentityOnNoMatch": {
+            "type": "boolean"
+          },
+          "createdIdentityType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "PERSON",
+              "SERVICE",
+              "WORKLOAD",
+              null
+            ]
+          },
+          "displayNameSourcePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUPERSEDED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "supersededAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ActivateSourceCorrelationPolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "canonicalKey",
+          "createIdentityOnNoMatch",
+          "createdIdentityType",
+          "displayNameSourcePath"
+        ],
+        "properties": {
+          "canonicalKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "createIdentityOnNoMatch": {
+            "type": "boolean"
+          },
+          "createdIdentityType": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "PERSON",
+              "SERVICE",
+              "WORKLOAD",
+              null
+            ]
+          },
+          "displayNameSourcePath": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Bounded $.field source path when createIdentityOnNoMatch=true."
+          }
+        }
+      },
+      "SourceLifecyclePolicyRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceValue",
+          "targetState"
+        ],
+        "properties": {
+          "sourceValue": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetState": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED",
+              "INACTIVE",
+              "DECOMMISSIONED"
+            ]
+          }
+        }
+      },
+      "SourceLifecyclePolicyResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sourceSystemId",
+          "sourcePath",
+          "versionNumber",
+          "rules",
+          "state",
+          "createdAt",
+          "activatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceSystemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourcePath": {
+            "type": "string",
+            "pattern": "^\\$\\..+"
+          },
+          "versionNumber": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "rules": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/SourceLifecyclePolicyRule"
+            }
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUPERSEDED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "supersededAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ActivateSourceLifecyclePolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourcePath",
+          "rules"
+        ],
+        "properties": {
+          "sourcePath": {
+            "type": "string",
+            "pattern": "^\\$\\..+"
+          },
+          "rules": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/SourceLifecyclePolicyRule"
+            }
+          }
+        }
+      },
+      "SourceAbsencePolicyResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sourceSystemId",
+          "versionNumber",
+          "maxInferredTransitions",
+          "state",
+          "createdAt",
+          "activatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceSystemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "versionNumber": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "maxInferredTransitions": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUPERSEDED"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "supersededAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ActivateSourceAbsencePolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "maxInferredTransitions"
+        ],
+        "properties": {
+          "maxInferredTransitions": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       }

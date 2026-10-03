@@ -438,6 +438,87 @@
         "x-wyrmgate-administrative-permission": "effective-access:read",
         "x-wyrmgate-consistency": "Support evidence is filtered against authoritative assignment lifecycle/time at read time."
       }
+    },
+    "/lifecycle-access-policy": {
+      "get": {
+        "operationId": "getCurrentLifecycleAccessPolicy",
+        "summary": "Get the current active lifecycle-access policy",
+        "description": "Returns the Access-owned immutable active lifecycle/birthright policy version. Policy evaluation remains internal current-state reconciliation.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current active lifecycle-access policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleAccessPolicyResource"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative policy",
+        "x-wyrmgate-administrative-permission": "lifecycle-access-policy:read"
+      }
+    },
+    "/lifecycle-access-policy:activate": {
+      "post": {
+        "operationId": "activateLifecycleAccessPolicy",
+        "summary": "Activate a successor lifecycle-access policy",
+        "description": "Creates and activates one immutable successor policy version, superseding the previously active version. The predicate language is closed through ADR-0041 and is not a generic expression engine.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivateLifecycleAccessPolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Activated lifecycle-access policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleAccessPolicyResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "x-wyrmgate-authority": "Access authoritative policy",
+        "x-wyrmgate-administrative-permission": "lifecycle-access-policy:activate",
+        "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
     }
   },
   "components": {
@@ -901,6 +982,262 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "LifecyclePolicyExpectedValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "STRING",
+              "BOOLEAN",
+              "INTEGER",
+              "DECIMAL",
+              "DATE",
+              "DATETIME",
+              "ENUM"
+            ]
+          },
+          "stringValue": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "booleanValue": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "integerValue": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "decimalValue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact decimal string; must fit the accepted numeric(38,12) policy contract without rounding."
+          },
+          "dateValue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "dateTimeValue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "enumValue": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "LifecycleAccessPolicyRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ruleId",
+          "predicateKind",
+          "targetKind",
+          "targetId"
+        ],
+        "properties": {
+          "ruleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "predicateKind": {
+            "type": "string",
+            "enum": [
+              "ALWAYS",
+              "CANONICAL_STRING_EQUALS",
+              "CANONICAL_BOOLEAN_EQUALS",
+              "CANONICAL_INTEGER_EQUALS",
+              "CANONICAL_DECIMAL_EQUALS",
+              "CANONICAL_DATE_EQUALS",
+              "CANONICAL_DATETIME_EQUALS",
+              "CANONICAL_ENUM_EQUALS",
+              "CANONICAL_STRING_CONTAINS",
+              "CANONICAL_BOOLEAN_CONTAINS",
+              "CANONICAL_INTEGER_CONTAINS",
+              "CANONICAL_DECIMAL_CONTAINS",
+              "CANONICAL_DATE_CONTAINS",
+              "CANONICAL_DATETIME_CONTAINS",
+              "CANONICAL_ENUM_CONTAINS",
+              "CANONICAL_STRING_CONTAINS_ANY",
+              "CANONICAL_BOOLEAN_CONTAINS_ANY",
+              "CANONICAL_INTEGER_CONTAINS_ANY",
+              "CANONICAL_DECIMAL_CONTAINS_ANY",
+              "CANONICAL_DATE_CONTAINS_ANY",
+              "CANONICAL_DATETIME_CONTAINS_ANY",
+              "CANONICAL_ENUM_CONTAINS_ANY",
+              "CANONICAL_STRING_CONTAINS_ALL",
+              "CANONICAL_BOOLEAN_CONTAINS_ALL",
+              "CANONICAL_INTEGER_CONTAINS_ALL",
+              "CANONICAL_DECIMAL_CONTAINS_ALL",
+              "CANONICAL_DATE_CONTAINS_ALL",
+              "CANONICAL_DATETIME_CONTAINS_ALL",
+              "CANONICAL_ENUM_CONTAINS_ALL"
+            ]
+          },
+          "canonicalKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedString": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedBoolean": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "expectedInteger": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "expectedDecimal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "expectedDateTime": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "expectedEnum": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedSet": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/LifecyclePolicyExpectedValue"
+            }
+          },
+          "targetKind": {
+            "type": "string",
+            "enum": [
+              "ROLE",
+              "ENTITLEMENT"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ActivateLifecycleAccessPolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rules"
+        ],
+        "properties": {
+          "rules": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/LifecycleAccessPolicyRule"
+            }
+          }
+        }
+      },
+      "LifecycleAccessPolicyResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "versionNumber",
+          "state",
+          "rules",
+          "createdAt",
+          "activatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "versionNumber": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUPERSEDED"
+            ]
+          },
+          "rules": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/LifecycleAccessPolicyRule"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "activatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "supersededAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       }

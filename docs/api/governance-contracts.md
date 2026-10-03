@@ -195,3 +195,33 @@ current authoritative AccessAssignment state.
 ReviewCampaign `COMPLETED` still means every generated ReviewItem has an immutable
 decision. ReviewRemediation state and provider fulfillment remain separate dimensions;
 the public API provides no generic remediation-status mutation operation.
+
+
+## Governance policy administration
+
+The Governance v1 contract now exposes the implemented ADR-0017 ACCESS_REQUEST PolicyVersion lifecycle as semantic policy operations:
+
+- `POST /policies/access-request/versions` — create typed DRAFT content;
+- `GET /policies/access-request/versions/{policyVersionId}`;
+- `GET /policies/access-request/active`;
+- `POST /policies/access-request/versions/{policyVersionId}:ready`;
+- `POST /policies/access-request/versions/{policyVersionId}:activate`;
+- `POST /policies/access-request/versions/{policyVersionId}:cancel`.
+
+The public contract names ACCESS_REQUEST explicitly because no generic policy-kind/expression engine exists. DRAFT content carries the existing typed Entitlement-pair SoD rules and constrained sequential approval-plan stages only. READY/ACTIVE/CANCEL transitions use strong revision ETags plus causal idempotency. Activated/superseded content remains immutable.
+
+Stable Administration permissions are `governance-policy:read|create|ready|activate|cancel`; they are default-deny and are not silently granted to INITIAL_TENANT_ADMIN.
+
+## GovernanceException API
+
+The ADR-0018 exception lifecycle is now public through:
+
+- `POST /exceptions` — request one typed IDENTITY_SOD_RULE exception and start its reusable ApprovalCase;
+- `GET /exceptions/{governanceExceptionId}`;
+- `POST /exceptions/{governanceExceptionId}:revoke`.
+
+The authenticated governed actor is always the requester; clients cannot assert a different requester identity. The request binds one subject Identity to one exact SoDRule of the current ACTIVE PolicyVersion, explicit validity, business reason, an immutable typed approval plan and optional predecessor for renewal. Approval/rejection still uses the reusable Approval API and remains evidence rather than Access authority.
+
+Revoke is an explicit authority-reduction operation with If-Match and causal idempotency. Semantic expiration remains clock-based even if scheduler materialization is late. Exception mutation never writes Access persistence.
+
+Permissions are `governance-exception:read|create|revoke`, default-deny and outside INITIAL_TENANT_ADMIN. Audit outcome evidence is data-minimized; business reason, approval-plan detail and SoD context are not copied into AuditRecord.

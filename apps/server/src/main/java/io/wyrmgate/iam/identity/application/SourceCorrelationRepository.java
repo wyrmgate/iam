@@ -88,6 +88,9 @@ public interface SourceCorrelationRepository {
     Optional<SourceCorrelationPolicyVersion> findActiveCorrelationPolicy(
             TenantContext tenant, UUID sourceSystemId);
 
+    Optional<SourceCorrelationPolicyVersion> findCorrelationPolicyById(
+            TenantContext tenant, UUID policyVersionId);
+
     SourceLifecyclePolicyVersion replaceActiveLifecyclePolicy(
             TenantContext tenant,
             UUID sourceSystemId,
@@ -99,6 +102,9 @@ public interface SourceCorrelationRepository {
     Optional<SourceLifecyclePolicyVersion> findActiveLifecyclePolicy(
             TenantContext tenant, UUID sourceSystemId);
 
+    Optional<SourceLifecyclePolicyVersion> findLifecyclePolicyById(
+            TenantContext tenant, UUID policyVersionId);
+
     SourceAbsencePolicyVersion replaceActiveAbsencePolicy(
             TenantContext tenant,
             UUID sourceSystemId,
@@ -108,6 +114,9 @@ public interface SourceCorrelationRepository {
 
     Optional<SourceAbsencePolicyVersion> findActiveAbsencePolicy(
             TenantContext tenant, UUID sourceSystemId);
+
+    Optional<SourceAbsencePolicyVersion> findAbsencePolicyById(
+            TenantContext tenant, UUID policyVersionId);
 
     SourceAbsenceInference startAbsenceInferenceIfAbsent(
             TenantContext tenant, SourceAbsenceInference candidate);

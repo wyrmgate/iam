@@ -16,4 +16,6 @@ public interface LifecycleAccessPolicyRepository {
             UUID policyVersionId);
 
     Optional<LifecycleAccessPolicyVersion> findActive(TenantContext tenant);
+
+    Optional<LifecycleAccessPolicyVersion> findById(TenantContext tenant, UUID policyVersionId);
 }

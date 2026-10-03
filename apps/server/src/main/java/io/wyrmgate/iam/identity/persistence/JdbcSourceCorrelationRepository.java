@@ -542,6 +542,40 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     }
 
     @Override
+    public Optional<SourceCorrelationPolicyVersion> findCorrelationPolicyById(
+            TenantContext tenant, UUID policyVersionId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, match_attribute_definition_version_id,
+                       match_mapping_version_id, version_number,
+                       create_identity_on_no_match, created_identity_type,
+                       display_name_source_path, state, created_at,
+                       activated_at, superseded_at
+                FROM identity.source_correlation_policy_version
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs, rowNum) -> new SourceCorrelationPolicyVersion(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("source_system_id", UUID.class),
+                        rs.getObject("match_attribute_definition_version_id", UUID.class),
+                        rs.getObject("match_mapping_version_id", UUID.class),
+                        rs.getLong("version_number"),
+                        rs.getBoolean("create_identity_on_no_match"),
+                        rs.getString("created_identity_type") == null
+                                ? null
+                                : IdentityType.valueOf(rs.getString("created_identity_type")),
+                        rs.getString("display_name_source_path"),
+                        SourceCorrelationPolicyVersion.State.valueOf(rs.getString("state")),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("activated_at").toInstant(),
+                        instant(rs.getTimestamp("superseded_at"))),
+                tenant.tenantId(),
+                policyVersionId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public SourceLifecyclePolicyVersion replaceActiveLifecyclePolicy(
             TenantContext tenant,
             UUID sourceSystemId,
@@ -660,6 +694,47 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
     }
 
     @Override
+    public Optional<SourceLifecyclePolicyVersion> findLifecyclePolicyById(
+            TenantContext tenant, UUID policyVersionId) {
+        List<SourceLifecyclePolicyVersion> policies = jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, source_path, version_number,
+                       state, created_at, activated_at, superseded_at
+                FROM identity.source_lifecycle_policy_version
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs, rowNum) -> {
+                    UUID policyId = rs.getObject("id", UUID.class);
+                    List<SourceLifecyclePolicyVersion.Rule> rules = jdbcTemplate.query(
+                            """
+                            SELECT source_value, target_lifecycle_state
+                            FROM identity.source_lifecycle_policy_rule
+                            WHERE tenant_id = ? AND policy_version_id = ?
+                            ORDER BY source_value
+                            """,
+                            (ruleRs, ruleRow) -> new SourceLifecyclePolicyVersion.Rule(
+                                    ruleRs.getString("source_value"),
+                                    io.wyrmgate.iam.identity.domain.IdentityLifecycleState.valueOf(
+                                            ruleRs.getString("target_lifecycle_state"))),
+                            tenant.tenantId(),
+                            policyId);
+                    return new SourceLifecyclePolicyVersion(
+                            policyId,
+                            rs.getObject("source_system_id", UUID.class),
+                            rs.getString("source_path"),
+                            rs.getLong("version_number"),
+                            rules,
+                            SourceLifecyclePolicyVersion.State.valueOf(rs.getString("state")),
+                            rs.getTimestamp("created_at").toInstant(),
+                            rs.getTimestamp("activated_at").toInstant(),
+                            instant(rs.getTimestamp("superseded_at")));
+                },
+                tenant.tenantId(),
+                policyVersionId);
+        return policies.stream().findFirst();
+    }
+
+    @Override
     public SourceAbsencePolicyVersion replaceActiveAbsencePolicy(
             TenantContext tenant,
             UUID sourceSystemId,
@@ -734,6 +809,31 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
                         instant(rs.getTimestamp("superseded_at"))),
                 tenant.tenantId(),
                 sourceSystemId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public Optional<SourceAbsencePolicyVersion> findAbsencePolicyById(
+            TenantContext tenant, UUID policyVersionId) {
+        return jdbcTemplate.query(
+                """
+                SELECT id, source_system_id, version_number, max_inferred_transitions,
+                       state, created_at, activated_at, superseded_at
+                FROM identity.source_absence_policy_version
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs, rowNum) -> new SourceAbsencePolicyVersion(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("source_system_id", UUID.class),
+                        rs.getLong("version_number"),
+                        rs.getInt("max_inferred_transitions"),
+                        SourceAbsencePolicyVersion.State.valueOf(rs.getString("state")),
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getTimestamp("activated_at").toInstant(),
+                        instant(rs.getTimestamp("superseded_at"))),
+                tenant.tenantId(),
+                policyVersionId)
                 .stream()
                 .findFirst();
     }

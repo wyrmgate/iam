@@ -35,6 +35,19 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission PRINCIPAL_CORRELATE =
             new AdministrativePermission("principal", "correlate");
 
+    public static final AdministrativePermission SOURCE_CORRELATION_POLICY_READ =
+            new AdministrativePermission("source-correlation-policy", "read");
+    public static final AdministrativePermission SOURCE_CORRELATION_POLICY_ACTIVATE =
+            new AdministrativePermission("source-correlation-policy", "activate");
+    public static final AdministrativePermission SOURCE_LIFECYCLE_POLICY_READ =
+            new AdministrativePermission("source-lifecycle-policy", "read");
+    public static final AdministrativePermission SOURCE_LIFECYCLE_POLICY_ACTIVATE =
+            new AdministrativePermission("source-lifecycle-policy", "activate");
+    public static final AdministrativePermission SOURCE_ABSENCE_POLICY_READ =
+            new AdministrativePermission("source-absence-policy", "read");
+    public static final AdministrativePermission SOURCE_ABSENCE_POLICY_ACTIVATE =
+            new AdministrativePermission("source-absence-policy", "activate");
+
 
     public static final AdministrativePermission APPLICATION_READ =
             new AdministrativePermission("application", "read");
@@ -92,6 +105,11 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission EFFECTIVE_ACCESS_READ =
             new AdministrativePermission("effective-access", "read");
 
+    public static final AdministrativePermission LIFECYCLE_ACCESS_POLICY_READ =
+            new AdministrativePermission("lifecycle-access-policy", "read");
+    public static final AdministrativePermission LIFECYCLE_ACCESS_POLICY_ACTIVATE =
+            new AdministrativePermission("lifecycle-access-policy", "activate");
+
     public static final AdministrativePermission CREDENTIAL_READ =
             new AdministrativePermission("credential", "read");
     public static final AdministrativePermission CREDENTIAL_CREATE =
@@ -104,6 +122,24 @@ public final class AdministrativePermissions {
             new AdministrativePermission("credential", "rotate");
     public static final AdministrativePermission CREDENTIAL_ROTATION_READ =
             new AdministrativePermission("credential-rotation", "read");
+
+    public static final AdministrativePermission GOVERNANCE_POLICY_READ =
+            new AdministrativePermission("governance-policy", "read");
+    public static final AdministrativePermission GOVERNANCE_POLICY_CREATE =
+            new AdministrativePermission("governance-policy", "create");
+    public static final AdministrativePermission GOVERNANCE_POLICY_READY =
+            new AdministrativePermission("governance-policy", "ready");
+    public static final AdministrativePermission GOVERNANCE_POLICY_ACTIVATE =
+            new AdministrativePermission("governance-policy", "activate");
+    public static final AdministrativePermission GOVERNANCE_POLICY_CANCEL =
+            new AdministrativePermission("governance-policy", "cancel");
+
+    public static final AdministrativePermission GOVERNANCE_EXCEPTION_READ =
+            new AdministrativePermission("governance-exception", "read");
+    public static final AdministrativePermission GOVERNANCE_EXCEPTION_CREATE =
+            new AdministrativePermission("governance-exception", "create");
+    public static final AdministrativePermission GOVERNANCE_EXCEPTION_REVOKE =
+            new AdministrativePermission("governance-exception", "revoke");
 
     public static final AdministrativePermission REVIEW_CAMPAIGN_READ =
             new AdministrativePermission("review-campaign", "read");

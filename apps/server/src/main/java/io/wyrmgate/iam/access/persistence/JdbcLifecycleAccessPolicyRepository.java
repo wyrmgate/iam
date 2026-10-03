@@ -78,11 +78,37 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
 
     @Override
     public Optional<LifecycleAccessPolicyVersion> findActive(TenantContext tenant) {
-        return jdbc.query("""
+        return findOne(
+                tenant,
+                """
                 SELECT id,version_number,state,created_at,activated_at,superseded_at
                 FROM access.lifecycle_access_policy_version
                 WHERE tenant_id=? AND state='ACTIVE'
                 """,
+                tenant.tenantId());
+    }
+
+    @Override
+    public Optional<LifecycleAccessPolicyVersion> findById(
+            TenantContext tenant,
+            UUID policyVersionId) {
+        return findOne(
+                tenant,
+                """
+                SELECT id,version_number,state,created_at,activated_at,superseded_at
+                FROM access.lifecycle_access_policy_version
+                WHERE tenant_id=? AND id=?
+                """,
+                tenant.tenantId(),
+                policyVersionId);
+    }
+
+    private Optional<LifecycleAccessPolicyVersion> findOne(
+            TenantContext tenant,
+            String sql,
+            Object... args) {
+        return jdbc.query(
+                sql,
                 (rs,row) -> {
                     UUID id=rs.getObject("id",UUID.class);
                     List<LifecycleAccessPolicyVersion.Rule> rules=jdbc.query("""
@@ -119,7 +145,8 @@ public final class JdbcLifecycleAccessPolicyRepository implements LifecycleAcces
                             rules,rs.getTimestamp("created_at").toInstant(),
                             rs.getTimestamp("activated_at").toInstant(),
                             rs.getTimestamp("superseded_at")==null?null:rs.getTimestamp("superseded_at").toInstant());
-                },tenant.tenantId()).stream().findFirst();
+                },
+                args).stream().findFirst();
     }
 
     private List<LifecycleAccessPolicyVersion.ExpectedValue> readExpectedValues(
