@@ -134,16 +134,9 @@ mapfile -t branches < <(
 
 if [[ "${EVENT_NAME}" == "push" ]]; then
   echo "bootstrap sweep: cleaning historical non-default branches"
-  for entry in "${branches[@]}"; do
-    branch_name="${entry%%
-  if branch_has_open_pr "${branch_name}"; then
-    echo "skip branch with open PR: ${branch_name}"
-    continue
-  fi
 
-  cleanup_branch "${branch_name}"
-done
-\t'*}"
+  for entry in "${branches[@]}"; do
+    branch_name="${entry%%$'\t'*}"
 
     if branch_has_open_pr "${branch_name}"; then
       echo "skip branch with open PR: ${branch_name}"
@@ -152,30 +145,15 @@ done
 
     cleanup_branch "${branch_name}"
   done
+
   exit 0
 fi
 
 cutoff_epoch="$(date -u -d "-${stale_days} days" +%s)"
 
 for entry in "${branches[@]}"; do
-  branch_name="${entry%%
-  if branch_has_open_pr "${branch_name}"; then
-    echo "skip branch with open PR: ${branch_name}"
-    continue
-  fi
-
-  cleanup_branch "${branch_name}"
-done
-\t'*}"
-  latest_created="${entry#*
-  if branch_has_open_pr "${branch_name}"; then
-    echo "skip branch with open PR: ${branch_name}"
-    continue
-  fi
-
-  cleanup_branch "${branch_name}"
-done
-\t'}"
+  branch_name="${entry%%$'\t'*}"
+  latest_created="${entry#*$'\t'}"
   latest_epoch="$(date -u -d "${latest_created}" +%s)"
 
   if (( latest_epoch > cutoff_epoch )); then
