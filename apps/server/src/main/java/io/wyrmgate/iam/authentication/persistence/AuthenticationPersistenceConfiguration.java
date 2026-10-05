@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.authentication.persistence;
 
+import io.wyrmgate.iam.authentication.application.AuthenticationProtocolQuery;
 import io.wyrmgate.iam.authentication.application.AuthenticationRepository;
 import io.wyrmgate.iam.authentication.application.AuthenticationService;
 import io.wyrmgate.iam.authentication.application.AuthenticationSubjectQuery;
@@ -16,6 +17,13 @@ public class AuthenticationPersistenceConfiguration {
     @Bean
     AuthenticationRepository authenticationRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcAuthenticationRepository(jdbcTemplate);
+    }
+
+    @Bean
+    AuthenticationProtocolQuery authenticationProtocolQuery(
+            JdbcTemplate jdbcTemplate,
+            AuthenticationRepository repository) {
+        return new JdbcAuthenticationProtocolQuery(jdbcTemplate, repository);
     }
 
     @Bean
