@@ -1,9 +1,11 @@
 package io.wyrmgate.iam.authentication.persistence;
 
+import io.wyrmgate.iam.authentication.application.AuthenticationLoginService;
 import io.wyrmgate.iam.authentication.application.AuthenticationProtocolQuery;
 import io.wyrmgate.iam.authentication.application.AuthenticationRepository;
 import io.wyrmgate.iam.authentication.application.AuthenticationService;
 import io.wyrmgate.iam.authentication.application.AuthenticationSubjectQuery;
+import io.wyrmgate.iam.credential.application.CredentialAuthenticatorVerifier;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import org.springframework.context.annotation.Bean;
@@ -33,5 +35,16 @@ public class AuthenticationPersistenceConfiguration {
             IdGenerator ids,
             TransactionExecutor transactions) {
         return new AuthenticationService(repository, subjects, ids, transactions);
+    }
+
+    @Bean
+    AuthenticationLoginService authenticationLoginService(
+            AuthenticationService authenticationService,
+            AuthenticationProtocolQuery protocolQuery,
+            CredentialAuthenticatorVerifier credentialAuthenticatorVerifier) {
+        return new AuthenticationLoginService(
+                authenticationService,
+                protocolQuery,
+                credentialAuthenticatorVerifier);
     }
 }
