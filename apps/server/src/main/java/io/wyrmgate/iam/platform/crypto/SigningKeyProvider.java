@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.platform.crypto;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -18,7 +19,14 @@ public interface SigningKeyProvider {
 
     Optional<SigningKeyMaterial> verificationKey(String keyId);
 
-    Collection<SigningKeyMaterial> verificationKeys();
+    /**
+     * Public verification material accepted by this provider. Providers that do
+     * not support historical verification keys remain source-compatible and
+     * expose their current public key by default.
+     */
+    default Collection<SigningKeyMaterial> verificationKeys() {
+        return List.of(currentSigningKey());
+    }
 
     byte[] sign(byte[] payload);
 }
