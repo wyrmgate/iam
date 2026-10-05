@@ -10,6 +10,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
 
@@ -38,32 +39,39 @@ public final class AuthenticationLoginService {
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(presentedPassword, "presentedPassword");
-        AuthenticationLoginBinding binding;
+        Objects.requireNonNull(now, "now");
         try {
-            binding = authentication.resolveActiveLogin(tenant, loginIdentifier);
-        } catch (RuntimeException unknownOrIneligible) {
-            // Keep caller-visible failure intentionally enumeration-neutral.
-            throw new AuthenticationFailedException();
-        }
+            AuthenticationLoginBinding binding;
+            try {
+                binding = authentication.resolveActiveLogin(tenant, loginIdentifier);
+            } catch (RuntimeException unknownOrIneligible) {
+                // Keep caller-visible failure intentionally enumeration-neutral.
+                throw new AuthenticationFailedException();
+            }
 
-        CredentialAuthenticatorVerifier.Result verification = credentials.verifyPassword(
-                tenant, binding.principalId(), presentedPassword, now);
-        if (verification.status() == CredentialAuthenticatorVerifier.Status.UNAVAILABLE) {
-            throw new AuthenticationDependencyUnavailableException();
-        }
-        if (verification.status() != CredentialAuthenticatorVerifier.Status.VERIFIED) {
-            throw new AuthenticationFailedException();
-        }
+            CredentialAuthenticatorVerifier.Result verification = credentials.verifyPassword(
+                    tenant, binding.principalId(), presentedPassword, now);
+            if (verification.status() == CredentialAuthenticatorVerifier.Status.UNAVAILABLE) {
+                throw new AuthenticationDependencyUnavailableException();
+            }
+            if (verification.status() != CredentialAuthenticatorVerifier.Status.VERIFIED) {
+                throw new AuthenticationFailedException();
+            }
 
-        String secret = randomSecret();
-        String digest = digest(secret);
-        AuthenticationAssurance assurance = verification.strength()
-                        == CredentialAuthenticatorVerifier.Strength.STRONG
-                ? AuthenticationAssurance.STRONG
-                : AuthenticationAssurance.BASELINE;
-        AuthenticationSession session = authentication.createSession(
-                tenant, binding.principalId(), assurance, digest, now);
-        return new LoginResult(session, secret);
+            String secret = randomSecret();
+            String digest = digest(secret);
+            AuthenticationAssurance assurance = verification.strength()
+                            == CredentialAuthenticatorVerifier.Strength.STRONG
+                    ? AuthenticationAssurance.STRONG
+                    : AuthenticationAssurance.BASELINE;
+            AuthenticationSession session = authentication.createSession(
+                    tenant, binding.principalId(), assurance, digest, now);
+            return new LoginResult(session, secret);
+        } finally {
+            // Credential verification also clears its copy path, but this outer guard covers
+            // unknown-login and pre-verification failures as well.
+            Arrays.fill(presentedPassword, '\0');
+        }
     }
 
     public AuthenticationProtocolQuery.ResolvedSession resolveSession(String rawSessionSecret) {
