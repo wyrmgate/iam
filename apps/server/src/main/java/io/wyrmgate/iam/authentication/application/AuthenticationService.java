@@ -1,6 +1,6 @@
 package io.wyrmgate.iam.authentication.application;
 
-import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceLevel;
+import io.wyrmgate.iam.authentication.domain.AuthenticationAssurance;
 import io.wyrmgate.iam.authentication.domain.AuthenticationClient;
 import io.wyrmgate.iam.authentication.domain.AuthenticationLoginBinding;
 import io.wyrmgate.iam.authentication.domain.AuthenticationSession;
@@ -53,38 +53,24 @@ public final class AuthenticationService {
             UUID id = ids.nextId();
             String protocolClientId = "wg_" + id.toString().replace("-", "");
             AuthenticationClient client = new AuthenticationClient(
-                    id,
-                    protocolClientId,
-                    displayName,
-                    clientType,
-                    redirectUris,
-                    postLogoutRedirectUris,
-                    scopes,
-                    AuthenticationClient.LifecycleState.ACTIVE,
-                    1,
-                    now,
-                    now);
+                    id, protocolClientId, displayName, clientType, redirectUris,
+                    postLogoutRedirectUris, scopes, AuthenticationClient.LifecycleState.ACTIVE,
+                    1, now, now);
             repository.insertClient(tenant, client);
             return client;
         });
     }
 
     public AuthenticationClient updateClient(
-            TenantContext tenant,
-            UUID clientId,
-            String displayName,
-            List<URI> redirectUris,
-            List<URI> postLogoutRedirectUris,
-            Set<String> scopes,
-            long expectedRevision,
-            Instant now) {
-        // Construct a candidate using immutable fields so the domain invariants run before persistence.
+            TenantContext tenant, UUID clientId, String displayName,
+            List<URI> redirectUris, List<URI> postLogoutRedirectUris,
+            Set<String> scopes, long expectedRevision, Instant now) {
         AuthenticationClient current = repository.findClient(tenant, clientId)
                 .orElseThrow(() -> new IllegalArgumentException("authentication client does not exist"));
         new AuthenticationClient(
-                current.id(), current.clientId(), displayName, current.clientType(),
-                redirectUris, postLogoutRedirectUris, scopes, current.lifecycleState(),
-                current.revision(), current.createdAt(), now);
+                current.id(), current.clientId(), displayName, current.clientType(), redirectUris,
+                postLogoutRedirectUris, scopes, current.lifecycleState(), current.revision(),
+                current.createdAt(), now);
         return transactions.required(() -> repository.updateClient(
                 tenant, clientId, displayName, redirectUris, postLogoutRedirectUris,
                 scopes, expectedRevision, now));
@@ -138,11 +124,8 @@ public final class AuthenticationService {
     }
 
     public AuthenticationLoginBinding updateLoginBindingDisplay(
-            TenantContext tenant,
-            UUID bindingId,
-            String loginIdentifier,
-            long expectedRevision,
-            Instant now) {
+            TenantContext tenant, UUID bindingId, String loginIdentifier,
+            long expectedRevision, Instant now) {
         AuthenticationLoginBinding current = getLoginBinding(tenant, bindingId);
         if (!AuthenticationLoginBinding.normalize(loginIdentifier)
                 .equals(current.normalizedLoginIdentifier())) {
@@ -191,16 +174,10 @@ public final class AuthenticationService {
                 }));
     }
 
-    /**
-     * Persists session metadata using only a digest supplied by the caller. The raw browser session secret
-     * deliberately never enters the Authentication domain object or repository contract.
-     */
+    /** Persists session metadata using only a digest; raw browser session authority is never domain state. */
     public AuthenticationSession createSession(
-            TenantContext tenant,
-            UUID principalId,
-            AuthenticationAssuranceLevel assurance,
-            String sessionSecretDigest,
-            Instant now) {
+            TenantContext tenant, UUID principalId, AuthenticationAssurance assurance,
+            String sessionSecretDigest, Instant now) {
         AuthenticationSubjectQuery.Result subject = subjects.resolve(tenant, principalId);
         if (subject.status() == AuthenticationSubjectQuery.Status.UNAVAILABLE) {
             throw new IllegalStateException("governed authentication subject evaluation unavailable");
