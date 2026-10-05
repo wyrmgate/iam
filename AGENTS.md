@@ -20,7 +20,7 @@ Do not ask the user to restate decisions that are available in these canonical s
 
 - Accepted ADRs and current formal requirements/specifications govern.
 - A newer accepted ADR may intentionally amend an older formal specification until the next formal revision.
-- Current repository architecture/domain/interface Markdown governs implementation detail.
+- Current repository architecture/domain/interface documentation governs implementation detail.
 - Existing code does not silently redefine architecture.
 - Historical/legacy material is reference only.
 - Never create competing authoritative definitions for the same concept.
@@ -28,7 +28,7 @@ Do not ask the user to restate decisions that are available in these canonical s
 ## Architecture guardrails
 
 - Keep canonical architecture framework-neutral.
-- Logical capabilities are Identity, Catalog, Access, Governance, Credential, Integration, Administration and Audit, with Platform as supporting infrastructure.
+- Logical capabilities are Identity, Catalog, Access, Governance, Credential, Authentication, Integration, Administration and Audit, with Platform as supporting infrastructure.
 - Capability ownership is not equivalent to package, Maven module, process, service or database schema.
 - Only an owning capability mutates its authoritative state.
 - Cross-capability collaboration uses semantic commands, queries and facts; do not mutate another capability through its repository/tables.
@@ -38,13 +38,15 @@ Do not ask the user to restate decisions that are available in these canonical s
 - Dynamic/custom attributes use governed typed schemas; provider-native data remains observation until explicitly mapped.
 - First-class relationships such as manager, organization, ownership and role composition stay first-class relationships.
 - Identity is the governed subject; Principal is the technical representation/account; Credential belongs to Principal.
+- Authentication owns first-party/federated login, SSO sessions, OIDC/OAuth client/grant state, subject mapping and claim-release policy; it does not own Identity, Credential private material, business access or IAM administrative authority.
 - AccessAssignment is authoritative business access intent; EffectiveAccess and desired provider state are derived projections.
+- OAuth/OIDC scopes, claims and external IdP groups/roles never become Wyrmgate AdministrativePermission or AccessAssignment authority implicitly.
 - Partial import/reconciliation never implies destructive absence.
 - Privilege increase fails closed when mandatory governance evaluation is unavailable; authoritative privilege reduction/revocation must not be blocked by unrelated evaluator failure.
 - External/provider calls never run inside the authoritative transaction that commits governance state.
 - Async processing assumes at-least-once delivery and must tolerate retry, duplication, replay and out-of-order events.
-- Secrets/private credential material must not appear in ordinary APIs, events, audit, logs, tasks or errors.
-- Tenant is an isolation boundary; Organization is business structure.
+- Secrets/private credential material, browser session secrets, authorization codes and refresh tokens must not appear in ordinary APIs, events, audit, logs, tasks or errors.
+- Tenant is the isolation boundary; Organization is business structure.
 - Avoid premature microservices.
 
 ## Workflow/API rules
@@ -77,8 +79,9 @@ For a major change:
 
 - Do not let ORM/framework convenience decide aggregate boundaries.
 - Prefer stable IDs across aggregate/capability boundaries rather than deep ORM object graphs.
-- Design high-cardinality data for bounded transactions, pagination and asynchronous processing.
-- Keep provider-specific behavior behind Integration/adapter boundaries.
+- Design high-cardinality data for bounded transactions and pagination; use asynchronous processing where appropriate.
+- Keep provider-specific implementation behind Integration/adapters.
+- Keep authentication-protocol/framework adapters behind Authentication boundaries; do not let OAuth/OIDC library types define canonical domain state.
 - Preserve Maven for the JVM build unless an explicit architectural/implementation decision changes it; do not introduce Gradle alongside it.
 - Treat legacy conflicts as migration/refactoring work rather than changing accepted architecture to fit legacy code.
 
