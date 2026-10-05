@@ -2,33 +2,58 @@
 
 ## Purpose
 
-This document defines the implementation-facing authentication boundary that precedes Wyrmgate Administrative Authorization. It implements ADR-0011 and remains subordinate to the formal Security/SRS requirements and accepted ADRs.
+This document defines the implementation-facing authentication boundary that precedes Wyrmgate Administrative Authorization. ADR-0011 established the first external bearer implementation; ADR-0042 broadens Wyrmgate into an IAM/IdP/SSO platform and supersedes the implication that an external IdP is the only canonical authentication source.
 
-Authentication answers **who presented a valid external credential**. Administration answers **what that governed actor may do to IAM state**. They are deliberately separate decisions.
+Authentication answers **which governed Principal/subject authenticated and with what provider-neutral assurance**. Administration answers **what that governed actor may do to IAM state**. They remain deliberately separate decisions.
 
-## Bearer authentication boundary
+See [`identity-provider-sso.md`](identity-provider-sso.md) for the first-party IdP/SSO security boundary.
 
-The first runtime target is an OAuth/OIDC-compatible JWT resource server configured with:
+## Supported authentication sources
+
+Wyrmgate supports two canonical authentication-source families for its control plane:
+
+1. **First-party Wyrmgate authentication** — a governed Principal authenticates using Credential-owned authenticator semantics and a secure server-side browser/session boundary.
+2. **Federated/external authentication** — a validated external OAuth/OIDC (and future explicitly accepted federation protocol) subject maps server-side to a governed Principal/Identity.
+
+Both paths produce the same provider-neutral governed actor context and both still require Administration operation-time authorization.
+
+Provider roles, groups, scopes, tenant claims, or similar custom claims are not converted into Wyrmgate `AdministrativePermission`.
+
+## External bearer authentication adapter
+
+The first implemented runtime target remains an OAuth/OIDC-compatible JWT resource server configured with:
 
 - one trusted issuer URI;
 - one required Wyrmgate API audience;
 - issuer-discovered signing keys and normal JWT validity checks.
 
-A valid token contributes only the exact external authentication subject `(issuer, subject)`. Provider roles, groups, scopes, tenant claims, or similar custom claims are not converted into Wyrmgate `AdministrativePermission`.
+A valid external token contributes only the exact external authentication subject `(issuer, subject)`. It grants no IAM authority by itself.
 
-When `iam.auth.enabled=false` (the default), protected `/api/v1/**` routes stay closed. Health, system information, and API-documentation endpoints may remain readable as explicitly configured.
+When `iam.auth.enabled=false`, that external bearer adapter is disabled. This no longer means Wyrmgate as a product has no possible authentication mechanism; first-party authentication is separately configured under the ADR-0042 IdP/SSO implementation boundary. Until that implementation slice is active, protected control-plane routes remain fail closed.
+
+Health, system information, protocol discovery/JWKS where explicitly enabled, and API-documentation endpoints may remain readable as specifically configured.
+
+## First-party authentication adapter
+
+First-party authentication must resolve an existing governed Principal and its owning Identity/Tenant server-side. It may not create a parallel `User` or accept client-writable tenant/authority claims.
+
+Local authenticator lifecycle is Credential-owned. Raw passwords, WebAuthn private material, recovery secrets, client secrets, signing private keys and equivalent private material never appear in ordinary IAM APIs, events, AuditRecord content, logs, URLs or browser storage.
+
+A successful first-party login establishes an authenticated session only. Administrative authorization is still evaluated by Administration for every protected semantic operation.
 
 ## Provider-neutral authentication assurance
 
-The trusted control-plane actor context now carries a canonical `AuthenticationAssuranceContext` with semantic level `BASELINE` or `STRONG`, plus authentication/step-up timestamps where available. This is a provider-neutral input to Administration authorization and is distinct from bearer validation itself.
+The trusted control-plane actor context carries a canonical `AuthenticationAssuranceContext` with semantic level `BASELINE` or `STRONG`, plus authentication/step-up timestamps where available. This is a provider-neutral input to Administration authorization and is distinct from bearer/token/session validation itself.
 
-The default runtime resolver maps a valid bearer-authenticated request to `BASELINE`. Strong assurance is therefore never inferred from token possession. Deployments that can establish stronger authentication may provide a `ControlPlaneAssuranceResolver` adapter over already validated provider context; raw provider claims, OIDC `acr`/`amr` names, and provider-specific values do not become canonical IAM semantics.
+The current external bearer resolver maps a valid bearer-authenticated request to `BASELINE` unless a deployment adapter establishes stronger assurance. First-party authentication must likewise map concrete methods into canonical assurance through an explicit trusted adapter. Raw provider claims, OIDC `acr`/`amr` names, authenticator vendor fields, and provider-specific values do not become canonical IAM semantics directly.
 
 Break-glass uses this assurance contract both at activation and at operation time. Missing, stale or downgraded strong assurance fails closed while leaving ordinary direct/delegated/elevated authorization semantics unchanged.
 
 ## Governed actor resolution
 
-Administration owns `ControlPlaneActorBinding`:
+Administration owns the control-plane binding/actor-resolution boundary.
+
+For external federation:
 
 ```text
 validated issuer + subject
@@ -40,66 +65,48 @@ ControlPlaneActorBinding
         +--> governed Identity ID
 ```
 
-The binding is server-side authoritative security configuration. The caller does not select its tenant or governed Identity through headers or writable token claims.
+For first-party Wyrmgate authentication:
 
-An actor binding grants no IAM permission by itself. The resolved actor still passes the normal Administration operation-time checks, including current governed Identity eligibility, semantic permission, resource, scope, temporal grant validity, and tenant isolation.
+```text
+authenticated governed Principal
+        |
+        v
+server-side Principal → Identity/Tenant resolution
+        |
+        +--> TenantContext
+        +--> governed Identity ID
+```
 
-The initial implementation maps an external issuer+subject to one ordinary tenant-scoped governed actor. Future customer-support/platform-operator access is a separate privileged mechanism and must not weaken this uniqueness rule.
+Neither path grants IAM permission by itself. The resolved actor still passes normal Administration operation-time checks, including current governed Identity eligibility, semantic permission, resource, scope, temporal grant validity, assurance and tenant isolation.
+
+The caller never selects its tenant or governed Identity through writable headers/token claims.
 
 ## Initial administrator bootstrap
 
-A fresh tenant intentionally has no administrative grant and therefore cannot authorize a normal administrative API call. Its first grant is established through an explicit operator-only one-shot server command, not an HTTP endpoint and not a permanent bootstrap account.
+A fresh tenant intentionally has no administrative grant and therefore cannot authorize a normal administrative API call. Its first grant is established through an explicit operator-only one-shot server command/process, not a permanent bootstrap account.
 
 The selected administrator must already exist as an `ACTIVE` governed Identity in the target tenant.
 
-The bootstrap transaction creates:
+ADR-0042 permits the bootstrap authentication anchor to be either:
 
-- an immutable tenant-unique `InitialAdminBootstrap` marker;
-- the external authentication subject binding;
-- explicit semantic permissions needed by the first implemented surfaces;
-- one `tenant-initial-administrator` AdministrativeRole;
-- one `GLOBAL` AdministrativeGrant for that role and Identity;
-- one minimized internal `administration.initial-admin-bootstrapped` outbox fact.
+- an external issuer+subject binding, or
+- an existing first-party governed Principal that can authenticate through an active Credential.
 
-The initial role contains only:
+The bootstrap transaction still creates durable burn-once evidence plus one explicit initial administrative role/grant. It creates no wildcard permission, universal OAuth scope, blanket application access or hidden superuser semantic.
 
-- `administration:manage-authorization`;
-- `identity:read`;
-- `identity:create`;
-- `identity:update`.
-
-`GLOBAL` broadens the resource scope of those permissions only. It is not a wildcard permission or hidden superuser semantic.
+The initial role permission membership remains explicit and governed by the current accepted Administration/bootstrap contract. `GLOBAL` broadens only the resource scope of listed permissions; it is not a wildcard permission.
 
 ## Burn-once invariant
 
 Bootstrap is permanently one-time per tenant.
 
-The tenant-unique bootstrap marker is durable even if the original grant is later revoked. The system must never infer bootstrap eligibility from the current absence of an active administrator. Losing all administrative authority after bootstrap therefore requires a future governed recovery mechanism. Bootstrap must never be repurposed as that recovery mechanism.
+The tenant-unique bootstrap marker remains durable even if the original grant is later revoked. The system must never infer bootstrap eligibility from the current absence of an active administrator. Losing all administrative authority after bootstrap therefore requires a governed recovery mechanism. Bootstrap must never be repurposed as that recovery mechanism.
 
-The marker is inserted inside the same database transaction as the binding, role, grant and internal fact. Deferred same-capability constraints permit the marker to act as the concurrency guard while referenced rows are created later in that same transaction. If any part fails, the transaction rolls back and the marker is not burned.
+The marker is inserted inside the same authoritative Administration transaction as the role/grant/binding state required by that bootstrap mode. If any part fails, the transaction rolls back and the marker is not burned.
 
-Bootstrap also refuses to start when any AdministrativeGrant already exists for the tenant or when the requested external subject is already bound elsewhere.
+## External bearer runtime configuration
 
-## Operator command
-
-Bootstrap is disabled by default. Run the server once with the explicit command-line flag and required values, for example:
-
-```bash
-java -jar wyrmgate-iam-server.jar \
-  --iam.bootstrap.initial-admin.enabled=true \
-  --iam.bootstrap.initial-admin.tenant-id=<tenant-uuid> \
-  --iam.bootstrap.initial-admin.identity-id=<identity-uuid> \
-  --iam.bootstrap.initial-admin.issuer=https://issuer.example \
-  --iam.bootstrap.initial-admin.subject=<external-subject>
-```
-
-Equivalent environment variables exist for deployment tooling, but the enable flag must not be left enabled for normal runtime. The application exits after the one-shot bootstrap invocation completes.
-
-A successful second invocation for the same tenant fails closed. An operator must remove the enable flag after successful provisioning; it is not a recurring startup task.
-
-## Runtime configuration
-
-The first bearer-authentication configuration is:
+The existing external bearer adapter uses:
 
 ```text
 IAM_AUTH_ENABLED=true
@@ -107,24 +114,26 @@ IAM_AUTH_ISSUER_URI=https://issuer.example
 IAM_AUTH_AUDIENCE=wyrmgate-api
 ```
 
-Protected runtime Identity APIs also require the ADR-0012 application-signing boundary used for integrity-protected continuation cursors. When `IAM_AUTH_ENABLED=true`, runtime startup fails closed unless signing is enabled and the active signing key material is configured. Retired public verification keys may remain configured for the bounded cursor-verification window; private signing material remains behind the platform signing adapter and is not exposed to Identity domain code.
+Those settings configure federation/resource-server behavior; they no longer define Wyrmgate's full product authentication model.
 
-Issuer discovery is lazy so migration/bootstrap startup does not require contacting the identity provider unless a bearer token is actually decoded.
+First-party IdP/SSO configuration is defined separately and must fail closed unless issuer/base URL, signing material, session security and required persistence/security dependencies are valid.
+
+## Browser/session rules
+
+The management console should authenticate through a same-origin secure session when first-party SSO is enabled. Long-lived bearer tokens or refresh tokens must not be stored in browser `localStorage` or `sessionStorage`.
+
+Cookie-authenticated state-changing browser endpoints require CSRF protection. Session cookies require deployment-appropriate `Secure`, `HttpOnly` and `SameSite` controls, bounded idle/absolute expiry, fixation protection and logout invalidation.
 
 ## Sensitive-data rules
 
-Wyrmgate does not persist bearer tokens, refresh tokens, signing private keys, provider client secrets, or token role/scope claims as part of actor binding or bootstrap.
+Wyrmgate does not persist or expose raw bearer tokens, authorization codes, refresh tokens, signing private keys, raw client secrets, passwords or private authenticator material as ordinary IAM state/evidence.
 
-The binding persists the exact issuer and external subject because they are the authoritative mapping key. Those values are excluded from the bootstrap outbox fact and ordinary error responses.
+External binding may persist exact issuer and external subject where required as its authoritative mapping key. First-party authentication uses governed Principal/Identity references rather than provider-like synthetic claims.
 
-Authentication failures return stable semantic errors and correlation IDs rather than JWT/library/SQL exception details.
+Authentication failures return stable semantic errors and correlation IDs rather than JWT/framework/SQL/secret details.
 
-## Current completion boundary
+## Current implementation boundary
 
-Trusted bearer validation, server-side tenant/governed-actor resolution, and burn-once initial-administrator provisioning are implemented and gate the first runtime Identity API slice.
+The repository currently implements the external JWT resource-server adapter and governed actor-resolution path. ADR-0042 makes first-party Wyrmgate IdP/SSO the next authentication capability tranche rather than an optional unrelated product.
 
-The protected `/api/v1/identities` operations combine `ControlPlaneActorRequestContext` with `AdministrativeAuthorizationService` for every semantic operation. Bearer possession alone never grants IAM authority: the resolved governed actor still requires the operation-specific `identity:read`, `identity:create`, or `identity:update` permission in the same tenant.
-
-The current Identity runtime slice covers authoritative create/read/list, non-lifecycle display-name update, and canonical-attribute metadata reads. Its collection cursors are integrity-protected under ADR-0012 and are bound to the trusted tenant context; canonical-attribute cursors are additionally bound to the Identity resource. Canonical attribute values/provenance remain fail-closed/redacted until classification-aware value visibility is implemented, and curated public Identity event publication remains a separate future adapter/integration concern.
-
-Authentication assurance (`acr`/`amr`), step-up, administrative delegation, maker-checker elevation, break-glass, and post-bootstrap recovery remain future governed security slices rather than implicit token behavior.
+Until first-party authentication/session/token issuance is implemented and verified, deployments can continue to use the existing external bearer adapter. No code path may weaken operation-time Administration authorization during the transition.
