@@ -2,7 +2,9 @@
 
 Private monorepo for the Wyrmgate Identity and Access Management platform.
 
-Wyrmgate IAM is being developed as a modular-monolith product with a Java/Spring backend and React console. The current authoritative design is maintained in the IAM v2 documentation set; repository-local implementation contracts and ADRs are added as code is introduced.
+Wyrmgate IAM is being developed as an enterprise **IAM + Identity Provider (IdP) + Single Sign-On (SSO) + Identity Governance and Administration (IGA)** product with a modular-monolith-compatible backend and React console. It governs canonical identities, principals, credentials, access and administrative authority while also supporting first-party authentication, federation and standards-based OIDC/OAuth SSO.
+
+The current authoritative design is maintained in the IAM v2 documentation set; repository-local implementation contracts and ADRs are added as code is introduced.
 
 ## Status
 
@@ -15,21 +17,24 @@ Pre-release / active development.
 - Java/Spring backend
 - React frontend
 - Flyway-managed database migrations
+- first-party OIDC/OAuth identity-provider and SSO capability
+- external identity-provider federation behind provider-neutral adapters
 - REST/OpenAPI administrative APIs
 - durable audit/domain-event infrastructure
 - provider-specific integrations behind capability-based ports/adapters
-- business governance intent separated from technical realization and provider-observed state
+- business governance intent separated from authentication, runtime authorization, technical realization and provider-observed state
+- no permanent built-in superadmin or wildcard OAuth-to-IAM authority bridge
 
 ## Repository map
 
-- `apps/server/` — IAM backend
+- `apps/server/` — IAM/IdP/SSO backend
 - `apps/console/` — IAM web console
 - `packages/` — narrowly scoped shared/generated artifacts
 - `migrations/` — migration support assets and tooling
 - `deploy/` — deployment profiles and runtime configuration templates
 - `infra/` — infrastructure-as-code and host provisioning
 - `scripts/` — developer, CI, release, and operations automation
-- `tests/` — cross-cutting integration, E2E, and security tests
+- `tests/` — cross-cutting integration, E2E, protocol, and security tests
 - `security/` — cross-cutting security engineering assets
 - `docs/` — repository-local implementation documentation and ADRs
 
