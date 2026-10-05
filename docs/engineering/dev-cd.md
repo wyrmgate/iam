@@ -2,61 +2,90 @@
 
 ## Current status
 
-The previously documented Railway backend is retired and is no longer an active Wyrmgate IAM deployment target.
+Railway Serverless is the selected shared DEV compute target for `iam-server` again.
 
-No replacement managed server target is currently canonical. Do not infer a new provider from retained infrastructure files, CI examples, or prior deployment history. Selecting a replacement managed server/runtime is an implementation/operations decision and must be verified before this document names it as active.
+The intended managed DEV topology is Cloudflare Pages + Pages Functions, Railway Serverless, and Neon PostgreSQL. This is an implementation/operations choice for shared development and testing; it does not make Railway, Cloudflare, or Neon part of canonical IAM architecture and it does not settle OD-005 production topology.
 
-The repository still preserves provider-neutral deployment contracts:
+The previous Railway service was retired and its repository-specific configuration was removed when that environment was taken down. The current reactivation is a new managed DEV deployment using the current Railway service/settings rather than an implicit rollback to the old service.
+
+The repository preserves provider-neutral deployment contracts:
 
 - `apps/server/Dockerfile` is the container build contract for `iam-server`;
 - Spring Boot binds to `${PORT:8080}` and consumes database configuration through `IAM_DB_URL`, `IAM_DB_USER`, and `IAM_DB_PASSWORD`;
+- `IAM_DEPLOYMENT_ENVIRONMENT=dev` identifies this environment as DEV;
 - `/actuator/health` is the server health endpoint;
 - Flyway startup is verified by application integration tests;
-- Core CI is the authoritative repository gate for compiling and testing the server.
+- Core CI, Security CI and Container CI remain the authoritative repository quality gates.
+
+The Railway service is connected to `wyrmgate/iam` `main`, uses repository root as build context and `apps/server/Dockerfile`, enables Railway `Wait for CI`, has one shared DEV replica, enables Serverless scale-to-zero, and uses `/actuator/health` as the deployment health check. Railway remains deployment authority; GitHub Actions validates repository contracts and does not directly deploy or mutate Railway infrastructure.
+
+The legacy Railway Config-as-Code file is not restored. Railway's former checked-in `apps/server/railway.json` path was retired, and the current service is configured through the selected Railway environment/settings. If Railway's supported infrastructure-as-code mechanism is adopted later, it requires a separate reviewed change.
 
 ## Console / Cloudflare Pages contract
 
-The console build and Pages Function routing contract remain supported repository behavior:
+The console build and Pages Function routing contract remains:
 
 - `apps/console` builds the static application;
 - only `/api/*` is routed through `apps/console/functions/api/[[path]].js`;
 - the Function reads server-side `IAM_BACKEND_ORIGIN`;
 - browser code must not receive a `VITE_IAM_BACKEND_ORIGIN` secret/configuration substitute.
 
-A Pages deployment is not a complete shared DEV environment unless `IAM_BACKEND_ORIGIN` points to a separately selected and verified IAM server environment. Until a replacement server target exists, do not describe Pages plus any database provider as an active end-to-end DEV topology.
+For the managed DEV topology, `IAM_BACKEND_ORIGIN` must point to the verified Railway DEV server origin. Do not point it at an unreviewed personal backend or any production system merely to make the console usable.
 
-Preview environments remain disabled unless they have explicit backend and data isolation. A feature-branch console must never silently target shared governed data.
+Preview environments remain disabled unless backend and data are isolated. A feature-branch console must never silently target shared governed DEV data.
 
-## Server deployment contract
+## Railway server contract
 
-Any future managed server target must:
+The selected Railway DEV service must:
 
-1. deploy a reviewed `main` revision whose required CI checks are green;
-2. build the checked-in server artifact/container without provider-specific domain changes;
-3. supply database credentials only through deployment secret/configuration facilities;
-4. verify Flyway completed to the repository current migration version;
-5. expose `/actuator/health`;
-6. preserve external-call-outside-authoritative-transaction and retry/idempotency semantics;
-7. document rollback and recovery behavior before being called the shared DEV baseline.
+1. deploy only reviewed `main` revisions whose required GitHub checks are green;
+2. use repository root `/` as Docker build context;
+3. use `apps/server/Dockerfile` without a custom start command overriding its `ENTRYPOINT`;
+4. expose the Railway-assigned `PORT`, with the application default remaining 8080;
+5. use `/actuator/health` for deployment health validation;
+6. obtain `IAM_DB_URL`, `IAM_DB_USER`, and `IAM_DB_PASSWORD` only from Railway secret/configuration storage;
+7. set `IAM_DEPLOYMENT_ENVIRONMENT=dev`;
+8. keep `IAM_OTEL_ENABLED=false` unless remote telemetry is intentionally being tested;
+9. use Neon PostgreSQL as the shared DEV database target;
+10. keep Serverless enabled while the environment is operated under the low-cost DEV posture;
+11. preserve external-call-outside-authoritative-transaction and retry/idempotency semantics.
 
-Provider-specific configuration belongs in a provider runbook/config file only while that provider is actually used. Obsolete provider configuration must be removed rather than kept as an apparent active contract.
+The current free/low-cost Railway resource envelope is an operational constraint, not architecture. Resource limits may be tuned without changing canonical domain semantics, but the service must remain large enough to start Spring, run Flyway safely and pass the health check.
 
 ## Database posture
 
-PostgreSQL remains the implementation target. Neon-specific recovery material may be retained only where it describes an actually used database environment; it does not imply a canonical server provider or a complete active DEV topology.
+Neon PostgreSQL remains the managed DEV database target. Railway hosts the application server only; it must not silently introduce a second authoritative PostgreSQL service.
 
-For a selected DEV database, verify both application health and the latest successful Flyway version. A healthy HTTP endpoint alone is not migration evidence.
+For every new or reset DEV database target, verify both application health and the latest successful Flyway version. A healthy HTTP endpoint alone is not migration evidence.
 
-## Deployment ownership
+Before destructive DEV tests or risky migrations, follow [`../operations/backup-recovery.md`](../operations/backup-recovery.md) and verify the available Neon recovery path.
 
-GitHub workflows validate repository contracts; they do not create cloud infrastructure, mutate DNS, or materialize deployment secrets.
+## Deployment ownership and CI
 
-Core CI verifies the server. The DEV Deployment Contract currently validates the console/Pages repository contract and this topology status only. A new server-provider gate should be added only after that provider becomes an intentional current target.
+GitHub workflows validate repository contracts; they do not create Railway infrastructure, mutate DNS, or materialize deployment secrets.
 
-## Retired Railway path
+The DEV Deployment Contract validates:
 
-Railway Serverless, `apps/server/railway.json`, Railway Wait for CI, Railway deployment history, and Railway-specific serverless pool/sleep guidance are retired implementation details and are not current deployment requirements.
+- the Cloudflare Pages build/proxy contract;
+- the Railway-compatible server Docker/runtime configuration;
+- the current managed DEV topology documentation.
 
-Historical commits retain the prior configuration if it is ever needed for reference. Do not restore it as a current contract without a new verified deployment decision.
+Railway `Wait for CI` is the deployment gate after GitHub Actions. Railway then builds the checked-in Dockerfile, deploys the reviewed revision and applies its own `/actuator/health` gate.
 
-See [`../operations/dev-managed-activation.md`](../operations/dev-managed-activation.md) for the current activation status.
+The expected flow is:
+
+```text
+push/merge to main
+  -> GitHub Core/Security/Container and DEV contract checks
+  -> Railway Wait for CI releases the deployment
+  -> Railway builds apps/server/Dockerfile
+  -> Flyway/application startup
+  -> /actuator/health passes
+  -> deployment becomes eligible for shared DEV use
+```
+
+## Activation status
+
+Selecting Railway again does not by itself prove the shared DEV environment is operational. The current service must complete the checks in [`../operations/dev-managed-activation.md`](../operations/dev-managed-activation.md), including health, Flyway, tenant isolation, Cloudflare routing and recovery verification, before the managed DEV topology is described as fully activated.
+
+Historical Railway configuration and deployment evidence remain historical implementation evidence only; they do not substitute for verification of the current service.
