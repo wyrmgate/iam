@@ -5,15 +5,27 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/dev-cd.yml'
+      - '.dockerignore'
       - 'apps/console/**'
+      - 'apps/server/**'
+      - 'docs/README.md'
       - 'docs/engineering/dev-cd.md'
+      - 'docs/engineering/public-demo.md'
+      - 'docs/engineering/edge.md'
+      - 'docs/engineering/observability.md'
       - 'docs/operations/dev-managed-activation.md'
   push:
     branches: [main]
     paths:
       - '.github/workflows/dev-cd.yml'
+      - '.dockerignore'
       - 'apps/console/**'
+      - 'apps/server/**'
+      - 'docs/README.md'
       - 'docs/engineering/dev-cd.md'
+      - 'docs/engineering/public-demo.md'
+      - 'docs/engineering/edge.md'
+      - 'docs/engineering/observability.md'
       - 'docs/operations/dev-managed-activation.md'
   workflow_dispatch:
 
@@ -65,6 +77,31 @@ jobs:
               raise SystemExit('Pages proxy must use IAM_BACKEND_ORIGIN.')
           PY
 
+  server:
+    name: railway-server-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate Railway-compatible server contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/server/Dockerfile
+          grep -Fq 'COPY apps/server/pom.xml' apps/server/Dockerfile
+          grep -Fq 'COPY apps/server ' apps/server/Dockerfile
+          grep -Fq 'EXPOSE 8080' apps/server/Dockerfile
+          grep -Fq 'ENTRYPOINT ["java"' apps/server/Dockerfile
+          grep -Fq 'port: ${PORT:8080}' apps/server/src/main/resources/application.yml
+          grep -Fq '${IAM_DB_URL:' apps/server/src/main/resources/application.yml
+          grep -Fq '${IAM_DB_USER:' apps/server/src/main/resources/application.yml
+          grep -Fq '${IAM_DB_PASSWORD:' apps/server/src/main/resources/application.yml
+          grep -Fq '${IAM_DEPLOYMENT_ENVIRONMENT:' apps/server/src/main/resources/application.yml
+          grep -Fq 'include: health,info' apps/server/src/main/resources/application.yml
+          test ! -f apps/server/railway.json
+
   docs:
     name: dev-topology-docs
     runs-on: ubuntu-latest
@@ -77,7 +114,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'Railway backend is retired' docs/engineering/dev-cd.md
-          grep -Fq 'No replacement managed server target is currently canonical' docs/engineering/dev-cd.md
-          grep -Fq 'Core CI' docs/engineering/dev-cd.md
+          grep -Fq 'Railway Serverless is the selected shared DEV compute target' docs/engineering/dev-cd.md
+          grep -Fq 'Cloudflare Pages + Pages Functions, Railway Serverless, and Neon PostgreSQL' docs/engineering/dev-cd.md
+          grep -Fq 'Wait for CI' docs/engineering/dev-cd.md
+          grep -Fq 'legacy Railway Config-as-Code file is not restored' docs/engineering/dev-cd.md
+          grep -Fq 'activation is not complete until' docs/operations/dev-managed-activation.md
           test -f docs/operations/dev-managed-activation.md
