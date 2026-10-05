@@ -34,36 +34,46 @@ export class ApiError extends Error {
   }
 }
 
-type ApiResult<T> = {
+export type ApiResult<T> = {
   data: T;
   etag: string | null;
   correlationId: string | null;
 };
 
-type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PATCH';
+export type RequestOptions = {
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   etag?: string;
   idempotent?: boolean;
   signal?: AbortSignal;
+  accept?: string;
 };
 
 const API_ROOT = '/api';
-const V1_ROOT = `${API_ROOT}/v1`;
+export const V1_ROOT = `${API_ROOT}/v1`;
 
 export function createIdempotencyKey(): string {
   return `console-${crypto.randomUUID()}`;
 }
 
-export function mutationHeaders(options: Pick<RequestOptions, 'etag' | 'idempotent'>): Headers {
-  const headers = new Headers({ Accept: 'application/json' });
+export function mutationHeaders(options: Pick<RequestOptions, 'etag' | 'idempotent' | 'accept'>): Headers {
+  const headers = new Headers({ Accept: options.accept ?? 'application/json' });
   if (options.etag) headers.set('If-Match', options.etag);
   if (options.idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
   return headers;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
-  if (!path.startsWith('/')) throw new Error('API path must be absolute');
+function safeErrorMessage(payload: unknown, status: number): string {
+  if (!payload || typeof payload !== 'object') return `Request failed with status ${status}`;
+  const source = payload as Record<string, unknown>;
+  const candidate = source.message ?? source.detail ?? source.error;
+  return typeof candidate === 'string' && candidate.trim()
+    ? candidate
+    : `Request failed with status ${status}`;
+}
+
+export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
+  if (!path.startsWith('/api/')) throw new Error('Console API calls must use same-origin /api/* paths');
   const headers = mutationHeaders(options);
   if (options.body !== undefined) headers.set('Content-Type', 'application/json');
 
@@ -79,34 +89,61 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
     try {
-      const payload = (await response.json()) as { message?: unknown; error?: unknown; detail?: unknown };
-      const candidate = payload.message ?? payload.detail ?? payload.error;
-      if (typeof candidate === 'string' && candidate.trim()) message = candidate;
+      message = safeErrorMessage(await response.json(), response.status);
     } catch {
-      // Do not surface arbitrary backend bodies, secrets, or HTML error pages.
+      // Never surface arbitrary HTML, stack traces, secret material, or proxy bodies.
     }
     throw new ApiError(response.status, message, correlationId);
   }
 
+  const contentType = response.headers.get('content-type') ?? '';
+  const data = response.status === 204 || !contentType.includes('json')
+    ? (undefined as T)
+    : (await response.json()) as T;
+
   return {
-    data: (await response.json()) as T,
+    data,
     etag: response.headers.get('ETag'),
     correlationId,
   };
 }
 
+export async function apiDownload(path: string, options: RequestOptions = {}): Promise<Blob> {
+  if (!path.startsWith('/api/')) throw new Error('Console downloads must use same-origin /api/* paths');
+  const headers = mutationHeaders({ ...options, accept: options.accept ?? 'application/x-ndjson' });
+  const response = await fetch(path, {
+    method: options.method ?? 'POST',
+    headers,
+    signal: options.signal,
+    credentials: 'same-origin',
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `Download failed with status ${response.status}`, response.headers.get('X-Correlation-Id'));
+  }
+  return response.blob();
+}
+
+export function withCursor(path: string, cursor?: string | null, extra?: Record<string, string | undefined>): string {
+  const [base, existing = ''] = path.split('?', 2);
+  const query = new URLSearchParams(existing);
+  if (!query.has('limit')) query.set('limit', '50');
+  if (cursor) query.set('cursor', cursor);
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (value) query.set(key, value);
+  }
+  return `${base}?${query.toString()}`;
+}
+
 export async function getSystemInfo(signal?: AbortSignal): Promise<SystemInfo> {
-  return (await request<SystemInfo>(`${API_ROOT}/system/info`, { signal })).data;
+  return (await apiRequest<SystemInfo>(`${API_ROOT}/system/info`, { signal })).data;
 }
 
 export async function listIdentities(cursor?: string, signal?: AbortSignal): Promise<IdentityPage> {
-  const query = new URLSearchParams({ limit: '50' });
-  if (cursor) query.set('cursor', cursor);
-  return (await request<IdentityPage>(`${V1_ROOT}/identities?${query.toString()}`, { signal })).data;
+  return (await apiRequest<IdentityPage>(withCursor(`${V1_ROOT}/identities`, cursor), { signal })).data;
 }
 
 export async function getIdentity(identityId: string, signal?: AbortSignal): Promise<ApiResult<IdentityResource>> {
-  return request<IdentityResource>(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}`, { signal });
+  return apiRequest<IdentityResource>(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}`, { signal });
 }
 
 export type IdentityLifecycleAction = 'activate' | 'suspend' | 'deactivate' | 'decommission';
@@ -116,7 +153,7 @@ export async function transitionIdentity(
   action: IdentityLifecycleAction,
   etag: string,
 ): Promise<ApiResult<IdentityResource>> {
-  return request<IdentityResource>(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}:${action}`, {
+  return apiRequest<IdentityResource>(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}:${action}`, {
     method: 'POST',
     etag,
     idempotent: true,
