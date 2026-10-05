@@ -13,7 +13,7 @@ CREATE TABLE authentication.client (
     CONSTRAINT authentication_client_tenant_fk
         FOREIGN KEY (tenant_id) REFERENCES platform.tenant (id),
     CONSTRAINT authentication_client_tenant_id_uq UNIQUE (tenant_id, id),
-    CONSTRAINT authentication_client_protocol_id_uq UNIQUE (tenant_id, protocol_client_id),
+    CONSTRAINT authentication_client_protocol_id_uq UNIQUE (protocol_client_id),
     CONSTRAINT authentication_client_protocol_id_ck CHECK (btrim(protocol_client_id) <> ''),
     CONSTRAINT authentication_client_display_name_ck CHECK (btrim(display_name) <> ''),
     CONSTRAINT authentication_client_type_ck CHECK (client_type IN ('PUBLIC','CONFIDENTIAL')),
@@ -188,7 +188,7 @@ FOR EACH ROW EXECUTE FUNCTION authentication.guard_login_binding_update();
 COMMENT ON SCHEMA authentication IS
     'Authentication-owned first-party/federated login, IdP and SSO authoritative state under ADR-0042.';
 COMMENT ON TABLE authentication.client IS
-    'Tenant-bound OIDC/OAuth client authority. Protocol secret material is never stored in this table.';
+    'Tenant-bound OIDC/OAuth client authority. Protocol client IDs are globally unique so the protocol edge can derive tenant context from server-owned state. Protocol secret material is never stored in this table.';
 COMMENT ON TABLE authentication.login_binding IS
     'Tenant-local login alias bound to stable governed Principal/Identity IDs; not a duplicate user aggregate.';
 COMMENT ON TABLE authentication.subject_identifier IS
