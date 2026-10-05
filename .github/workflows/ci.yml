@@ -52,6 +52,9 @@ jobs:
       - name: Install console dependencies
         run: npm --prefix apps/console install --no-audit --no-fund
 
+      - name: Test console API boundary
+        run: npm --prefix apps/console test
+
       - name: Typecheck and build console
         run: npm --prefix apps/console run build
 
