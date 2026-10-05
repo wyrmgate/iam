@@ -1,0 +1,359 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Wyrmgate Authentication Administration API",
+    "version": "1.0.0",
+    "description": "Tenant-isolated administration of first-party IAM/IdP/SSO Authentication clients, local login bindings, and SSO session metadata. Protocol bearer/session secrets are never administrative resource fields."
+  },
+  "servers": [{"url": "/"}],
+  "security": [{"bearerAuth": []}],
+  "paths": {
+    "/api/v1/authentication/clients": {
+      "get": {
+        "operationId": "listAuthenticationClients",
+        "parameters": [
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"}
+        ],
+        "responses": {
+          "200": {"description": "Page of clients", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationClientPage"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      },
+      "post": {
+        "operationId": "createAuthenticationClient",
+        "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateAuthenticationClientRequest"}}}},
+        "responses": {
+          "201": {"description": "Created client", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationClient"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"}
+        }
+      }
+    },
+    "/api/v1/authentication/clients/{id}": {
+      "parameters": [{"$ref": "#/components/parameters/ResourceId"}],
+      "get": {
+        "operationId": "getAuthenticationClient",
+        "responses": {
+          "200": {"description": "Client", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationClient"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      },
+      "patch": {
+        "operationId": "updateAuthenticationClient",
+        "parameters": [{"$ref": "#/components/parameters/IfMatch"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UpdateAuthenticationClientRequest"}}}},
+        "responses": {
+          "200": {"description": "Updated client", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationClient"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "412": {"$ref": "#/components/responses/PreconditionFailed"}
+        }
+      }
+    },
+    "/api/v1/authentication/clients/{id}/disable": {
+      "parameters": [
+        {"$ref": "#/components/parameters/ResourceId"},
+        {"$ref": "#/components/parameters/IfMatch"},
+        {"$ref": "#/components/parameters/IdempotencyKey"}
+      ],
+      "post": {
+        "operationId": "disableAuthenticationClient",
+        "responses": {
+          "200": {"description": "Disabled client", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationClient"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/PreconditionFailed"}
+        }
+      }
+    },
+    "/api/v1/authentication/login-bindings": {
+      "get": {
+        "operationId": "listAuthenticationLoginBindings",
+        "parameters": [
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"}
+        ],
+        "responses": {
+          "200": {"description": "Page of login bindings", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationLoginBindingPage"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      },
+      "post": {
+        "operationId": "createAuthenticationLoginBinding",
+        "parameters": [{"$ref": "#/components/parameters/IdempotencyKey"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateAuthenticationLoginBindingRequest"}}}},
+        "responses": {
+          "201": {"description": "Created login binding", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationLoginBinding"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "503": {"$ref": "#/components/responses/Unavailable"}
+        }
+      }
+    },
+    "/api/v1/authentication/login-bindings/{id}": {
+      "parameters": [{"$ref": "#/components/parameters/ResourceId"}],
+      "get": {
+        "operationId": "getAuthenticationLoginBinding",
+        "responses": {
+          "200": {"description": "Login binding", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationLoginBinding"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      },
+      "patch": {
+        "operationId": "updateAuthenticationLoginBinding",
+        "parameters": [{"$ref": "#/components/parameters/IfMatch"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UpdateAuthenticationLoginBindingRequest"}}}},
+        "responses": {
+          "200": {"description": "Updated login binding", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationLoginBinding"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "412": {"$ref": "#/components/responses/PreconditionFailed"}
+        }
+      }
+    },
+    "/api/v1/authentication/login-bindings/{id}/disable": {
+      "parameters": [
+        {"$ref": "#/components/parameters/ResourceId"},
+        {"$ref": "#/components/parameters/IfMatch"},
+        {"$ref": "#/components/parameters/IdempotencyKey"}
+      ],
+      "post": {
+        "operationId": "disableAuthenticationLoginBinding",
+        "responses": {
+          "200": {"description": "Disabled login binding", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationLoginBinding"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/PreconditionFailed"}
+        }
+      }
+    },
+    "/api/v1/authentication/sessions": {
+      "get": {
+        "operationId": "listAuthenticationSessions",
+        "parameters": [
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"}
+        ],
+        "responses": {
+          "200": {"description": "Page of session metadata", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationSessionPage"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"}
+        }
+      }
+    },
+    "/api/v1/authentication/sessions/{id}": {
+      "parameters": [{"$ref": "#/components/parameters/ResourceId"}],
+      "get": {
+        "operationId": "getAuthenticationSession",
+        "responses": {
+          "200": {"description": "Session metadata", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationSession"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        }
+      }
+    },
+    "/api/v1/authentication/sessions/{id}/revoke": {
+      "parameters": [
+        {"$ref": "#/components/parameters/ResourceId"},
+        {"$ref": "#/components/parameters/IfMatch"},
+        {"$ref": "#/components/parameters/IdempotencyKey"}
+      ],
+      "post": {
+        "operationId": "revokeAuthenticationSession",
+        "responses": {
+          "200": {"description": "Revoked session metadata", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthenticationSession"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/PreconditionFailed"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+    },
+    "parameters": {
+      "ResourceId": {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "Cursor": {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string", "maxLength": 4096}},
+      "Limit": {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50}},
+      "IfMatch": {"name": "If-Match", "in": "header", "required": true, "schema": {"type": "string", "pattern": "^\\\"rev-[1-9][0-9]*\\\"$"}},
+      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 8, "maxLength": 200}}
+    },
+    "headers": {
+      "ETag": {"schema": {"type": "string"}, "description": "Strong optimistic revision ETag."}
+    },
+    "responses": {
+      "BadRequest": {"description": "Invalid request", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "Unauthorized": {"description": "Authentication required", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "Forbidden": {"description": "Administrative authorization denied", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "NotFound": {"description": "Resource not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "Conflict": {"description": "Idempotency or invariant conflict", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "PreconditionFailed": {"description": "Stale revision", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+      "Unavailable": {"description": "Mandatory security dependency unavailable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+    },
+    "schemas": {
+      "AuthenticationClient": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","clientId","displayName","clientType","redirectUris","postLogoutRedirectUris","scopes","state","revision","createdAt","updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "clientId": {"type": "string", "maxLength": 192},
+          "displayName": {"type": "string", "maxLength": 256},
+          "clientType": {"type": "string", "enum": ["PUBLIC"]},
+          "redirectUris": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "format": "uri"}},
+          "postLogoutRedirectUris": {"type": "array", "uniqueItems": true, "items": {"type": "string", "format": "uri"}},
+          "scopes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "maxLength": 128}},
+          "state": {"type": "string", "enum": ["ACTIVE","DISABLED"]},
+          "revision": {"type": "integer", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "CreateAuthenticationClientRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["displayName","clientType","redirectUris","postLogoutRedirectUris","scopes"],
+        "properties": {
+          "displayName": {"type": "string", "minLength": 1, "maxLength": 256},
+          "clientType": {"type": "string", "enum": ["PUBLIC"]},
+          "redirectUris": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "format": "uri"}},
+          "postLogoutRedirectUris": {"type": "array", "uniqueItems": true, "items": {"type": "string", "format": "uri"}},
+          "scopes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "maxLength": 128}}
+        }
+      },
+      "UpdateAuthenticationClientRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["displayName","redirectUris","postLogoutRedirectUris","scopes"],
+        "properties": {
+          "displayName": {"type": "string", "minLength": 1, "maxLength": 256},
+          "redirectUris": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "format": "uri"}},
+          "postLogoutRedirectUris": {"type": "array", "uniqueItems": true, "items": {"type": "string", "format": "uri"}},
+          "scopes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "maxLength": 128}}
+        }
+      },
+      "AuthenticationClientPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/AuthenticationClient"}},
+          "nextCursor": {"type": ["string","null"]}
+        }
+      },
+      "AuthenticationLoginBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","loginIdentifier","principalId","identityId","state","revision","createdAt","updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "loginIdentifier": {"type": "string", "maxLength": 320},
+          "principalId": {"type": "string", "format": "uuid"},
+          "identityId": {"type": "string", "format": "uuid"},
+          "state": {"type": "string", "enum": ["ACTIVE","DISABLED"]},
+          "revision": {"type": "integer", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "CreateAuthenticationLoginBindingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["principalId","loginIdentifier"],
+        "properties": {
+          "principalId": {"type": "string", "format": "uuid"},
+          "loginIdentifier": {"type": "string", "minLength": 1, "maxLength": 320}
+        }
+      },
+      "UpdateAuthenticationLoginBindingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["loginIdentifier"],
+        "properties": {"loginIdentifier": {"type": "string", "minLength": 1, "maxLength": 320}}
+      },
+      "AuthenticationLoginBindingPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/AuthenticationLoginBinding"}},
+          "nextCursor": {"type": ["string","null"]}
+        }
+      },
+      "AuthenticationSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id","identityId","principalId","assurance","state","authenticatedAt","lastSeenAt","expiresAt","revision","createdAt","updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "identityId": {"type": "string", "format": "uuid"},
+          "principalId": {"type": "string", "format": "uuid"},
+          "assurance": {"type": "string", "enum": ["BASELINE","STRONG"]},
+          "state": {"type": "string", "enum": ["ACTIVE","REVOKED","EXPIRED"]},
+          "authenticatedAt": {"type": "string", "format": "date-time"},
+          "lastSeenAt": {"type": "string", "format": "date-time"},
+          "expiresAt": {"type": "string", "format": "date-time"},
+          "revokedAt": {"type": ["string","null"], "format": "date-time"},
+          "revision": {"type": "integer", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "AuthenticationSessionPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/AuthenticationSession"}},
+          "nextCursor": {"type": ["string","null"]}
+        }
+      },
+      "FieldError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field","code","message"],
+        "properties": {
+          "field": {"type": "string"},
+          "code": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code","message","correlationId","fieldErrors"],
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"},
+          "correlationId": {"type": "string", "format": "uuid"},
+          "fieldErrors": {"type": "array", "items": {"$ref": "#/components/schemas/FieldError"}}
+        }
+      }
+    }
+  }
+}
