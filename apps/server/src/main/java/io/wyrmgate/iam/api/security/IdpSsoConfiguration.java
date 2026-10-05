@@ -11,7 +11,6 @@ import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import java.security.interfaces.RSAPublicKey;
 import java.util.List;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -21,11 +20,11 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
-import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
@@ -55,7 +54,6 @@ public class IdpSsoConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "iam.sso", name = "enabled", havingValue = "true")
-    @ConditionalOnBean(SigningKeyProvider.class)
     JWKSource<SecurityContext> idpJwkSource(SigningKeyProvider signingKeys) {
         List<JWK> publicKeys = signingKeys.verificationKeys().stream()
                 .map(IdpSsoConfiguration::publicJwk)
@@ -69,7 +67,6 @@ public class IdpSsoConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "iam.sso", name = "enabled", havingValue = "true")
-    @ConditionalOnBean(name = "idpJwkSource")
     JwtDecoder idpJwtDecoder(JWKSource<SecurityContext> idpJwkSource) {
         return OAuth2AuthorizationServerConfiguration.jwtDecoder(idpJwkSource);
     }
@@ -83,8 +80,11 @@ public class IdpSsoConfiguration {
     @Bean
     @Order(0)
     @ConditionalOnProperty(prefix = "iam.sso", name = "enabled", havingValue = "true")
-    @ConditionalOnBean({SigningKeyProvider.class, JWKSource.class, AuthorizationServerSettings.class})
-    SecurityFilterChain idpAuthorizationServerSecurity(HttpSecurity http) throws Exception {
+    SecurityFilterChain idpAuthorizationServerSecurity(
+            HttpSecurity http,
+            JWKSource<SecurityContext> idpJwkSource,
+            AuthorizationServerSettings idpAuthorizationServerSettings,
+            RegisteredClientRepository idpRegisteredClientRepository) throws Exception {
         OAuth2AuthorizationServerConfigurer authorizationServer = new OAuth2AuthorizationServerConfigurer();
         RequestMatcher endpoints = authorizationServer.getEndpointsMatcher();
 
