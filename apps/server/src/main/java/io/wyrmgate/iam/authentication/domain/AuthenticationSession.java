@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.authentication.domain;
 
-import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceLevel;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -10,7 +9,7 @@ public record AuthenticationSession(
         UUID id,
         UUID identityId,
         UUID principalId,
-        AuthenticationAssuranceLevel assuranceLevel,
+        AuthenticationAssurance assurance,
         LifecycleState lifecycleState,
         Instant authenticatedAt,
         Instant lastSeenAt,
@@ -24,7 +23,7 @@ public record AuthenticationSession(
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(identityId, "identityId");
         Objects.requireNonNull(principalId, "principalId");
-        Objects.requireNonNull(assuranceLevel, "assuranceLevel");
+        Objects.requireNonNull(assurance, "assurance");
         Objects.requireNonNull(lifecycleState, "lifecycleState");
         Objects.requireNonNull(authenticatedAt, "authenticatedAt");
         Objects.requireNonNull(lastSeenAt, "lastSeenAt");
