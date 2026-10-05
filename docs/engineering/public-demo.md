@@ -2,9 +2,11 @@
 
 ## Active direction
 
-The first real Wyrmgate IAM DEV environment is also the initial testing/demo environment. It uses Cloudflare Pages + Pages Functions for the console/edge, Railway Serverless for `iam-server`, and Neon PostgreSQL.
+The selected shared DEV/testing/demo topology is Cloudflare Pages + Pages Functions for the console/edge, Railway Serverless for `iam-server`, and Neon PostgreSQL.
 
-There is no separate active host-based DEMO deployment in the current first-live direction. The managed DEV environment may be used for demonstrations only with synthetic/non-sensitive data and appropriate product restrictions for whatever features are exposed at that time.
+The current Railway service is a new DEV activation after the previous Railway service was retired. It must not be treated as an active demonstration environment until the checks in [`../operations/dev-managed-activation.md`](../operations/dev-managed-activation.md) are complete.
+
+There is no separate active host-based DEMO deployment. Once managed DEV activation is complete, that environment may also be used for demonstrations only with synthetic/non-sensitive data and appropriate product restrictions for whatever features are exposed at that time.
 
 ## Standalone DEMO reference
 
@@ -16,6 +18,7 @@ This preserves prior operational work without creating a second canonical DEV/DE
 
 Before an Internet-accessible demo is treated as safe, verify controls appropriate to implemented functionality, including:
 
+- managed DEV activation is complete;
 - synthetic/fake data only;
 - dangerous administration operations disabled or tightly constrained;
 - abuse/rate limiting at an appropriate edge/application layer;
@@ -28,4 +31,4 @@ Before an Internet-accessible demo is treated as safe, verify controls appropria
 
 ## Production boundary
 
-This managed DEV/demo topology is not the production topology and does not resolve production HA/DR, isolation, scaling, backup, or disaster-recovery requirements.
+This managed DEV/demo topology is not the production topology and does not resolve production HA/DR, isolation, scaling, backup or disaster-recovery requirements under OD-005.
