@@ -1,7 +1,7 @@
 package io.wyrmgate.iam.authentication.persistence;
 
-import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceLevel;
 import io.wyrmgate.iam.authentication.application.AuthenticationRepository;
+import io.wyrmgate.iam.authentication.domain.AuthenticationAssurance;
 import io.wyrmgate.iam.authentication.domain.AuthenticationClient;
 import io.wyrmgate.iam.authentication.domain.AuthenticationLoginBinding;
 import io.wyrmgate.iam.authentication.domain.AuthenticationSession;
@@ -253,7 +253,7 @@ public final class JdbcAuthenticationRepository implements AuthenticationReposit
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 session.id(), tenant.tenantId(), session.identityId(), session.principalId(), sessionSecretDigest,
-                session.assuranceLevel().name(), session.lifecycleState().name(),
+                session.assurance().name(), session.lifecycleState().name(),
                 Timestamp.from(session.authenticatedAt()), Timestamp.from(session.lastSeenAt()),
                 Timestamp.from(session.expiresAt()), timestamp(session.revokedAt()), session.revision(),
                 Timestamp.from(session.createdAt()), Timestamp.from(session.updatedAt()));
@@ -381,7 +381,7 @@ public final class JdbcAuthenticationRepository implements AuthenticationReposit
                 rs.getObject("id", UUID.class),
                 rs.getObject("identity_id", UUID.class),
                 rs.getObject("principal_id", UUID.class),
-                AuthenticationAssuranceLevel.valueOf(rs.getString("assurance_level")),
+                AuthenticationAssurance.valueOf(rs.getString("assurance_level")),
                 AuthenticationSession.LifecycleState.valueOf(rs.getString("lifecycle_state")),
                 rs.getTimestamp("authenticated_at").toInstant(),
                 rs.getTimestamp("last_seen_at").toInstant(),
