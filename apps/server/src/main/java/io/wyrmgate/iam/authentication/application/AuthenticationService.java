@@ -13,7 +13,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -222,6 +221,6 @@ public final class AuthenticationService {
     private static String randomOpaque(int bytes) {
         byte[] value = new byte[bytes];
         RANDOM.nextBytes(value);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(value).toLowerCase(Locale.ROOT);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(value);
     }
 }
