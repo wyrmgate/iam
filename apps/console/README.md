@@ -10,43 +10,60 @@ React-based administrative and end-user console for Wyrmgate IAM.
 - Vite 8.1.x
 - npm
 
-The console follows the product navigation and job-oriented UX defined in the IAM v2 documentation rather than mirroring backend modules mechanically. Business rules, tenant resolution, governed-actor resolution and administrative authorization remain server-side.
+The console follows the job-oriented IAM v2 product model rather than mirroring Java packages, Maven modules or database tables. Business rules, tenant resolution, governed-actor resolution and Administrative Authorization remain server-side.
 
 ## Browser/API boundary
 
-The browser calls only same-origin `/api/*` routes. In managed DEV, `functions/api/[[path]].js` forwards those routes to the server-side `IAM_BACKEND_ORIGIN`. The backend origin must never be exposed through a `VITE_*` build variable.
+The browser calls only same-origin `/api/*` routes. The backend origin must never be exposed through a `VITE_*` build variable.
 
-The API client in `src/api.ts` is mechanically aligned with the checked-in public OpenAPI contracts for the operations it consumes. It preserves protocol semantics instead of creating frontend-only mutations:
+`src/api.ts` is mechanically aligned with checked-in public OpenAPI semantics for the operations the console consumes:
 
 - opaque cursor values are passed back without construction or interpretation;
 - authoritative reads retain strong `ETag` values for later `If-Match` mutations;
-- retryable mutations receive a fresh causal `Idempotency-Key`;
-- 401, 403, 409 and 412 remain distinct conditions in the UI;
-- arbitrary backend response bodies are not rendered as error HTML or diagnostics;
-- no token, credential secret or provider-native private material is stored in browser storage.
+- retryable mutations receive causal `Idempotency-Key` values;
+- 401, 403, 404, 409, 412 and mandatory-evaluator 503 remain distinct conditions;
+- arbitrary backend HTML, stack traces and proxy bodies are not rendered as diagnostics;
+- no bearer token, raw credential secret/private material, connector secret or provider-native private payload is written to browser storage, URLs or logs.
 
-OAuth/OIDC or edge-auth claims are not interpreted as Wyrmgate administrative permissions. Operation-time authorization is authoritative on the server. Permission-aware action optimization requires a public backend-derived effective-authority projection; the console must not invent one.
+OAuth/OIDC scopes, roles, groups and token claims are not interpreted as Wyrmgate administrative permissions. Operation-time server authorization is final. Backend-derived current effective-authority visibility is tracked as #265; until that public projection exists, navigation visibility is not proof of permission and 403 remains authoritative.
 
-## Routes and current coverage
+## Navigation and coverage
 
-Current routes in this bounded issue #263 slice:
-
-| Route | Purpose |
+| Route | Public contract coverage |
 | --- | --- |
 | `/` | Runtime/control-plane overview and trust-boundary status |
-| `/identities` | Authoritative Identity list with deterministic cursor continuation |
-| `/identities/:identityId` | Authoritative Identity detail, revision and lifecycle commands |
+| `/identities` | Identity list/create/read/metadata/lifecycle, canonical effective-value disclosure, merge/split correction |
+| `/principals` | Principal list/register/read/correlate |
+| `/catalog` | Applications, ApplicationTargets, Entitlements, Roles and typed RoleVersion composition/lifecycle |
+| `/access` | AccessAssignment intent, explicit lifecycle commands, read-only EffectiveAccess, typed lifecycle-access policy |
+| `/requests` | AccessRequest create/read/submit and approval inbox/decision evidence |
+| `/reviews` | Review campaign list/create/start and reviewer KEEP/REVOKE inbox |
+| `/policies` | Identity source policy, Access lifecycle policy, Governance ACCESS_REQUEST policy lifecycle and exception lookup/revocation |
+| `/credentials` | Principal-scoped Credential metadata, revoke/compromise and durable rotation planning |
+| `/integrations` | ConnectorInstance, ConnectorBinding, ConnectorWorker and entitlement-observation mapping public administration surfaces |
+| `/administration` | AdministrativeRole, Grant, Delegation, Elevation and BreakGlass authority workflows |
+| `/audit` | AuditRecord/evidence reads and durable export/evidence-lifecycle workspaces |
 
-The Identity detail keeps Identity authoritative state distinct from Principal/provider-account concepts. Lifecycle commands use the explicit semantic endpoints from `identity-v1.json`; they do not mutate generic status fields.
+The UI preserves the project authority distinctions: Identity versus Principal, AccessAssignment versus EffectiveAccess, governance decision versus remediation, connector lifecycle versus provider observation, and Audit evidence versus generic logging.
 
-This slice intentionally does **not** claim completion of issue #263. Principal, Catalog, Access, Governance, Credential, Integration, Administration and Audit routes remain to be implemented against their accepted public contracts. Backend-derived effective-authority visibility must also be added through an accepted public interface before the console can optimize action visibility by administrative permission.
+## Explicit public-API gaps
 
-## UX conventions
+The console does not bypass missing contracts:
 
-- loading, empty, connectivity, authentication, authorization, conflict and stale-revision states are explicit;
-- destructive/terminal lifecycle changes require confirmation;
-- keyboard focus is visible and navigation uses semantic links/buttons;
-- layouts remain usable on narrow viewports;
+- **#265** — current governed actor/effective Administrative Authorization projection. Until implemented, the browser does not synthesize permissions from token claims.
+- **#266** — public operator-facing provisioning/reconciliation status. The internal connector-worker protocol is not called by the browser and Integration tables are not queried directly.
+
+These gaps remain visible in the relevant pages. They prevent issue #263 from being closed as fully operator-ready until their accepted public interfaces exist.
+
+## UX and safety conventions
+
+- loading, empty, authentication, authorization, not-found, conflict, stale-revision and retry states are explicit;
+- destructive/reduction operations require confirmation where accidental invocation is materially harmful;
+- break-glass is visually separated from normal grants/elevation and retains server-side assurance/evaluator enforcement;
+- structured IAM relationships use typed fields/builders rather than generic status mutation;
+- provider configuration is Integration-owned and secret-shaped fields are redacted from generic detail rendering;
+- Credential secret references are metadata only; raw secret/private material must never be pasted into ordinary console flows;
+- keyboard focus is visible and layouts remain usable on narrow viewports;
 - no permanent mock business data is shipped.
 
 ## Local development
@@ -62,19 +79,19 @@ make console-build
 make console-dev
 ```
 
-From `apps/console` the API-boundary test suite can also be run directly:
+From `apps/console`:
 
 ```bash
 npm test
 ```
 
-## Managed DEV
+## Managed console deployment
 
-Cloudflare Pages settings:
+The repository still supports the Cloudflare Pages console contract:
 
 - root directory: `apps/console`
 - build command: `npm run build`
 - output directory: `dist`
-- server-side environment binding: `IAM_BACKEND_ORIGIN`
+- server-side edge binding: `IAM_BACKEND_ORIGIN`
 
-For deployment verification, exercise the console through the Cloudflare Pages origin and confirm requests remain `/api/*` in the browser while reaching the Railway `iam-server` and Neon-backed DEV environment. A healthy runtime alone does not satisfy issue #263; each supported console workflow must be verified end-to-end before that deployment blocker closes.
+The previously documented Cloudflare Pages -> Railway `iam-server` -> Neon end-to-end DEV topology has been retired; Railway is no longer the canonical server target. Do not treat the Pages contract as evidence of a current managed server deployment. When a replacement managed server target is accepted, end-to-end console verification must be performed against that canonical topology before #263 closes.
