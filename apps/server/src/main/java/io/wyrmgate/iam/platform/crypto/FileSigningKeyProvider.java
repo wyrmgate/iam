@@ -11,6 +11,7 @@ import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -83,6 +84,11 @@ public final class FileSigningKeyProvider implements SigningKeyProvider {
             return Optional.empty();
         }
         return Optional.ofNullable(verificationKeys.get(keyId));
+    }
+
+    @Override
+    public Collection<SigningKeyMaterial> verificationKeys() {
+        return verificationKeys.values();
     }
 
     @Override
