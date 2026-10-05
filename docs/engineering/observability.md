@@ -6,13 +6,15 @@ Wyrmgate IAM uses vendor-neutral application telemetry through OpenTelemetry Pro
 
 The application does not contain Grafana-specific APIs or credentials. Grafana Cloud is one compatible OTLP backend; another OTLP-capable service can replace it without changing IAM domain/application semantics.
 
-## Active managed DEV posture
+## Managed DEV posture
 
-For the first Cloudflare Pages + Railway + Neon DEV/testing/demo environment, remote telemetry is intentionally disabled with `IAM_OTEL_ENABLED=false` until Grafana Cloud free-tier behavior is confirmed suitable.
+For the selected Cloudflare Pages + Railway Serverless + Neon DEV/testing/demo topology, remote telemetry remains intentionally disabled with `IAM_OTEL_ENABLED=false` during baseline activation and low-cost idle operation.
 
-The existing Collector remains a local/standalone deployment component, not a mandatory process in this initial managed DEV topology. Do not add Grafana credentials or backend endpoints to the repository.
+The existing Collector remains a local/standalone deployment component, not a mandatory process in shared DEV. Do not add Grafana credentials or backend endpoints to the repository.
 
-Railway Serverless considers outbound activity when determining whether a service can sleep, so any later remote telemetry activation must also verify its effect on the intended DEV serverless behavior.
+Railway Serverless considers outbound activity when determining whether a service can sleep. Any later remote telemetry activation must therefore verify both observability behavior and its effect on the intended DEV Serverless/low-cost posture.
+
+The managed DEV activation procedure must first prove application health, Flyway state, tenant isolation, console routing and recovery. Remote telemetry is optional for that baseline and may be enabled later for an intentional observability test.
 
 ## Standalone/local telemetry flow
 
@@ -51,7 +53,7 @@ When a deployment uses the runtime Collector, it receives backend configuration 
 - `IAM_OTEL_EXPORTER_ENDPOINT` — OTLP/HTTP base endpoint of the selected backend.
 - `IAM_OTEL_EXPORTER_AUTHORIZATION` — complete Authorization header value required by the backend.
 
-These values are credentials/configuration and must not be committed or printed in CI logs. They are not required for the initial managed DEV activation while telemetry is disabled.
+These values are credentials/configuration and must not be committed or printed in CI logs. They are not required for baseline managed DEV activation while telemetry is disabled.
 
 ## Redaction contract
 
