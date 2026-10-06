@@ -27,7 +27,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build server image for validation
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/server/Dockerfile
@@ -62,7 +62,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build console image for validation
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: apps/console/Dockerfile
@@ -127,7 +127,7 @@ jobs:
 
       - name: Build and publish multi-arch image
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
