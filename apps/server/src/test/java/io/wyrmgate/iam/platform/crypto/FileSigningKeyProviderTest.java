@@ -40,6 +40,9 @@ class FileSigningKeyProviderTest {
         assertThat(material.keyId()).isEqualTo("local-test-key");
         assertThat(material.signingAlgorithm()).isEqualTo("SHA256withRSA");
         assertThat(material.publicKey().getEncoded()).isEqualTo(keyPair.getPublic().getEncoded());
+        assertThat(provider.verificationKeys())
+                .extracting(SigningKeyMaterial::keyId)
+                .containsExactly("local-test-key");
 
         byte[] payload = "wyrmgate-signing-contract".getBytes(StandardCharsets.UTF_8);
         byte[] signed = provider.sign(payload);
@@ -80,6 +83,11 @@ class FileSigningKeyProviderTest {
                 .get()
                 .extracting(SigningKeyMaterial::publicKey)
                 .isEqualTo(previous.getPublic());
+        assertThat(provider.verificationKeys())
+                .extracting(SigningKeyMaterial::keyId)
+                .containsExactlyInAnyOrder("current-key", "previous-key");
+        assertThat(provider.verificationKeys())
+                .allSatisfy(material -> assertThat(material.publicKey()).isNotNull());
         assertThat(provider.verificationKey("unknown")).isEmpty();
     }
 
