@@ -48,7 +48,6 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission SOURCE_ABSENCE_POLICY_ACTIVATE =
             new AdministrativePermission("source-absence-policy", "activate");
 
-
     public static final AdministrativePermission APPLICATION_READ =
             new AdministrativePermission("application", "read");
     public static final AdministrativePermission APPLICATION_CREATE =
@@ -57,6 +56,15 @@ public final class AdministrativePermissions {
             new AdministrativePermission("application", "update");
     public static final AdministrativePermission APPLICATION_RETIRE =
             new AdministrativePermission("application", "retire");
+
+    public static final AdministrativePermission SSO_CLIENT_READ =
+            new AdministrativePermission("sso-client", "read");
+    public static final AdministrativePermission SSO_CLIENT_CREATE =
+            new AdministrativePermission("sso-client", "create");
+    public static final AdministrativePermission SSO_CLIENT_UPDATE =
+            new AdministrativePermission("sso-client", "update");
+    public static final AdministrativePermission SSO_CLIENT_RETIRE =
+            new AdministrativePermission("sso-client", "retire");
 
     public static final AdministrativePermission APPLICATION_TARGET_READ =
             new AdministrativePermission("application-target", "read");
