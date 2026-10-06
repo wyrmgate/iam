@@ -63,6 +63,21 @@ final class CatalogCursorCodec {
         return decode(cursor, "application-target", tenant, applicationId);
     }
 
+    String encodeSsoClients(TenantContext tenant, UUID applicationId, PagePosition position) {
+        return position == null ? null : sign(payload(
+                "sso-client",
+                tenant.tenantId().toString(),
+                applicationId.toString(),
+                clock.instant().toString(),
+                Long.toString(position.createdAt().getEpochSecond()),
+                Integer.toString(position.createdAt().getNano()),
+                position.id().toString()));
+    }
+
+    PagePosition decodeSsoClients(String cursor, TenantContext tenant, UUID applicationId) {
+        return decode(cursor, "sso-client", tenant, applicationId);
+    }
+
     String encodeRoles(TenantContext tenant, PagePosition position) {
         return position == null ? null : sign(payload(
                 "role",
