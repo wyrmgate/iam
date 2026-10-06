@@ -1,0 +1,197 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "Wyrmgate IAM SSO Client Administration API",
+    "version": "0.1.0",
+    "description": "Catalog-owned governed public OIDC client registration. OAuth scopes are protocol projections and never Wyrmgate Administration permissions."
+  },
+  "servers": [{"url": "/api/v1"}],
+  "security": [{"controlPlaneBearer": []}],
+  "paths": {
+    "/applications/{applicationId}/sso-clients": {
+      "get": {
+        "operationId": "listSsoClients",
+        "summary": "List governed SSO clients for an application",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {"description": "SSO client page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SsoClientPage"}}}},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        },
+        "x-wyrmgate-authority": "Catalog authoritative SSO registration state",
+        "x-wyrmgate-administrative-permission": "sso-client:read"
+      },
+      "post": {
+        "operationId": "createSsoClient",
+        "summary": "Register a public PKCE SSO client",
+        "parameters": [
+          {"$ref": "#/components/parameters/ApplicationId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateSsoClientRequest"}}}
+        },
+        "responses": {
+          "201": {
+            "description": "SSO client registered",
+            "headers": {"ETag": {"$ref": "#/components/headers/RevisionEtag"}, "Location": {"schema": {"type": "string"}}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SsoClientResource"}}}
+          },
+          "400": {"$ref": "#/components/responses/ValidationError"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"}
+        },
+        "x-wyrmgate-administrative-permission": "sso-client:create",
+        "x-wyrmgate-idempotency": "Required",
+        "x-wyrmgate-secret-boundary": "Public clients only; no client secret is accepted or returned"
+      }
+    },
+    "/sso-clients/{registrationId}": {
+      "get": {
+        "operationId": "getSsoClient",
+        "summary": "Get governed SSO client",
+        "parameters": [
+          {"$ref": "#/components/parameters/RegistrationId"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {"description": "SSO client", "headers": {"ETag": {"$ref": "#/components/headers/RevisionEtag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SsoClientResource"}}}},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"}
+        },
+        "x-wyrmgate-administrative-permission": "sso-client:read"
+      },
+      "put": {
+        "operationId": "replaceSsoClientConfiguration",
+        "summary": "Replace mutable SSO client configuration",
+        "parameters": [
+          {"$ref": "#/components/parameters/RegistrationId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReplaceSsoClientRequest"}}}},
+        "responses": {
+          "200": {"description": "SSO client updated", "headers": {"ETag": {"$ref": "#/components/headers/RevisionEtag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SsoClientResource"}}}},
+          "400": {"$ref": "#/components/responses/ValidationError"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/PreconditionFailed"}
+        },
+        "x-wyrmgate-administrative-permission": "sso-client:update",
+        "x-wyrmgate-idempotency": "Required",
+        "x-wyrmgate-concurrency": "If-Match revision required"
+      }
+    },
+    "/sso-clients/{registrationId}/retire": {
+      "post": {
+        "operationId": "retireSsoClient",
+        "summary": "Retire an SSO client terminally",
+        "parameters": [
+          {"$ref": "#/components/parameters/RegistrationId"},
+          {"$ref": "#/components/parameters/IfMatch"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/CorrelationId"}
+        ],
+        "responses": {
+          "200": {"description": "SSO client retired", "headers": {"ETag": {"$ref": "#/components/headers/RevisionEtag"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SsoClientResource"}}}},
+          "400": {"$ref": "#/components/responses/ValidationError"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "412": {"$ref": "#/components/responses/PreconditionFailed"}
+        },
+        "x-wyrmgate-administrative-permission": "sso-client:retire",
+        "x-wyrmgate-idempotency": "Required",
+        "x-wyrmgate-concurrency": "If-Match revision required"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "controlPlaneBearer": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+    },
+    "parameters": {
+      "ApplicationId": {"name": "applicationId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "RegistrationId": {"name": "registrationId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "Cursor": {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string", "maxLength": 4096}},
+      "Limit": {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}},
+      "CorrelationId": {"name": "X-Correlation-Id", "in": "header", "required": false, "schema": {"type": "string", "format": "uuid"}},
+      "IdempotencyKey": {"name": "Idempotency-Key", "in": "header", "required": true, "schema": {"type": "string", "minLength": 1, "maxLength": 200}},
+      "IfMatch": {"name": "If-Match", "in": "header", "required": true, "schema": {"type": "string"}}
+    },
+    "headers": {
+      "RevisionEtag": {"description": "Quoted authoritative revision", "schema": {"type": "string"}}
+    },
+    "schemas": {
+      "RedirectUri": {"type": "string", "format": "uri", "maxLength": 2048},
+      "SsoScope": {"type": "string", "enum": ["openid", "profile", "email"]},
+      "CreateSsoClientRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["redirectUris"],
+        "properties": {
+          "redirectUris": {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true, "items": {"$ref": "#/components/schemas/RedirectUri"}},
+          "allowedScopes": {"type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "default": ["openid"], "items": {"$ref": "#/components/schemas/SsoScope"}},
+          "requiresGovernedAccess": {"type": "boolean", "default": true}
+        }
+      },
+      "ReplaceSsoClientRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["redirectUris", "allowedScopes", "requiresGovernedAccess"],
+        "properties": {
+          "redirectUris": {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true, "items": {"$ref": "#/components/schemas/RedirectUri"}},
+          "allowedScopes": {"type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": {"$ref": "#/components/schemas/SsoScope"}},
+          "requiresGovernedAccess": {"type": "boolean"}
+        }
+      },
+      "SsoClientResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "applicationId", "clientId", "clientType", "pkceS256Required", "redirectUris", "allowedScopes", "requiresGovernedAccess", "lifecycleState", "revision", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "applicationId": {"type": "string", "format": "uuid"},
+          "clientId": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Server-generated public OAuth client identifier; not a secret."},
+          "clientType": {"const": "PUBLIC"},
+          "pkceS256Required": {"const": true},
+          "redirectUris": {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true, "items": {"$ref": "#/components/schemas/RedirectUri"}},
+          "allowedScopes": {"type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": {"$ref": "#/components/schemas/SsoScope"}},
+          "requiresGovernedAccess": {"type": "boolean"},
+          "lifecycleState": {"type": "string", "enum": ["ACTIVE", "RETIRED"]},
+          "revision": {"type": "integer", "minimum": 1},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "SsoClientPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/SsoClientResource"}},
+          "nextCursor": {"type": ["string", "null"]}
+        }
+      },
+      "FieldError": {"type": "object", "required": ["field", "code", "message"], "properties": {"field": {"type": "string"}, "code": {"type": "string"}, "message": {"type": "string"}}},
+      "ErrorResponse": {"type": "object", "required": ["code", "message", "correlationId", "fieldErrors"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}, "correlationId": {"type": "string", "format": "uuid"}, "fieldErrors": {"type": "array", "items": {"$ref": "#/components/schemas/FieldError"}}}}
+    },
+    "responses": {
+      "ValidationError": {"description": "Validation failed", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Forbidden": {"description": "Administrative authorization denied", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "NotFound": {"description": "Resource not found in the actor tenant", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Conflict": {"description": "Idempotency or invariant conflict", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "PreconditionFailed": {"description": "Stale optimistic revision", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+    }
+  }
+}
