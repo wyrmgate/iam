@@ -9,6 +9,8 @@ import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQueryService;
 import io.wyrmgate.iam.catalog.application.RoleRepository;
 import io.wyrmgate.iam.catalog.application.RoleQueryService;
+import io.wyrmgate.iam.catalog.application.SsoClientRegistrationRepository;
+import io.wyrmgate.iam.catalog.application.SsoClientRegistrationService;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -22,6 +24,21 @@ public class CatalogPersistenceConfiguration {
     @Bean
     CatalogRepository catalogRepository(JdbcTemplate jdbc) {
         return new JdbcCatalogRepository(jdbc);
+    }
+
+    @Bean
+    SsoClientRegistrationRepository ssoClientRegistrationRepository(JdbcTemplate jdbc) {
+        return new JdbcSsoClientRegistrationRepository(jdbc);
+    }
+
+    @Bean
+    SsoClientRegistrationService ssoClientRegistrationService(
+            CatalogRepository catalogRepository,
+            SsoClientRegistrationRepository ssoClientRegistrationRepository,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new SsoClientRegistrationService(
+                catalogRepository, ssoClientRegistrationRepository, ids, transactions);
     }
 
     @Bean

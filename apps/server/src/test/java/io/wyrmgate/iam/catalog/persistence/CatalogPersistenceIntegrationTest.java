@@ -5,7 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
+import io.wyrmgate.iam.catalog.application.SsoClientRegistrationService;
 import io.wyrmgate.iam.catalog.domain.CatalogLifecycleState;
+import io.wyrmgate.iam.catalog.domain.SsoClientLifecycleState;
+import io.wyrmgate.iam.catalog.domain.SsoClientScope;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
@@ -15,6 +18,7 @@ import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Set;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -38,6 +42,7 @@ class CatalogPersistenceIntegrationTest {
     private static JdbcCatalogRepository repository;
     private static CatalogCommandService commands;
     private static CatalogQueryService queries;
+    private static SsoClientRegistrationService ssoClients;
 
     @BeforeAll
     static void startPostgres() {
@@ -55,7 +60,9 @@ class CatalogPersistenceIntegrationTest {
                 new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         commands = new CatalogCommandService(repository, ids, transactions);
         queries = new CatalogQueryService(repository);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
+        ssoClients = new SsoClientRegistrationService(
+                repository, new JdbcSsoClientRegistrationRepository(jdbc), ids, transactions);
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("61");
     }
 
     @AfterAll
@@ -157,6 +164,77 @@ class CatalogPersistenceIntegrationTest {
         assertThatThrownBy(() -> commands.renameApplication(
                         tenant, app.id(), "Stale", 1, NOW.plusSeconds(3)))
                 .isInstanceOf(StaleWriteException.class);
+    }
+
+    @Test
+    void governedSsoClientsAreTenantIsolatedRevisionedAndRetirementRemovesProtocolEligibility() {
+        TenantContext first = tenant("sso-first");
+        TenantContext second = tenant("sso-second");
+        var app = commands.createApplication(first, "portal", "Portal", NOW);
+
+        var created = ssoClients.create(
+                first,
+                app.id(),
+                Set.of("https://portal.example.test/callback"),
+                Set.of(SsoClientScope.OPENID),
+                true,
+                NOW.plusSeconds(1));
+
+        assertThat(created.clientId()).startsWith("wc_");
+        assertThat(ssoClients.find(first, created.id())).contains(created);
+        assertThat(ssoClients.find(second, created.id())).isEmpty();
+        assertThat(ssoClients.findActiveByClientId(first, created.clientId())).contains(created);
+        assertThat(ssoClients.findActiveByClientId(second, created.clientId())).isEmpty();
+
+        var updated = ssoClients.replaceConfiguration(
+                first,
+                created.id(),
+                Set.of("https://portal.example.test/oidc/callback"),
+                Set.of(SsoClientScope.OPENID, SsoClientScope.PROFILE),
+                false,
+                created.revision(),
+                NOW.plusSeconds(2));
+        assertThat(updated.revision()).isEqualTo(2);
+        assertThat(updated.requiresGovernedAccess()).isFalse();
+        assertThat(updated.redirectUris()).containsExactly("https://portal.example.test/oidc/callback");
+
+        assertThatThrownBy(() -> ssoClients.replaceConfiguration(
+                        first,
+                        created.id(),
+                        Set.of("https://portal.example.test/stale"),
+                        Set.of(SsoClientScope.OPENID),
+                        true,
+                        created.revision(),
+                        NOW.plusSeconds(3)))
+                .isInstanceOf(StaleWriteException.class);
+
+        var retired = ssoClients.retire(
+                first, created.id(), updated.revision(), NOW.plusSeconds(4));
+        assertThat(retired.lifecycleState()).isEqualTo(SsoClientLifecycleState.RETIRED);
+        assertThat(ssoClients.find(first, created.id())).contains(retired);
+        assertThat(ssoClients.findActiveByClientId(first, created.clientId())).isEmpty();
+    }
+
+    @Test
+    void ssoClientForeignKeysPreventCrossTenantAndCrossApplicationMutation() {
+        TenantContext first = tenant("sso-fk-first");
+        TenantContext second = tenant("sso-fk-second");
+        var firstApp = commands.createApplication(first, "first-app", "First", NOW);
+        var secondApp = commands.createApplication(second, "second-app", "Second", NOW);
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO catalog.sso_client_registration (
+                    id, tenant_id, application_id, client_id, requires_governed_access,
+                    lifecycle_state, revision, created_at, updated_at)
+                VALUES (?, ?, ?, 'wc_bad', true, 'ACTIVE', 1, ?, ?)
+                """,
+                ids.nextId(), first.tenantId(), secondApp.id(), Timestamp.from(NOW), Timestamp.from(NOW)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+
+        var valid = ssoClients.create(
+                first, firstApp.id(), Set.of("https://first.example.test/callback"),
+                Set.of(SsoClientScope.OPENID), true, NOW.plusSeconds(1));
+        assertThat(ssoClients.list(first, firstApp.id(), null, 50).items()).containsExactly(valid);
     }
 
     private TenantContext tenant(String name) {

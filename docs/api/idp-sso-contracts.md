@@ -8,7 +8,7 @@ This contract does not create a ninth canonical domain capability. IdP/SSO is a 
 
 ## Current implementation checkpoint
 
-The first runtime foundation is intentionally fail-closed and disabled by default.
+The first-party IdP foundation is fail-closed and disabled by default.
 
 When `iam.idp.enabled=true`:
 
@@ -19,7 +19,27 @@ When `iam.idp.enabled=true`:
 - private signing material is never exported through the IdP API;
 - the IdP public endpoint has its own security chain and does not weaken `/api/v1/**` control-plane authorization.
 
-The OIDC discovery document is deliberately **not** published by this checkpoint because Authorization Code + PKCE and token endpoints are not yet active. Wyrmgate must not advertise protocol endpoints that do not exist. Discovery becomes public atomically with the authorization-server endpoint slice.
+Catalog now also owns typed public-client registration used by the forthcoming authorization-server adapter:
+
+- multiple SSO client registrations may reference one Application;
+- each registration has a server-generated public `clientId` distinct from its internal registration ID;
+- initial client type is `PUBLIC`; no client secret exists in this slice;
+- S256 PKCE is mandatory for this client type;
+- exact redirect URIs are stored as child rows, never wildcard patterns or arbitrary JSON;
+- production redirects require HTTPS; loopback HTTP is permitted for development/native-loopback use;
+- baseline scopes are `openid`, `profile`, and `email`, with `openid` mandatory;
+- `requiresGovernedAccess` defaults to `true` and is an explicit typed configuration input;
+- lifecycle is `ACTIVE -> RETIRED`, with retirement terminal;
+- mutation APIs use Administration permissions, ETag/If-Match revisions, Idempotency-Key, Audit evidence and tenant-bound persistence;
+- list APIs use signed tenant/application-bound cursors.
+
+The management contract is `contracts/openapi/sso-client-v1.json` and exposes:
+
+- `GET/POST /api/v1/applications/{applicationId}/sso-clients`;
+- `GET/PUT /api/v1/sso-clients/{registrationId}`;
+- `POST /api/v1/sso-clients/{registrationId}/retire`.
+
+The OIDC discovery document is deliberately **not** published yet because Authorization Code + PKCE and token endpoints are not active. Wyrmgate must not advertise protocol endpoints that do not exist. Discovery becomes public atomically with the authorization-server endpoint slice.
 
 Current RSA-only JWKS support is an implementation checkpoint, not a canonical requirement. Additional signing algorithms require compatible signing-port and verification-key support plus negative tests before activation.
 
@@ -62,13 +82,43 @@ No endpoint is considered implemented merely because a framework can auto-enable
 
 SSO relying-party registration is governed configuration, not generic framework CRUD.
 
+### Ownership and cardinality
+
 - Catalog continues to own `Application`.
-- Typed SSO registration metadata references an existing tenant-owned Application.
-- Administration authorizes client-registration management at operation time.
-- Redirect URIs are exact registered values; wildcard redirect matching is prohibited.
-- Public clients have no client secret.
-- Confidential client secret material, where later supported, is write-only/secret-provider backed and never returned after creation.
-- Framework `RegisteredClient` or equivalent objects are protocol projections/adapters, not canonical Catalog aggregates.
+- `SsoClientRegistration` is Catalog-owned authoritative configuration referencing exactly one existing Application.
+- An Application may have multiple registrations so web, SPA, desktop/native, or other distinct relying-party clients do not need to share protocol identifiers or redirect sets.
+- A protocol framework `RegisteredClient` or equivalent is a derived adapter/projection and may never become a competing source of truth.
+
+### Initial public-client baseline
+
+The first registration slice supports public clients only:
+
+- `clientType=PUBLIC`;
+- `pkceS256Required=true`;
+- no client secret is accepted, generated, persisted or returned;
+- `clientId` is server-generated and is public protocol metadata, not a secret;
+- redirect URIs use exact string registration and exact matching; wildcard matching is prohibited;
+- non-loopback HTTP redirect URIs are rejected;
+- `openid` is mandatory and `profile`/`email` are the only additional baseline scopes.
+
+Confidential-client authentication is intentionally deferred until its secret ownership and lifecycle are defined without violating the canonical invariant that Credential belongs to Principal. Framework convenience is not sufficient authority to invent a second secret/credential model.
+
+### Governance and concurrency
+
+Administration authorizes registration management at operation time through:
+
+- `sso-client:read`;
+- `sso-client:create`;
+- `sso-client:update`;
+- `sso-client:retire`.
+
+These permissions are not automatically added to the burn-once initial administrator role. Administrators must establish explicit governed authority using the existing Administration model.
+
+Mutable SSO registrations use revision-based optimistic concurrency. Retryable create/update/retire operations require `Idempotency-Key`. Retirement is terminal and removes the registration from the active protocol query. Audit receives only semantic, data-minimized success/denied/failure evidence; no protocol secret exists in the public-client slice.
+
+### Protocol adapter query
+
+The future authorization-server adapter resolves a client by `(Tenant, clientId)` through a Catalog semantic query that returns only `ACTIVE` registrations. It must not query or mutate Catalog tables directly and must not treat a retired client as protocol-valid even if stale framework state exists.
 
 ## Authentication and session boundary
 
@@ -95,9 +145,11 @@ OAuth scopes and upstream groups/roles/claims never become Wyrmgate `Administrat
 
 ## Application access gate
 
-Where an Application requires governed access, authorization-code issuance queries current Catalog/Access/Governance semantics through explicit ports. Protocol infrastructure consumes the semantic decision; it does not mutate Access authority or infer application access from authentication claims.
+Where `requiresGovernedAccess=true`, authorization-code issuance queries current Catalog/Access/Governance semantics through explicit ports. Protocol infrastructure consumes the semantic decision; it does not mutate Access authority or infer application access from authentication claims.
 
 Required privilege-increase evaluation fails closed when its authoritative evaluator is unavailable.
+
+`requiresGovernedAccess=false` means authentication eligibility is still required but an Application-specific AccessAssignment gate is not required by this registration. It does not bypass Administration authorization, Identity/Principal lifecycle eligibility, authentication assurance, client validation, PKCE or claim-release policy.
 
 ## Bootstrap
 
@@ -112,7 +164,7 @@ Every implementation slice must include negative tests for:
 - tenant isolation;
 - exact redirect URI matching;
 - PKCE downgrade/bypass attempts;
-- unregistered clients;
+- unregistered or retired clients;
 - inactive Principal/Identity login;
 - revoked/compromised authenticator use;
 - token/claim over-disclosure;
