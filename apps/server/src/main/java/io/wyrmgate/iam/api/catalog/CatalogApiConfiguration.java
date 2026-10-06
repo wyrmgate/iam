@@ -6,6 +6,7 @@ import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogRepository;
 import io.wyrmgate.iam.catalog.application.RoleCommandService;
 import io.wyrmgate.iam.catalog.application.RoleRepository;
+import io.wyrmgate.iam.catalog.application.SsoClientRegistrationService;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -40,6 +41,19 @@ class CatalogApiConfiguration {
                 transactions,
                 audit,
                 ids);
+    }
+
+    @Bean
+    SsoClientApiMutationService ssoClientApiMutationService(
+            AdministrativeAuthorizationService authorization,
+            CatalogRepository catalog,
+            SsoClientRegistrationService service,
+            JdbcIdempotencyRepository idempotency,
+            TransactionExecutor transactions,
+            SecurityAuditPort audit,
+            IdGenerator ids) {
+        return new SsoClientApiMutationService(
+                authorization, catalog, service, idempotency, transactions, audit, ids);
     }
 
     @Bean
