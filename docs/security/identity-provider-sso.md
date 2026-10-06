@@ -118,6 +118,8 @@ Token-signing private keys remain behind Platform signing infrastructure. Public
 
 Key rotation must support an overlap window where previously issued tokens can still be validated until their bounded expiry while newly issued tokens use the current active signing key.
 
+The Platform `SigningKeyProvider` exposes only public `SigningKeyMaterial` for verification/JWKS enumeration and a signing operation. Rotation-capable adapters may retain bounded historical public verification keys; implementations that do not support overlap expose only the current public key. Private key material never crosses that port.
+
 ## Audit and secret boundaries
 
 Audit may record data-minimized semantic events such as:
@@ -131,16 +133,35 @@ Audit may record data-minimized semantic events such as:
 
 Audit/logging must never include passwords, authorization codes, bearer/access tokens, refresh tokens, raw client secrets, private signing keys, recovery secrets or raw authenticator material.
 
+## Current protocol-foundation runtime
+
+The first implementation slice is intentionally non-usable for login until governed client registration and Principal authentication are implemented.
+
+Enablement is explicit:
+
+```text
+IAM_SSO_ENABLED=true
+IAM_SSO_ISSUER=https://iam.example.com
+IAM_SIGNING_ENABLED=true
+IAM_SIGNING_KEY_ID=<active-kid>
+IAM_SIGNING_PRIVATE_KEY_PATH=<operator-managed PKCS#8 PEM path>
+IAM_SIGNING_PUBLIC_KEY_PATH=<matching X.509 public-key PEM path>
+```
+
+`IAM_SSO_ISSUER` must be an absolute HTTPS issuer without user-info, query or fragment. Plain HTTP is accepted only for localhost/loopback development. SSO enablement requires the Platform signing provider; invalid/missing issuer or signing configuration fails startup rather than silently degrading.
+
+The protocol chain is higher priority than connector-worker and control-plane resource-server chains, but matches only OAuth/OIDC authorization-server endpoints. The foundation has no sample/default user and uses a closed client repository with no registered clients. This means protocol metadata/public verification material can be introduced without creating a usable authorization path or bypassing existing Administration authorization.
+
 ## Implementation checkpoints
 
-The implementation should land in bounded slices:
+The implementation lands in bounded slices:
 
-1. protocol/security foundation and OIDC metadata/JWKS;
-2. governed SSO client registration;
-3. first-party local authentication and secure browser session;
-4. Authorization Code + PKCE and token issuance;
-5. console sign-in through first-party SSO;
-6. federation adapters;
-7. optional protocol extensions only when explicitly accepted.
+1. **Protocol/security foundation and OIDC metadata/JWKS** — in progress under #273; explicit issuer, public verification-key enumeration and fail-closed empty client registry are implemented on the current feature slice.
+2. Governed SSO client registration.
+3. First-party local authentication and secure browser session.
+4. Authorization Code + PKCE and token issuance.
+5. Console sign-in through first-party SSO.
+6. Federation adapters.
+7. Optional protocol extensions only when explicitly accepted.
 
 Each slice requires contract tests, tenant-isolation tests, secret-boundary tests and negative security cases before merge.
