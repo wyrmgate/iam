@@ -6,8 +6,6 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
-    labels:
-      - dependencies
 
   - package-ecosystem: npm
     directory: /apps/console
@@ -15,8 +13,6 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
-    labels:
-      - dependencies
 
   - package-ecosystem: github-actions
     directory: /
@@ -24,5 +20,3 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
-    labels:
-      - dependencies
