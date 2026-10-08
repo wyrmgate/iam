@@ -25,7 +25,7 @@
         <jackson2-core.version>2.22.3</jackson2-core.version>
         <jackson2-databind.version>2.22.3</jackson2-databind.version>
         <jackson3-core.version>3.2.3</jackson3-core.version>
-        <jackson3-databind.version>3.1.7</jackson3-databind.version>
+        <jackson3-databind.version>3.2.3</jackson3-databind.version>
     </properties>
 
     <dependencies>
