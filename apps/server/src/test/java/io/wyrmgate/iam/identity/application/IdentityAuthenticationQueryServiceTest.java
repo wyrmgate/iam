@@ -40,17 +40,20 @@ class IdentityAuthenticationQueryServiceTest {
 
     @Test
     void inactiveOrUncorrelatedSubjectsFailClosed() {
+        Principal disabled = principal(PrincipalLifecycleState.DISABLED, IDENTITY_ID, 1);
+        Principal uncorrelated = principal(PrincipalLifecycleState.ACTIVE, null, 1);
+        Principal inactiveIdentityPrincipal =
+                principal(PrincipalLifecycleState.ACTIVE, IDENTITY_ID, 1);
+        Identity suspendedIdentity = identity(IdentityLifecycleState.SUSPENDED, 1);
+
         when(principals.findByTargetAndNativeKey(TENANT, TARGET_ID, "disabled"))
-                .thenReturn(Optional.of(principal(
-                        PrincipalLifecycleState.DISABLED, IDENTITY_ID, 1)));
+                .thenReturn(Optional.of(disabled));
         when(principals.findByTargetAndNativeKey(TENANT, TARGET_ID, "uncorrelated"))
-                .thenReturn(Optional.of(principal(
-                        PrincipalLifecycleState.ACTIVE, null, 1)));
+                .thenReturn(Optional.of(uncorrelated));
         when(principals.findByTargetAndNativeKey(TENANT, TARGET_ID, "inactive-identity"))
-                .thenReturn(Optional.of(principal(
-                        PrincipalLifecycleState.ACTIVE, IDENTITY_ID, 1)));
+                .thenReturn(Optional.of(inactiveIdentityPrincipal));
         when(identities.findById(TENANT, IDENTITY_ID))
-                .thenReturn(Optional.of(identity(IdentityLifecycleState.SUSPENDED, 1)));
+                .thenReturn(Optional.of(suspendedIdentity));
 
         assertThat(service.resolveEligible(TENANT, TARGET_ID, "disabled")).isEmpty();
         assertThat(service.resolveEligible(TENANT, TARGET_ID, "uncorrelated")).isEmpty();
