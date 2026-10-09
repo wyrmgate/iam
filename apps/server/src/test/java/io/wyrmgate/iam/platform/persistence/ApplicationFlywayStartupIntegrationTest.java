@@ -3,6 +3,7 @@ package io.wyrmgate.iam.platform.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,9 @@ class ApplicationFlywayStartupIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    Flyway flyway;
+
     @Test
     void applicationStartupMigratesEmptyDatabaseToCurrentVersion() {
         Integer historyTable = jdbc.queryForObject(
@@ -53,16 +57,16 @@ class ApplicationFlywayStartupIntegrationTest {
                 Integer.class);
         assertThat(historyTable).isEqualTo(1);
 
-        String currentVersion = jdbc.queryForObject(
+        Integer failedMigrations = jdbc.queryForObject(
                 """
-                SELECT version
+                SELECT count(*)
                 FROM public.flyway_schema_history
-                WHERE success
-                ORDER BY installed_rank DESC
-                LIMIT 1
+                WHERE NOT success
                 """,
-                String.class);
-        assertThat(currentVersion).isEqualTo("60");
+                Integer.class);
+        assertThat(failedMigrations).isZero();
+        assertThat(flyway.info().current()).isNotNull();
+        assertThat(flyway.info().pending()).isEmpty();
 
         List<String> schemas = List.of(
                 "identity",
