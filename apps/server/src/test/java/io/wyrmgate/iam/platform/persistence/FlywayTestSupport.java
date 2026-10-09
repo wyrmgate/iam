@@ -5,11 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 
-final class FlywayTestSupport {
+public final class FlywayTestSupport {
 
     private FlywayTestSupport() {}
 
-    static void assertFullyMigrated(Flyway flyway) {
+    public static void assertFullyMigrated(Flyway flyway) {
         flyway.validate();
 
         MigrationInfo current = flyway.info().current();

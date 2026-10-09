@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.api.catalog;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -89,7 +91,7 @@ class CatalogApiIntegrationTest {
         commands = new CatalogCommandService(repository, ids, transactions);
         queries = new CatalogQueryService(repository);
         idempotency = new JdbcIdempotencyRepository(jdbc, ids);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
+        assertFullyMigrated(flyway);
     }
 
     @AfterAll

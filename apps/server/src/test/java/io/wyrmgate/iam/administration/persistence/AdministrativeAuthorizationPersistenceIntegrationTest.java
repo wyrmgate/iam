@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.administration.persistence;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -67,7 +69,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
+        assertFullyMigrated(flyway);
     }
 
     @AfterAll

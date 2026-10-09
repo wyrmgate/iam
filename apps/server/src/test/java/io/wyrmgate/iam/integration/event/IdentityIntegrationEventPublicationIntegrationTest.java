@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.integration.event;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
@@ -67,7 +69,7 @@ class IdentityIntegrationEventPublicationIntegrationTest {
                 ids,
                 transactions);
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
+        assertFullyMigrated(flyway);
     }
 
     @AfterAll

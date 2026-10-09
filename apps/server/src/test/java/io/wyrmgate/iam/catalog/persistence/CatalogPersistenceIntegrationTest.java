@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.catalog.persistence;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -62,7 +64,7 @@ class CatalogPersistenceIntegrationTest {
         queries = new CatalogQueryService(repository);
         ssoClients = new SsoClientRegistrationService(
                 repository, new JdbcSsoClientRegistrationRepository(jdbc), ids, transactions);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("61");
+        assertFullyMigrated(flyway);
     }
 
     @AfterAll

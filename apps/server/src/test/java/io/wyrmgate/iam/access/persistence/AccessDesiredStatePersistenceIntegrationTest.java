@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.access.persistence;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
@@ -44,7 +46,7 @@ class AccessDesiredStatePersistenceIntegrationTest {
         tenants = new JdbcTenantRepository(jdbc, ids);
         repository = new JdbcDesiredStateProjectionRepository(jdbc, ids);
         query = new AccessDesiredStateQueryService(repository);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
+        assertFullyMigrated(flyway);
     }
 
     @AfterAll
