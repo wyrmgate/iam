@@ -64,8 +64,8 @@ jobs:
           for path in changed:
               print(path)
 
-          if replacements != 46 or len(changed) != 46:
-              raise SystemExit(f'Expected exactly 46 assertions/files from full scan; got {replacements} assertions in {len(changed)} files')
+          if replacements != 47 or len(changed) != 47:
+              raise SystemExit(f'Expected exactly 47 assertions/files from full scan; got {replacements} assertions in {len(changed)} files')
           if remaining:
               raise SystemExit('Hardcoded Flyway version assertions remain:\n' + '\n'.join(remaining))
           PY
