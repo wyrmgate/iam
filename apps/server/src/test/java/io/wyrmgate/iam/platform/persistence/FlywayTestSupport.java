@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 
+/** Shared Flyway assertions that avoid coupling tests to a concrete migration version. */
 public final class FlywayTestSupport {
 
     private FlywayTestSupport() {}
