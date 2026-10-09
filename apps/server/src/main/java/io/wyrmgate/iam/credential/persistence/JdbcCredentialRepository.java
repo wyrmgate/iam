@@ -126,6 +126,35 @@ public final class JdbcCredentialRepository
     }
 
     @Override
+    public List<Credential> findEffectiveCredentials(
+            TenantContext tenant,
+            UUID principalId,
+            CredentialKind kind,
+            Instant at) {
+        return jdbc.query("""
+                SELECT id, principal_id, credential_kind,
+                       secret_provider_type, secret_reference_key,
+                       lifecycle_state, valid_from, valid_until,
+                       revision, created_at, updated_at,
+                       compromised_at, revoked_at, expired_at
+                FROM credential.credential
+                WHERE tenant_id = ?
+                  AND principal_id = ?
+                  AND credential_kind = ?
+                  AND lifecycle_state = 'ACTIVE'
+                  AND (valid_from IS NULL OR valid_from <= ?)
+                  AND (valid_until IS NULL OR valid_until > ?)
+                ORDER BY created_at DESC, id DESC
+                """,
+                (rs,row) -> credential(rs),
+                tenant.tenantId(),
+                principalId,
+                kind.name(),
+                Timestamp.from(at),
+                Timestamp.from(at));
+    }
+
+    @Override
     public Credential updateCredentialState(
             TenantContext tenant,
             UUID credentialId,

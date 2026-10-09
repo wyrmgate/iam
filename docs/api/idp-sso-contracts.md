@@ -39,6 +39,18 @@ The management contract is `contracts/openapi/sso-client-v1.json` and exposes:
 - `GET/PUT /api/v1/sso-clients/{registrationId}`;
 - `POST /api/v1/sso-clients/{registrationId}/retire`.
 
+The checkpoint-3 authentication/session semantic runtime is also present internally:
+
+- Identity resolves only an `ACTIVE` Principal correlated to an `ACTIVE` Identity and returns a minimal authentication subject projection;
+- Credential selects only tenant-bound, `ACTIVE`, temporally effective `PASSWORD` authenticators and delegates private verification through a `CredentialSecretVerifier` selected by the opaque `SecretReference.providerType`;
+- no verifier adapter is built in by default; a deployment must provide an approved secret/verifier-store adapter, and missing or ambiguous adapters fail closed;
+- successful verification returns only Credential identity/revision needed to bind the browser session;
+- Platform browser sessions use a fresh 256-bit opaque token, persist only its SHA-256 digest, and are tenant-bound with default 30-minute idle and 8-hour absolute limits;
+- every session resolution revalidates current Identity/Principal login eligibility plus establishing Credential ownership, kind, lifecycle, temporal validity and exact revision; lifecycle/revision change therefore invalidates the session fail closed;
+- session context contains no Administration permission, AccessAssignment, application entitlement or OAuth scope authority.
+
+The public browser login/logout interaction is **not** exposed by this internal checkpoint. Tenant routing, first-party authentication-target selection, cookie attributes and CSRF interaction semantics must be explicit before a public cookie-authenticated mutation surface is activated. This avoids making browser input authoritative for Tenant and avoids claiming CSRF completion before such an endpoint exists.
+
 The OIDC discovery document is deliberately **not** published yet because Authorization Code + PKCE and token endpoints are not active. Wyrmgate must not advertise protocol endpoints that do not exist. Discovery becomes public atomically with the authorization-server endpoint slice.
 
 Current RSA-only JWKS support is an implementation checkpoint, not a canonical requirement. Additional signing algorithms require compatible signing-port and verification-key support plus negative tests before activation.
@@ -127,6 +139,8 @@ First-party authentication must resolve an existing governed Principal and its o
 A successful authentication establishes provider-neutral actor/session context. It does not create Administration permission, AccessAssignment, application entitlement or OAuth scope by itself.
 
 Browser sessions must be cookie based with deployment-appropriate `Secure`, `HttpOnly`, and `SameSite` protections, CSRF protection for cookie-authenticated mutations, session fixation protection, bounded idle/absolute lifetime and logout invalidation. Long-lived bearer/refresh tokens are not stored in browser local/session storage.
+
+The internal browser-session runtime is intentionally transport-neutral. Raw session tokens exist only long enough to be returned to the future HTTP adapter for protected-cookie establishment; persistence contains only token digests. The future HTTP adapter must not expose the token in JSON, URLs, logs, audit or client-side storage.
 
 ## Claims and subjects
 
