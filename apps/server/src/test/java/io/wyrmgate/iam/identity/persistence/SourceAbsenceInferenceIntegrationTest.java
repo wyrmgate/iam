@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.identity.persistence;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -97,7 +99,7 @@ class SourceAbsenceInferenceIntegrationTest {
                 transactions,
                 new ObjectMapper());
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
+        assertFullyMigrated(flyway);
     }
 
     @AfterAll

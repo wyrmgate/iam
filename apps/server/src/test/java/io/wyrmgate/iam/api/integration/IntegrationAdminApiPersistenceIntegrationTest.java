@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.api.integration;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -121,7 +123,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                         transactions,
                         Clock.systemUTC()),
                 ids);
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
+        assertFullyMigrated(flyway);
     }
 
     @AfterAll

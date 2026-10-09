@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.api.access;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -133,12 +135,7 @@ class AccessApiIntegrationTest {
                 .load();
         flyway.migrate();
         flyway.validate();
-        assertThat(
-                flyway.info()
-                        .current()
-                        .getVersion()
-                        .getVersion())
-                .isEqualTo("60");
+        assertFullyMigrated(flyway);
 
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();

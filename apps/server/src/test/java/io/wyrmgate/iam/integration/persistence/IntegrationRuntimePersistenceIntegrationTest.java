@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.integration.persistence;
 
+import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -65,7 +67,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
         repository = new JdbcIntegrationRuntimeRepository(
                 jdbc, json, ids, observedAccessFacts);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("60");
+        assertFullyMigrated(flyway);
     }
 
     @AfterAll
