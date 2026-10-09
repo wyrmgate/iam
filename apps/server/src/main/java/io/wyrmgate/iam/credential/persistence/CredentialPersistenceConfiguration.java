@@ -1,16 +1,19 @@
 package io.wyrmgate.iam.credential.persistence;
 
+import io.wyrmgate.iam.credential.application.CredentialAuthenticationService;
 import io.wyrmgate.iam.credential.application.CredentialBoundaryProcessingScheduler;
 import io.wyrmgate.iam.credential.application.CredentialBoundaryProcessingService;
 import io.wyrmgate.iam.credential.application.CredentialBoundaryScheduler;
 import io.wyrmgate.iam.credential.application.CredentialQueryService;
 import io.wyrmgate.iam.credential.application.CredentialRepository;
 import io.wyrmgate.iam.credential.application.CredentialRotationService;
+import io.wyrmgate.iam.credential.application.CredentialSecretVerifier;
 import io.wyrmgate.iam.credential.application.CredentialService;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -30,6 +33,13 @@ public class CredentialPersistenceConfiguration {
     CredentialQueryService credentialQueryService(
             CredentialRepository credentials) {
         return new CredentialQueryService(credentials);
+    }
+
+    @Bean
+    CredentialAuthenticationService credentialAuthenticationService(
+            CredentialRepository credentials,
+            List<CredentialSecretVerifier> verifiers) {
+        return new CredentialAuthenticationService(credentials, verifiers);
     }
 
     @Bean

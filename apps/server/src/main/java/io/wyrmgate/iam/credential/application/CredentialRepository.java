@@ -25,6 +25,13 @@ public interface CredentialRepository {
             CredentialPosition after,
             int limit);
 
+    /** Returns only credentials that are ACTIVE and temporally effective at {@code at}. */
+    List<Credential> findEffectiveCredentials(
+            TenantContext tenant,
+            UUID principalId,
+            CredentialKind kind,
+            Instant at);
+
     Credential updateCredentialState(
             TenantContext tenant,
             UUID credentialId,

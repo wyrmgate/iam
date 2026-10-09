@@ -29,6 +29,16 @@ A standalone deployment may authenticate a governed Principal using first-party 
 - secret/verifier material is resolved only through an explicit security adapter;
 - compromise/revocation takes effect at authentication/session policy boundaries without rewriting historical governance decisions.
 
+Checkpoint 3 now implements those boundaries as semantic ports rather than protocol-framework user state:
+
+- Identity exposes an authentication-only query that returns a minimal subject projection only when the Principal is active, correlated to an existing Identity, and that Identity is active;
+- Credential selects only tenant-bound, active, temporally effective `PASSWORD` credentials for the Principal;
+- private verification occurs through a `CredentialSecretVerifier` adapter keyed by the opaque Credential `SecretReference`; raw verifier material remains outside Credential persistence;
+- missing or ambiguous verifier adapters fail closed;
+- the verifier result is explicitly bound to the Principal plus Credential identity/revision needed to establish and subsequently revalidate the browser session; a credential proof for one Principal cannot establish a session for another.
+
+No production secret-provider implementation is implied by this boundary. A deployment must provide an approved adapter for its secret/verifier store before local password authentication can succeed.
+
 There is no permanent built-in `admin/admin`, hidden root credential or reusable bootstrap password.
 
 ## Federated authentication
@@ -93,6 +103,10 @@ The management console and first-party login UI must use secure same-origin brow
 
 Session cookies must use deployment-appropriate Secure, HttpOnly and SameSite protections. CSRF protection is required for cookie-authenticated state-changing browser endpoints. Session fixation protection, bounded idle/absolute lifetime and logout invalidation are mandatory.
 
+The checkpoint-3 session runtime uses a fresh 256-bit opaque token for every successful establishment. Only a SHA-256 digest is persisted. Session rows are tenant-bound and contain the Principal/Identity plus the Credential ID and revision that established authentication; they carry no Administration permission, AccessAssignment, application entitlement or OAuth scope. Session establishment requires the Credential-owned verification proof to name the same Principal as the Identity-owned authentication subject. Default bounds are 30 minutes idle and 8 hours absolute. Every session resolution revalidates current Principal/Identity login eligibility and the establishing Credential's ownership, kind, lifecycle, temporal validity and revision. Revocation, compromise or another Credential lifecycle revision therefore invalidates the session fail closed. Logout marks the session revoked; raw session tokens are never persisted.
+
+The public login/logout HTTP contract and cookie attributes are intentionally not activated by this internal checkpoint until tenant routing/authentication-interaction semantics are fixed. Consequently this slice does not weaken the existing public security chain and does not claim CSRF completion before a cookie-authenticated mutation surface exists.
+
 ## Control-plane authentication
 
 ADR-0011 external bearer authentication remains supported. ADR-0042 adds first-party Wyrmgate authentication as another source of the same provider-neutral governed actor context.
@@ -142,5 +156,7 @@ The implementation should land in bounded slices:
 5. console sign-in through first-party SSO;
 6. federation adapters;
 7. optional protocol extensions only when explicitly accepted.
+
+Checkpoint 3 is being delivered in two deliberately separated layers: the authentication/session semantic runtime first, followed by the public browser interaction once tenant-routing and protocol interaction semantics are explicit. This does not move Authorization Code/token issuance from checkpoint 4.
 
 Each slice requires contract tests, tenant-isolation tests, secret-boundary tests and negative security cases before merge.
