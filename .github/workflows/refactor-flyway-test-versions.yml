@@ -1,9 +1,9 @@
 name: One-shot Flyway test version refactor
 
 on:
-  push:
+  pull_request:
     branches:
-      - chore/dependency-maintenance-2026-10-08
+      - main
 
 permissions:
   contents: write
