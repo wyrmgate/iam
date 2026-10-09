@@ -1,0 +1,82 @@
+name: One-shot Flyway test version refactor
+
+on:
+  push:
+    branches:
+      - chore/dependency-maintenance-2026-10-08
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: chore/dependency-maintenance-2026-10-08
+          fetch-depth: 0
+
+      - name: Replace hardcoded Flyway migration versions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('apps/server/src/test/java')
+          helper_path = root / 'io/wyrmgate/iam/platform/persistence/FlywayTestSupport.java'
+          helper_import = 'import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;'
+
+          pattern = re.compile(
+              r'assertThat\(\s*flyway\.info\(\)\s*\.current\(\)\s*\.getVersion\(\)\s*\.getVersion\(\)\s*\)\s*\.isEqualTo\("\d+"\);',
+              re.MULTILINE,
+          )
+
+          changed = []
+          replacements = 0
+          for path in sorted(root.rglob('*.java')):
+              text = path.read_text()
+              updated, count = pattern.subn('assertFullyMigrated(flyway);', text)
+              if not count:
+                  continue
+
+              if helper_import not in updated:
+                  package_end = updated.index('\n', updated.index('package ')) + 1
+                  updated = updated[:package_end] + '\n' + helper_import + '\n' + updated[package_end:]
+
+              path.write_text(updated)
+              replacements += count
+              changed.append(str(path))
+
+          helper = helper_path.read_text()
+          helper = helper.replace('final class FlywayTestSupport {', 'public final class FlywayTestSupport {')
+          helper = helper.replace('    static void assertFullyMigrated(Flyway flyway) {', '    public static void assertFullyMigrated(Flyway flyway) {')
+          helper_path.write_text(helper)
+
+          remaining = []
+          for path in sorted(root.rglob('*.java')):
+              if pattern.search(path.read_text()):
+                  remaining.append(str(path))
+
+          print(f'Replaced {replacements} hardcoded Flyway version assertions in {len(changed)} files')
+          for path in changed:
+              print(path)
+
+          if replacements != 46 or len(changed) != 46:
+              raise SystemExit(f'Expected exactly 46 assertions/files from full scan; got {replacements} assertions in {len(changed)} files')
+          if remaining:
+              raise SystemExit('Hardcoded Flyway version assertions remain:\n' + '\n'.join(remaining))
+          PY
+
+      - name: Commit refactor and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/refactor-flyway-test-versions.yml
+          git add apps/server/src/test/java
+          git diff --cached --check
+          git commit -m "test: remove hardcoded Flyway migration versions"
+          git push origin HEAD:chore/dependency-maintenance-2026-10-08
