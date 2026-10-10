@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.administration.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -40,13 +41,13 @@ class CurrentAdministrativeAuthorityProjectionTest {
         var actor = actor();
         var permission = new AdministrativePermission("identity", "read");
         when(status.isAdministrativelyEligible(actor.tenant(), actor.identityId())).thenReturn(true);
-        when(repository.findGrantCandidates(actor.tenant(), actor.identityId())).thenReturn(List.of(
+        when(repository.findGrantCandidates(actor.tenant(), actor.identityId(), anyInt())).thenReturn(List.of(
                 candidate(permission, grant(actor, AdministrativeGrantState.ACTIVE, NOW.minusSeconds(60), NOW.plusSeconds(60))),
                 candidate(permission, grant(actor, AdministrativeGrantState.REVOKED, NOW.minusSeconds(60), NOW.plusSeconds(60))),
                 candidate(permission, grant(actor, AdministrativeGrantState.ACTIVE, NOW.minusSeconds(120), NOW))));
-        when(repository.findDelegationCandidates(actor.tenant(), actor.identityId())).thenReturn(List.of());
-        when(repository.findElevationCandidates(actor.tenant(), actor.identityId())).thenReturn(List.of());
-        when(repository.findBreakGlassCandidates(actor.tenant(), actor.identityId())).thenReturn(List.of());
+        when(repository.findDelegationCandidates(actor.tenant(), actor.identityId(), anyInt())).thenReturn(List.of());
+        when(repository.findElevationCandidates(actor.tenant(), actor.identityId(), anyInt())).thenReturn(List.of());
+        when(repository.findBreakGlassCandidates(actor.tenant(), actor.identityId(), anyInt())).thenReturn(List.of());
 
         var result = new CurrentAdministrativeAuthorityProjection(repository, status).current(actor, NOW);
 
