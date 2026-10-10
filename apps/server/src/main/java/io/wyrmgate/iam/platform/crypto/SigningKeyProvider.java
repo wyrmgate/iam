@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.platform.crypto;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -14,6 +15,14 @@ public interface SigningKeyProvider {
     SigningKeyMaterial currentSigningKey();
 
     Optional<SigningKeyMaterial> verificationKey(String keyId);
+
+    /**
+     * Public verification material that must remain discoverable while tokens signed by retained
+     * keys can still be valid. Implementations must never expose private key material here.
+     */
+    default List<SigningKeyMaterial> verificationKeys() {
+        return List.of(currentSigningKey());
+    }
 
     byte[] sign(byte[] payload);
 }

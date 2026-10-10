@@ -3,8 +3,11 @@ package io.wyrmgate.iam.idp.protocol;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import java.net.URI;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -22,8 +25,8 @@ public class IdpProtocolController {
     public IdpProtocolController(IdpProtocolProperties properties, SigningKeyProvider signingKeys) {
         this.issuer = properties.requiredIssuer();
         this.signingKeys = signingKeys;
-        // Fail startup rather than publish an unusable verification-key or discovery surface.
-        IdpJwkEncoder.encode(signingKeys.currentSigningKey());
+        // Fail startup rather than publish an unusable or incomplete verification-key surface.
+        publishableVerificationKeys();
     }
 
     @GetMapping("/.well-known/openid-configuration")
@@ -50,9 +53,38 @@ public class IdpProtocolController {
 
     @GetMapping("/oauth2/jwks")
     ResponseEntity<Map<String, Object>> jwks() {
-        SigningKeyMaterial current = signingKeys.currentSigningKey();
+        List<Map<String, Object>> keys = publishableVerificationKeys().stream()
+                .map(IdpJwkEncoder::encode)
+                .toList();
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(Map.of("keys", List.of(IdpJwkEncoder.encode(current))));
+                .body(Map.of("keys", keys));
+    }
+
+    private List<SigningKeyMaterial> publishableVerificationKeys() {
+        SigningKeyMaterial current = signingKeys.currentSigningKey();
+        List<SigningKeyMaterial> keys = signingKeys.verificationKeys();
+        if (keys == null || keys.isEmpty()) {
+            throw new IllegalStateException("at least one signing verification key is required");
+        }
+
+        Set<String> keyIds = new HashSet<>();
+        boolean currentPresent = false;
+        for (SigningKeyMaterial key : keys) {
+            if (key == null || !keyIds.add(key.keyId())) {
+                throw new IllegalStateException("signing verification key IDs must be unique");
+            }
+            if (current.keyId().equals(key.keyId())) currentPresent = true;
+            IdpJwkEncoder.encode(key);
+        }
+        if (!currentPresent) {
+            throw new IllegalStateException("current signing key must be published for verification");
+        }
+
+        return keys.stream()
+                .sorted(Comparator
+                        .comparing((SigningKeyMaterial key) -> !current.keyId().equals(key.keyId()))
+                        .thenComparing(SigningKeyMaterial::keyId))
+                .toList();
     }
 }
