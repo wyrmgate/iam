@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.catalog.persistence;
 
 import io.wyrmgate.iam.catalog.application.CatalogQueryModels.PagePosition;
+import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery.ResolvedClient;
 import io.wyrmgate.iam.catalog.application.SsoClientRegistrationRepository;
 import io.wyrmgate.iam.catalog.domain.SsoClientLifecycleState;
 import io.wyrmgate.iam.catalog.domain.SsoClientRegistration;
@@ -60,6 +61,20 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
                 FROM catalog.sso_client_registration
                 WHERE tenant_id = ? AND client_id = ? AND lifecycle_state = 'ACTIVE'
                 """, (rs, row) -> map(tenant, rs), tenant.tenantId(), clientId)
+                .stream().findFirst();
+    }
+
+    @Override
+    public Optional<ResolvedClient> findActiveProtocolClient(String clientId) {
+        return jdbc.query("""
+                SELECT tenant_id, id, application_id, client_id, requires_governed_access,
+                       lifecycle_state, revision, created_at, updated_at
+                FROM catalog.sso_client_registration
+                WHERE client_id = ? AND lifecycle_state = 'ACTIVE'
+                """, (rs, row) -> {
+                    TenantContext tenant = new TenantContext(rs.getObject("tenant_id", UUID.class));
+                    return new ResolvedClient(tenant, map(tenant, rs));
+                }, clientId)
                 .stream().findFirst();
     }
 

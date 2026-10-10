@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /** Catalog-owned semantic service for governed public OIDC client registrations. */
-public final class SsoClientRegistrationService {
+public final class SsoClientRegistrationService implements SsoClientProtocolQuery {
 
     private final CatalogRepository catalog;
     private final SsoClientRegistrationRepository registrations;
@@ -73,7 +73,6 @@ public final class SsoClientRegistrationService {
             boolean requiresGovernedAccess,
             long expectedRevision,
             Instant now) {
-        // Constructing a candidate validates protocol-facing inputs before the write transaction.
         SsoClientRegistration current = registrations.find(tenant, registrationId)
                 .orElseThrow(() -> new IllegalArgumentException("SSO client registration does not exist"));
         new SsoClientRegistration(
@@ -102,9 +101,23 @@ public final class SsoClientRegistrationService {
         return registrations.find(tenant, registrationId);
     }
 
-    /** Protocol adapter query; only current ACTIVE registrations are returned. */
+    /** Tenant-bound protocol query used after the tenant has already been resolved server-side. */
     public Optional<SsoClientRegistration> findActiveByClientId(TenantContext tenant, String clientId) {
         return registrations.findActiveByClientId(tenant, clientId);
+    }
+
+    /**
+     * Public protocol routing query. A retired/missing parent Application invalidates the client even
+     * if an older registration row remains ACTIVE.
+     */
+    @Override
+    public Optional<ResolvedClient> resolveActive(String clientId) {
+        if (clientId == null || clientId.isBlank()) return Optional.empty();
+        return registrations.findActiveProtocolClient(clientId)
+                .filter(resolved -> catalog.findApplication(
+                                resolved.tenant(), resolved.registration().applicationId())
+                        .filter(application -> application.lifecycleState() == CatalogLifecycleState.ACTIVE)
+                        .isPresent());
     }
 
     public Page list(

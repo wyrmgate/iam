@@ -21,7 +21,11 @@ public class IdpProtocolSecurityConfiguration {
     @Bean
     @Order(0)
     SecurityFilterChain idpPublicProtocolSecurity(HttpSecurity http) throws Exception {
-        http.securityMatcher("/oauth2/jwks")
+        http.securityMatcher(
+                        "/.well-known/openid-configuration",
+                        "/oauth2/jwks",
+                        "/oauth2/authorize",
+                        "/oauth2/token")
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());

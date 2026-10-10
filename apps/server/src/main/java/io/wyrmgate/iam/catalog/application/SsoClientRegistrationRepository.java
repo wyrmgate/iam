@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.catalog.application;
 
 import io.wyrmgate.iam.catalog.application.CatalogQueryModels.PagePosition;
+import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery.ResolvedClient;
 import io.wyrmgate.iam.catalog.domain.SsoClientRegistration;
 import io.wyrmgate.iam.catalog.domain.SsoClientScope;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -18,6 +19,8 @@ public interface SsoClientRegistrationRepository {
     Optional<SsoClientRegistration> find(TenantContext tenant, UUID registrationId);
 
     Optional<SsoClientRegistration> findActiveByClientId(TenantContext tenant, String clientId);
+
+    Optional<ResolvedClient> findActiveProtocolClient(String clientId);
 
     List<SsoClientRegistration> findPage(
             TenantContext tenant, UUID applicationId, PagePosition after, int limit);
