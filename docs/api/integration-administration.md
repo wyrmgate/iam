@@ -10,6 +10,8 @@ The first governed control-plane management surface for Integration-owned connec
 
 The machine-readable contract is `apps/server/src/main/resources/contracts/openapi/integration-admin-v1.json`.
 
+That contract now defines complete typed create/update payloads, success/error responses, required `Idempotency-Key` and strong `If-Match` headers, and operation-level Administration permissions for every ConnectorInstance, ConnectorBinding and ConnectorWorker mutation. Update payloads intentionally exclude immutable identity/target fields and lifecycle state so clients cannot smuggle authority changes through generic PATCH bodies. Connector-worker session/execution operations remain exclusively on the dedicated connector-worker protocol rather than this administration contract.
+
 ## Authorization
 
 Every operation consumes the trusted control-plane actor context and evaluates Administration-owned semantic permissions at operation time. Default deny applies.
@@ -75,6 +77,8 @@ All mutations require `Idempotency-Key`.
 
 Updates and disable operations require strong revision `If-Match`, for example `"rev-7"`.
 
+The public contract maps idempotency or semantic conflicts to `409` and stale revision preconditions to `412`; validation, authorization and not-found outcomes are separately typed. Runtime/OpenAPI alignment tests pin the published request-field sets and public mutation paths to the controller request records and mappings.
+
 Idempotency records and authoritative Integration mutation commit within the same required transaction. Reuse of one key with a different fingerprint is a conflict.
 
 ## Internal facts
@@ -89,7 +93,6 @@ Facts do not include:
 - worker scope/permission details.
 
 These internal facts are not automatically public integration events.
-
 
 ## Entitlement observation mappings
 
