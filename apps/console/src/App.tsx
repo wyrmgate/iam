@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   apiRequest,
+  getCurrentAdministrativeAuthority,
   getIdentity,
   getSystemInfo,
   listIdentities,
   transitionIdentity,
   V1_ROOT,
+  type CurrentAdministrativeAuthority,
   type IdentityLifecycleAction,
   type IdentityPage,
   type IdentityResource,
@@ -69,7 +71,7 @@ function ErrorPanel({ error, onRetry }: { error: unknown; onRetry?: () => void }
   );
 }
 
-function Overview({ system }: { system: LoadState<SystemInfo> }) {
+function Overview({ system, authority }: { system: LoadState<SystemInfo>; authority: LoadState<CurrentAdministrativeAuthority> }) {
   return (
     <section className="page-stack">
       <header className="page-header">
@@ -96,8 +98,9 @@ function Overview({ system }: { system: LoadState<SystemInfo> }) {
         </article>
         <article className="card">
           <span className="label">Authority visibility</span>
-          <strong>Operation-time final</strong>
-          <span>Current effective-authority projection is tracked as backend gap #265. Navigation is not proof of permission.</span>
+          {authority.status === 'loading' && <><strong>Checking…</strong><span>Loading current backend-derived authority.</span></>}
+          {authority.status === 'error' && <><strong>Unavailable</strong><span>Navigation remains visible; operation-time server authorization is still final.</span></>}
+          {authority.status === 'ready' && <><strong>{authority.value.administrativelyEligible ? `${authority.value.authorities.length} effective source${authority.value.authorities.length === 1 ? '' : 's'}` : 'Not administratively eligible'}</strong><span>Navigation is optimized from the current no-store Administration projection. A server 403 remains final.</span></>}
         </article>
       </div>
     </section>
@@ -241,19 +244,43 @@ function Identities({ selectedId, onSelect }: { selectedId?: string; onSelect: (
 }
 
 type RouteKey = 'overview' | 'identities' | 'principals' | 'catalog' | 'access' | 'requests' | 'reviews' | 'policies' | 'credentials' | 'integrations' | 'administration' | 'audit' | 'not-found';
-const nav: Array<{ route: RouteKey; path: string; label: string }> = [
-  { route: 'overview', path: '/', label: 'Overview' }, { route: 'identities', path: '/identities', label: 'Identities' }, { route: 'principals', path: '/principals', label: 'Principals' }, { route: 'catalog', path: '/catalog', label: 'Catalog' }, { route: 'access', path: '/access', label: 'Access' }, { route: 'requests', path: '/requests', label: 'Requests & Approvals' }, { route: 'reviews', path: '/reviews', label: 'Reviews' }, { route: 'policies', path: '/policies', label: 'Policies / Exceptions' }, { route: 'credentials', path: '/credentials', label: 'Credentials' }, { route: 'integrations', path: '/integrations', label: 'Integrations' }, { route: 'administration', path: '/administration', label: 'Administration' }, { route: 'audit', path: '/audit', label: 'Audit' },
+type NavItem = { route: RouteKey; path: string; label: string; resourceTypes?: string[] };
+const nav: NavItem[] = [
+  { route: 'overview', path: '/', label: 'Overview' },
+  { route: 'identities', path: '/identities', label: 'Identities', resourceTypes: ['identity', 'canonical-attribute-value'] },
+  { route: 'principals', path: '/principals', label: 'Principals', resourceTypes: ['principal', 'source-correlation-policy', 'source-lifecycle-policy', 'source-absence-policy'] },
+  { route: 'catalog', path: '/catalog', label: 'Catalog', resourceTypes: ['application', 'sso-client', 'application-target', 'entitlement', 'role', 'role-version'] },
+  { route: 'access', path: '/access', label: 'Access', resourceTypes: ['access-assignment', 'effective-access', 'lifecycle-access-policy'] },
+  { route: 'requests', path: '/requests', label: 'Requests & Approvals' },
+  { route: 'reviews', path: '/reviews', label: 'Reviews', resourceTypes: ['review-campaign'] },
+  { route: 'policies', path: '/policies', label: 'Policies / Exceptions', resourceTypes: ['governance-policy', 'governance-exception', 'source-correlation-policy', 'source-lifecycle-policy', 'source-absence-policy'] },
+  { route: 'credentials', path: '/credentials', label: 'Credentials', resourceTypes: ['credential', 'credential-rotation'] },
+  { route: 'integrations', path: '/integrations', label: 'Integrations', resourceTypes: ['connector', 'connector-binding', 'connector-worker', 'entitlement-observation-mapping'] },
+  { route: 'administration', path: '/administration', label: 'Administration' },
+  { route: 'audit', path: '/audit', label: 'Audit', resourceTypes: ['audit', 'evidence-snapshot'] },
 ];
+
+function visibleNavigation(authority: LoadState<CurrentAdministrativeAuthority>): NavItem[] {
+  if (authority.status !== 'ready') return nav;
+  if (!authority.value.administrativelyEligible) {
+    return nav.filter((item) => item.route === 'overview' || item.route === 'requests' || item.route === 'administration');
+  }
+  const resourceTypes = new Set(authority.value.authorities.map((item) => item.permission.resourceType));
+  return nav.filter((item) => !item.resourceTypes || item.resourceTypes.some((resourceType) => resourceTypes.has(resourceType)));
+}
 
 export function App() {
   const [pathname, setPathname] = usePathname();
   const [system, setSystem] = useState<LoadState<SystemInfo>>({ status: 'loading' });
+  const [authority, setAuthority] = useState<LoadState<CurrentAdministrativeAuthority>>({ status: 'loading' });
   useEffect(() => { const controller = new AbortController(); getSystemInfo(controller.signal).then((value) => setSystem({ status: 'ready', value })).catch((error: unknown) => { if (error instanceof DOMException && error.name === 'AbortError') return; setSystem({ status: 'error', error }); }); return () => controller.abort(); }, []);
+  useEffect(() => { const controller = new AbortController(); getCurrentAdministrativeAuthority(controller.signal).then((value) => setAuthority({ status: 'ready', value })).catch((error: unknown) => { if (error instanceof DOMException && error.name === 'AbortError') return; setAuthority({ status: 'error', error }); }); return () => controller.abort(); }, [pathname]);
 
   const identityMatch = pathname.match(/^\/identities\/([^/]+)$/);
   const exact = nav.find((item) => item.path === pathname);
   const route: RouteKey = identityMatch ? 'identities' : exact?.route ?? 'not-found';
+  const visibleNav = visibleNavigation(authority);
   function go(path: string) { navigate(path, setPathname); }
 
-  return <div className="app-shell"><aside className="sidebar"><a className="brand" href="/" onClick={(event) => { event.preventDefault(); go('/'); }}><span className="brand-mark">W</span><span><strong>Wyrmgate</strong><small>IAM Console</small></span></a><nav aria-label="Primary navigation">{nav.map((item) => <a key={item.path} className={route === item.route ? 'active' : ''} href={item.path} onClick={(event) => { event.preventDefault(); go(item.path); }}>{item.label}</a>)}</nav><div className="sidebar-footer"><span className={`status-dot ${system.status === 'ready' ? 'online' : ''}`} /><span>{system.status === 'ready' ? system.value.status : system.status === 'loading' ? 'Checking runtime' : 'Runtime unavailable'}</span></div></aside><main className="content" id="main-content">{route === 'overview' && <Overview system={system} />}{route === 'identities' && <Identities selectedId={identityMatch ? decodeURIComponent(identityMatch[1]) : undefined} onSelect={(id) => go(id ? `/identities/${encodeURIComponent(id)}` : '/identities')} />}{route === 'principals' && <PrincipalsPage />}{route === 'catalog' && <CatalogPage />}{route === 'access' && <AccessPage />}{route === 'requests' && <RequestsPage />}{route === 'reviews' && <ReviewsPage />}{route === 'policies' && <PoliciesPage />}{route === 'credentials' && <CredentialsPage />}{route === 'integrations' && <IntegrationsPage />}{route === 'administration' && <AdministrationPage />}{route === 'audit' && <AuditPage />}{route === 'not-found' && <section className="page-stack"><header className="page-header"><p className="eyebrow">404</p><h1>Page not found</h1></header><button className="button secondary" onClick={() => go('/')}>Return to overview</button></section>}</main></div>;
+  return <div className="app-shell"><aside className="sidebar"><a className="brand" href="/" onClick={(event) => { event.preventDefault(); go('/'); }}><span className="brand-mark">W</span><span><strong>Wyrmgate</strong><small>IAM Console</small></span></a><nav aria-label="Primary navigation">{visibleNav.map((item) => <a key={item.path} className={route === item.route ? 'active' : ''} href={item.path} onClick={(event) => { event.preventDefault(); go(item.path); }}>{item.label}</a>)}</nav><div className="sidebar-footer"><span className={`status-dot ${system.status === 'ready' ? 'online' : ''}`} /><span>{system.status === 'ready' ? system.value.status : system.status === 'loading' ? 'Checking runtime' : 'Runtime unavailable'}</span></div></aside><main className="content" id="main-content">{route === 'overview' && <Overview system={system} authority={authority} />}{route === 'identities' && <Identities selectedId={identityMatch ? decodeURIComponent(identityMatch[1]) : undefined} onSelect={(id) => go(id ? `/identities/${encodeURIComponent(id)}` : '/identities')} />}{route === 'principals' && <PrincipalsPage />}{route === 'catalog' && <CatalogPage />}{route === 'access' && <AccessPage />}{route === 'requests' && <RequestsPage />}{route === 'reviews' && <ReviewsPage />}{route === 'policies' && <PoliciesPage />}{route === 'credentials' && <CredentialsPage />}{route === 'integrations' && <IntegrationsPage />}{route === 'administration' && <AdministrationPage />}{route === 'audit' && <AuditPage />}{route === 'not-found' && <section className="page-stack"><header className="page-header"><p className="eyebrow">404</p><h1>Page not found</h1></header><button className="button secondary" onClick={() => go('/')}>Return to overview</button></section>}</main></div>;
 }

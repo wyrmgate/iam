@@ -22,6 +22,36 @@ export type SystemInfo = {
   status: string;
 };
 
+export type AdministrativePermissionResource = {
+  resourceType: string;
+  action: string;
+  key: string;
+};
+
+export type AdministrativeScopeResource = {
+  type: 'GLOBAL' | 'SPECIFIC_RESOURCE' | 'CANONICAL_ATTRIBUTE_CLASSIFICATION';
+  resourceType?: string | null;
+  resourceId?: string | null;
+  scopeKey?: string | null;
+};
+
+export type EffectiveAdministrativeAuthority = {
+  permission: AdministrativePermissionResource;
+  scope: AdministrativeScopeResource;
+  source: 'DIRECT_GRANT' | 'DELEGATION' | 'ELEVATION' | 'BREAK_GLASS';
+  sourceId: string;
+  validFrom?: string | null;
+  validUntil?: string | null;
+};
+
+export type CurrentAdministrativeAuthority = {
+  tenantId: string;
+  actorIdentityId: string;
+  administrativelyEligible: boolean;
+  evaluatedAt: string;
+  authorities: EffectiveAdministrativeAuthority[];
+};
+
 export type AuthSession = { authenticated: boolean };
 export type LoginInput = {
   clientId: string;
@@ -169,6 +199,10 @@ export async function signOut(): Promise<void> {
 
 export async function getSystemInfo(signal?: AbortSignal): Promise<SystemInfo> {
   return (await apiRequest<SystemInfo>(`${API_ROOT}/system/info`, { signal })).data;
+}
+
+export async function getCurrentAdministrativeAuthority(signal?: AbortSignal): Promise<CurrentAdministrativeAuthority> {
+  return (await apiRequest<CurrentAdministrativeAuthority>(`${V1_ROOT}/current-administrative-authority`, { signal })).data;
 }
 
 export async function listIdentities(cursor?: string, signal?: AbortSignal): Promise<IdentityPage> {
