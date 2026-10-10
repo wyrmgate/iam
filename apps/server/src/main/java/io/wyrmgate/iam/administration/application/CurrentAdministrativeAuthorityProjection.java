@@ -50,7 +50,7 @@ public final class CurrentAdministrativeAuthorityProjection {
         for (var candidate : repository.findDelegationCandidates(actor.tenant(), actor.identityId())) {
             var authority = candidate.authority();
             var delegation = authority.delegation();
-            if (AdministrativeAuthorizationService.isEffectiveDelegation(authority, now)
+            if (isEffectiveDelegation(authority, now)
                     && supportedScope(delegation.scope().type())) {
                 authorities.add(new EffectiveAdministrativeAuthority(
                         candidate.permission(), delegation.scope(), AdministrativeAuthoritySource.DELEGATION,
@@ -85,6 +85,28 @@ public final class CurrentAdministrativeAuthorityProjection {
                 .thenComparing(value -> value.source().name())
                 .thenComparing(EffectiveAdministrativeAuthority::sourceId));
         return new Result(true, List.copyOf(authorities));
+    }
+
+    private static boolean isEffectiveDelegation(
+            AdministrativeDelegatedAuthorityCandidate candidate, Instant now) {
+        var delegation = candidate.delegation();
+        var source = candidate.sourceGrant();
+        if (!delegation.isEffectiveAt(now)
+                || !source.isEffectiveAt(now)
+                || !source.delegable()
+                || !source.actorIdentityId().equals(delegation.delegatorIdentityId())
+                || !source.id().equals(delegation.sourceGrantId())
+                || !source.roleId().equals(delegation.roleId())
+                || !AdministrativeAuthorityService.scopeContains(source.scope(), delegation.scope())) {
+            return false;
+        }
+        if (source.validFrom() != null
+                && delegation.validFrom() != null
+                && delegation.validFrom().isBefore(source.validFrom())) {
+            return false;
+        }
+        return source.validUntil() == null
+                || !delegation.validUntil().isAfter(source.validUntil());
     }
 
     private static boolean supportedScope(AdministrativeScopeType type) {
