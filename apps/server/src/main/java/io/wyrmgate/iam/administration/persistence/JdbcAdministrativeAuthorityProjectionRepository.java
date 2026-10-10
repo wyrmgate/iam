@@ -33,7 +33,7 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
 
     @Override
     public List<GrantCandidate> findGrantCandidates(
-            TenantContext tenant, UUID actorIdentityId) {
+            TenantContext tenant, UUID actorIdentityId, int limit) {
         return jdbcTemplate.query(
                 """
                 SELECT p.resource_type AS p_resource_type, p.action AS p_action,
@@ -49,6 +49,7 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
                   ON p.tenant_id = rp.tenant_id AND p.id = rp.permission_id
                 WHERE g.tenant_id = ? AND g.actor_identity_id = ?
                 ORDER BY p.resource_type, p.action, g.created_at, g.id
+                LIMIT ?
                 """,
                 (rs, rowNum) -> new GrantCandidate(
                         permission(rs.getString("p_resource_type"), rs.getString("p_action")),
@@ -65,12 +66,12 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
                                 rs.getObject("authority_basis_grant_id", UUID.class),
                                 rs.getLong("revision"), rs.getTimestamp("created_at").toInstant(),
                                 rs.getTimestamp("updated_at").toInstant())),
-                tenant.tenantId(), actorIdentityId);
+                tenant.tenantId(), actorIdentityId, limit);
     }
 
     @Override
     public List<DelegationCandidate> findDelegationCandidates(
-            TenantContext tenant, UUID actorIdentityId) {
+            TenantContext tenant, UUID actorIdentityId, int limit) {
         return jdbcTemplate.query(
                 """
                 SELECT p.resource_type AS p_resource_type, p.action AS p_action,
@@ -97,6 +98,7 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
                   ON p.tenant_id = rp.tenant_id AND p.id = rp.permission_id
                 WHERE d.tenant_id = ? AND d.delegate_identity_id = ?
                 ORDER BY p.resource_type, p.action, d.created_at, d.id
+                LIMIT ?
                 """,
                 (rs, rowNum) -> new DelegationCandidate(
                         permission(rs.getString("p_resource_type"), rs.getString("p_action")),
@@ -134,12 +136,12 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
                                         rs.getLong("g_revision"),
                                         rs.getTimestamp("g_created_at").toInstant(),
                                         rs.getTimestamp("g_updated_at").toInstant()))),
-                tenant.tenantId(), actorIdentityId);
+                tenant.tenantId(), actorIdentityId, limit);
     }
 
     @Override
     public List<ElevationCandidate> findElevationCandidates(
-            TenantContext tenant, UUID actorIdentityId) {
+            TenantContext tenant, UUID actorIdentityId, int limit) {
         return jdbcTemplate.query(
                 """
                 SELECT p.resource_type AS p_resource_type, p.action AS p_action,
@@ -157,6 +159,7 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
                   ON p.tenant_id = rp.tenant_id AND p.id = rp.permission_id
                 WHERE e.tenant_id = ? AND e.beneficiary_identity_id = ?
                 ORDER BY p.resource_type, p.action, e.created_at, e.id
+                LIMIT ?
                 """,
                 (rs, rowNum) -> new ElevationCandidate(
                         permission(rs.getString("p_resource_type"), rs.getString("p_action")),
@@ -182,12 +185,12 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
                                 rs.getObject("causation_id", UUID.class),
                                 rs.getLong("revision"), rs.getTimestamp("created_at").toInstant(),
                                 rs.getTimestamp("updated_at").toInstant())),
-                tenant.tenantId(), actorIdentityId);
+                tenant.tenantId(), actorIdentityId, limit);
     }
 
     @Override
     public List<BreakGlassCandidate> findBreakGlassCandidates(
-            TenantContext tenant, UUID actorIdentityId) {
+            TenantContext tenant, UUID actorIdentityId, int limit) {
         return jdbcTemplate.query(
                 """
                 SELECT p.resource_type AS p_resource_type, p.action AS p_action,
@@ -205,6 +208,7 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
                   ON p.tenant_id = rp.tenant_id AND p.id = rp.permission_id
                 WHERE b.tenant_id = ? AND b.actor_identity_id = ?
                 ORDER BY p.resource_type, p.action, b.created_at, b.id
+                LIMIT ?
                 """,
                 (rs, rowNum) -> new BreakGlassCandidate(
                         permission(rs.getString("p_resource_type"), rs.getString("p_action")),
@@ -227,7 +231,7 @@ public final class JdbcAdministrativeAuthorityProjectionRepository
                                 rs.getObject("correlation_id", UUID.class), rs.getObject("causation_id", UUID.class),
                                 rs.getLong("revision"), rs.getTimestamp("created_at").toInstant(),
                                 rs.getTimestamp("updated_at").toInstant())),
-                tenant.tenantId(), actorIdentityId);
+                tenant.tenantId(), actorIdentityId, limit);
     }
 
     private static AdministrativePermission permission(String resourceType, String action) {
