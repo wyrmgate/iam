@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runbook defines the repeatable evidence-producing recovery drill required for OD-005. It is intentionally provider-neutral until a production topology is selected.
+This runbook defines the repeatable evidence-producing recovery drill required for OD-005. ADR-0043 sets the provider-neutral production recovery objectives: authoritative/evidence PostgreSQL **RPO <= 5 minutes**, **RTO <= 60 minutes**, and quarterly full recovery verification.
 
 A successful backup job is not proof of recoverability. Recovery must be exercised against an isolation-safe target.
 
@@ -10,7 +10,7 @@ A successful backup job is not proof of recoverability. Recovery must be exercis
 
 Before a drill:
 
-- use a reviewed production recovery design and the currently approved RPO/RTO targets;
+- use the reviewed production recovery design and ADR-0043 targets;
 - identify the exact source environment/revision and recovery mechanism being tested;
 - choose an isolation-safe target that cannot serve production traffic accidentally;
 - prevent recovered connectors/webhooks/outbound integrations from mutating real external systems unless the drill plan explicitly authorizes a safe test path;
@@ -99,19 +99,20 @@ Start the application against the recovered target and verify:
 - health checks pass;
 - database connectivity is healthy;
 - critical read paths work;
-- any intentionally disabled external integration is visibly degraded rather than silently treated as healthy.
+- any intentionally disabled external integration is visibly degraded rather than silently treated as healthy;
+- production alerting/paging for the recovered topology is active before normal service re-entry.
 
 ### 8. Measure RPO
 
 Determine the newest safely recovered committed data point and compare it with the source timeline.
 
-Record the observed data-loss interval and whether it satisfies the approved RPO.
+The observed committed-state loss must be **5 minutes or less**.
 
 ### 9. Measure RTO
 
 Measure from the declared recovery start until all documented service re-entry criteria are satisfied.
 
-Record the elapsed duration and whether it satisfies the approved RTO.
+The measured recovery duration must be **60 minutes or less**.
 
 ### 10. Record exceptions and cleanup
 
@@ -135,14 +136,16 @@ A drill passes only when:
 - projection rebuild is proven;
 - durable work resumes safely under replay/retry assumptions;
 - application health/re-entry checks pass;
-- measured RPO and RTO satisfy the approved targets;
+- measured RPO is <= 5 minutes;
+- measured RTO is <= 60 minutes;
+- production alerting is operational;
 - evidence and follow-up actions are recorded.
 
 Any material failure keeps OD-005 open.
 
 ## Drill cadence
 
-The normal cadence remains **TBD** until approved by operations/security/business stakeholders.
+Run a full isolation-safe production recovery drill **at least quarterly**.
 
 Run an out-of-cycle drill after a material change to:
 
