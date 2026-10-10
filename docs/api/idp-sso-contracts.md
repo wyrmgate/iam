@@ -4,60 +4,24 @@
 
 This document is the living implementation contract for ADR-0042. Wyrmgate is an IAM platform with first-party Identity Provider (IdP), Single Sign-On (SSO), and IGA capabilities.
 
-This contract does not create a ninth canonical domain capability. IdP/SSO is a composed product service over Identity, Principal, Credential, Catalog, Access/Governance, Administration, Audit, and Platform-owned protocol/session/signing infrastructure.
+IdP/SSO is a composed product service over the canonical capabilities. It does not create a ninth capability and no protocol-framework client/user/role object becomes authoritative IAM state.
 
 ## Current implementation checkpoint
 
-The first-party IdP foundation is fail-closed and disabled by default.
+The first-party IdP is disabled by default. When `iam.idp.enabled=true`:
 
-When `iam.idp.enabled=true`:
+- `iam.idp.issuer` is mandatory and must use HTTPS except loopback HTTP for local development;
+- Platform signing must be enabled and supply a publishable RSA signing key;
+- `GET /.well-known/openid-configuration`, `GET /oauth2/jwks`, `GET /oauth2/authorize`, and `POST /oauth2/token` are public protocol surfaces isolated from `/api/v1/**` control-plane authorization;
+- the active baseline is Authorization Code with mandatory S256 PKCE for Catalog-managed public clients;
+- authorization-code and access/ID-token lifetimes are five minutes by default;
+- public browser login/logout is still a later checkpoint; this slice consumes an already-established Platform browser session and returns `login_required` when one is absent.
 
-- `iam.idp.issuer` is mandatory;
-- the issuer must use HTTPS, except loopback HTTP for local development;
-- Platform signing must be enabled and supply a publishable active RSA signing key;
-- `GET /oauth2/jwks` is public and returns only public verification-key material for the active signing key;
-- private signing material is never exported through the IdP API;
-- the IdP public endpoint has its own security chain and does not weaken `/api/v1/**` control-plane authorization.
-
-Catalog now also owns typed public-client registration used by the forthcoming authorization-server adapter:
-
-- multiple SSO client registrations may reference one Application;
-- each registration has a server-generated public `clientId` distinct from its internal registration ID;
-- initial client type is `PUBLIC`; no client secret exists in this slice;
-- S256 PKCE is mandatory for this client type;
-- exact redirect URIs are stored as child rows, never wildcard patterns or arbitrary JSON;
-- production redirects require HTTPS; loopback HTTP is permitted for development/native-loopback use;
-- baseline scopes are `openid`, `profile`, and `email`, with `openid` mandatory;
-- `requiresGovernedAccess` defaults to `true` and is an explicit typed configuration input;
-- lifecycle is `ACTIVE -> RETIRED`, with retirement terminal;
-- mutation APIs use Administration permissions, ETag/If-Match revisions, Idempotency-Key, Audit evidence and tenant-bound persistence;
-- list APIs use signed tenant/application-bound cursors.
-
-The management contract is `contracts/openapi/sso-client-v1.json` and exposes:
-
-- `GET/POST /api/v1/applications/{applicationId}/sso-clients`;
-- `GET/PUT /api/v1/sso-clients/{registrationId}`;
-- `POST /api/v1/sso-clients/{registrationId}/retire`.
-
-The checkpoint-3 authentication/session semantic runtime is also present internally:
-
-- Identity resolves only an `ACTIVE` Principal correlated to an `ACTIVE` Identity and returns a minimal authentication subject projection;
-- Credential selects only tenant-bound, `ACTIVE`, temporally effective `PASSWORD` authenticators and delegates private verification through a `CredentialSecretVerifier` selected by the opaque `SecretReference.providerType`;
-- no verifier adapter is built in by default; a deployment must provide an approved secret/verifier-store adapter, and missing or ambiguous adapters fail closed;
-- successful verification returns only Credential identity/revision needed to bind the browser session;
-- Platform browser sessions use a fresh 256-bit opaque token, persist only its SHA-256 digest, and are tenant-bound with default 30-minute idle and 8-hour absolute limits;
-- every session resolution revalidates current Identity/Principal login eligibility plus establishing Credential ownership, kind, lifecycle, temporal validity and exact revision; lifecycle/revision change therefore invalidates the session fail closed;
-- session context contains no Administration permission, AccessAssignment, application entitlement or OAuth scope authority.
-
-The public browser login/logout interaction is **not** exposed by this internal checkpoint. Tenant routing, first-party authentication-target selection, cookie attributes and CSRF interaction semantics must be explicit before a public cookie-authenticated mutation surface is activated. This avoids making browser input authoritative for Tenant and avoids claiming CSRF completion before such an endpoint exists.
-
-The OIDC discovery document is deliberately **not** published yet because Authorization Code + PKCE and token endpoints are not active. Wyrmgate must not advertise protocol endpoints that do not exist. Discovery becomes public atomically with the authorization-server endpoint slice.
-
-Current RSA-only JWKS support is an implementation checkpoint, not a canonical requirement. Additional signing algorithms require compatible signing-port and verification-key support plus negative tests before activation.
+Catalog owns typed SSO client registration. Platform owns only short-lived protocol/session/signing state. Access remains authoritative for effective application access.
 
 ## Configuration
 
-Example standalone-development foundation configuration:
+Example standalone configuration:
 
 ```properties
 iam.idp.enabled=true
@@ -66,123 +30,205 @@ iam.idp.issuer=https://iam.example.test
 iam.signing.enabled=true
 iam.signing.key-id=wyrmgate-2026-01
 iam.signing.key-algorithm=RSA
-iam.signing.signing-algorithm=RS256
+iam.signing.signing-algorithm=SHA256withRSA
 iam.signing.private-key-path=/run/secrets/wyrmgate-idp-private.pem
 iam.signing.public-key-path=/etc/wyrmgate/wyrmgate-idp-public.pem
 ```
 
-Private-key paths are deployment configuration, not API-visible metadata. Private key bytes, passwords, authorization codes, bearer/refresh tokens and raw client secrets are prohibited from ordinary logs, APIs, events, audit payloads and browser storage.
+The signing provider uses JCA algorithm names; discovery/JWKS/JWT headers expose the corresponding JOSE name (`SHA256withRSA` -> `RS256`, and likewise for the supported RSA SHA-384/SHA-512 variants).
 
-## Protocol target
+Private-key bytes, passwords, authorization codes, bearer tokens, raw session tokens, refresh tokens, and client secrets are prohibited from ordinary logs, APIs, events, audit payloads, and browser storage.
 
-The accepted first-party baseline is OpenID Connect over OAuth with Authorization Code + PKCE. The complete baseline will expose:
+## Discovery and JWKS
 
-- `/.well-known/openid-configuration`;
-- `/oauth2/jwks`;
-- `/oauth2/authorize`;
-- `/oauth2/token`;
-- secure browser login/session establishment;
-- exact registered redirect-URI validation;
-- S256 PKCE;
-- nonce/state protocol handling;
-- signed ID/access tokens with bounded lifetime;
-- explicit session termination/logout.
+`GET /.well-known/openid-configuration` advertises only the implemented baseline:
 
-No endpoint is considered implemented merely because a framework can auto-enable it.
+- issuer;
+- authorization endpoint;
+- token endpoint;
+- JWKS URI;
+- `code` response type;
+- `authorization_code` grant;
+- public subjects;
+- supported RSA ID-token signing algorithm;
+- S256 code challenge;
+- `openid`, `profile`, and `email` scopes;
+- token endpoint authentication method `none`.
+
+`GET /oauth2/jwks` publishes only public verification-key material. Current RSA-only JWKS support is an implementation checkpoint, not a canonical requirement.
+
+The signing-key abstraction may retain old public verification material for overlap, but this checkpoint publishes only the current signing JWK. Broader rotation publication is a later bounded change.
 
 ## Governed client registration
 
-SSO relying-party registration is governed configuration, not generic framework CRUD.
+`SsoClientRegistration` is Catalog-owned authoritative configuration and references exactly one Application. Multiple registrations may reference one Application.
 
-### Ownership and cardinality
-
-- Catalog continues to own `Application`.
-- `SsoClientRegistration` is Catalog-owned authoritative configuration referencing exactly one existing Application.
-- An Application may have multiple registrations so web, SPA, desktop/native, or other distinct relying-party clients do not need to share protocol identifiers or redirect sets.
-- A protocol framework `RegisteredClient` or equivalent is a derived adapter/projection and may never become a competing source of truth.
-
-### Initial public-client baseline
-
-The first registration slice supports public clients only:
+The public-client baseline has these invariants:
 
 - `clientType=PUBLIC`;
-- `pkceS256Required=true`;
-- no client secret is accepted, generated, persisted or returned;
-- `clientId` is server-generated and is public protocol metadata, not a secret;
+- no client secret exists;
+- client IDs are server-generated public identifiers;
+- client IDs are globally unique across tenants because unauthenticated protocol routing must derive Tenant server-side from `client_id`;
+- S256 PKCE is mandatory;
 - redirect URIs use exact string registration and exact matching; wildcard matching is prohibited;
-- non-loopback HTTP redirect URIs are rejected;
-- `openid` is mandatory and `profile`/`email` are the only additional baseline scopes.
+- production redirects require HTTPS; loopback HTTP is permitted for local/native development;
+- `openid` is mandatory and `profile`/`email` are the only additional baseline scopes;
+- lifecycle is `ACTIVE -> RETIRED`, with retirement terminal;
+- protocol resolution requires both the registration and parent Application to remain `ACTIVE`;
+- mutation APIs remain tenant-bound and revision-controlled.
 
-Confidential-client authentication is intentionally deferred until its secret ownership and lifecycle are defined without violating the canonical invariant that Credential belongs to Principal. Framework convenience is not sufficient authority to invent a second secret/credential model.
+Catalog exposes a semantic `SsoClientProtocolQuery` for unauthenticated protocol routing. The protocol layer does not query Catalog tables directly. Browser request parameters never select the authoritative Tenant.
 
-### Governance and concurrency
+The existing SSO-client management endpoints remain:
 
-Administration authorizes registration management at operation time through:
+- `GET/POST /api/v1/applications/{applicationId}/sso-clients`;
+- `GET/PUT /api/v1/sso-clients/{registrationId}`;
+- `POST /api/v1/sso-clients/{registrationId}/retire`.
 
-- `sso-client:read`;
-- `sso-client:create`;
-- `sso-client:update`;
-- `sso-client:retire`.
+Their runtime machine-readable description is provided by the server OpenAPI surface (`/api/openapi`). A separate checked-in `contracts/openapi/sso-client-v1.json` file is not currently present and must not be cited as an existing artifact.
 
-These permissions are not automatically added to the burn-once initial administrator role. Administrators must establish explicit governed authority using the existing Administration model.
+## Authorization endpoint
 
-Mutable SSO registrations use revision-based optimistic concurrency. Retryable create/update/retire operations require `Idempotency-Key`. Retirement is terminal and removes the registration from the active protocol query. Audit receives only semantic, data-minimized success/denied/failure evidence; no protocol secret exists in the public-client slice.
+`GET /oauth2/authorize` accepts the baseline parameters:
 
-### Protocol adapter query
+- `response_type=code`;
+- `client_id`;
+- `redirect_uri`;
+- space-delimited `scope`;
+- mandatory `state`;
+- `code_challenge`;
+- `code_challenge_method=S256`;
+- optional `nonce`.
 
-The future authorization-server adapter resolves a client by `(Tenant, clientId)` through a Catalog semantic query that returns only `ACTIVE` registrations. It must not query or mutate Catalog tables directly and must not treat a retired client as protocol-valid even if stale framework state exists.
+Processing order is security-significant:
 
-## Authentication and session boundary
+1. resolve the active client and server-derived Tenant;
+2. validate `redirect_uri` by exact match against that registration;
+3. only after the redirect is trusted, validate response type, scopes, state, nonce, and PKCE;
+4. resolve and revalidate the existing browser session in the derived Tenant;
+5. if `requiresGovernedAccess=true`, query current Catalog/Access semantics and fail closed when the evaluator is unavailable;
+6. persist only short-lived code state and return the raw code once in the trusted redirect.
 
-First-party authentication must resolve an existing governed Principal and its owning Identity. Credential owns local authenticator lifecycle and a secret/verifier adapter performs private verification.
+Unknown/retired clients and unregistered redirect URIs return a direct error response and never redirect to attacker-controlled input. Errors discovered after redirect validation may be returned to that exact redirect URI together with the caller's valid state.
 
-A successful authentication establishes provider-neutral actor/session context. It does not create Administration permission, AccessAssignment, application entitlement or OAuth scope by itself.
+`state` is treated as an opaque client correlation/CSRF value. Wyrmgate validates a bounded non-control-character value and echoes it exactly; it does not reinterpret state as Tenant or authority.
 
-Browser sessions must be cookie based with deployment-appropriate `Secure`, `HttpOnly`, and `SameSite` protections, CSRF protection for cookie-authenticated mutations, session fixation protection, bounded idle/absolute lifetime and logout invalidation. Long-lived bearer/refresh tokens are not stored in browser local/session storage.
+`nonce` is optional for this authorization-code baseline. When supplied, it is bounded and carried through the authorization-code transaction into the signed ID token. It is not IAM authority.
 
-The internal browser-session runtime is intentionally transport-neutral. Raw session tokens exist only long enough to be returned to the future HTTP adapter for protected-cookie establishment; persistence contains only token digests. The future HTTP adapter must not expose the token in JSON, URLs, logs, audit or client-side storage.
+## Authorization-code state
 
-## Claims and subjects
+Platform persists short-lived technical authorization-code state in `platform.idp_authorization_code`.
 
-OIDC/OAuth claims are audience-specific curated projections.
+The raw authorization code is generated from 256 bits of randomness and is never persisted. Persistence contains only its SHA-256 digest plus the protocol bindings required to redeem it safely:
 
-They must never automatically expose or serialize:
+- server-derived Tenant;
+- Catalog SSO registration ID and revision;
+- Application ID and client ID;
+- browser session ID;
+- Principal and Identity IDs needed for the protocol subject;
+- exact redirect URI;
+- approved scopes;
+- S256 challenge;
+- optional nonce;
+- authentication time;
+- creation, expiry, and one-time consumption timestamps.
 
-- AdministrativeRole/Grant/Delegation/Elevation/BreakGlass state;
-- raw AccessAssignment collections;
-- unrestricted canonical attributes;
-- provider observations;
-- credential/secret references;
-- internal persistence identifiers that have not been accepted as public protocol identifiers.
+Catalog/Identity/Access references are stable cross-capability IDs, not database-level ownership transfers.
 
-OAuth scopes and upstream groups/roles/claims never become Wyrmgate `AdministrativePermission` automatically.
+Redemption performs an atomic `UPDATE ... RETURNING` against an unconsumed, unexpired digest. A code is burned before all request bindings are checked, so a failed replay/binding/PKCE attempt cannot leave that code reusable.
+
+## Token endpoint
+
+`POST /oauth2/token` consumes `application/x-www-form-urlencoded` with:
+
+- `grant_type=authorization_code`;
+- `code`;
+- `client_id`;
+- `redirect_uri`;
+- `code_verifier`.
+
+Public clients do not authenticate with a client secret.
+
+Redemption requires:
+
+- an active client resolved to the same server-derived Tenant;
+- an unexpired, previously unconsumed code;
+- unchanged registration identity/revision and client ID;
+- the exact redirect URI used at authorization time and still registered;
+- an RFC 7636 verifier length/character set;
+- constant-time comparison of the computed S256 challenge with the stored challenge.
+
+Successful token responses contain `access_token`, `token_type=Bearer`, `expires_in`, `id_token`, and the granted scope string. Responses use `Cache-Control: no-store` and `Pragma: no-cache`. Refresh tokens are not issued.
+
+## Subjects and token claims
+
+The current public subject policy is deterministic and opaque:
+
+`base64url(SHA-256("wyrmgate-sub-v1|" + tenantId + "|" + identityId))`
+
+This keeps raw internal IDs out of the token while producing a stable public subject within the current policy. Changing the subject policy is a public protocol compatibility change and requires an explicit contract decision.
+
+ID-token claims are deliberately minimal:
+
+- `iss`;
+- `sub`;
+- `aud` = client ID;
+- `iat`;
+- `exp`;
+- `auth_time`;
+- optional `nonce`.
+
+Access-token claims are deliberately minimal:
+
+- `iss`;
+- `sub`;
+- `aud` = client ID;
+- `iat`;
+- `exp`;
+- `client_id`;
+- granted `scope`.
+
+The presence of `profile` or `email` scope in this checkpoint does not cause unrestricted Identity attributes to be copied into tokens. Typed claim release is a separate explicit policy surface.
+
+Tokens must never automatically expose AdministrativeRole/Grant/Delegation/Elevation/BreakGlass state, raw AccessAssignment collections, unrestricted canonical attributes, provider observations, credential/secret references, raw Tenant/Identity/Principal database IDs, or framework-native authorities.
+
+OAuth scopes are protocol grants for a relying party; they do not become Wyrmgate `AdministrativePermission`.
 
 ## Application access gate
 
-Where `requiresGovernedAccess=true`, authorization-code issuance queries current Catalog/Access/Governance semantics through explicit ports. Protocol infrastructure consumes the semantic decision; it does not mutate Access authority or infer application access from authentication claims.
+Where `requiresGovernedAccess=true`, authorization-code issuance evaluates the application's current active Catalog entitlements against Access `EffectiveAccess` through semantic query ports.
 
-Required privilege-increase evaluation fails closed when its authoritative evaluator is unavailable.
+The IdP adapter pages Catalog data and calls the Access query; it never joins or mutates another capability's tables. Any runtime failure in this mandatory privilege-increase evaluation fails closed and no authorization code is persisted.
 
-`requiresGovernedAccess=false` means authentication eligibility is still required but an Application-specific AccessAssignment gate is not required by this registration. It does not bypass Administration authorization, Identity/Principal lifecycle eligibility, authentication assurance, client validation, PKCE or claim-release policy.
+`requiresGovernedAccess=false` bypasses only the Application-specific business-access gate. It does not bypass Identity/Principal/session eligibility, client/redirect validation, PKCE, scopes, token signing, or Administration authorization elsewhere.
 
-## Bootstrap
+## Browser session boundary
 
-There is no default `admin/admin`, permanent superadmin password, hidden root account or wildcard superuser.
+Checkpoint 3 remains the browser authentication source for checkpoint 4:
 
-Burn-once initial-administrator bootstrap remains the only initial authority establishment mechanism. ADR-0042 permits that bootstrap to target an existing first-party Principal with an active login authenticator as well as an external provider subject.
+- session establishment uses a fresh 256-bit opaque token;
+- only the SHA-256 digest is persisted;
+- sessions are tenant-bound with default 30-minute idle and 8-hour absolute limits;
+- each resolution revalidates current Identity/Principal eligibility and the exact establishing Credential revision;
+- session context contains no Administration permission, AccessAssignment, application entitlement, or OAuth scope authority.
+
+The authorization endpoint currently looks for the reserved cookie name `__Host-wyrmgate_sso`, but checkpoint 4 does not create that cookie or activate public login/logout. Cookie attributes, first-party login interaction, CSRF-protected state-changing browser endpoints, and logout HTTP behavior are checkpoint 5.
 
 ## Verification requirements
 
-Every implementation slice must include negative tests for:
+Every implementation slice must include negative coverage appropriate to the surface, including:
 
-- tenant isolation;
-- exact redirect URI matching;
-- PKCE downgrade/bypass attempts;
-- unregistered or retired clients;
-- inactive Principal/Identity login;
-- revoked/compromised authenticator use;
+- server-derived tenant isolation;
+- unknown/retired client rejection;
+- exact redirect matching before any redirect response;
+- PKCE downgrade/bypass/replay attempts;
+- browser-session revalidation;
+- mandatory governed-access fail-closed behavior;
 - token/claim over-disclosure;
-- conversion of OAuth/upstream claims into Administration authority;
+- signing/JWKS algorithm consistency;
 - private key/client secret/password/code/token leakage;
-- session fixation/CSRF where applicable;
 - disabled IdP surfaces remaining closed.
+
+## Deferred protocol features
+
+Refresh tokens, token revocation/introspection, device authorization, client credentials, confidential-client authentication, PAR/JAR/JARM, dynamic client registration, token exchange, federation adapters, and typed profile/email claim release require explicit contracts before activation.

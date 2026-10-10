@@ -2,161 +2,171 @@
 
 ## Purpose
 
-This document defines the implementation-facing first-party authentication, federation and SSO boundary introduced by ADR-0042. Wyrmgate is an enterprise IAM platform with integrated IdP/SSO and IGA capabilities.
+This document defines the implementation-facing first-party authentication, federation, and SSO boundary introduced by ADR-0042.
 
-Authentication, SSO protocol issuance, business access governance and IAM administrative authorization remain separate decisions.
+Authentication, SSO protocol issuance, business access governance, and IAM administrative authorization are separate decisions.
 
 ## Canonical ownership
 
-- Identity owns the governed subject and Principal lifecycle.
+- Identity owns governed subjects and Principal lifecycle.
 - Credential owns authenticator/credential metadata and lifecycle for a Principal.
-- Catalog owns the governed Application and typed SSO-facing registration inputs.
+- Catalog owns Applications and typed SSO relying-party registration.
 - Access/Governance own business access intent and policy decisions.
-- Administration owns permission to configure and operate IAM/IdP administration.
+- Administration owns IAM/IdP administrative permission.
 - Audit owns immutable data-minimized security evidence.
-- Platform provides protocol/session/token/signing infrastructure behind semantic ports.
+- Platform supplies protocol/session/token/signing infrastructure behind semantic ports.
 
-Protocol framework entities must not become a competing canonical `User`, `Role`, `Permission`, `Application` or `Credential` model.
+Protocol framework entities must not become a competing canonical `User`, `Role`, `Permission`, `Application`, or `Credential` model.
 
 ## First-party authentication
 
-A standalone deployment may authenticate a governed Principal using first-party authenticators. The initial password/WebAuthn/etc. concrete choices are implementation slices, but all implementations must preserve these invariants:
+A standalone deployment may authenticate an existing governed Principal through first-party authenticators. The concrete authenticator technology may evolve, but these invariants remain:
 
-- authentication is performed against an existing governed Principal;
-- the owning Identity and Principal must be semantically eligible for login;
+- the Principal and owning Identity must be eligible for login;
 - authenticator lifecycle is Credential-owned;
-- raw password, private key, recovery secret or equivalent private material never appears in ordinary Credential APIs, browser storage, logs, audit payloads, task payloads or errors;
-- secret/verifier material is resolved only through an explicit security adapter;
-- compromise/revocation takes effect at authentication/session policy boundaries without rewriting historical governance decisions.
+- private verifier material never appears in ordinary APIs, browser storage, logs, audit, task payloads, or errors;
+- verification is behind an explicit secret/verifier adapter;
+- revocation/compromise must take effect at authentication/session boundaries without rewriting historical governance state.
 
-Checkpoint 3 now implements those boundaries as semantic ports rather than protocol-framework user state:
+The checkpoint-3 runtime already enforces these boundaries. Identity returns only a minimal authentication projection, Credential selects a tenant-bound active temporally valid authenticator, private verification is delegated by opaque `SecretReference`, and the resulting browser session is bound to the exact Credential identity/revision.
 
-- Identity exposes an authentication-only query that returns a minimal subject projection only when the Principal is active, correlated to an existing Identity, and that Identity is active;
-- Credential selects only tenant-bound, active, temporally effective `PASSWORD` credentials for the Principal;
-- private verification occurs through a `CredentialSecretVerifier` adapter keyed by the opaque Credential `SecretReference`; raw verifier material remains outside Credential persistence;
-- missing or ambiguous verifier adapters fail closed;
-- the verifier result is explicitly bound to the Principal plus Credential identity/revision needed to establish and subsequently revalidate the browser session; a credential proof for one Principal cannot establish a session for another.
-
-No production secret-provider implementation is implied by this boundary. A deployment must provide an approved adapter for its secret/verifier store before local password authentication can succeed.
-
-There is no permanent built-in `admin/admin`, hidden root credential or reusable bootstrap password.
+There is no permanent built-in `admin/admin`, hidden root credential, or reusable bootstrap password.
 
 ## Federated authentication
 
-Wyrmgate may trust explicitly configured external authentication providers. Federation adapters validate the upstream protocol and map the resulting provider subject to a governed Principal/Identity through server-side configuration.
+Wyrmgate may trust explicitly configured external providers in a later slice. Federation adapters must validate the upstream protocol and map the provider subject server-side to governed Principal/Identity state.
 
-Provider groups, roles, scopes, tenant claims and provider-native assurance names do not become Wyrmgate AdministrativePermission or business access automatically. Any promotion into governed canonical state requires an explicit typed mapping/policy owned by the relevant capability.
+Provider groups, roles, scopes, tenant claims, and provider-native assurance names do not automatically become `AdministrativePermission` or business access.
 
-## OIDC/OAuth protocol baseline
+## OIDC/OAuth baseline
 
-The first accepted IdP/SSO protocol baseline is OpenID Connect over OAuth 2.x with Authorization Code + PKCE.
+The active first-party protocol baseline is OpenID Connect over OAuth with Authorization Code + mandatory S256 PKCE for public clients.
 
-Required protocol surfaces:
+Implemented public surfaces when `iam.idp.enabled=true`:
 
-- `/.well-known/openid-configuration`;
-- public JWKS endpoint;
-- authorization endpoint;
-- token endpoint;
-- signed ID tokens and access tokens;
-- exact redirect URI matching;
-- state, nonce and PKCE enforcement where applicable;
-- bounded browser SSO sessions;
-- logout/session termination;
-- governed client/application registration;
-- signing-key rotation with retained public verification material for bounded overlap;
-- explicit curated claim release.
+- `GET /.well-known/openid-configuration`;
+- `GET /oauth2/jwks`;
+- `GET /oauth2/authorize`;
+- `POST /oauth2/token`.
 
-Additional OAuth/OIDC features such as refresh tokens, revocation, introspection, device authorization, client credentials, PAR/JAR/JARM, dynamic client registration and token exchange require explicit contracts before activation.
+The implementation enforces exact redirect URI matching, bounded state/nonce handling, one-time short-lived authorization codes, and signed short-lived ID/access tokens. Refresh tokens are not issued.
 
-## Subject semantics
+Additional OAuth/OIDC features require explicit contracts before activation.
 
-OIDC `sub` is a stable public protocol identifier. It is not automatically the database primary key of Identity or Principal.
+## Server-derived tenant routing
 
-The subject policy must be stable, tenant-safe and non-secret. Pairwise/public subject modes may be added only through an explicit accepted contract.
+The browser must not authoritatively choose Tenant.
 
-## Claim release
+The public protocol request starts from a server-generated globally unique Catalog `client_id`. Catalog resolves that identifier to an active registration and server-derived `TenantContext`; the parent Application must also remain active.
 
-Claims are data-minimized projections for a particular relying party/audience. A token must never be treated as a serialized Identity360 graph.
+The IdP then resolves the browser session inside that Tenant. No query parameter, state value, nonce, token claim, or browser-supplied header becomes authoritative Tenant input.
 
-The baseline may expose only explicitly configured standard claims and typed application-specific claims. It must not dump:
+## Redirect and authorization response safety
 
-- AdministrativeRole/Grant/Delegation/Elevation/BreakGlass state;
-- raw AccessAssignment records;
-- unrestricted canonical attributes;
-- provider observations;
-- credential material or secret references;
-- internal correlation or persistence details not intended as public protocol contract.
+A redirect URI is trusted only after exact string comparison with the Catalog registration. Wildcards, prefix matching, and normalization-based equivalence are prohibited.
 
-OAuth scopes define protocol consent/capability for the relying party. They do not create Wyrmgate Administration permissions.
+An unknown/retired client or invalid redirect produces a direct error response. The server must never redirect an error to an unvalidated URI.
+
+After an exact redirect has been validated, protocol errors may be sent to that URI. A valid caller `state` is echoed unchanged so the relying party can correlate the response; Wyrmgate does not interpret state as authority.
+
+## PKCE and authorization codes
+
+Public clients require `code_challenge_method=S256`.
+
+Authorization codes are high-entropy, single-use, five-minute technical credentials:
+
+- 256 bits of random raw code are generated;
+- only the SHA-256 code digest is persisted;
+- the stored row binds Tenant, Catalog registration/revision, Application, client ID, browser session, Principal/Identity, exact redirect URI, approved scopes, S256 challenge, optional nonce, authentication time, expiry, and consumption time;
+- redemption atomically marks an unconsumed/unexpired row consumed before all secondary request bindings are checked;
+- a bad verifier, wrong redirect, stale client revision, or replay therefore cannot leave the code reusable.
+
+Raw authorization codes are never ordinary Audit/log/API/event data.
+
+## State and nonce
+
+`state` is a relying-party correlation/CSRF value. The IdP requires a bounded non-control-character value for this baseline, returns it only to the already validated redirect URI, and does not persist the raw state as authorization authority.
+
+`nonce` is optional for the code-flow baseline. When supplied it is bounded, carried in the short-lived authorization transaction, and copied into the signed ID token. It is not Identity, Access, Administration, or Tenant authority.
 
 ## Application access decision
 
-Authentication success does not necessarily mean the Identity may use every registered application.
+Authentication success does not imply permission to every Application.
 
-Where an application requires governed access, the SSO authorization path queries current Access/Catalog semantics. The protocol layer consumes a semantic allow/deny result and must not mutate Access state or infer entitlement from token claims.
+If a Catalog SSO registration sets `requiresGovernedAccess=true`, code issuance pages that Application's active Catalog entitlements and queries Access `EffectiveAccess` for the authenticated Identity. The protocol layer consumes semantic reads only; it does not mutate Access or join Access/Catalog persistence.
 
-Privilege increases fail closed when mandatory governance/access evaluation required for token issuance is unavailable. Existing authoritative reductions/revocations must not be ignored merely because an unrelated evaluator is unavailable.
+Because this is a privilege-increase decision, evaluator failure fails closed and no code is issued. `requiresGovernedAccess=false` skips only this application gate.
+
+## Subject and claim semantics
+
+The current public `sub` is an opaque deterministic digest of the versioned subject-policy prefix plus server-derived Tenant ID and governed Identity ID. Raw internal IDs are not exposed as token claims.
+
+Claims are curated protocol projections. Current ID tokens contain only issuer, subject, audience, issue/expiry times, authentication time, and optional nonce. Current access tokens contain only issuer, subject, audience, issue/expiry times, client ID, and granted scope string.
+
+Tokens must never dump:
+
+- Administration role/grant/delegation/elevation/break-glass state;
+- raw AccessAssignment data;
+- unrestricted Identity attributes;
+- provider observations;
+- Credential material or secret references;
+- internal correlation/persistence identifiers not accepted as public protocol identifiers.
+
+`profile` and `email` scope names do not by themselves authorize attribute disclosure. Typed claim-release policy is a separate explicit surface.
+
+OAuth scopes do not create Wyrmgate AdministrativePermission.
 
 ## Browser and session security
 
-The management console and first-party login UI must use secure same-origin browser/session handling. Long-lived bearer tokens, refresh tokens, client secrets and authenticator material must not be placed in `localStorage` or exposed in URLs.
+Management-console and first-party login UI must use secure same-origin session handling. Long-lived bearer tokens, refresh tokens, client secrets, and authenticator material must not be placed in browser local/session storage or exposed in URLs.
 
-Session cookies must use deployment-appropriate Secure, HttpOnly and SameSite protections. CSRF protection is required for cookie-authenticated state-changing browser endpoints. Session fixation protection, bounded idle/absolute lifetime and logout invalidation are mandatory.
+The existing browser-session runtime uses a fresh 256-bit opaque token. Only a SHA-256 digest is persisted. Sessions are tenant-bound and store Principal/Identity plus the exact Credential ID/revision that established authentication. They carry no Administration permission, AccessAssignment, application entitlement, or OAuth scope.
 
-The checkpoint-3 session runtime uses a fresh 256-bit opaque token for every successful establishment. Only a SHA-256 digest is persisted. Session rows are tenant-bound and contain the Principal/Identity plus the Credential ID and revision that established authentication; they carry no Administration permission, AccessAssignment, application entitlement or OAuth scope. Session establishment requires the Credential-owned verification proof to name the same Principal as the Identity-owned authentication subject. Default bounds are 30 minutes idle and 8 hours absolute. Every session resolution revalidates current Principal/Identity login eligibility and the establishing Credential's ownership, kind, lifecycle, temporal validity and revision. Revocation, compromise or another Credential lifecycle revision therefore invalidates the session fail closed. Logout marks the session revoked; raw session tokens are never persisted.
+Default bounds are 30 minutes idle and 8 hours absolute. Every resolution revalidates current Principal/Identity login eligibility plus Credential ownership, kind, lifecycle, temporal validity, and revision. Revocation/compromise/revision change invalidates the session fail closed.
 
-The public login/logout HTTP contract and cookie attributes are intentionally not activated by this internal checkpoint until tenant routing/authentication-interaction semantics are fixed. Consequently this slice does not weaken the existing public security chain and does not claim CSRF completion before a cookie-authenticated mutation surface exists.
+Checkpoint 4 consumes an existing session via reserved cookie name `__Host-wyrmgate_sso` but does not yet expose public login/logout. Checkpoint 5 must establish the cookie with deployment-appropriate Secure, HttpOnly, and SameSite protection, prevent fixation, enforce CSRF on cookie-authenticated state-changing endpoints, and implement logout invalidation.
+
+## Token signing and key management
+
+Signing private keys remain behind the Platform `SigningKeyProvider`. Public JWK material is publishable; private material is never returned.
+
+The current adapter supports RSA JCA signing algorithms mapped to JOSE names (`SHA256withRSA` -> `RS256`, etc.) so JWT headers, discovery, and JWKS are consistent with the actual signature primitive.
+
+Key rotation must retain public verification material long enough for previously issued bounded-lifetime tokens. Publishing multiple retained verification keys is not yet implemented by checkpoint 4 and must be completed before claiming seamless overlapping-key rotation.
 
 ## Control-plane authentication
 
-ADR-0011 external bearer authentication remains supported. ADR-0042 adds first-party Wyrmgate authentication as another source of the same provider-neutral governed actor context.
+External bearer authentication from ADR-0011 remains supported. First-party Wyrmgate authentication is another source of provider-neutral governed actor context.
 
-Regardless of authentication source:
+Regardless of source:
 
 1. identify the authenticated Principal/provider subject;
-2. resolve the governed Identity and Tenant server-side;
+2. resolve governed Identity and Tenant server-side;
 3. establish provider-neutral authentication assurance;
-4. perform Administration operation-time authorization.
+4. perform Administration authorization at operation time.
 
-The browser cannot supply authoritative tenant or administrative permission claims.
+A valid SSO token does not bypass Administration authorization.
 
 ## Initial administrator bootstrap
 
-Burn-once bootstrap remains operator-controlled and default-deny. It may target either an externally authenticated subject or an existing first-party Principal with an active login authenticator.
+Burn-once bootstrap remains operator-controlled and default-deny. It may target an externally authenticated subject or an existing first-party Principal with an active login authenticator.
 
-Bootstrap only establishes the explicit Administration role/grant defined by the accepted bootstrap contract. It does not create wildcard SSO scopes or blanket application access.
+Bootstrap creates only explicit Administration authority. It does not create wildcard OAuth scopes or blanket application access.
 
-## Signing and key management
+## Audit and observability
 
-Token-signing private keys remain behind Platform signing infrastructure. Public JWK material is intentionally publishable. Private keys are never returned through administrative or protocol APIs.
+Audit may record data-minimized semantic evidence for authentication, session lifecycle, client configuration, signing-key administration, federation mapping, and suspicious authenticator events.
 
-Key rotation must support an overlap window where previously issued tokens can still be validated until their bounded expiry while newly issued tokens use the current active signing key.
-
-## Audit and secret boundaries
-
-Audit may record data-minimized semantic events such as:
-
-- authentication success/failure;
-- session establishment/termination;
-- client registration/configuration changes;
-- federation mapping changes;
-- authenticator revocation/compromise;
-- signing-key administrative lifecycle events.
-
-Audit/logging must never include passwords, authorization codes, bearer/access tokens, refresh tokens, raw client secrets, private signing keys, recovery secrets or raw authenticator material.
+Audit/logging must never include passwords, authorization codes, access/bearer tokens, refresh tokens, raw session tokens, client secrets, private keys, recovery secrets, or raw authenticator material. Protocol exceptions should expose stable error codes rather than secret-bearing diagnostics.
 
 ## Implementation checkpoints
 
-The implementation should land in bounded slices:
-
-1. protocol/security foundation and OIDC metadata/JWKS;
+1. protocol/security foundation and JWKS;
 2. governed SSO client registration;
-3. first-party local authentication and secure browser session;
-4. Authorization Code + PKCE and token issuance;
-5. console sign-in through first-party SSO;
+3. first-party local authentication and browser-session runtime;
+4. **Authorization Code + PKCE, discovery, exact redirect validation, state/nonce handling, and signed token issuance (implemented here);**
+5. public same-origin console sign-in/login/logout;
 6. federation adapters;
 7. optional protocol extensions only when explicitly accepted.
 
-Checkpoint 3 is being delivered in two deliberately separated layers: the authentication/session semantic runtime first, followed by the public browser interaction once tenant-routing and protocol interaction semantics are explicit. This does not move Authorization Code/token issuance from checkpoint 4.
-
-Each slice requires contract tests, tenant-isolation tests, secret-boundary tests and negative security cases before merge.
+Each slice requires negative security coverage appropriate to its surface, including tenant routing/isolation, redirect validation, PKCE downgrade/replay, lifecycle invalidation, fail-closed governance evaluation, claim minimization, secret non-disclosure, and CSRF/session-fixation handling where applicable.

@@ -20,7 +20,7 @@ final class IdpJwkEncoder {
         jwk.put("kty", "RSA");
         jwk.put("use", "sig");
         jwk.put("kid", material.keyId());
-        jwk.put("alg", material.signingAlgorithm());
+        jwk.put("alg", IdpJoseAlgorithms.joseName(material.signingAlgorithm()));
         jwk.put("n", unsigned(rsa.getModulus()));
         jwk.put("e", unsigned(rsa.getPublicExponent()));
         return Map.copyOf(jwk);
