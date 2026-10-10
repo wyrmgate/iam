@@ -118,18 +118,52 @@ public final class IdpBrowserSessionService {
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(now, "now");
-        if (rawToken == null || rawToken.isBlank()) return Optional.empty();
+        Optional<String> tokenHash = hash(rawToken);
+        if (tokenHash.isEmpty()) return Optional.empty();
+        return sessions.findByTokenHash(tenant, tokenHash.orElseThrow())
+                .flatMap(session -> revalidate(tenant, session, now));
+    }
 
-        String tokenHash;
-        try {
-            tokenHash = tokens.hash(rawToken);
-        } catch (IllegalArgumentException invalid) {
-            return Optional.empty();
-        }
+    /**
+     * Resolves Tenant from the globally unique opaque-session digest, then performs the same
+     * tenant-scoped lifecycle revalidation. This is the first-party control-plane authentication
+     * boundary: the browser supplies only possession proof, never authoritative Tenant.
+     */
+    public Optional<ResolvedSession> resolve(String rawToken, Instant now) {
+        Objects.requireNonNull(now, "now");
+        Optional<String> tokenHash = hash(rawToken);
+        if (tokenHash.isEmpty()) return Optional.empty();
+        return sessions.findByTokenHash(tokenHash.orElseThrow())
+                .flatMap(located -> revalidate(located.tenant(), located.session(), now)
+                        .map(context -> new ResolvedSession(located.tenant(), context)));
+    }
 
-        Optional<IdpBrowserSession> found = sessions.findByTokenHash(tenant, tokenHash);
-        if (found.isEmpty()) return Optional.empty();
-        IdpBrowserSession session = found.get();
+    public void logout(
+            TenantContext tenant,
+            String rawToken,
+            Instant now) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(now, "now");
+        Optional<String> tokenHash = hash(rawToken);
+        if (tokenHash.isEmpty()) return;
+        sessions.findByTokenHash(tenant, tokenHash.orElseThrow())
+                .ifPresent(session -> revokeQuietly(tenant, session.id(), now));
+    }
+
+    /** Revokes a session while deriving Tenant only from the opaque token digest. */
+    public void logout(String rawToken, Instant now) {
+        Objects.requireNonNull(now, "now");
+        Optional<String> tokenHash = hash(rawToken);
+        if (tokenHash.isEmpty()) return;
+        sessions.findByTokenHash(tokenHash.orElseThrow())
+                .ifPresent(located -> revokeQuietly(
+                        located.tenant(), located.session().id(), now));
+    }
+
+    private Optional<SessionContext> revalidate(
+            TenantContext tenant,
+            IdpBrowserSession session,
+            Instant now) {
         if (!session.usableAt(now)) {
             revokeQuietly(tenant, session.id(), now);
             return Optional.empty();
@@ -163,21 +197,13 @@ public final class IdpBrowserSessionService {
                 session.absoluteExpiresAt()));
     }
 
-    public void logout(
-            TenantContext tenant,
-            String rawToken,
-            Instant now) {
-        Objects.requireNonNull(tenant, "tenant");
-        Objects.requireNonNull(now, "now");
-        if (rawToken == null || rawToken.isBlank()) return;
-        String tokenHash;
+    private Optional<String> hash(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) return Optional.empty();
         try {
-            tokenHash = tokens.hash(rawToken);
+            return Optional.of(tokens.hash(rawToken));
         } catch (IllegalArgumentException invalid) {
-            return;
+            return Optional.empty();
         }
-        sessions.findByTokenHash(tenant, tokenHash)
-                .ifPresent(session -> revokeQuietly(tenant, session.id(), now));
     }
 
     private void revokeQuietly(TenantContext tenant, UUID sessionId, Instant now) {
@@ -194,6 +220,13 @@ public final class IdpBrowserSessionService {
 
     private static Instant minimum(Instant left, Instant right) {
         return left.isBefore(right) ? left : right;
+    }
+
+    public record ResolvedSession(TenantContext tenant, SessionContext context) {
+        public ResolvedSession {
+            Objects.requireNonNull(tenant, "tenant");
+            Objects.requireNonNull(context, "context");
+        }
     }
 
     public record SessionContext(

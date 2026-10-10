@@ -2,15 +2,18 @@ package io.wyrmgate.iam.api.security;
 
 import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
 import io.wyrmgate.iam.administration.domain.AuthenticationAssuranceContext;
+import io.wyrmgate.iam.idp.session.IdpBrowserSessionService;
+import io.wyrmgate.iam.idp.session.IdpCsrfTokenCodec;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -26,8 +29,9 @@ import org.springframework.security.oauth2.jwt.SupplierJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
-/** Provider-neutral bearer authentication boundary for Wyrmgate control-plane APIs. */
+/** Provider-neutral authentication boundary for Wyrmgate control-plane APIs. */
 @Configuration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableConfigurationProperties(ControlPlaneAuthProperties.class)
@@ -57,6 +61,55 @@ public class ControlPlaneSecurityConfiguration {
             decoder.setJwtValidator(validator);
             return decoder;
         });
+    }
+
+    /**
+     * When first-party IdP is enabled, same-origin opaque browser sessions and the optional
+     * external bearer mode share one provider-neutral control-plane boundary. Explicit bearer
+     * authentication takes precedence when a bearer header is supplied.
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "iam.idp", name = "enabled", havingValue = "true")
+    @Order(1)
+    SecurityFilterChain firstPartyControlPlaneSecurity(
+            HttpSecurity http,
+            @Qualifier("controlPlaneJwtDecoder") ObjectProvider<JwtDecoder> controlPlaneJwtDecoders,
+            IdpBrowserSessionService sessions,
+            IdpCsrfTokenCodec csrf,
+            ControlPlaneActorResolver actorResolver,
+            ControlPlaneAssuranceResolver assuranceResolver,
+            IdGenerator idGenerator,
+            SemanticAuthenticationEntryPoint entryPoint) throws Exception {
+        http.securityMatcher("/api/auth/**", "/api/v1/**")
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/api/auth/login", "/api/auth/session", "/api/auth/logout").permitAll()
+                        .requestMatchers("/api/v1/**").authenticated()
+                        .anyRequest().denyAll())
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint));
+
+        IdpBrowserSessionAuthenticationFilter browserFilter =
+                new IdpBrowserSessionAuthenticationFilter(sessions, csrf, idGenerator);
+        JwtDecoder decoder = controlPlaneJwtDecoders.getIfAvailable();
+        if (decoder != null) {
+            http.oauth2ResourceServer(resourceServer -> resourceServer
+                            .authenticationEntryPoint(entryPoint)
+                            .jwt(jwt -> jwt
+                                    .decoder(decoder)
+                                    .jwtAuthenticationConverter(token -> new JwtAuthenticationToken(
+                                            token,
+                                            List.<GrantedAuthority>of(),
+                                            token.getSubject()))))
+                    .addFilterBefore(browserFilter, BearerTokenAuthenticationFilter.class)
+                    .addFilterAfter(
+                            new ControlPlaneActorResolutionFilter(
+                                    actorResolver, assuranceResolver, idGenerator),
+                            BearerTokenAuthenticationFilter.class);
+        } else {
+            http.addFilterBefore(browserFilter, AuthorizationFilter.class);
+        }
+        return http.build();
     }
 
     @Bean
