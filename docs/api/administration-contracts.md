@@ -12,7 +12,30 @@ The checked-in `administration-v1.json` contract exposes:
 - `/api/v1/administrative-elevations` for finite elevation request, approval request, approval application, cancellation, and revocation.
 - `/api/v1/administrative-break-glass-operations` for assurance-gated emergency activation, read/list, and revocation.
 
+The companion `administration-current-authority-v1.json` contract exposes the authenticated self-read projection at `/api/v1/current-administrative-authority`.
+
 Every surface is tenant-scoped through the authenticated control-plane actor context. Tenant is never accepted from a request body.
+
+## Current administrative authority projection
+
+`GET /api/v1/current-administrative-authority` returns a point-in-time Administration-owned read projection for the current trusted governed actor. It exists so the console can avoid presenting obviously unavailable navigation/actions without inventing authorization from OAuth/OIDC claims, browser state, business Roles, provider groups, or tenant hints.
+
+The response contains only:
+
+- the server-resolved tenant ID and governed actor Identity ID;
+- whether the actor is currently administratively eligible;
+- the evaluation timestamp;
+- currently effective semantic permission + typed scope entries, with authority source, source ID and validity interval.
+
+The projection preserves `GLOBAL`, `SPECIFIC_RESOURCE` and `CANONICAL_ATTRIBUTE_CLASSIFICATION` semantics. Other modeled scope kinds remain omitted until their operation-time hierarchy/population evaluators are concrete; returning them as effective would overstate authority.
+
+Direct grants, delegations, elevations and break-glass are re-evaluated from current Administration state. Delegation remains source-dependent, temporary authority disappears at semantic expiry/revocation, role permission changes are reflected by the current role-permission join, actor suspension/ineligibility returns an empty projection, and break-glass additionally requires current provider-neutral assurance. The endpoint returns `Cache-Control: no-store` and the browser must not persist the result as durable session authority.
+
+This projection is **not an authorization decision**. Every authoritative operation still performs normal operation-time Administration authorization. A visible/enabled console action may still receive `403` after any concurrent state, policy, scope, assurance or validity change, and that server denial is final.
+
+The endpoint requires authenticated control-plane actor resolution but does not require `administration:manage-authorization`: an operator may inspect only their own derived authority without gaining permission to manage authority resources. There is no endpoint to ask for another actor's projection.
+
+Provider-native claims, bearer tokens, session identifiers, authentication assertions, raw reason/evidence fields, private credential material and secrets are structurally absent.
 
 ## Authorization
 
@@ -30,11 +53,15 @@ Ordinary Administration mutations register idempotency in the same Administratio
 
 Break-glass activation uses a retry-stable preselected operation ID derived from tenant, operation namespace, and idempotency key. The domain service accepts that ID through an internal overload while preserving the existing policy, assurance, evidence, and audit validation path.
 
+The current-authority projection is a read and uses neither ETag nor idempotency keys. Its no-store response is intentionally point-in-time and should be re-read when the console needs fresh action/navigation optimization.
+
 ## Pagination
 
 Lists use deterministic `createdAt + id` continuation and integrity-protected signed cursors. Cursors are tenant- and collection-kind-bound and expire according to the common API cursor lifetime.
 
 The current bounded Administration queries do not return a separate has-more marker. A page whose size exactly equals the requested limit can therefore return a continuation that leads to an empty final page. This does not skip or duplicate resources and can be refined later without changing cursor semantics.
+
+The current-authority self projection is intentionally not paginated. It is bounded to the actor's current effective authority sources and is not a general authority-search API.
 
 ## Elevation boundary
 
@@ -57,3 +84,5 @@ ADR-0033 fixes the completion contract. POST_USE_REVIEW is implemented as immuta
 Every public role, grant, delegation, and elevation mutation appends a data-minimized AuditRecord after the authoritative operation succeeds or fails. Break-glass reuses its domain-level AuditRecord producer so the public transport layer does not duplicate evidence.
 
 Audit contains the actual governed actor, exact semantic action, known target resource, outcome, time, and request correlation. It does not contain reason text, incident details, full permission sets, request payloads, token or assurance claims, exceptions, or provider-native identity data. Audit failure never rewrites an already completed Administration result.
+
+The current-authority read is an ephemeral derived projection for UI optimization rather than new authoritative state; it does not create or mutate Administration authority.
