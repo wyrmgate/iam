@@ -4,7 +4,7 @@ import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeAct
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Objects;
 
-/** Request-scoped transport holder for the trusted actor resolved from a validated bearer token. */
+/** Request-scoped holder for a trusted, provider-neutral authenticated control-plane actor. */
 public final class ControlPlaneActorRequestContext {
 
     static final String ATTRIBUTE = ControlPlaneActorRequestContext.class.getName() + ".actor";

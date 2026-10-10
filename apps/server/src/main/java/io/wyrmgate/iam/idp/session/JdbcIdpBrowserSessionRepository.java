@@ -62,6 +62,24 @@ public final class JdbcIdpBrowserSessionRepository
     }
 
     @Override
+    public Optional<LocatedSession> findByTokenHash(String tokenHash) {
+        return jdbc.query("""
+                SELECT tenant_id, id, principal_id, identity_id,
+                       credential_id, credential_revision, token_hash,
+                       created_at, last_seen_at, idle_expires_at,
+                       absolute_expires_at, revoked_at
+                FROM platform.idp_browser_session
+                WHERE token_hash = ?
+                """,
+                (rs, row) -> new LocatedSession(
+                        new TenantContext(rs.getObject("tenant_id", UUID.class)),
+                        session(rs)),
+                tokenHash)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
     public boolean touch(
             TenantContext tenant,
             UUID sessionId,

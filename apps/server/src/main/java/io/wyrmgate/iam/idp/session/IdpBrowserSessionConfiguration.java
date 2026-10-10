@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.idp.session;
 
+import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
 import io.wyrmgate.iam.credential.application.CredentialAuthenticationService;
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -21,6 +22,11 @@ public class IdpBrowserSessionConfiguration {
     }
 
     @Bean
+    IdpCsrfTokenCodec idpCsrfTokenCodec() {
+        return new IdpCsrfTokenCodec();
+    }
+
+    @Bean
     IdpBrowserSessionService idpBrowserSessionService(
             IdpBrowserSessionRepository sessions,
             IdentityAuthenticationQuery identities,
@@ -33,5 +39,14 @@ public class IdpBrowserSessionConfiguration {
                 credentials,
                 tokens,
                 ids);
+    }
+
+    @Bean
+    IdpInteractiveLoginService idpInteractiveLoginService(
+            SsoClientProtocolQuery clients,
+            IdentityAuthenticationQuery identities,
+            CredentialAuthenticationService credentials,
+            IdpBrowserSessionService sessions) {
+        return new IdpInteractiveLoginService(clients, identities, credentials, sessions);
     }
 }

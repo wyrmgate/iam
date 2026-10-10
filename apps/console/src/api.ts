@@ -22,6 +22,14 @@ export type SystemInfo = {
   status: string;
 };
 
+export type AuthSession = { authenticated: boolean };
+export type LoginInput = {
+  clientId: string;
+  applicationTargetId: string;
+  principalKey: string;
+  password: string;
+};
+
 export class ApiError extends Error {
   readonly status: number;
   readonly correlationId: string | null;
@@ -51,15 +59,28 @@ export type RequestOptions = {
 
 const API_ROOT = '/api';
 export const V1_ROOT = `${API_ROOT}/v1`;
+const CSRF_COOKIE = '__Host-wyrmgate_csrf';
+const CSRF_HEADER = 'X-Wyrmgate-CSRF';
 
 export function createIdempotencyKey(): string {
   return `console-${crypto.randomUUID()}`;
+}
+
+function cookieValue(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  for (const raw of document.cookie.split(';')) {
+    const [key, ...rest] = raw.trim().split('=');
+    if (key === name) return rest.join('=');
+  }
+  return null;
 }
 
 export function mutationHeaders(options: Pick<RequestOptions, 'etag' | 'idempotent' | 'accept'>): Headers {
   const headers = new Headers({ Accept: options.accept ?? 'application/json' });
   if (options.etag) headers.set('If-Match', options.etag);
   if (options.idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
+  const csrf = cookieValue(CSRF_COOKIE);
+  if (csrf) headers.set(CSRF_HEADER, csrf);
   return headers;
 }
 
@@ -132,6 +153,18 @@ export function withCursor(path: string, cursor?: string | null, extra?: Record<
     if (value) query.set(key, value);
   }
   return `${base}?${query.toString()}`;
+}
+
+export async function getAuthSession(signal?: AbortSignal): Promise<AuthSession> {
+  return (await apiRequest<AuthSession>(`${API_ROOT}/auth/session`, { signal })).data;
+}
+
+export async function signIn(input: LoginInput): Promise<AuthSession> {
+  return (await apiRequest<AuthSession>(`${API_ROOT}/auth/login`, { method: 'POST', body: input })).data;
+}
+
+export async function signOut(): Promise<void> {
+  await apiRequest<void>(`${API_ROOT}/auth/logout`, { method: 'POST' });
 }
 
 export async function getSystemInfo(signal?: AbortSignal): Promise<SystemInfo> {
