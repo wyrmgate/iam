@@ -17,6 +17,9 @@ import java.util.Objects;
  */
 public final class CurrentAdministrativeAuthorityProjection {
 
+    private static final int MAX_AUTHORITIES = 1_000;
+    private static final int QUERY_LIMIT = MAX_AUTHORITIES + 1;
+
     private final AdministrativeAuthorityProjectionRepository repository;
     private final GovernedActorStatusQuery governedActorStatusQuery;
 
@@ -39,7 +42,9 @@ public final class CurrentAdministrativeAuthorityProjection {
         }
 
         List<EffectiveAdministrativeAuthority> authorities = new ArrayList<>();
-        for (var candidate : repository.findGrantCandidates(actor.tenant(), actor.identityId())) {
+        var grants = repository.findGrantCandidates(actor.tenant(), actor.identityId(), QUERY_LIMIT);
+        requireBounded(grants.size());
+        for (var candidate : grants) {
             var grant = candidate.grant();
             if (grant.isEffectiveAt(now) && supportedScope(grant.scope().type())) {
                 authorities.add(new EffectiveAdministrativeAuthority(
@@ -47,7 +52,10 @@ public final class CurrentAdministrativeAuthorityProjection {
                         grant.id(), grant.validFrom(), grant.validUntil()));
             }
         }
-        for (var candidate : repository.findDelegationCandidates(actor.tenant(), actor.identityId())) {
+
+        var delegations = repository.findDelegationCandidates(actor.tenant(), actor.identityId(), QUERY_LIMIT);
+        requireBounded(delegations.size());
+        for (var candidate : delegations) {
             var authority = candidate.authority();
             var delegation = authority.delegation();
             if (isEffectiveDelegation(authority, now)
@@ -57,7 +65,10 @@ public final class CurrentAdministrativeAuthorityProjection {
                         delegation.id(), delegation.validFrom(), delegation.validUntil()));
             }
         }
-        for (var candidate : repository.findElevationCandidates(actor.tenant(), actor.identityId())) {
+
+        var elevations = repository.findElevationCandidates(actor.tenant(), actor.identityId(), QUERY_LIMIT);
+        requireBounded(elevations.size());
+        for (var candidate : elevations) {
             var elevation = candidate.elevation();
             if (elevation.isEffectiveAt(now) && supportedScope(elevation.scope().type())) {
                 authorities.add(new EffectiveAdministrativeAuthority(
@@ -65,7 +76,10 @@ public final class CurrentAdministrativeAuthorityProjection {
                         elevation.id(), elevation.validFrom(), elevation.validUntil()));
             }
         }
-        for (var candidate : repository.findBreakGlassCandidates(actor.tenant(), actor.identityId())) {
+
+        var breakGlass = repository.findBreakGlassCandidates(actor.tenant(), actor.identityId(), QUERY_LIMIT);
+        requireBounded(breakGlass.size());
+        for (var candidate : breakGlass) {
             var operation = candidate.operation();
             if (operation.isEffectiveAt(now)
                     && operation.currentAssuranceAllows(actor.assurance(), now)
@@ -75,6 +89,7 @@ public final class CurrentAdministrativeAuthorityProjection {
                         operation.id(), operation.validFrom(), operation.validUntil()));
             }
         }
+        requireBounded(authorities.size());
 
         authorities.sort(Comparator
                 .comparing((EffectiveAdministrativeAuthority value) -> value.permission().key())
@@ -85,6 +100,14 @@ public final class CurrentAdministrativeAuthorityProjection {
                 .thenComparing(value -> value.source().name())
                 .thenComparing(EffectiveAdministrativeAuthority::sourceId));
         return new Result(true, List.copyOf(authorities));
+    }
+
+    private static void requireBounded(int count) {
+        if (count > MAX_AUTHORITIES) {
+            throw new AdministrativeAuthorityException(
+                    "authority_projection_unavailable",
+                    "Current administrative authority exceeds the bounded synchronous projection capacity.");
+        }
     }
 
     private static boolean isEffectiveDelegation(
