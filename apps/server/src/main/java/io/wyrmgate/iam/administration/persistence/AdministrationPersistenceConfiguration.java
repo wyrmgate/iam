@@ -1,19 +1,21 @@
 package io.wyrmgate.iam.administration.persistence;
 
+import io.wyrmgate.iam.administration.application.AdministrativeAuthorityProjectionRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorityRepository;
+import io.wyrmgate.iam.administration.application.AdministrativeAuthorityService;
+import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationRepository;
+import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassAuditSink;
-import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassPolicy;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassNotificationScheduler;
+import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassPolicy;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeBreakGlassService;
-import io.wyrmgate.iam.administration.application.AdministrativeAuthorityService;
 import io.wyrmgate.iam.administration.application.AdministrativeElevationApprovalCommand;
 import io.wyrmgate.iam.administration.application.AdministrativeElevationRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeElevationService;
-import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationRepository;
-import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.ControlPlaneActorBindingRepository;
 import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
+import io.wyrmgate.iam.administration.application.CurrentAdministrativeAuthorityProjection;
 import io.wyrmgate.iam.administration.application.GovernedActorStatusQuery;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapFactSink;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapRepository;
@@ -41,6 +43,19 @@ public class AdministrationPersistenceConfiguration {
             AdministrativeAuthorizationRepository repository,
             GovernedActorStatusQuery governedActorStatusQuery) {
         return new AdministrativeAuthorizationService(repository, governedActorStatusQuery);
+    }
+
+    @Bean
+    AdministrativeAuthorityProjectionRepository administrativeAuthorityProjectionRepository(
+            JdbcTemplate jdbcTemplate) {
+        return new JdbcAdministrativeAuthorityProjectionRepository(jdbcTemplate);
+    }
+
+    @Bean
+    CurrentAdministrativeAuthorityProjection currentAdministrativeAuthorityProjection(
+            AdministrativeAuthorityProjectionRepository repository,
+            GovernedActorStatusQuery governedActorStatusQuery) {
+        return new CurrentAdministrativeAuthorityProjection(repository, governedActorStatusQuery);
     }
 
     @Bean
