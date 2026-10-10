@@ -7,6 +7,7 @@ import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,45 @@ class IdpProtocolFoundationTest {
     }
 
     @Test
+    void jwksPublishesCurrentAndRetainedVerificationKeysForRotationOverlap() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        SigningKeyMaterial current = new SigningKeyMaterial(
+                "kid-current", "RS256", generator.generateKeyPair().getPublic());
+        SigningKeyMaterial retained = new SigningKeyMaterial(
+                "kid-retained", "RS256", generator.generateKeyPair().getPublic());
+        SigningKeyProvider provider = provider(current, List.of(retained, current));
+        IdpProtocolController controller = new IdpProtocolController(
+                new IdpProtocolProperties(true, "https://idp.example.test"), provider);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> keys = (List<Map<String, Object>>) controller.jwks()
+                .getBody()
+                .get("keys");
+
+        assertThat(keys).extracting(key -> key.get("kid"))
+                .containsExactly("kid-current", "kid-retained");
+        assertThat(keys).allSatisfy(key -> assertThat(key)
+                .doesNotContainKeys("d", "p", "q", "dp", "dq", "qi", "privateKey"));
+    }
+
+    @Test
+    void controllerRejectsVerificationSetThatOmitsCurrentSigningKey() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        SigningKeyMaterial current = new SigningKeyMaterial(
+                "kid-current", "RS256", generator.generateKeyPair().getPublic());
+        SigningKeyMaterial retained = new SigningKeyMaterial(
+                "kid-retained", "RS256", generator.generateKeyPair().getPublic());
+
+        assertThatThrownBy(() -> new IdpProtocolController(
+                        new IdpProtocolProperties(true, "https://idp.example.test"),
+                        provider(current, List.of(retained))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("current signing key");
+    }
+
+    @Test
     void controllerFailsClosedWithoutPublishableSigningKey() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
         generator.initialize(256);
@@ -61,6 +101,12 @@ class IdpProtocolFoundationTest {
     }
 
     private static SigningKeyProvider provider(SigningKeyMaterial material) {
+        return provider(material, List.of(material));
+    }
+
+    private static SigningKeyProvider provider(
+            SigningKeyMaterial material,
+            List<SigningKeyMaterial> verificationKeys) {
         return new SigningKeyProvider() {
             @Override
             public SigningKeyMaterial currentSigningKey() {
@@ -69,7 +115,14 @@ class IdpProtocolFoundationTest {
 
             @Override
             public Optional<SigningKeyMaterial> verificationKey(String keyId) {
-                return material.keyId().equals(keyId) ? Optional.of(material) : Optional.empty();
+                return verificationKeys.stream()
+                        .filter(candidate -> candidate.keyId().equals(keyId))
+                        .findFirst();
+            }
+
+            @Override
+            public List<SigningKeyMaterial> verificationKeys() {
+                return verificationKeys;
             }
 
             @Override

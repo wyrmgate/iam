@@ -12,6 +12,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,6 +29,7 @@ public final class FileSigningKeyProvider implements SigningKeyProvider {
     private final PrivateKey privateKey;
     private final SigningKeyMaterial keyMaterial;
     private final Map<String, SigningKeyMaterial> verificationKeys;
+    private final List<SigningKeyMaterial> verificationKeySet;
 
     public FileSigningKeyProvider(
             String keyId,
@@ -70,6 +72,7 @@ public final class FileSigningKeyProvider implements SigningKeyProvider {
                             loadPublicKey(keyAlgorithm, path)));
         });
         this.verificationKeys = Map.copyOf(keys);
+        this.verificationKeySet = List.copyOf(keys.values());
     }
 
     @Override
@@ -83,6 +86,11 @@ public final class FileSigningKeyProvider implements SigningKeyProvider {
             return Optional.empty();
         }
         return Optional.ofNullable(verificationKeys.get(keyId));
+    }
+
+    @Override
+    public List<SigningKeyMaterial> verificationKeys() {
+        return verificationKeySet;
     }
 
     @Override

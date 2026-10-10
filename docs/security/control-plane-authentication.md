@@ -2,58 +2,58 @@
 
 ## Purpose
 
-This document defines the implementation-facing authentication boundary that precedes Wyrmgate Administrative Authorization. ADR-0011 established the first external bearer implementation; ADR-0042 broadens Wyrmgate into an IAM/IdP/SSO platform and supersedes the implication that an external IdP is the only canonical authentication source.
+This document defines the authentication boundary that precedes Wyrmgate Administrative Authorization. ADR-0011 established the external bearer implementation; ADR-0042 broadened Wyrmgate into an IAM/IdP/SSO platform and superseded the implication that an external IdP is the only canonical authentication source.
 
-Authentication answers **which governed Principal/subject authenticated and with what provider-neutral assurance**. Administration answers **what that governed actor may do to IAM state**. They remain deliberately separate decisions.
+Authentication answers **which governed subject authenticated and through which trusted mechanism**. Administration answers **what that governed actor may do to IAM state**. These remain separate decisions.
 
-See [`identity-provider-sso.md`](identity-provider-sso.md) for the first-party IdP/SSO security boundary.
+See [`identity-provider-sso.md`](identity-provider-sso.md) for first-party IdP/SSO and federation security details.
 
 ## Supported authentication sources
 
-Wyrmgate supports two canonical authentication-source families for its control plane:
+Wyrmgate supports two canonical authentication-source families for the control plane:
 
-1. **First-party Wyrmgate authentication** — a governed Principal authenticates using Credential-owned authenticator semantics and a secure server-side browser/session boundary.
-2. **Federated/external authentication** — a validated external OAuth/OIDC (and future explicitly accepted federation protocol) subject maps server-side to a governed Principal/Identity.
+1. **First-party Wyrmgate authentication** — an existing governed Principal authenticates using Credential-owned authenticator semantics and a server-side browser session.
+2. **Federated/external authentication** — a cryptographically validated external OAuth/OIDC subject, and future explicitly accepted upstream provider adapters, map server-side to governed Wyrmgate actor semantics.
 
-Both paths produce the same provider-neutral governed actor context and both still require Administration operation-time authorization.
+Both paths produce provider-neutral actor context and both still require Administration authorization for every protected operation. Provider roles, groups, scopes, tenant claims, arbitrary claims, or library authorities are never converted automatically into `AdministrativePermission`.
 
-Provider roles, groups, scopes, tenant claims, or similar custom claims are not converted into Wyrmgate `AdministrativePermission`.
+## External bearer adapter
 
-## External bearer authentication adapter
+The implemented external JWT resource-server adapter is configured with one trusted issuer URI and one required Wyrmgate API audience. Normal JWT issuer/signature/time/audience validation occurs before exact `(issuer, subject)` is passed to `ControlPlaneActorResolver`. Administration-owned binding resolves that external subject to a Tenant and governed Identity.
 
-The first implemented runtime target remains an OAuth/OIDC-compatible JWT resource server configured with:
+A valid token grants no IAM authority by itself. Browser-supplied Tenant headers and token/provider claims do not select authoritative Tenant.
 
-- one trusted issuer URI;
-- one required Wyrmgate API audience;
-- issuer-discovered signing keys and normal JWT validity checks.
+Configuration:
 
-A valid external token contributes only the exact external authentication subject `(issuer, subject)`. It grants no IAM authority by itself.
+```text
+IAM_AUTH_ENABLED=true
+IAM_AUTH_ISSUER_URI=https://issuer.example
+IAM_AUTH_AUDIENCE=wyrmgate-api
+```
 
-When `iam.auth.enabled=false`, that external bearer adapter is disabled. This no longer means Wyrmgate as a product has no possible authentication mechanism; first-party authentication is separately configured under the ADR-0042 IdP/SSO implementation boundary. Until that implementation slice is active, protected control-plane routes remain fail closed.
+When first-party IdP and external bearer modes are both enabled, an explicit bearer header takes precedence for that request; otherwise the same-origin first-party session may authenticate the request.
 
-Health, system information, protocol discovery/JWKS where explicitly enabled, and API-documentation endpoints may remain readable as specifically configured.
+## First-party adapter
 
-## First-party authentication adapter
+When `iam.idp.enabled=true`, local login routes Tenant from a globally unique active Catalog SSO client ID, resolves an ACTIVE Principal/Identity within that Tenant, verifies Credential-owned password proof, and establishes a fresh opaque session. Possession of the resulting globally unique session-token digest lets the server recover Tenant from server-side state; client input never supplies authoritative Tenant.
 
-First-party authentication must resolve an existing governed Principal and its owning Identity/Tenant server-side. It may not create a parallel `User` or accept client-writable tenant/authority claims.
+Every cookie-authenticated `/api/v1/**` request revalidates current Principal/Identity and exact establishing Credential state/revision before creating provider-neutral actor context. The session contains no Administration authority. State-changing requests require CSRF proof. Logout revokes the server-side session.
 
-Local authenticator lifecycle is Credential-owned. Raw passwords, WebAuthn private material, recovery secrets, client secrets, signing private keys and equivalent private material never appear in ordinary IAM APIs, events, AuditRecord content, logs, URLs or browser storage.
+## Federation extension boundary
 
-A successful first-party login establishes an authenticated session only. Administrative authorization is still evaluated by Administration for every protected semantic operation.
+The existing external JWT/OIDC adapter is the concrete federation-compatible control-plane source today. ADR-0042 checkpoint 6 also defines a typed `FederatedAuthenticationAdapter<R>` SPI for future upstream OIDC/SAML authentication into first-party flows.
 
-## Provider-neutral authentication assurance
+Adapters are explicitly wired by stable provider key and concrete request type. They must cryptographically validate provider-specific exchanges before returning only exact external `(issuer, subject)` plus authentication time. `FederationAdapterRegistry` enables nothing by default and rejects duplicate provider keys. Provider network calls, metadata, signing keys, OIDC token exchange, SAML assertions, and native claims stay behind provider-specific Integration adapters.
 
-The trusted control-plane actor context carries a canonical `AuthenticationAssuranceContext` with semantic level `BASELINE` or `STRONG`, plus authentication/step-up timestamps where available. This is a provider-neutral input to Administration authorization and is distinct from bearer/token/session validation itself.
+Upstream groups, roles, scopes, tenant claims, arbitrary attributes, and provider assurance strings are intentionally absent from the normalized verified-subject result. They do not become business access, `AdministrativePermission`, or canonical assurance automatically. Any future provider activation must separately define server-side Principal/Identity/Tenant mapping and security tests.
 
-The current external bearer resolver maps a valid bearer-authenticated request to `BASELINE` unless a deployment adapter establishes stronger assurance. First-party authentication must likewise map concrete methods into canonical assurance through an explicit trusted adapter. Raw provider claims, OIDC `acr`/`amr` names, authenticator vendor fields, and provider-specific values do not become canonical IAM semantics directly.
+## Provider-neutral assurance
 
-Break-glass uses this assurance contract both at activation and at operation time. Missing, stale or downgraded strong assurance fails closed while leaving ordinary direct/delegated/elevated authorization semantics unchanged.
+The trusted control-plane actor context carries canonical `AuthenticationAssuranceContext` (`BASELINE` or `STRONG`) plus trusted timestamps where available. Provider-specific `acr`/`amr`, authenticator vendor fields, or raw upstream labels do not directly become canonical assurance. A trusted adapter must explicitly map them when such a mapping is accepted. Break-glass continues to fail closed when required strong assurance is unavailable, stale, or downgraded.
 
 ## Governed actor resolution
 
-Administration owns the control-plane binding/actor-resolution boundary.
-
-For external federation:
+External bearer flow:
 
 ```text
 validated issuer + subject
@@ -65,75 +65,40 @@ ControlPlaneActorBinding
         +--> governed Identity ID
 ```
 
-For first-party Wyrmgate authentication:
+First-party flow:
 
 ```text
-authenticated governed Principal
-        |
-        v
-server-side Principal → Identity/Tenant resolution
+server-resolved opaque browser session
         |
         +--> TenantContext
-        +--> governed Identity ID
+        +--> governed Principal / Identity
+        |
+        v
+provider-neutral authenticated actor
 ```
 
-Neither path grants IAM permission by itself. The resolved actor still passes normal Administration operation-time checks, including current governed Identity eligibility, semantic permission, resource, scope, temporal grant validity, assurance and tenant isolation.
-
-The caller never selects its tenant or governed Identity through writable headers/token claims.
+Neither path grants IAM permission by itself. The actor still passes current Administration checks for governed Identity eligibility, semantic permission, resource/scope, temporal validity, assurance, and Tenant isolation.
 
 ## Initial administrator bootstrap
 
-A fresh tenant intentionally has no administrative grant and therefore cannot authorize a normal administrative API call. Its first grant is established through an explicit operator-only one-shot server command/process, not a permanent bootstrap account.
+A fresh Tenant has no administrative grant and cannot authorize a normal administrative API call. Its first grant is established through the explicit operator-only burn-once process from ADR-0011, not a permanent bootstrap account.
 
-The selected administrator must already exist as an `ACTIVE` governed Identity in the target tenant.
+The selected administrator must already be an ACTIVE governed Identity in the target Tenant. ADR-0042 permits the authentication anchor to be an existing external issuer+subject binding or an existing first-party governed Principal able to authenticate through an active Credential.
 
-ADR-0042 permits the bootstrap authentication anchor to be either:
-
-- an external issuer+subject binding, or
-- an existing first-party governed Principal that can authenticate through an active Credential.
-
-The bootstrap transaction still creates durable burn-once evidence plus one explicit initial administrative role/grant. It creates no wildcard permission, universal OAuth scope, blanket application access or hidden superuser semantic.
-
-The initial role permission membership remains explicit and governed by the current accepted Administration/bootstrap contract. `GLOBAL` broadens only the resource scope of listed permissions; it is not a wildcard permission.
-
-## Burn-once invariant
-
-Bootstrap is permanently one-time per tenant.
-
-The tenant-unique bootstrap marker remains durable even if the original grant is later revoked. The system must never infer bootstrap eligibility from the current absence of an active administrator. Losing all administrative authority after bootstrap therefore requires a governed recovery mechanism. Bootstrap must never be repurposed as that recovery mechanism.
-
-The marker is inserted inside the same authoritative Administration transaction as the role/grant/binding state required by that bootstrap mode. If any part fails, the transaction rolls back and the marker is not burned.
-
-## External bearer runtime configuration
-
-The existing external bearer adapter uses:
-
-```text
-IAM_AUTH_ENABLED=true
-IAM_AUTH_ISSUER_URI=https://issuer.example
-IAM_AUTH_AUDIENCE=wyrmgate-api
-```
-
-Those settings configure federation/resource-server behavior; they no longer define Wyrmgate's full product authentication model.
-
-First-party IdP/SSO configuration is defined separately and must fail closed unless issuer/base URL, signing material, session security and required persistence/security dependencies are valid.
+Bootstrap creates only explicit Administration role/grant/binding state required by that mode. It creates no wildcard permission, universal OAuth scope, blanket application access, hidden superuser, or reusable password. The durable Tenant-unique bootstrap marker remains burned even if the initial grant is later revoked; loss of all administrators requires a governed recovery mechanism, never re-running bootstrap.
 
 ## Browser/session rules
 
-The management console should authenticate through a same-origin secure session when first-party SSO is enabled. Long-lived bearer tokens or refresh tokens must not be stored in browser `localStorage` or `sessionStorage`.
-
-Cookie-authenticated state-changing browser endpoints require CSRF protection. Session cookies require deployment-appropriate `Secure`, `HttpOnly` and `SameSite` controls, bounded idle/absolute expiry, fixation protection and logout invalidation.
+The management console uses same-origin first-party sessions when enabled. Long-lived bearer/access tokens or refresh tokens are not stored in browser `localStorage` or `sessionStorage`. The authentication cookie is Secure/HttpOnly/host-only with bounded idle and absolute expiry; authentication rotates the session to prevent fixation; logout invalidates server state. Cookie-authenticated state changes require CSRF protection.
 
 ## Sensitive-data rules
 
-Wyrmgate does not persist or expose raw bearer tokens, authorization codes, refresh tokens, signing private keys, raw client secrets, passwords or private authenticator material as ordinary IAM state/evidence.
+Raw bearer tokens, authorization codes, refresh tokens, session tokens, SAML assertions, upstream authorization codes, signing private keys, raw client secrets, passwords, and private authenticator material are never ordinary IAM state, evidence, logs, events, URLs, or error payloads.
 
-External binding may persist exact issuer and external subject where required as its authoritative mapping key. First-party authentication uses governed Principal/Identity references rather than provider-like synthetic claims.
-
-Authentication failures return stable semantic errors and correlation IDs rather than JWT/framework/SQL/secret details.
+External binding may persist exact issuer and external subject as its authoritative mapping key. First-party authentication uses governed Principal/Identity references. Authentication failures return stable semantic errors/correlation IDs rather than framework, SQL, provider, or secret details.
 
 ## Current implementation boundary
 
-The repository currently implements the external JWT resource-server adapter and governed actor-resolution path. ADR-0042 makes first-party Wyrmgate IdP/SSO the next authentication capability tranche rather than an optional unrelated product.
+The repository now implements both supported control-plane authentication families at their accepted baseline: first-party same-origin browser sessions and external JWT/OIDC bearer authentication. It also exposes an explicit typed federation adapter boundary for future upstream OIDC/SAML provider integrations, with no provider implicitly enabled.
 
-Until first-party authentication/session/token issuance is implemented and verified, deployments can continue to use the existing external bearer adapter. No code path may weaken operation-time Administration authorization during the transition.
+Optional OAuth/OIDC features and concrete upstream first-party-session federation providers remain future product scope until separately accepted and contracted. No future extension may weaken operation-time Administration authorization or bypass server-derived Tenant/governed-actor resolution.

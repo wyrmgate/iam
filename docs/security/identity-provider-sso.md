@@ -10,7 +10,7 @@ Identity owns governed subjects and Principal lifecycle; Credential owns authent
 
 ## First-party authentication
 
-Checkpoint 5 authenticates an existing governed Principal through Credential-owned PASSWORD authenticators. Tenant is first derived server-side from a globally unique active Catalog SSO `client_id`. The submitted ApplicationTarget ID and native Principal key are only tenant-scoped selectors; Identity requires the selected Principal and owning Identity to be ACTIVE. Credential independently verifies an effective authenticator for that Principal behind the secret-verifier boundary.
+Wyrmgate authenticates an existing governed Principal through Credential-owned PASSWORD authenticators. Tenant is first derived server-side from a globally unique active Catalog SSO `client_id`. The submitted ApplicationTarget ID and native Principal key are only tenant-scoped selectors; Identity requires the selected Principal and owning Identity to be ACTIVE. Credential independently verifies an effective authenticator for that Principal behind the secret-verifier boundary.
 
 All authentication failures are intentionally non-enumerating. Passwords and private verifier material never enter ordinary persistence, logs, audit, events, errors, URLs, or browser storage. There is no permanent built-in administrator password, hidden root credential, or wildcard superuser.
 
@@ -34,7 +34,7 @@ The management console uses same-origin `/api/*` calls with browser credentials 
 
 A valid first-party session creates only provider-neutral authenticated actor context from the server-derived Tenant and governed Identity. Administration authorization remains final at operation time for every protected control-plane operation.
 
-When external bearer mode is also enabled, an explicit bearer header takes precedence and follows validated issuer/audience plus server-side external-subject binding. External groups, roles, scopes, claims, or assurance labels never automatically become `AdministrativePermission` or business access.
+The external JWT/OIDC resource-server adapter remains a supported federation-compatible control-plane authentication source. When external bearer mode is also enabled, an explicit bearer header takes precedence and follows validated issuer/audience plus server-side external-subject binding. External groups, roles, scopes, claims, tenant claims, or provider assurance strings never automatically become `AdministrativePermission`, business access, or canonical assurance.
 
 ## OIDC/OAuth protocol boundary
 
@@ -46,15 +46,27 @@ If an SSO registration requires governed access, application access is evaluated
 
 Public `sub` is an opaque deterministic digest over the versioned subject-policy prefix, server-derived Tenant ID, and governed Identity ID. Raw internal IDs are not public token claims. ID/access claims remain deliberately minimal and never dump Administration grants, AccessAssignment state, unrestricted Identity attributes, provider observations, or Credential/secret data. OAuth scopes do not create Wyrmgate administrative permissions.
 
-Private signing material remains behind Platform `SigningKeyProvider`; only public JWK material is exposed. Current JWKS publishes the active signing key. Retained verification-key overlap must be published before seamless key rotation is claimed.
+Private signing material remains behind Platform `SigningKeyProvider`; only public JWK material is exposed. JWKS publishes the current signing verification key plus explicitly retained public verification keys. The current key must be present in the verification set, duplicate key IDs fail closed, and retained keys can overlap during bounded rotation so still-valid older tokens remain verifiable. Private signing material is never published.
 
-## Federated authentication
+## Federated authentication and explicit adapter boundary
 
-Federation remains checkpoint 6. Any adapter must explicitly validate the upstream protocol, derive Tenant server-side, and map the upstream provider subject to governed Principal/Identity state. Provider-native groups/roles/scopes/tenant claims remain observation/protocol input until explicitly governed; they never silently create Wyrmgate authority.
+Checkpoint 6 establishes a framework-neutral, typed federation adapter SPI. `FederatedAuthenticationAdapter<R>` requires each provider integration to declare a stable provider key, protocol family (`OIDC` or `SAML`), and concrete request type. A provider implementation must cryptographically validate its provider-specific exchange before returning the data-minimized `VerifiedFederatedSubject` of exact external `(issuer, subject)` plus authentication time.
+
+The core deliberately does **not** define a generic JSON/map federation credential or enable an adapter because a library happens to support a protocol. `FederationAdapterRegistry` contains only explicitly wired provider adapters and rejects duplicate/invalid provider keys. An empty registry enables no upstream login provider. Provider network calls, metadata, signing keys, SAML assertions, OIDC code/token exchanges, and provider-native details remain behind provider-specific Integration adapters.
+
+The normalized verified result intentionally excludes upstream groups, roles, scopes, tenant claims, arbitrary native attributes, and raw assurance strings. Those values remain provider/protocol input or observation until explicitly mapped through governed semantics. A concrete upstream login adapter must additionally map the verified external subject server-side to the governed Principal/Identity/Tenant required by the consuming authentication flow; client input never chooses authoritative Tenant.
+
+The existing external JWT/OIDC control-plane adapter is the currently active concrete federation-compatible path and continues to map only validated `(issuer, subject)` through server-side Administration actor binding. The new SPI is the explicit extension point for future upstream first-party-session OIDC/SAML adapters; no such provider is silently active by default.
+
+## Optional protocol extensions
+
+Protocol-library features do not become product contracts automatically. The following remain disabled/deferred until separately accepted, typed, secured, documented, and tested: refresh tokens, token introspection/revocation, RP-initiated logout, device authorization, confidential clients/client-secret authentication, client credentials, PAR, JAR, JARM, dynamic client registration, token exchange, and broad profile/email claim release.
+
+Enabling any extension requires an explicit public contract, capability ownership analysis, secret boundary, tenant routing, authorization semantics, lifecycle/rotation rules, and negative security coverage. No generic extension registry may bypass these requirements.
 
 ## Audit and observability
 
-Audit may record data-minimized semantic evidence for authentication, session lifecycle, client configuration, signing-key administration, federation mapping, and suspicious authenticator events. Passwords, authorization codes, access/bearer tokens, raw session tokens, refresh tokens, client secrets, private keys, recovery secrets, and raw authenticator material are prohibited from ordinary audit/log payloads and error diagnostics.
+Audit may record data-minimized semantic evidence for authentication, session lifecycle, client configuration, signing-key administration, federation mapping, and suspicious authenticator events. Passwords, authorization codes, access/bearer tokens, raw session tokens, refresh tokens, client secrets, private keys, recovery secrets, SAML assertions, upstream authorization codes, and raw authenticator material are prohibited from ordinary audit/log payloads and error diagnostics.
 
 ## Implementation checkpoints
 
@@ -62,7 +74,7 @@ Audit may record data-minimized semantic evidence for authentication, session li
 2. governed SSO client registration — implemented;
 3. first-party local authentication and bounded browser-session runtime — implemented;
 4. Authorization Code + PKCE, exact redirect validation, state/nonce handling, discovery, and signed token issuance — implemented;
-5. same-origin console sign-in/session/logout, secure cookies, fixation prevention, CSRF protection, and first-party control-plane actor context — implemented by this checkpoint;
-6. federation adapters and explicitly accepted optional extensions — deferred.
+5. same-origin console sign-in/session/logout, secure cookies, fixation prevention, CSRF protection, and first-party control-plane actor context — implemented;
+6. explicit federation adapter/extension boundary, external JWT/OIDC compatibility, and retained JWKS verification-key overlap — implemented.
 
-Each slice requires negative security coverage for the surface it activates.
+Concrete upstream OIDC/SAML login providers and optional OAuth/OIDC extensions are future product slices, not incomplete baseline behavior. Each future activation requires its own explicit accepted contract and negative security coverage.
