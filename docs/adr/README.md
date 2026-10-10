@@ -36,7 +36,7 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0026 Explicit Identity merge/split with historical reference preservation](0026-explicit-identity-merge-split-history-preservation.md)
 - [ADR-0027 Provenance-fenced source reactivation after trusted absence inference](0027-provenance-fenced-source-reactivation.md)
 - [ADR-0028 Governance approval for lifecycle-policy privilege increases](0028-governance-approval-lifecycle-policy-privilege-increase.md)
-- [ADR-0029 Typed scalar equality for lifecycle-access policy predicates](0029-typed-scalar-lifecycle-policy-predicates.md)
+- [ADR-0029 Typed scalar equality for lifecycle-access policy predicates](0029-typed-scalar-lifecycle-access-policy-predicates.md)
 - [ADR-0030 Classification-scoped canonical attribute value authorization](0030-classification-scoped-canonical-value-authorization.md)
 - [ADR-0031 Append-only AuditRecord foundation and replay semantics](0031-append-only-audit-record-foundation.md)
 - [ADR-0032 Delegated, elevated and emergency administrative authority](0032-delegated-elevated-emergency-administrative-authority.md)
@@ -48,7 +48,8 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0038 Provenance-fenced source suspension restoration](0038-provenance-fenced-source-suspension-restoration.md)
 - [ADR-0039 Exact DECIMAL, DATE and DATETIME lifecycle-access predicates](0039-exact-temporal-decimal-lifecycle-predicates.md)
 - [ADR-0040 Typed MULTI membership for lifecycle-access policy](0040-typed-multi-membership-lifecycle-access-predicates.md)
-- [ADR-0041 Typed MULTI expected-set lifecycle-access predicates](0041-typed-multi-expected-set-lifecycle-predicates.md)
+- [ADR-0041 Typed MULTI expected-set lifecycle-access predicates](0041-typed-multi-expected-set-lifecycle-access-predicates.md)
 - [ADR-0042 First-party identity provider and single sign-on](0042-first-party-identity-provider-and-sso.md)
+- [ADR-0043 Production HA/DR and recovery objectives](0043-production-ha-dr-and-recovery-objectives.md)
 
-Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.8. It carries forward v0.7 and folds ADR-0038 through ADR-0041 plus the completed OD-003 public policy/JML control-plane contract tranche into the formal specification set, with the persistence checkpoint through Flyway V60. ADR-0042 intentionally amends that v0.8 baseline by broadening Wyrmgate from an IGA-focused product to an IAM platform with first-party IdP/SSO capability; it must be folded into the next controlled formal revision. A later accepted ADR may amend the formal baseline between controlled document revisions and must be folded into the next meaningful formal revision.
+Formal specification documents are versioned separately in the IAM `Formal Specifications` Drive folder. The current controlled checkpoint is v0.8. It carries forward v0.7 and folds ADR-0038 through ADR-0041 plus the completed OD-003 public policy/JML control-plane contract tranche into the formal specification set, with the persistence checkpoint through Flyway V60. ADR-0042 intentionally amends that v0.8 baseline by broadening Wyrmgate from an IGA-focused product to an IAM platform with first-party IdP/SSO capability. ADR-0043 adds the reviewed OD-005 production service/recovery objective and provider-neutral HA/DR topology baseline. Both decisions must be folded into the next controlled formal revision. A later accepted ADR may amend the formal baseline between controlled document revisions and must be folded into the next meaningful formal revision.
