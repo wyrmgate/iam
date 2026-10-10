@@ -67,6 +67,7 @@ export function createIdempotencyKey(): string {
 }
 
 function cookieValue(name: string): string | null {
+  if (typeof document === 'undefined') return null;
   for (const raw of document.cookie.split(';')) {
     const [key, ...rest] = raw.trim().split('=');
     if (key === name) return rest.join('=');
