@@ -118,5 +118,6 @@ The repository supports the Cloudflare Pages console contract:
 - build command: `npm run build`
 - output directory: `dist`
 - server-side edge binding: `IAM_BACKEND_ORIGIN`
+- production console deployments are expected to be triggered by the Cloudflare Pages Git integration when a new commit reaches `main`; Railway deployment status alone does not prove that the matching console build was published.
 
 The current managed DEV topology and activation state are defined by `docs/engineering/dev-cd.md` and `docs/operations/dev-managed-activation.md`; this console README does not independently redefine that deployment topology. End-to-end console verification must use the currently canonical managed DEV environment.
