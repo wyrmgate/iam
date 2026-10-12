@@ -1,6 +1,6 @@
 # ADR-0044: Fresh-install bootstrap and first-party initial administrator establishment
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-13
 - Amends: ADR-0011 burn-once initial-administrator bootstrap for fresh standalone installation
 - Depends on: ADR-0042 first-party identity provider and single sign-on
@@ -101,16 +101,7 @@ The operator supplies the initial password only to the installation adapter for 
 
 The Credential capability creates verifier/private material behind the accepted secret/verifier boundary and persists only governed Credential metadata plus an opaque secret/verifier reference where required by the implementation.
 
-Raw password or verifier material must never appear in:
-
-- ordinary IAM persistence;
-- InstallationBootstrap state;
-- domain/public events;
-- AuditRecord payloads;
-- logs;
-- task payloads;
-- command result objects;
-- exception/error payloads.
+Raw password or verifier material must never appear in ordinary IAM persistence, InstallationBootstrap state, domain/public events, AuditRecord payloads, logs, task payloads, command result objects, or exception/error payloads.
 
 A retry after verifier creation must use causal idempotency rather than retaining or replaying plaintext from durable process state. If the adapter cannot safely prove prior enrollment completion, operator re-entry of the password may be required by the concrete installation UX, but the durable process must never persist the plaintext to make retries convenient.
 
@@ -118,13 +109,7 @@ A retry after verifier creation must use causal idempotency rather than retainin
 
 The Wyrmgate Console is represented through ordinary governed Catalog semantics rather than a hidden OAuth framework client.
 
-The initial Console registration must produce an active public client with:
-
-- server-generated globally unique `client_id`;
-- exact configured redirect URI(s);
-- mandatory Authorization Code + S256 PKCE semantics;
-- no bootstrap client secret;
-- parent Application/ApplicationTarget references owned by Catalog.
+The initial Console registration must produce an active public client with a server-generated globally unique `client_id`, exact configured redirect URI(s), mandatory Authorization Code + S256 PKCE semantics, no bootstrap client secret, and parent Application/ApplicationTarget references owned by Catalog.
 
 The resulting `client_id` becomes the normal first-party login Tenant-routing anchor defined by ADR-0042.
 
@@ -166,7 +151,7 @@ Audit failure must not retroactively rewrite a successfully committed capability
 - The initial Console Application/Target/client values become explicit installation outputs/configuration rather than hidden framework defaults.
 - Normal login begins only after the process verifies current semantic postconditions and seals itself.
 - Losing all administrators after sealing remains a separate governed recovery feature and cannot reuse installation bootstrap.
-- Formal v0.8 specifications predate this fresh-install orchestration. If accepted, this ADR amends them until the next controlled formal revision updates BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM as appropriate.
+- Formal v0.8 specifications predate this fresh-install orchestration. This ADR amends them until the next controlled formal revision updates BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM as appropriate.
 
 ## Rejected alternatives
 
