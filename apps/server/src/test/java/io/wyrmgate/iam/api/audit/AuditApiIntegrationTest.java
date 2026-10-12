@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.api.audit;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -38,22 +37,16 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class AuditApiIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
     private static final String ACTOR_ATTRIBUTE =
             ControlPlaneActorRequestContext.class.getName() + ".actor";
     private static final Instant NOW =
@@ -75,19 +68,8 @@ class AuditApiIntegrationTest {
 
     @BeforeAll
     static void start() {
-        POSTGRES.start();
-        DriverManagerDataSource dataSource =
-                new DriverManagerDataSource(
-                        POSTGRES.getJdbcUrl(),
-                        POSTGRES.getUsername(),
-                        POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .load();
-        flyway.migrate();
-        flyway.validate();
-        assertFullyMigrated(flyway);
-
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
@@ -98,11 +80,6 @@ class AuditApiIntegrationTest {
         commands = new AuditCommandService(records, transactions, clock);
         queries = new AuditQueryService(records);
         json = new ObjectMapper().findAndRegisterModules();
-    }
-
-    @AfterAll
-    static void stop() {
-        POSTGRES.stop();
     }
 
     @BeforeEach

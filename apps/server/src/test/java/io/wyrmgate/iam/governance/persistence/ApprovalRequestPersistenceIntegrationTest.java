@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.governance.persistence;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,20 +29,14 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class ApprovalRequestPersistenceIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
     private static final Instant NOW =
             Instant.parse("2026-09-28T08:30:00Z");
 
@@ -59,19 +52,8 @@ class ApprovalRequestPersistenceIntegrationTest {
 
     @BeforeAll
     static void start() {
-        POSTGRES.start();
-        DriverManagerDataSource dataSource =
-                new DriverManagerDataSource(
-                        POSTGRES.getJdbcUrl(),
-                        POSTGRES.getUsername(),
-                        POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .load();
-        flyway.migrate();
-        flyway.validate();
-        assertFullyMigrated(flyway);
-
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
@@ -88,11 +70,6 @@ class ApprovalRequestPersistenceIntegrationTest {
                         (requestedTenant, item) -> { }),
                 ids,
                 transactions);
-    }
-
-    @AfterAll
-    static void stop() {
-        POSTGRES.stop();
     }
 
     @BeforeEach

@@ -1,7 +1,5 @@
 package io.wyrmgate.iam.catalog.persistence;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -14,6 +12,7 @@ import io.wyrmgate.iam.catalog.domain.SsoClientScope;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -21,21 +20,15 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Set;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class CatalogPersistenceIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
     private static final Instant NOW = Instant.parse("2026-09-21T09:00:00Z");
 
     private static JdbcTemplate jdbc;
@@ -47,14 +40,9 @@ class CatalogPersistenceIntegrationTest {
     private static SsoClientRegistrationService ssoClients;
 
     @BeforeAll
-    static void startPostgres() {
-        POSTGRES.start();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-        jdbc = new JdbcTemplate(dataSource);
+    static void setUpDatabase() {
+        var dataSource = SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = SharedPostgresIntegrationDatabase.jdbc();
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         repository = new JdbcCatalogRepository(jdbc);
@@ -64,12 +52,6 @@ class CatalogPersistenceIntegrationTest {
         queries = new CatalogQueryService(repository);
         ssoClients = new SsoClientRegistrationService(
                 repository, new JdbcSsoClientRegistrationRepository(jdbc), ids, transactions);
-        assertFullyMigrated(flyway);
-    }
-
-    @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
     }
 
     @BeforeEach

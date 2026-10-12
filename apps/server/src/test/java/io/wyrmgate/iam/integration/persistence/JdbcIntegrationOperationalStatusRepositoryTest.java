@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.integration.persistence;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,17 +10,12 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class JdbcIntegrationOperationalStatusRepositoryTest {
-    private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
+
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
     private static JdbcTemplate jdbc;
     private static JdbcTenantRepository tenants;
@@ -29,24 +23,13 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
 
     @BeforeAll
     static void setup() {
-        POSTGRES.start();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-        assertFullyMigrated(flyway);
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         tenants = new JdbcTenantRepository(jdbc, new UuidV7Generator());
         repository = new JdbcIntegrationOperationalStatusRepository(jdbc);
     }
-
-    @AfterAll
-    static void stop() {
-        POSTGRES.stop();
-    }
-
-    @Test
+@Test
     void tenantIsolationPaginationAndStructuralRedactionHold() throws Exception {
         Instant base = Instant.parse("2026-10-12T04:00:00Z");
         UUID tenantA = tenants.create("Tenant A", base).id();

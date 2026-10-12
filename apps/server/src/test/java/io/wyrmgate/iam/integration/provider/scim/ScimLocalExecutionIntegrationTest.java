@@ -29,22 +29,16 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class ScimLocalExecutionIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
     private static final Instant NOW = Instant.parse("2026-09-21T08:00:00Z");
 
     private static JdbcTemplate jdbc;
@@ -60,12 +54,8 @@ class ScimLocalExecutionIntegrationTest {
 
     @BeforeAll
     static void startPostgresAndMigrate() {
-        POSTGRES.start();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
@@ -76,11 +66,6 @@ class ScimLocalExecutionIntegrationTest {
                 jdbc, json, ids, observedAccessFacts);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
-    }
-
-    @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
     }
 
     @BeforeEach

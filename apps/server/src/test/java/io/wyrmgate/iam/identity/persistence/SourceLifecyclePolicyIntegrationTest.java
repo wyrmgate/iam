@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.identity.persistence;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,20 +26,13 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class SourceLifecyclePolicyIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -55,13 +47,8 @@ class SourceLifecyclePolicyIntegrationTest {
 
     @BeforeAll
     static void startPostgresAndMigrate() {
-        POSTGRES.start();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
@@ -84,14 +71,7 @@ class SourceLifecyclePolicyIntegrationTest {
                 new SourceMappedValueExtractor(new ObjectMapper()),
                 ids,
                 transactions);
-
-        assertFullyMigrated(flyway);
-    }
-
-    @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
-    }
+}
 
     @BeforeEach
     void clearRows() {
