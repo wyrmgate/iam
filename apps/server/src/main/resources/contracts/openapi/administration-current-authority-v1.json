@@ -1,0 +1,111 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "Wyrmgate IAM Current Administrative Authority API",
+    "version": "0.1.0",
+    "description": "Authenticated point-in-time Administration-owned projection of the current governed actor and effective typed administrative authority for console optimization. Operation-time server authorization remains final."
+  },
+  "servers": [
+    { "url": "/api/v1" }
+  ],
+  "security": [
+    { "controlPlaneBearer": [] }
+  ],
+  "paths": {
+    "/current-administrative-authority": {
+      "get": {
+        "operationId": "getCurrentAdministrativeAuthority",
+        "summary": "Read current actor administrative authority projection",
+        "description": "Returns only server-derived current governed actor/tenant context and effective typed Administration authority. Provider-native claims, bearer material and secrets are never returned. This response is not an authorization decision and must not substitute for operation-time server authorization.",
+        "responses": {
+          "200": {
+            "description": "Point-in-time current administrative authority projection",
+            "headers": {
+              "Cache-Control": {
+                "description": "The runtime returns no-store because revocation, suspension and temporal expiry must be observed promptly.",
+                "schema": { "type": "string" }
+              },
+              "X-Correlation-Id": {
+                "schema": { "type": "string", "format": "uuid" }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CurrentAdministrativeAuthority" }
+              }
+            }
+          },
+          "401": {
+            "description": "Trusted control-plane authentication is required"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "controlPlaneBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "CurrentAdministrativeAuthority": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tenantId", "actorIdentityId", "administrativelyEligible", "evaluatedAt", "authorities"],
+        "properties": {
+          "tenantId": { "type": "string", "format": "uuid" },
+          "actorIdentityId": { "type": "string", "format": "uuid" },
+          "administrativelyEligible": { "type": "boolean" },
+          "evaluatedAt": { "type": "string", "format": "date-time" },
+          "authorities": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EffectiveAdministrativeAuthority" }
+          }
+        }
+      },
+      "EffectiveAdministrativeAuthority": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["permission", "scope", "source", "sourceId"],
+        "properties": {
+          "permission": { "$ref": "#/components/schemas/AdministrativePermission" },
+          "scope": { "$ref": "#/components/schemas/AdministrativeScope" },
+          "source": {
+            "type": "string",
+            "enum": ["DIRECT_GRANT", "DELEGATION", "ELEVATION", "BREAK_GLASS"]
+          },
+          "sourceId": { "type": "string", "format": "uuid" },
+          "validFrom": { "type": ["string", "null"], "format": "date-time" },
+          "validUntil": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "AdministrativePermission": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["resourceType", "action", "key"],
+        "properties": {
+          "resourceType": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "action": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "key": { "type": "string" }
+        }
+      },
+      "AdministrativeScope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["GLOBAL", "SPECIFIC_RESOURCE", "CANONICAL_ATTRIBUTE_CLASSIFICATION"]
+          },
+          "resourceType": { "type": ["string", "null"] },
+          "resourceId": { "type": ["string", "null"], "format": "uuid" },
+          "scopeKey": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

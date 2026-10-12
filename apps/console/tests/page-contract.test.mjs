@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const pages = await readFile(new URL('../src/ControlPlanePages.tsx', import.meta.url), 'utf8');
+const authorityPage = await readFile(new URL('../src/CurrentAdministrativeAuthorityPage.tsx', import.meta.url), 'utf8');
 const api = await readFile(new URL('../src/api.ts', import.meta.url), 'utf8');
 
 const requiredRoutes = [
@@ -33,16 +34,20 @@ test('browser client enforces same-origin API routing', () => {
 });
 
 test('console never uses browser storage for tokens, secrets, or authority', () => {
-  const source = `${app}\n${pages}\n${api}`;
+  const source = `${app}\n${pages}\n${authorityPage}\n${api}`;
   assert.doesNotMatch(source, /localStorage|sessionStorage/);
   assert.doesNotMatch(source, /Authorization:\s*['"`]/);
   assert.doesNotMatch(source, /connector-worker\/v1|provisioning-tasks\/.+:claim|lease\/renew/);
 });
 
-test('server authorization and API gaps stay explicit', () => {
+test('server authorization and remaining API gaps stay explicit', () => {
   assert.match(pages, /Server authorization is final/);
-  assert.match(pages, /issue=\{265\}/);
+  assert.doesNotMatch(pages, /issue=\{265\}/);
+  assert.match(pages, /CurrentAdministrativeAuthorityPage/);
   assert.match(pages, /issue=\{266\}/);
+  assert.match(api, /current-administrative-authority/);
+  assert.match(app, /visibleNavigation\(authority\)/);
+  assert.match(authorityPage, /operation is re-authorized by the server/);
 });
 
 test('secret-shaped detail fields are redacted', () => {

@@ -25,13 +25,13 @@ The browser calls only same-origin `/api/*` routes. The backend origin must neve
 - arbitrary backend HTML, stack traces and proxy bodies are not rendered as diagnostics;
 - no bearer token, raw credential secret/private material, connector secret or provider-native private payload is written to browser storage, URLs or logs.
 
-OAuth/OIDC scopes, roles, groups and token claims are not interpreted as Wyrmgate administrative permissions. Operation-time server authorization is final. Backend-derived current effective-authority visibility is tracked as #265; until that public projection exists, navigation visibility is not proof of permission and 403 remains authoritative.
+OAuth/OIDC scopes, roles, groups and token claims are not interpreted as Wyrmgate administrative permissions. The console reads `/api/v1/current-administrative-authority` as a no-store, backend-derived point-in-time projection to hide obviously unrelated navigation and to render **My Administrative Authority**. The projection preserves semantic permission, typed scope, source and validity. It is not durable session authority and never replaces operation-time server authorization; a server `403` remains final.
 
 ## Navigation and coverage
 
 | Route | Public contract coverage |
 | --- | --- |
-| `/` | Runtime/control-plane overview and trust-boundary status |
+| `/` | Runtime/control-plane overview, trust-boundary status and current authority summary |
 | `/identities` | Identity list/create/read/metadata/lifecycle, canonical effective-value disclosure, merge/split correction |
 | `/principals` | Principal list/register/read/correlate |
 | `/catalog` | Applications, ApplicationTargets, Entitlements, Roles and typed RoleVersion composition/lifecycle |
@@ -41,8 +41,10 @@ OAuth/OIDC scopes, roles, groups and token claims are not interpreted as Wyrmgat
 | `/policies` | Identity source policy, Access lifecycle policy, Governance ACCESS_REQUEST policy lifecycle and exception lookup/revocation |
 | `/credentials` | Principal-scoped Credential metadata, revoke/compromise and durable rotation planning |
 | `/integrations` | ConnectorInstance, ConnectorBinding, ConnectorWorker and entitlement-observation mapping public administration surfaces |
-| `/administration` | AdministrativeRole, Grant, Delegation, Elevation and BreakGlass authority workflows |
+| `/administration` | AdministrativeRole, Grant, Delegation, Elevation and BreakGlass workflows plus current backend-derived actor authority |
 | `/audit` | AuditRecord/evidence reads and durable export/evidence-lifecycle workspaces |
+
+When the authority projection is available, top-level navigation is optimized from the current effective permission resource types. Scoped authority still leaves its relevant product area visible because resource-level authorization remains a server operation-time decision. If the projection cannot be loaded, the console does not guess: navigation remains available and the server remains authoritative.
 
 The UI preserves the project authority distinctions: Identity versus Principal, AccessAssignment versus EffectiveAccess, governance decision versus remediation, connector lifecycle versus provider observation, and Audit evidence versus generic logging.
 
@@ -50,10 +52,9 @@ The UI preserves the project authority distinctions: Identity versus Principal, 
 
 The console does not bypass missing contracts:
 
-- **#265** — current governed actor/effective Administrative Authorization projection. Until implemented, the browser does not synthesize permissions from token claims.
 - **#266** — public operator-facing provisioning/reconciliation status. The internal connector-worker protocol is not called by the browser and Integration tables are not queried directly.
 
-These gaps remain visible in the relevant pages. They prevent issue #263 from being closed as fully operator-ready until their accepted public interfaces exist.
+Issue #265 is implemented by the current Administration-owned self-projection. No browser permission model or token-claim mapping was introduced.
 
 ## UX and safety conventions
 
@@ -63,6 +64,7 @@ These gaps remain visible in the relevant pages. They prevent issue #263 from be
 - structured IAM relationships use typed fields/builders rather than generic status mutation;
 - provider configuration is Integration-owned and secret-shaped fields are redacted from generic detail rendering;
 - Credential secret references are metadata only; raw secret/private material must never be pasted into ordinary console flows;
+- current authority is never written to `localStorage`/`sessionStorage` and is refreshed from the no-store backend projection;
 - keyboard focus is visible and layouts remain usable on narrow viewports;
 - no permanent mock business data is shipped.
 
@@ -87,11 +89,11 @@ npm test
 
 ## Managed console deployment
 
-The repository still supports the Cloudflare Pages console contract:
+The repository supports the Cloudflare Pages console contract:
 
 - root directory: `apps/console`
 - build command: `npm run build`
 - output directory: `dist`
 - server-side edge binding: `IAM_BACKEND_ORIGIN`
 
-The previously documented Cloudflare Pages -> Railway `iam-server` -> Neon end-to-end DEV topology has been retired; Railway is no longer the canonical server target. Do not treat the Pages contract as evidence of a current managed server deployment. When a replacement managed server target is accepted, end-to-end console verification must be performed against that canonical topology before #263 closes.
+The current managed DEV topology and activation state are defined by `docs/engineering/dev-cd.md` and `docs/operations/dev-managed-activation.md`; this console README does not independently redefine that deployment topology. End-to-end console verification must use the currently canonical managed DEV environment.

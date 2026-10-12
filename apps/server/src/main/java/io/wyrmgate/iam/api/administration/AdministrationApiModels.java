@@ -10,6 +10,21 @@ final class AdministrationApiModels {
     record PermissionResource(String resourceType, String action, String key) {}
     record ScopeResource(String type, String resourceType, UUID resourceId, String scopeKey) {}
 
+    record EffectiveAuthorityResource(
+            PermissionResource permission,
+            ScopeResource scope,
+            String source,
+            UUID sourceId,
+            Instant validFrom,
+            Instant validUntil) {}
+
+    record CurrentAdministrativeAuthorityResource(
+            UUID tenantId,
+            UUID actorIdentityId,
+            boolean administrativelyEligible,
+            Instant evaluatedAt,
+            List<EffectiveAuthorityResource> authorities) {}
+
     record AdministrativeRoleResource(
             UUID id, String code, String name, List<PermissionResource> permissions,
             long revision, Instant createdAt, Instant updatedAt) {}
@@ -37,7 +52,6 @@ final class AdministrationApiModels {
             UUID id, UUID breakGlassOperationId, UUID reviewerIdentityId,
             String outcome, String summary, Instant reviewedAt,
             UUID correlationId, UUID causationId, Instant createdAt) {}
-
 
     record RolePage(List<AdministrativeRoleResource> items, String nextCursor) {}
     record GrantPage(List<AdministrativeGrantResource> items, String nextCursor) {}
