@@ -35,12 +35,17 @@ jobs:
               'import org.springframework.jdbc.datasource.DriverManagerDataSource;\n',
               'import org.testcontainers.postgresql.PostgreSQLContainer;\n',
           )
+          leftover_flyway = re.compile(
+              r'\s*Flyway flyway = Flyway\.configure\(\)'
+              r'.*?flyway\.validate\(\);\s*',
+              re.DOTALL,
+          )
 
           for path in sorted(root.rglob('*.java')):
               text = path.read_text()
               if 'SharedPostgresIntegrationDatabase.reset();' not in text:
                   continue
-              updated = text
+              updated = leftover_flyway.sub('\n', text)
               for line in removable_imports:
                   updated = updated.replace(line, '')
               updated = re.sub(r'(class\s+\w+[^\{]*\{)\nprivate static', r'\1\n\n    private static', updated)
@@ -48,6 +53,7 @@ jobs:
                   'SharedPostgresIntegrationDatabase.dataSource();\njdbc =',
                   'SharedPostgresIntegrationDatabase.dataSource();\n        jdbc =',
               )
+              updated = updated.replace('\n@BeforeEach\n', '\n\n    @BeforeEach\n')
               if updated != text:
                   path.write_text(updated)
                   changed.append(str(path))
@@ -65,8 +71,6 @@ jobs:
                   violations.append(str(path))
 
           print(f'Cleaned {len(changed)} transformed test classes')
-          for path in changed:
-              print(path)
           if violations:
               print('Unexpected heavyweight database setup remains:')
               for path in violations:
