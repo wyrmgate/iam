@@ -13,6 +13,8 @@ import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.integration.application.GrantProvisioningPlannerService;
 import io.wyrmgate.iam.integration.application.GrantProvisioningPlanningProcessor;
 import io.wyrmgate.iam.integration.application.GrantProvisioningRepository;
+import io.wyrmgate.iam.integration.application.IntegrationOperationalStatusRepository;
+import io.wyrmgate.iam.integration.application.IntegrationOperationalStatusService;
 import io.wyrmgate.iam.integration.application.IntegrationPrincipalProvisioningFactSink;
 import io.wyrmgate.iam.integration.application.PrincipalProvisioningPlannerService;
 import io.wyrmgate.iam.integration.application.PrincipalProvisioningPlanningProcessor;
@@ -60,6 +62,18 @@ public class IntegrationRuntimeConfiguration {
     IntegrationAdministrationRepository integrationAdministrationRepository(
             JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         return new JdbcIntegrationAdministrationRepository(jdbcTemplate, objectMapper);
+    }
+
+    @Bean
+    IntegrationOperationalStatusRepository integrationOperationalStatusRepository(
+            JdbcTemplate jdbcTemplate) {
+        return new JdbcIntegrationOperationalStatusRepository(jdbcTemplate);
+    }
+
+    @Bean
+    IntegrationOperationalStatusService integrationOperationalStatusService(
+            IntegrationOperationalStatusRepository repository) {
+        return new IntegrationOperationalStatusService(repository);
     }
 
     @Bean

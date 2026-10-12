@@ -126,3 +126,44 @@ Semantic default-deny permissions:
 The mapping target is validated through a Catalog-owned semantic query. Integration does not read or mutate Catalog persistence directly.
 
 Successful map/unmap commits also append a data-minimized internal `integration.observed-access-input-changed` outbox fact containing the ConnectorBinding scope and mapping aggregate reference. ENTITLEMENT/GRANT reconciliation completion emits the same internal trigger whenever completion materializes current observation state, including positive observations retained from non-COMPLETE runs. Governance leases these facts asynchronously and re-queries current normalized observed access before updating findings. This trigger is internal only and is not a public integration event.
+
+## Public operational status reads
+
+Issue #266 adds a separate read-only public projection for operator diagnosis of existing Integration-owned process state. The companion machine-readable contract is `apps/server/src/main/resources/contracts/openapi/integration-operations-v1.json`.
+
+The public operations are:
+
+- `GET /api/v1/provisioning-jobs`
+- `GET /api/v1/provisioning-jobs/{id}`
+- `GET /api/v1/provisioning-tasks`
+- `GET /api/v1/provisioning-tasks/{id}`
+- `GET /api/v1/provisioning-tasks/{taskId}/attempts`
+- `GET /api/v1/provisioning-attempts/{id}`
+- `GET /api/v1/reconciliation-runs`
+- `GET /api/v1/reconciliation-runs/{id}`
+
+These resources report current technical fulfillment/reconciliation process state only. They do not become Access authoritative intent, desired provider state, Catalog authority, or evidence that provider observation is governable access. Downstream provider failure remains an Integration operational condition and never rewrites a valid governance decision.
+
+All collection reads use deterministic descending `(timestamp, id)` order, a maximum page size of 200 and tenant-bound signed continuation cursors. Responses use `Cache-Control: no-store` and preserve request correlation IDs.
+
+Administration defines four explicit default-deny read permissions:
+
+- `provisioning-job:read`
+- `provisioning-task:read`
+- `provisioning-attempt:read`
+- `reconciliation-run:read`
+
+These permissions are not added to `INITIAL_TENANT_ADMIN`; they must be granted explicitly through normal Administration authority management.
+
+The projection is structurally data-minimized. Public responses intentionally exclude worker/execution internals and provider-native detail including:
+
+- provisioning task idempotency keys and payloads;
+- worker lease IDs/epochs and lease-management state;
+- provider request/object/version identifiers and raw attempt metadata;
+- completion fingerprints;
+- reconciliation checkpoints and completion lease/fingerprint fields;
+- connector configuration, secret references and private credential material.
+
+Only normalized states, normalized failure category/code where already modeled, semantic subject/contract references, timing, revisions, and correlation/causation identifiers are exposed. The browser receives no claim/renew/complete operation and cannot invoke the internal connector-worker execution protocol through this surface.
+
+The operational projection is implemented over the existing Integration schema. It introduces no new persistence authority and requires no data migration.
