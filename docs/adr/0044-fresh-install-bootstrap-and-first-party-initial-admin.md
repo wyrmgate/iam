@@ -7,7 +7,7 @@
 
 ## Context
 
-ADR-0011 established a burn-once, operator-only initial-administrator bootstrap for a Tenant that already exists and already has an administratively eligible governed Identity. Its implemented adapter currently provisions an external authentication subject binding plus the initial Administration role and grant.
+ADR-0011 established a burn-once, operator-only initial-administrator bootstrap for a Tenant that already exists and already has an administratively eligible governed Identity. Its implemented adapter originally provisioned an external authentication subject binding plus the initial Administration role and grant.
 
 ADR-0042 broadened Wyrmgate into a standalone IAM + IdP/SSO + IGA platform and allows the initial administrator to authenticate through an existing governed Principal with an active Credential. However, a completely fresh standalone installation still has a circular dependency: normal administrative APIs require Administration authority, while the first governed Tenant, Identity, Principal, PASSWORD Credential and Wyrmgate Console SSO registration do not yet exist.
 
@@ -25,15 +25,18 @@ The process orchestrates semantic commands owned by the existing capabilities. I
 
 The logical sequence is:
 
-1. create the first Tenant;
-2. create the first governed PERSON Identity and make it ACTIVE through Identity-owned semantics;
-3. create/register the first ACTIVE Principal for that Identity with a native login key suitable for the local authentication contract;
-4. enroll an ACTIVE PASSWORD Credential for that Principal through the Credential-owned secret/verifier boundary;
-5. create/register the Wyrmgate Console as a governed Catalog Application and ApplicationTarget;
-6. register an ACTIVE public SSO client for the Console with a server-generated globally unique `client_id`, exact redirect URI registration and mandatory S256 PKCE;
-7. invoke Administration's tenant-scoped burn-once initial-administrator bootstrap for the first governed Identity using the first-party Principal as its authentication anchor;
-8. verify that all minimum postconditions required for normal first-party login and Administration authorization hold;
-9. permanently seal the installation bootstrap.
+1. durably allocate the installation plan and all stable cross-step identifiers without storing password material;
+2. create the first Tenant isolation root through Platform-owned tenant semantics;
+3. create the first governed PERSON Identity and make it ACTIVE through Identity-owned semantics;
+4. create/register the Wyrmgate Console as a governed Catalog Application and ACTIVE ApplicationTarget;
+5. register an ACTIVE public SSO client for the Console with a server-generated globally unique `client_id`, exact redirect URI registration and mandatory S256 PKCE;
+6. create/register the first ACTIVE Principal for the Identity, targeted at the Console ApplicationTarget, with a native login key suitable for the local authentication contract;
+7. enroll an ACTIVE PASSWORD Credential for that Principal through the Credential-owned secret/verifier boundary;
+8. invoke Administration's tenant-scoped burn-once initial-administrator bootstrap for the first governed Identity using the first-party Principal as its authentication anchor;
+9. verify current semantic state required for normal first-party login and Administration authorization;
+10. permanently seal the installation bootstrap.
+
+Catalog ApplicationTarget creation precedes Principal creation because a Principal is authoritative Identity state for a concrete technical target and the existing invariant requires that target to be active at creation time.
 
 The sequence is implementation-neutral. Physical package/module names and framework adapters do not define the canonical process.
 
@@ -51,23 +54,23 @@ Sealing the deployment does not replace or weaken the tenant marker. The tenant 
 
 The fresh-install bootstrap is a durable process because it spans multiple capability-owned transactions and includes secret/verifier work that must not be folded into one distributed transaction.
 
-Recommended process progression is:
+The implemented semantic progression is:
 
 ```text
-NOT_STARTED
+PLANNED
   -> TENANT_CREATED
   -> IDENTITY_CREATED
+  -> CONSOLE_REGISTERED
   -> PRINCIPAL_CREATED
   -> CREDENTIAL_ENROLLED
-  -> CONSOLE_REGISTERED
   -> ADMIN_BOOTSTRAPPED
   -> VERIFIED
   -> SEALED
 ```
 
-The exact persistence representation may differ, but these semantic checkpoints must remain distinguishable enough to resume safely after interruption.
+`PLANNED` is committed before the first capability mutation and contains the stable Tenant, Identity, Catalog, Principal, Credential and correlation identifiers plus non-secret installation inputs. It never contains a password or verifier.
 
-Each step must be causally idempotent. Re-running the same installation operation after a crash resumes or confirms the prior result; it must not silently create duplicate first objects or alternate initial administrators.
+Each capability mutation is causally idempotent for the exact preallocated identifier and expected semantics. If a capability transaction commits but the following checkpoint write fails, replay confirms the already-created authoritative object rather than silently creating a second first object.
 
 A failure after one committed capability step uses forward recovery/resume. Cross-capability distributed rollback is not required and must not be simulated by directly deleting foreign capability state.
 
@@ -85,7 +88,7 @@ The installation path must not reopen because:
 
 Loss of all administrative authority after sealing is a governed recovery problem, not an installation-bootstrap condition.
 
-The seal must be persisted in deployment-local authoritative security state and protected against ordinary control-plane mutation. A deployment restore must preserve the seal consistently with the restored authoritative state.
+The seal is persisted in deployment-local authoritative security state and is not exposed through ordinary control-plane mutation. A deployment restore must preserve the seal consistently with the restored authoritative state.
 
 ### First-party authentication anchor
 
@@ -95,60 +98,62 @@ The existing external-subject binding path remains supported for deployments cho
 
 Administration bootstrap continues to create Administration-owned role/grant historical state only. It does not create the Identity, Principal, Credential, Catalog Application, SSO client or browser session.
 
+The first-party tenant bootstrap is replay-safe only when the existing immutable marker names the exact same Identity and Principal. Any other existing bootstrap marker fails closed.
+
 ### PASSWORD enrollment and secret boundary
 
-The operator supplies the initial password only to the installation adapter for immediate Credential-owned enrollment. Raw password material is ephemeral input.
+The operator supplies the initial password only to the trusted installation adapter for immediate Credential-owned enrollment. The baseline startup adapter reads it from a local operator-controlled password file; the durable installation process never persists it.
 
-The Credential capability creates verifier/private material behind the accepted secret/verifier boundary and persists only governed Credential metadata plus an opaque secret/verifier reference where required by the implementation.
+Credential owns a private local verifier store behind `CredentialSecretVerifier`/enrollment semantics. The baseline local provider persists salted PBKDF2-HMAC-SHA-256 verifier material under a system-managed opaque `SecretReference`; the ordinary Credential creation path cannot select that provider type.
 
-Raw password or verifier material must never appear in ordinary IAM persistence, InstallationBootstrap state, domain/public events, AuditRecord payloads, logs, task payloads, command result objects, or exception/error payloads.
+Raw password material must never appear in ordinary IAM persistence, `InstallationBootstrap` state, domain/public events, AuditRecord payloads, logs, task payloads, command result objects, or exception/error payloads. Private verifier material remains confined to the Credential secret boundary and is not exposed through ordinary IAM APIs or events.
 
-A retry after verifier creation must use causal idempotency rather than retaining or replaying plaintext from durable process state. If the adapter cannot safely prove prior enrollment completion, operator re-entry of the password may be required by the concrete installation UX, but the durable process must never persist the plaintext to make retries convenient.
+A retry after verifier creation uses the stable preallocated Credential/reference key. If the same verifier already exists, enrollment verifies the supplied password and resumes; a different password fails closed. This makes replay safe without retaining plaintext in durable process state.
 
 ### Wyrmgate Console registration
 
 The Wyrmgate Console is represented through ordinary governed Catalog semantics rather than a hidden OAuth framework client.
 
-The initial Console registration must produce an active public client with a server-generated globally unique `client_id`, exact configured redirect URI(s), mandatory Authorization Code + S256 PKCE semantics, no bootstrap client secret, and parent Application/ApplicationTarget references owned by Catalog.
+The initial Console registration produces an active public client with a server-generated globally unique `client_id`, exact configured redirect URI, mandatory Authorization Code + S256 PKCE semantics, no bootstrap client secret, and parent Application/ApplicationTarget references owned by Catalog.
 
-The resulting `client_id` becomes the normal first-party login Tenant-routing anchor defined by ADR-0042.
+The Console SSO client does not itself grant Administration authority. The resulting `client_id` is the normal first-party login Tenant-routing anchor defined by ADR-0042; each protected operation still passes Administration authorization.
 
 ### Verification before sealing
 
-The deployment may be sealed only after semantic read-side verification confirms at least:
+The deployment may be sealed only after semantic current-state verification confirms at least:
 
 - the created Tenant is the intended first Tenant;
-- the first Identity and Principal are ACTIVE and correctly related;
-- an effective PASSWORD Credential exists for the Principal;
-- the Console SSO client is ACTIVE and resolves to the same Tenant;
-- the tenant-scoped `InitialAdminBootstrap` marker exists;
-- the initial Administration grant is effective for the first Identity;
-- the normal first-party authentication path can resolve the created Principal/Credential configuration without relying on bootstrap authority.
+- the first Identity and Principal are ACTIVE, correctly related and resolvable through the normal first-party authentication subject query;
+- the exact PASSWORD Credential verifies the supplied installation password through the normal Credential authentication service;
+- the Console SSO client is ACTIVE, resolves globally, and routes to the same Tenant/Application;
+- the tenant-scoped `InitialAdminBootstrap` marker names the first-party Identity/Principal anchor;
+- the corresponding initial Administration grant is currently effective for that Identity.
 
-Verification reads current semantic state; it must not infer success merely because prior commands returned successfully.
+Verification reads current semantic state; it does not infer success merely because prior commands returned successfully and it does not create a browser session as a side effect.
 
 ### Bootstrap adapter boundary
 
-The fresh-install entrypoint is an explicit deployment/operator adapter, such as a dedicated startup/CLI installation command executed with local deployment authority. It is not exposed as a reusable unauthenticated remote endpoint.
+The fresh-install entrypoint is an explicit deployment/operator adapter. The baseline implementation is a conditional startup `ApplicationRunner` enabled only by `iam.bootstrap.installation.enabled=true`; it reads the initial password from the configured local password file and invokes the durable service.
 
-Any future remote bootstrap mechanism would require a separate accepted security design covering trusted operator authentication, anti-replay, network exposure, secret handling and seal enforcement.
+It is not exposed as a reusable unauthenticated remote endpoint. Any future remote bootstrap mechanism requires a separate accepted security design covering trusted operator authentication, anti-replay, network exposure, secret handling and seal enforcement.
 
-After `SEALED`, the bootstrap adapter must fail closed before invoking capability commands.
+After `SEALED`, the adapter checks the durable seal before reading the password file and invokes no capability mutations. Operators should disable the bootstrap setting and remove the external password file after successful installation.
 
 ### Audit and evidence
 
-Bootstrap operations produce data-minimized semantic evidence appropriate to each owning capability. The deployment process may retain stable IDs, correlation/causation identifiers, timestamps, checkpoint state and failure diagnostics that contain no secret/private material.
+Bootstrap operations produce data-minimized semantic evidence appropriate to each owning capability. The deployment process retains stable IDs, correlation identifiers, non-secret installation parameters, timestamps and checkpoint state only.
 
-Audit failure must not retroactively rewrite a successfully committed capability-owned result. Sealing verification should require only the security evidence explicitly designated as mandatory by the concrete implementation contract.
+Audit failure must not retroactively rewrite a successfully committed capability-owned result. Sealing verification requires current semantic security state rather than successful audit delivery.
 
 ## Consequences
 
 - A standalone Wyrmgate installation can reach its first normal username/password login without an external IdP or permanent built-in administrator.
 - Administration remains the sole owner of control-plane authority; the broader installer does not become a super-capability.
-- The existing `InitialAdminBootstrap` implementation needs a first-party variant that does not require an external subject binding while preserving the permanent tenant marker and initial explicit role/grant semantics.
-- A new deployment-scoped bootstrap process/state store and trusted operator adapter are required.
-- Tenant/Identity/Principal/Credential/Catalog commands used by installation need causal idempotency suitable for resume.
-- The initial Console Application/Target/client values become explicit installation outputs/configuration rather than hidden framework defaults.
+- Administration supports both external-subject and first-party-Principal initial authentication anchors while preserving one immutable tenant bootstrap marker.
+- Platform owns the narrow creation semantic for the first Tenant isolation root; this is not a new business capability or a generic unauthenticated tenant-creation API.
+- Identity, Catalog and Credential expose owner-local idempotent semantics used with preallocated installation identifiers so recovery does not depend on a distributed transaction.
+- The local PASSWORD verifier provider is system-managed and private to Credential.
+- The initial Console Application/Target/client values are explicit installation outputs rather than hidden framework defaults.
 - Normal login begins only after the process verifies current semantic postconditions and seals itself.
 - Losing all administrators after sealing remains a separate governed recovery feature and cannot reuse installation bootstrap.
 - Formal v0.8 specifications predate this fresh-install orchestration. This ADR amends them until the next controlled formal revision updates BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM as appropriate.
@@ -160,7 +165,9 @@ Audit failure must not retroactively rewrite a successfully committed capability
 - **Reopen bootstrap whenever no active administrator exists:** turns ordinary revocation or misconfiguration into a privilege-escalation trigger.
 - **One cross-capability database transaction:** violates capability ownership and couples installation semantics to one physical persistence topology.
 - **Direct inserts into capability tables from an installer:** bypasses invariants, events, idempotency and ownership boundaries.
+- **Create a target-less first Principal as a bootstrap exception:** weakens the Principal/ApplicationTarget invariant and creates a special account model that normal authentication does not use.
 - **Expose `/api/bootstrap` unauthenticated until first use:** enlarges the remote attack surface and makes trusted operator establishment ambiguous.
 - **Create a separate bootstrap User/admin model:** duplicates Identity/Principal and creates competing authentication/authorization authority.
 - **Persist plaintext password in bootstrap process state for retry:** violates the Credential secret boundary.
+- **Permit ordinary Credential creation to select the built-in local-password verifier reference:** permits copying or misbinding system-managed private verifier references.
 - **Treat the Console as a hidden OAuth framework client:** creates competing Catalog/client authority and weakens tenant-routing governance.
