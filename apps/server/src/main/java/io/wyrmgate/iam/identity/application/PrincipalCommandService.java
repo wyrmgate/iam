@@ -44,16 +44,40 @@ public final class PrincipalCommandService {
             Instant now,
             UUID correlationId,
             UUID causationId) {
-        return createWithId(
-                tenant,
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(correlationId, "correlationId");
+
+        requireActiveTarget(tenant, applicationTargetId);
+        if (identityId != null && identities.findById(tenant, identityId).isEmpty()) {
+            throw new PrincipalCommandException(
+                    "identity_not_found",
+                    "The requested Identity was not found in the tenant.");
+        }
+
+        Principal principal = new Principal(
                 ids.nextId(),
-                applicationTargetId,
-                nativePrincipalKey,
                 identityId,
+                applicationTargetId,
+                PrincipalKind.ACCOUNT,
+                nativePrincipalKey,
+                PrincipalLifecycleState.ACTIVE,
+                1,
                 now,
-                correlationId,
-                causationId,
-                false);
+                now);
+
+        return transactions.required(() -> {
+            principals.insert(tenant, principal);
+            Principal persisted = principals.findById(tenant, principal.id())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "created principal could not be reloaded"));
+            if (persisted.identityId() != null) {
+                facts.principalCorrelated(
+                        tenant, persisted, correlationId, causationId);
+            }
+            return persisted;
+        });
     }
 
     /** Idempotent owner-local command used by fresh-install orchestration. */
@@ -66,28 +90,6 @@ public final class PrincipalCommandService {
             Instant now,
             UUID correlationId,
             UUID causationId) {
-        return createWithId(
-                tenant,
-                principalId,
-                applicationTargetId,
-                nativePrincipalKey,
-                identityId,
-                now,
-                correlationId,
-                causationId,
-                true);
-    }
-
-    private Principal createWithId(
-            TenantContext tenant,
-            UUID principalId,
-            UUID applicationTargetId,
-            String nativePrincipalKey,
-            UUID identityId,
-            Instant now,
-            UUID correlationId,
-            UUID causationId,
-            boolean idempotent) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(principalId, "principalId");
         Objects.requireNonNull(applicationTargetId, "applicationTargetId");
@@ -115,7 +117,7 @@ public final class PrincipalCommandService {
         return transactions.required(() -> {
             Principal existingById = principals.findById(tenant, principalId).orElse(null);
             if (existingById != null) {
-                if (idempotent && sameInstallationPrincipal(existingById, desired)) {
+                if (sameInstallationPrincipal(existingById, desired)) {
                     return existingById;
                 }
                 throw new PrincipalCommandException(
@@ -125,7 +127,7 @@ public final class PrincipalCommandService {
             Principal existingByKey = principals.findByTargetAndNativeKey(
                     tenant, applicationTargetId, nativePrincipalKey).orElse(null);
             if (existingByKey != null) {
-                if (idempotent && existingByKey.id().equals(principalId)
+                if (existingByKey.id().equals(principalId)
                         && sameInstallationPrincipal(existingByKey, desired)) {
                     return existingByKey;
                 }
