@@ -4,12 +4,15 @@ import io.wyrmgate.iam.administration.application.InitialAdminBootstrapRepositor
 import io.wyrmgate.iam.administration.domain.AdministrativeGrant;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativeRole;
+import io.wyrmgate.iam.administration.domain.InitialAdminAuthenticationAnchorType;
 import io.wyrmgate.iam.administration.domain.InitialAdminBootstrap;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -20,6 +23,32 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
 
     public JdbcInitialAdminBootstrapRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate");
+    }
+
+    @Override
+    public Optional<InitialAdminBootstrap> findBootstrap(TenantContext tenant) {
+        List<InitialAdminBootstrap> rows = jdbcTemplate.query(
+                """
+                SELECT id, actor_identity_id, authentication_anchor_type,
+                       actor_binding_id, actor_principal_id,
+                       administrative_role_id, administrative_grant_id,
+                       completed_at, correlation_id
+                FROM administration.initial_admin_bootstrap
+                WHERE tenant_id = ?
+                """,
+                (rs, rowNum) -> new InitialAdminBootstrap(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("actor_identity_id", UUID.class),
+                        InitialAdminAuthenticationAnchorType.valueOf(
+                                rs.getString("authentication_anchor_type")),
+                        rs.getObject("actor_binding_id", UUID.class),
+                        rs.getObject("actor_principal_id", UUID.class),
+                        rs.getObject("administrative_role_id", UUID.class),
+                        rs.getObject("administrative_grant_id", UUID.class),
+                        rs.getTimestamp("completed_at").toInstant(),
+                        rs.getObject("correlation_id", UUID.class)),
+                tenant.tenantId());
+        return rows.stream().findFirst();
     }
 
     @Override
