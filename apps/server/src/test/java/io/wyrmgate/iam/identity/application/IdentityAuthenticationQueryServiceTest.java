@@ -6,9 +6,13 @@ import static org.mockito.Mockito.when;
 
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
+import io.wyrmgate.iam.identity.domain.IdentityProfile;
+import io.wyrmgate.iam.identity.domain.IdentityType;
 import io.wyrmgate.iam.identity.domain.Principal;
+import io.wyrmgate.iam.identity.domain.PrincipalKind;
 import io.wyrmgate.iam.identity.domain.PrincipalLifecycleState;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -19,6 +23,7 @@ class IdentityAuthenticationQueryServiceTest {
     private static final UUID TARGET_ID = UUID.randomUUID();
     private static final UUID PRINCIPAL_ID = UUID.randomUUID();
     private static final UUID IDENTITY_ID = UUID.randomUUID();
+    private static final Instant NOW = Instant.parse("2026-10-10T04:00:00Z");
 
     private final PrincipalRepository principals = mock(PrincipalRepository.class);
     private final IdentityRepository identities = mock(IdentityRepository.class);
@@ -27,7 +32,7 @@ class IdentityAuthenticationQueryServiceTest {
 
     @Test
     void resolvesOnlyActiveCorrelatedPrincipalAndIdentity() {
-        Principal principal = principal(PrincipalLifecycleState.ACTIVE, IDENTITY_ID, 7);
+        Principal principal = principal(PrincipalLifecycleState.ACTIVE, IDENTITY_ID, 7, "alice");
         Identity identity = identity(IdentityLifecycleState.ACTIVE, 11);
         when(principals.findByTargetAndNativeKey(TENANT, TARGET_ID, "alice"))
                 .thenReturn(Optional.of(principal));
@@ -40,20 +45,17 @@ class IdentityAuthenticationQueryServiceTest {
 
     @Test
     void inactiveOrUncorrelatedSubjectsFailClosed() {
-        Principal disabled = principal(PrincipalLifecycleState.DISABLED, IDENTITY_ID, 1);
-        Principal uncorrelated = principal(PrincipalLifecycleState.ACTIVE, null, 1);
-        Principal inactiveIdentityPrincipal =
-                principal(PrincipalLifecycleState.ACTIVE, IDENTITY_ID, 1);
-        Identity suspendedIdentity = identity(IdentityLifecycleState.SUSPENDED, 1);
-
         when(principals.findByTargetAndNativeKey(TENANT, TARGET_ID, "disabled"))
-                .thenReturn(Optional.of(disabled));
+                .thenReturn(Optional.of(principal(
+                        PrincipalLifecycleState.DISABLED, IDENTITY_ID, 1, "disabled")));
         when(principals.findByTargetAndNativeKey(TENANT, TARGET_ID, "uncorrelated"))
-                .thenReturn(Optional.of(uncorrelated));
+                .thenReturn(Optional.of(principal(
+                        PrincipalLifecycleState.ACTIVE, null, 1, "uncorrelated")));
         when(principals.findByTargetAndNativeKey(TENANT, TARGET_ID, "inactive-identity"))
-                .thenReturn(Optional.of(inactiveIdentityPrincipal));
+                .thenReturn(Optional.of(principal(
+                        PrincipalLifecycleState.ACTIVE, IDENTITY_ID, 1, "inactive-identity")));
         when(identities.findById(TENANT, IDENTITY_ID))
-                .thenReturn(Optional.of(suspendedIdentity));
+                .thenReturn(Optional.of(identity(IdentityLifecycleState.SUSPENDED, 1)));
 
         assertThat(service.resolveEligible(TENANT, TARGET_ID, "disabled")).isEmpty();
         assertThat(service.resolveEligible(TENANT, TARGET_ID, "uncorrelated")).isEmpty();
@@ -64,22 +66,29 @@ class IdentityAuthenticationQueryServiceTest {
     private static Principal principal(
             PrincipalLifecycleState state,
             UUID identityId,
-            long revision) {
-        Principal principal = mock(Principal.class);
-        when(principal.id()).thenReturn(PRINCIPAL_ID);
-        when(principal.identityId()).thenReturn(identityId);
-        when(principal.lifecycleState()).thenReturn(state);
-        when(principal.revision()).thenReturn(revision);
-        return principal;
+            long revision,
+            String nativeKey) {
+        return new Principal(
+                PRINCIPAL_ID,
+                identityId,
+                TARGET_ID,
+                PrincipalKind.ACCOUNT,
+                nativeKey,
+                state,
+                revision,
+                NOW.minusSeconds(60),
+                NOW);
     }
 
-    private static Identity identity(
-            IdentityLifecycleState state,
-            long revision) {
-        Identity identity = mock(Identity.class);
-        when(identity.id()).thenReturn(IDENTITY_ID);
-        when(identity.lifecycleState()).thenReturn(state);
-        when(identity.revision()).thenReturn(revision);
-        return identity;
+    private static Identity identity(IdentityLifecycleState state, long revision) {
+        return new Identity(
+                IDENTITY_ID,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                state,
+                "Alice Example",
+                revision,
+                NOW.minusSeconds(60),
+                NOW);
     }
 }
