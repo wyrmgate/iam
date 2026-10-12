@@ -29,19 +29,17 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class ScimLocalExecutionIntegrationTest {
-private static final Instant NOW = Instant.parse("2026-09-21T08:00:00Z");
+
+    private static final Instant NOW = Instant.parse("2026-09-21T08:00:00Z");
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -58,9 +56,6 @@ private static final Instant NOW = Instant.parse("2026-09-21T08:00:00Z");
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
@@ -72,7 +67,8 @@ private static final Instant NOW = Instant.parse("2026-09-21T08:00:00Z");
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
     }
-@BeforeEach
+
+    @BeforeEach
     void setUp() throws IOException {
         freshness.clear();
         clearDatabase();

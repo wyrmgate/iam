@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.api.catalog;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -41,20 +40,18 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class CatalogApiIntegrationTest {
-private static final String ACTOR_ATTRIBUTE =
+
+    private static final String ACTOR_ATTRIBUTE =
             ControlPlaneActorRequestContext.class.getName() + ".actor";
 
     private static JdbcTemplate jdbc;
@@ -75,7 +72,8 @@ private static final String ACTOR_ATTRIBUTE =
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
 }
-@BeforeEach
+
+    @BeforeEach
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE

@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.identity.persistence;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,18 +39,16 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class CanonicalAttributePersistenceIntegrationTest {
-private static JdbcTemplate jdbc;
+
+    private static JdbcTemplate jdbc;
     private static IdGenerator ids;
     private static JdbcTenantRepository tenants;
     private static JdbcOutboxRepository outbox;
@@ -70,7 +67,8 @@ private static JdbcTemplate jdbc;
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
 }
-@BeforeEach
+
+    @BeforeEach
     void clearRows() {
         jdbc.execute("""
                 TRUNCATE TABLE

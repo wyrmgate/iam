@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.integration.application;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,17 +24,15 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class PrincipalProvisioningPlanningIntegrationTest {
-private static final Instant NOW = Instant.parse("2026-09-25T11:00:00Z");
+
+    private static final Instant NOW = Instant.parse("2026-09-25T11:00:00Z");
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -50,7 +47,7 @@ private static final Instant NOW = Instant.parse("2026-09-25T11:00:00Z");
     static void start() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
-jdbc = new JdbcTemplate(dataSource);
+        jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         outbox = new JdbcOutboxRepository(jdbc);
@@ -61,7 +58,8 @@ jdbc = new JdbcTemplate(dataSource);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
     }
-@BeforeEach
+
+    @BeforeEach
     void clear() {
         jdbc.execute("""
                 TRUNCATE TABLE

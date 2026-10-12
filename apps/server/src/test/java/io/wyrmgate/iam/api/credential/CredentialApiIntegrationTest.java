@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.api.credential;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -47,20 +46,18 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class CredentialApiIntegrationTest {
-private static final String ACTOR_ATTRIBUTE =
+
+    private static final String ACTOR_ATTRIBUTE =
             ControlPlaneActorRequestContext.class.getName() + ".actor";
     private static final Instant NOW =
             Instant.parse("2026-09-29T14:00:00Z");
@@ -86,7 +83,7 @@ private static final String ACTOR_ATTRIBUTE =
     static void start() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
-jdbc = new JdbcTemplate(dataSource);
+        jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         transactions = new SpringTransactionExecutor(
@@ -96,7 +93,8 @@ jdbc = new JdbcTemplate(dataSource);
         idempotency =
                 new JdbcIdempotencyRepository(jdbc, ids);
     }
-@BeforeEach
+
+    @BeforeEach
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE

@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.platform.persistence;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -21,18 +20,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class PersistenceFoundationIntegrationTest {
-private static JdbcTemplate jdbc;
+
+    private static JdbcTemplate jdbc;
     private static IdGenerator idGenerator;
     private static JdbcTenantRepository tenants;
     private static JdbcOutboxRepository outbox;
@@ -46,7 +43,8 @@ private static JdbcTemplate jdbc;
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
 }
-@BeforeEach
+
+    @BeforeEach
     void clearPlatformRows() {
         jdbc.execute("""
                 TRUNCATE TABLE

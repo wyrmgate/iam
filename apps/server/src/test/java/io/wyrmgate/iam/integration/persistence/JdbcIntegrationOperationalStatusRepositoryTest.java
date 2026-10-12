@@ -1,6 +1,5 @@
 package io.wyrmgate.iam.integration.persistence;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,15 +10,13 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class JdbcIntegrationOperationalStatusRepositoryTest {
-private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
+
+    private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
     private static JdbcTemplate jdbc;
     private static JdbcTenantRepository tenants;
     private static JdbcIntegrationOperationalStatusRepository repository;
@@ -28,7 +25,7 @@ private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModul
     static void setup() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
-jdbc = new JdbcTemplate(dataSource);
+        jdbc = new JdbcTemplate(dataSource);
         tenants = new JdbcTenantRepository(jdbc, new UuidV7Generator());
         repository = new JdbcIntegrationOperationalStatusRepository(jdbc);
     }
