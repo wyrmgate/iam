@@ -39,15 +39,65 @@ public final class IdentityCommandService {
             Instant now,
             UUID correlationId,
             UUID causationId) {
+        return createWithId(
+                tenant,
+                idGenerator.nextId(),
+                type,
+                profile,
+                lifecycleState,
+                displayName,
+                now,
+                correlationId,
+                causationId,
+                false);
+    }
+
+    /**
+     * Idempotent owner-local command used only by the trusted fresh-install orchestrator.
+     * A retry succeeds only when the exact preallocated Identity already exists with the
+     * expected bootstrap semantics.
+     */
+    public Identity ensureInstallationPerson(
+            TenantContext tenant,
+            UUID identityId,
+            String displayName,
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
+        return createWithId(
+                tenant,
+                identityId,
+                IdentityType.PERSON,
+                new IdentityProfile.PersonProfile(),
+                IdentityLifecycleState.ACTIVE,
+                displayName,
+                now,
+                correlationId,
+                causationId,
+                true);
+    }
+
+    private Identity createWithId(
+            TenantContext tenant,
+            UUID identityId,
+            IdentityType type,
+            IdentityProfile profile,
+            IdentityLifecycleState lifecycleState,
+            String displayName,
+            Instant now,
+            UUID correlationId,
+            UUID causationId,
+            boolean idempotent) {
         Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(identityId, "identityId");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(profile, "profile");
         Objects.requireNonNull(lifecycleState, "lifecycleState");
         Objects.requireNonNull(now, "now");
         Objects.requireNonNull(correlationId, "correlationId");
 
-        Identity identity = new Identity(
-                idGenerator.nextId(),
+        Identity desired = new Identity(
+                identityId,
                 type,
                 profile,
                 lifecycleState,
@@ -57,12 +107,26 @@ public final class IdentityCommandService {
                 now);
 
         return transactions.required(() -> {
-            repository.insert(tenant, identity);
-            Identity persisted = repository.findById(tenant, identity.id())
+            Identity existing = repository.findById(tenant, identityId).orElse(null);
+            if (existing != null) {
+                if (idempotent && sameInstallationIdentity(existing, desired)) {
+                    return existing;
+                }
+                throw new IllegalStateException("Identity ID already exists with different semantics");
+            }
+            repository.insert(tenant, desired);
+            Identity persisted = repository.findById(tenant, desired.id())
                     .orElseThrow(() -> new IllegalStateException("created identity could not be reloaded"));
             factSink.identityCreated(tenant, persisted, correlationId, causationId);
             return persisted;
         });
+    }
+
+    private static boolean sameInstallationIdentity(Identity existing, Identity desired) {
+        return existing.type() == IdentityType.PERSON
+                && existing.profile() instanceof IdentityProfile.PersonProfile
+                && existing.lifecycleState() == IdentityLifecycleState.ACTIVE
+                && existing.displayName().equals(desired.displayName());
     }
 
     public Identity changeLifecycle(
