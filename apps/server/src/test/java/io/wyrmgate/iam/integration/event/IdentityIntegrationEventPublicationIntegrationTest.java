@@ -26,7 +26,6 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +36,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class IdentityIntegrationEventPublicationIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18.4-alpine");
+    private static final PostgreSQLContainer POSTGRES =
+            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
     private static final Instant BASE_TIME = Instant.parse("2026-09-21T04:10:00Z");
 
     private static JdbcTemplate jdbc;
@@ -49,7 +49,7 @@ class IdentityIntegrationEventPublicationIntegrationTest {
 
     @BeforeAll
     static void startPostgres() {
-        POSTGRES.start();
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
@@ -71,13 +71,7 @@ class IdentityIntegrationEventPublicationIntegrationTest {
 
         assertFullyMigrated(flyway);
     }
-
-    @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
-    }
-
-    @BeforeEach
+@BeforeEach
     void clearDatabase() {
         jdbc.execute("""
                 TRUNCATE TABLE

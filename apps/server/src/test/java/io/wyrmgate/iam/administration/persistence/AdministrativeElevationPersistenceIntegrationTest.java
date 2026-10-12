@@ -43,7 +43,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,7 +54,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class AdministrativeElevationPersistenceIntegrationTest {
 
     private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
+            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -70,7 +69,7 @@ class AdministrativeElevationPersistenceIntegrationTest {
 
     @BeforeAll
     static void start() {
-        POSTGRES.start();
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
@@ -122,13 +121,7 @@ class AdministrativeElevationPersistenceIntegrationTest {
                 ids,
                 transactions);
     }
-
-    @AfterAll
-    static void stop() {
-        POSTGRES.stop();
-    }
-
-    @BeforeEach
+@BeforeEach
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE

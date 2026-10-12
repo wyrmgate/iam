@@ -29,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +40,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class IntegrationRuntimePersistenceIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18.4-alpine");
+    private static final PostgreSQLContainer POSTGRES =
+            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
     private static final Instant NOW = Instant.parse("2026-09-21T06:00:00Z");
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -52,7 +52,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
 
     @BeforeAll
     static void startPostgresAndMigrate() {
-        POSTGRES.start();
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
@@ -69,13 +69,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         assertFullyMigrated(flyway);
     }
-
-    @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
-    }
-
-    @BeforeEach
+@BeforeEach
     void clearDatabase() {
         jdbc.execute("""
                 TRUNCATE TABLE

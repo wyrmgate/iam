@@ -12,7 +12,6 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,7 +20,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class JdbcIntegrationOperationalStatusRepositoryTest {
     private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
+            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
     private static JdbcTemplate jdbc;
     private static JdbcTenantRepository tenants;
@@ -29,7 +28,7 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
 
     @BeforeAll
     static void setup() {
-        POSTGRES.start();
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
@@ -40,13 +39,7 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
         tenants = new JdbcTenantRepository(jdbc, new UuidV7Generator());
         repository = new JdbcIntegrationOperationalStatusRepository(jdbc);
     }
-
-    @AfterAll
-    static void stop() {
-        POSTGRES.stop();
-    }
-
-    @Test
+@Test
     void tenantIsolationPaginationAndStructuralRedactionHold() throws Exception {
         Instant base = Instant.parse("2026-10-12T04:00:00Z");
         UUID tenantA = tenants.create("Tenant A", base).id();

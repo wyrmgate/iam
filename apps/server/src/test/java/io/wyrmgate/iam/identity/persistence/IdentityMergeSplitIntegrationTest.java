@@ -30,7 +30,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,7 +41,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class IdentityMergeSplitIntegrationTest {
 
     private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
+            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
     private static final Instant NOW = Instant.parse("2026-09-30T08:00:00Z");
 
     private static JdbcTemplate jdbc;
@@ -59,7 +58,7 @@ class IdentityMergeSplitIntegrationTest {
 
     @BeforeAll
     static void start() {
-        POSTGRES.start();
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
@@ -93,13 +92,7 @@ class IdentityMergeSplitIntegrationTest {
                 ids,
                 transactions);
     }
-
-    @AfterAll
-    static void stop() {
-        POSTGRES.stop();
-    }
-
-    @BeforeEach
+@BeforeEach
     void clear() {
         jdbc.execute("""
                 TRUNCATE TABLE

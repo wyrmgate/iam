@@ -55,7 +55,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,7 +66,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class AccessRequestAccessApplicationIntegrationTest {
 
     private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer("postgres:18.4-alpine");
+            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
     private static final Instant NOW =
             Instant.parse("2026-09-28T10:00:00Z");
 
@@ -99,7 +98,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
     @BeforeAll
     static void start() {
-        POSTGRES.start();
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         DriverManagerDataSource dataSource =
                 new DriverManagerDataSource(
                         POSTGRES.getJdbcUrl(),
@@ -168,13 +167,7 @@ class AccessRequestAccessApplicationIntegrationTest {
         accessIntent = new AccessIntentCommandService(
                 assignmentRepository, assignmentCommands);
     }
-
-    @AfterAll
-    static void stop() {
-        POSTGRES.stop();
-    }
-
-    @BeforeEach
+@BeforeEach
     void reset() {
         jdbc.execute("""
                 TRUNCATE TABLE

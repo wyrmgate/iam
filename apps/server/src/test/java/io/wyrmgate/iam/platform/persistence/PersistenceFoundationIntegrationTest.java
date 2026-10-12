@@ -22,7 +22,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +33,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class PersistenceFoundationIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18.4-alpine");
+    private static final PostgreSQLContainer POSTGRES =
+            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
 
     private static JdbcTemplate jdbc;
     private static IdGenerator idGenerator;
@@ -47,7 +47,7 @@ class PersistenceFoundationIntegrationTest {
 
     @BeforeAll
     static void startPostgresAndMigrateFromEmptyDatabase() {
-        POSTGRES.start();
+        io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
 
@@ -66,13 +66,7 @@ class PersistenceFoundationIntegrationTest {
 
         assertFullyMigrated(flyway);
     }
-
-    @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
-    }
-
-    @BeforeEach
+@BeforeEach
     void clearPlatformRows() {
         jdbc.execute("""
                 TRUNCATE TABLE
