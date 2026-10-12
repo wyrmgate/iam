@@ -90,6 +90,32 @@ public final class InitialAdminBootstrapService {
                 tenant, actorIdentityId, actorPrincipalId, now, correlationId));
     }
 
+    /** Current-state verification used before the deployment bootstrap may be sealed. */
+    public boolean isEffectiveFirstPartyBootstrap(
+            TenantContext tenant,
+            UUID actorIdentityId,
+            UUID actorPrincipalId,
+            Instant at) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(actorIdentityId, "actorIdentityId");
+        Objects.requireNonNull(actorPrincipalId, "actorPrincipalId");
+        Objects.requireNonNull(at, "at");
+        InitialAdminBootstrap marker = bootstrapRepository.findBootstrap(tenant).orElse(null);
+        return marker != null
+                && marker.authenticationAnchorType()
+                        == InitialAdminAuthenticationAnchorType.FIRST_PARTY_PRINCIPAL
+                && marker.actorIdentityId().equals(actorIdentityId)
+                && marker.actorPrincipalId().equals(actorPrincipalId)
+                && governedActorStatusQuery.isAdministrativelyEligible(tenant, actorIdentityId)
+                && firstPartyAnchorQuery.isEligiblePrincipalForIdentity(
+                        tenant, actorPrincipalId, actorIdentityId)
+                && bootstrapRepository.isGrantEffective(
+                        tenant,
+                        marker.administrativeGrantId(),
+                        actorIdentityId,
+                        at);
+    }
+
     private InitialAdminBootstrapResult bootstrapExternalInTransaction(
             TenantContext tenant,
             UUID actorIdentityId,
