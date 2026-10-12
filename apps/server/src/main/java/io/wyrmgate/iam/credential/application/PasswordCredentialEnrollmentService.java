@@ -49,17 +49,39 @@ public final class PasswordCredentialEnrollmentService {
             throw new IllegalArgumentException("Principal does not exist");
         }
 
-        SecretReference expectedReference = secretEnrollment.ensure(
+        SecretReference expectedReference = new SecretReference(
+                PasswordSecretEnrollment.PROVIDER_TYPE,
+                credentialId.toString());
+        Credential existing = credentials.findCredential(tenant, credentialId).orElse(null);
+        if (existing != null && !sameInstallationCredentialMetadata(
+                existing, principalId, expectedReference)) {
+            throw new IllegalStateException(
+                    "preallocated Credential already exists with different semantics");
+        }
+
+        SecretReference enrolledReference = secretEnrollment.ensure(
                 tenant, credentialId, password, now);
+        if (!enrolledReference.equals(expectedReference)) {
+            throw new IllegalStateException(
+                    "local password enrollment returned an unexpected secret reference");
+        }
+        if (existing != null) {
+            if (!existing.effectiveAt(now)) {
+                throw new IllegalStateException(
+                        "preallocated installation Credential is not currently effective");
+            }
+            return existing;
+        }
 
         return transactions.required(() -> {
-            Credential existing = credentials.findCredential(tenant, credentialId).orElse(null);
-            if (existing != null) {
-                if (sameInstallationCredential(existing, principalId, expectedReference, now)) {
-                    return existing;
+            Credential raced = credentials.findCredential(tenant, credentialId).orElse(null);
+            if (raced != null) {
+                if (sameInstallationCredentialMetadata(raced, principalId, expectedReference)
+                        && raced.effectiveAt(now)) {
+                    return raced;
                 }
                 throw new IllegalStateException(
-                        "preallocated Credential already exists with different semantics");
+                        "preallocated Credential was concurrently created with different semantics");
             }
             Credential desired = new Credential(
                     credentialId,
@@ -80,14 +102,12 @@ public final class PasswordCredentialEnrollmentService {
         });
     }
 
-    private static boolean sameInstallationCredential(
+    private static boolean sameInstallationCredentialMetadata(
             Credential existing,
             UUID principalId,
-            SecretReference expectedReference,
-            Instant now) {
+            SecretReference expectedReference) {
         return existing.principalId().equals(principalId)
                 && existing.kind() == CredentialKind.PASSWORD
-                && existing.secretReference().equals(expectedReference)
-                && existing.effectiveAt(now);
+                && existing.secretReference().equals(expectedReference);
     }
 }
