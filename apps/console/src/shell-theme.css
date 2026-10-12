@@ -1,0 +1,76 @@
+:root {
+  --shell-ink: #171a1e;
+  --shell-muted: #697178;
+  --shell-paper: #f2f1ec;
+  --shell-canvas: #fbfaf6;
+  --shell-line: #d5d3cc;
+  --shell-accent: #4d7184;
+  --shell-accent-soft: #dce8ed;
+}
+
+/*
+ * Wyrmgate shell palette refinement.
+ * Keep semantic success/warning/danger colors owned by their components; this
+ * layer only tunes neutral shell chrome and the product accent.
+ */
+.navigation-dock {
+  background: #14181c;
+  border-right-color: #2c3238;
+}
+
+.dock-brand-glyph {
+  border-color: #5d6d78;
+  color: #f1eee7;
+  background: linear-gradient(145deg, rgba(90, 122, 140, .18), rgba(255, 255, 255, .015));
+}
+
+.dock-item:hover,
+.dock-item:focus-visible {
+  background: #20272d;
+}
+
+.dock-item.active {
+  background: #232d34;
+  color: #f2f4f4;
+}
+
+.dock-item.active::before {
+  width: 3px;
+  background: #8eafbf;
+  box-shadow: 0 0 16px rgba(142, 175, 191, .28);
+}
+
+.shell-topbar {
+  background: rgba(251, 250, 246, .95);
+}
+
+.command-trigger:hover,
+.context-trigger:hover,
+.actor-trigger:hover {
+  border-color: #b8c3c9;
+  background: rgba(77, 113, 132, .045);
+}
+
+.context-trigger.active {
+  border-color: #839faa;
+  background: var(--shell-accent-soft);
+  color: #294b5a;
+}
+
+.command-results button.selected {
+  background: #e8eff2;
+  box-shadow: inset 3px 0 #7697a7;
+}
+
+.command-input-row > span {
+  color: #52798d;
+}
+
+.context-rail {
+  background: #f7f5ef;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Keep shell theme deterministic until explicit multi-theme support exists. */
+  :root { color-scheme: light; }
+}
