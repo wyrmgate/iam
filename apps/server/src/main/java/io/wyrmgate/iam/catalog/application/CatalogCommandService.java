@@ -28,11 +28,44 @@ public final class CatalogCommandService {
 
     public Application createApplication(
             TenantContext tenant, String code, String name, Instant now) {
+        return createApplicationWithId(tenant, ids.nextId(), code, name, now, false);
+    }
+
+    /** Idempotent owner-local creation for the preallocated Console Application. */
+    public Application ensureInstallationApplication(
+            TenantContext tenant,
+            UUID applicationId,
+            String code,
+            String name,
+            Instant now) {
+        return createApplicationWithId(tenant, applicationId, code, name, now, true);
+    }
+
+    private Application createApplicationWithId(
+            TenantContext tenant,
+            UUID applicationId,
+            String code,
+            String name,
+            Instant now,
+            boolean idempotent) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(applicationId, "applicationId");
+        Objects.requireNonNull(now, "now");
         return transactions.required(() -> {
-            Application application = new Application(
-                    ids.nextId(), code, name, CatalogLifecycleState.ACTIVE, 1, now, now);
-            repository.insertApplication(tenant, application);
-            return application;
+            Application desired = new Application(
+                    applicationId, code, name, CatalogLifecycleState.ACTIVE, 1, now, now);
+            Application existing = repository.findApplication(tenant, applicationId).orElse(null);
+            if (existing != null) {
+                if (idempotent
+                        && existing.code().equals(desired.code())
+                        && existing.name().equals(desired.name())
+                        && existing.lifecycleState() == CatalogLifecycleState.ACTIVE) {
+                    return existing;
+                }
+                throw new IllegalStateException("Application ID already exists with different semantics");
+            }
+            repository.insertApplication(tenant, desired);
+            return desired;
         });
     }
 
@@ -62,17 +95,51 @@ public final class CatalogCommandService {
             UUID applicationId,
             String code,
             Instant now) {
+        return createTargetWithId(tenant, ids.nextId(), applicationId, code, now, false);
+    }
+
+    /** Idempotent owner-local creation for the preallocated Console ApplicationTarget. */
+    public ApplicationTarget ensureInstallationTarget(
+            TenantContext tenant,
+            UUID targetId,
+            UUID applicationId,
+            String code,
+            Instant now) {
+        return createTargetWithId(tenant, targetId, applicationId, code, now, true);
+    }
+
+    private ApplicationTarget createTargetWithId(
+            TenantContext tenant,
+            UUID targetId,
+            UUID applicationId,
+            String code,
+            Instant now,
+            boolean idempotent) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(targetId, "targetId");
+        Objects.requireNonNull(applicationId, "applicationId");
+        Objects.requireNonNull(now, "now");
         return transactions.required(() -> {
             Application application = repository.findApplication(tenant, applicationId)
                     .orElseThrow(() -> new IllegalArgumentException("application does not exist"));
             if (application.lifecycleState() != CatalogLifecycleState.ACTIVE) {
                 throw new IllegalArgumentException("application is retired");
             }
-            ApplicationTarget target = new ApplicationTarget(
-                    ids.nextId(), applicationId, code,
+            ApplicationTarget desired = new ApplicationTarget(
+                    targetId, applicationId, code,
                     CatalogLifecycleState.ACTIVE, 1, now, now);
-            repository.insertTarget(tenant, target);
-            return target;
+            ApplicationTarget existing = repository.findTarget(tenant, targetId).orElse(null);
+            if (existing != null) {
+                if (idempotent
+                        && existing.applicationId().equals(applicationId)
+                        && existing.code().equals(desired.code())
+                        && existing.lifecycleState() == CatalogLifecycleState.ACTIVE) {
+                    return existing;
+                }
+                throw new IllegalStateException("ApplicationTarget ID already exists with different semantics");
+            }
+            repository.insertTarget(tenant, desired);
+            return desired;
         });
     }
 
@@ -82,7 +149,8 @@ public final class CatalogCommandService {
             long expectedRevision,
             Instant now) {
         return transactions.required(() ->
-                repository.retireTarget(tenant, targetId, expectedRevision, now));
+                repository.retireTarget(
+                        tenant, targetId, expectedRevision, now));
     }
 
     public Entitlement createEntitlement(
