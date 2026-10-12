@@ -13,6 +13,8 @@ public record PlatformSigningProperties(
         String signingAlgorithm,
         String privateKeyPath,
         String publicKeyPath,
+        String privateKeyPem,
+        String publicKeyPem,
         String verificationKeys) {
 
     public String requiredKeyId() {
@@ -29,6 +31,22 @@ public record PlatformSigningProperties(
 
     public String requiredSigningAlgorithm() {
         return requireText(signingAlgorithm, "signing-algorithm");
+    }
+
+    public boolean hasInlineKeyMaterial() {
+        return hasText(privateKeyPem) || hasText(publicKeyPem);
+    }
+
+    public boolean hasFileKeyMaterial() {
+        return hasText(privateKeyPath) || hasText(publicKeyPath);
+    }
+
+    public String requiredPrivateKeyPem() {
+        return requireText(privateKeyPem, "private-key-pem");
+    }
+
+    public String requiredPublicKeyPem() {
+        return requireText(publicKeyPem, "public-key-pem");
     }
 
     public Path requiredPrivateKeyPath() {
@@ -62,6 +80,10 @@ public record PlatformSigningProperties(
             }
         }
         return Map.copyOf(result);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String requireText(String value, String name) {
