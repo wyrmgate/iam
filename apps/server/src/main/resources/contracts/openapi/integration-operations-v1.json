@@ -1,0 +1,328 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Wyrmgate Integration Operational Status API",
+    "version": "1.0.0",
+    "description": "Authenticated read-only Integration process status. These resources are operational evidence and provider-process observation, not Access authoritative intent or desired provider state. Internal connector-worker execution, lease, payload, provider-native object details, checkpoints, secrets and raw configuration are intentionally excluded."
+  },
+  "paths": {
+    "/api/v1/provisioning-jobs": {
+      "get": {
+        "operationId": "listProvisioningJobs",
+        "summary": "List provisioning jobs",
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ProvisioningJobPage" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/provisioning-jobs/{id}": {
+      "get": {
+        "operationId": "getProvisioningJob",
+        "summary": "Read a provisioning job",
+        "parameters": [{ "$ref": "#/components/parameters/ResourceId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ProvisioningJob" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/provisioning-tasks": {
+      "get": {
+        "operationId": "listProvisioningTasks",
+        "summary": "List provisioning tasks",
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ProvisioningTaskPage" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/provisioning-tasks/{id}": {
+      "get": {
+        "operationId": "getProvisioningTask",
+        "summary": "Read a provisioning task",
+        "parameters": [{ "$ref": "#/components/parameters/ResourceId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ProvisioningTask" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/provisioning-tasks/{taskId}/attempts": {
+      "get": {
+        "operationId": "listProvisioningAttempts",
+        "summary": "List immutable attempts for one provisioning task",
+        "parameters": [
+          { "$ref": "#/components/parameters/TaskId" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ProvisioningAttemptPage" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/provisioning-attempts/{id}": {
+      "get": {
+        "operationId": "getProvisioningAttempt",
+        "summary": "Read one immutable provisioning attempt",
+        "parameters": [{ "$ref": "#/components/parameters/ResourceId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ProvisioningAttempt" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/reconciliation-runs": {
+      "get": {
+        "operationId": "listReconciliationRuns",
+        "summary": "List reconciliation runs",
+        "parameters": [
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ReconciliationRunPage" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/reconciliation-runs/{id}": {
+      "get": {
+        "operationId": "getReconciliationRun",
+        "summary": "Read a reconciliation run",
+        "parameters": [{ "$ref": "#/components/parameters/ResourceId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ReconciliationRun" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ResourceId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "TaskId": {
+        "name": "taskId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string", "maxLength": 4096 }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+      }
+    },
+    "responses": {
+      "ProvisioningJob": {
+        "description": "Provisioning job status",
+        "headers": { "Cache-Control": { "schema": { "type": "string" } }, "X-Correlation-Id": { "schema": { "type": "string", "format": "uuid" } } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProvisioningJobResource" } } }
+      },
+      "ProvisioningJobPage": {
+        "description": "Bounded provisioning job page",
+        "headers": { "Cache-Control": { "schema": { "type": "string" } }, "X-Correlation-Id": { "schema": { "type": "string", "format": "uuid" } } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProvisioningJobPage" } } }
+      },
+      "ProvisioningTask": {
+        "description": "Provisioning task status",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProvisioningTaskResource" } } }
+      },
+      "ProvisioningTaskPage": {
+        "description": "Bounded provisioning task page",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProvisioningTaskPage" } } }
+      },
+      "ProvisioningAttempt": {
+        "description": "Immutable provisioning attempt status",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProvisioningAttemptResource" } } }
+      },
+      "ProvisioningAttemptPage": {
+        "description": "Bounded immutable provisioning attempt page",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProvisioningAttemptPage" } } }
+      },
+      "ReconciliationRun": {
+        "description": "Reconciliation run status",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReconciliationRunResource" } } }
+      },
+      "ReconciliationRunPage": {
+        "description": "Bounded reconciliation run page",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReconciliationRunPage" } } }
+      },
+      "Error": {
+        "description": "Error",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      }
+    },
+    "schemas": {
+      "ProvisioningJobResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "connectorBindingId", "state", "revision", "correlationId", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "connectorBindingId": { "type": "string", "format": "uuid" },
+          "state": { "type": "string", "enum": ["PLANNED", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"] },
+          "revision": { "type": "integer", "format": "int64", "minimum": 1 },
+          "correlationId": { "type": "string", "format": "uuid" },
+          "causationId": { "type": ["string", "null"], "format": "uuid" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProvisioningJobPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ProvisioningJobResource" } },
+          "nextCursor": { "type": ["string", "null"] }
+        }
+      },
+      "ProvisioningTaskResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "provisioningJobId", "operationId", "operationType", "subjectKind", "subjectId", "desiredRevision", "contractId", "contractVersion", "state", "attemptCount", "revision", "correlationId", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "provisioningJobId": { "type": "string", "format": "uuid" },
+          "operationId": { "type": "string", "format": "uuid" },
+          "operationType": { "type": "string" },
+          "subjectKind": { "type": "string" },
+          "subjectId": { "type": "string", "format": "uuid" },
+          "desiredRevision": { "type": "integer", "format": "int64", "minimum": 1 },
+          "contractId": { "type": "string" },
+          "contractVersion": { "type": "integer", "minimum": 1 },
+          "state": { "type": "string", "enum": ["READY", "RUNNING", "SUCCEEDED", "FAILED_RETRYABLE", "FAILED_FINAL", "SUPERSEDED", "SKIPPED", "BLOCKED"] },
+          "attemptCount": { "type": "integer", "minimum": 0 },
+          "nextAttemptAt": { "type": ["string", "null"], "format": "date-time" },
+          "failureCode": { "type": ["string", "null"], "maxLength": 128 },
+          "revision": { "type": "integer", "format": "int64", "minimum": 1 },
+          "correlationId": { "type": "string", "format": "uuid" },
+          "causationId": { "type": ["string", "null"], "format": "uuid" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProvisioningTaskPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ProvisioningTaskResource" } },
+          "nextCursor": { "type": ["string", "null"] }
+        }
+      },
+      "ProvisioningAttemptResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "taskId", "attemptNumber", "startedAt", "completedAt", "outcome", "correlationId"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "taskId": { "type": "string", "format": "uuid" },
+          "attemptNumber": { "type": "integer", "minimum": 1 },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "completedAt": { "type": "string", "format": "date-time" },
+          "outcome": { "type": "string", "enum": ["SUCCEEDED", "FAILED_RETRYABLE", "FAILED_FINAL", "SUPERSEDED", "SKIPPED"] },
+          "failureCategory": { "type": ["string", "null"], "enum": ["TRANSIENT", "RATE_LIMITED", "AUTHENTICATION", "AUTHORIZATION", "VALIDATION", "UNSUPPORTED", "PROVIDER", null] },
+          "correlationId": { "type": "string", "format": "uuid" },
+          "causationId": { "type": ["string", "null"], "format": "uuid" }
+        }
+      },
+      "ProvisioningAttemptPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ProvisioningAttemptResource" } },
+          "nextCursor": { "type": ["string", "null"] }
+        }
+      },
+      "ReconciliationRunResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "connectorBindingId", "operationId", "scopeObjectClass", "state", "reportedCoverage", "effectiveCompleteness", "configurationVersion", "runtimeId", "runtimeVersion", "contractId", "contractVersion", "correlationId", "revision", "startedAt", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "connectorBindingId": { "type": "string", "format": "uuid" },
+          "operationId": { "type": "string", "format": "uuid" },
+          "scopeObjectClass": { "type": "string", "enum": ["PRINCIPAL"] },
+          "state": { "type": "string", "enum": ["RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"] },
+          "reportedCoverage": { "type": "string", "enum": ["COMPLETE", "PARTIAL", "UNKNOWN"] },
+          "effectiveCompleteness": { "type": "string", "enum": ["COMPLETE", "PARTIAL", "UNKNOWN"] },
+          "configurationVersion": { "type": "integer", "format": "int64", "minimum": 1 },
+          "runtimeId": { "type": "string" },
+          "runtimeVersion": { "type": "string" },
+          "contractId": { "type": "string" },
+          "contractVersion": { "type": "integer", "minimum": 1 },
+          "nextAttemptAt": { "type": ["string", "null"], "format": "date-time" },
+          "failureCode": { "type": ["string", "null"], "maxLength": 128 },
+          "correlationId": { "type": "string", "format": "uuid" },
+          "causationId": { "type": ["string", "null"], "format": "uuid" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 1 },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "completedAt": { "type": ["string", "null"], "format": "date-time" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ReconciliationRunPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ReconciliationRunResource" } },
+          "nextCursor": { "type": ["string", "null"] }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "correlationId"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "correlationId": { "type": "string", "format": "uuid" }
+        }
+      }
+    }
+  }
+}
