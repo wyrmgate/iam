@@ -16,10 +16,12 @@ import io.wyrmgate.iam.administration.application.AdministrativeElevationService
 import io.wyrmgate.iam.administration.application.ControlPlaneActorBindingRepository;
 import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
 import io.wyrmgate.iam.administration.application.CurrentAdministrativeAuthorityProjection;
+import io.wyrmgate.iam.administration.application.FirstPartyInitialAdminAnchorQuery;
 import io.wyrmgate.iam.administration.application.GovernedActorStatusQuery;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapFactSink;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapRepository;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapService;
+import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
@@ -169,10 +171,17 @@ public class AdministrationPersistenceConfiguration {
     }
 
     @Bean
+    FirstPartyInitialAdminAnchorQuery firstPartyInitialAdminAnchorQuery(
+            IdentityAuthenticationQuery identityAuthenticationQuery) {
+        return new IdentityFirstPartyInitialAdminAnchorQueryAdapter(identityAuthenticationQuery);
+    }
+
+    @Bean
     InitialAdminBootstrapService initialAdminBootstrapService(
             InitialAdminBootstrapRepository bootstrapRepository,
             ControlPlaneActorBindingRepository actorBindingRepository,
             GovernedActorStatusQuery governedActorStatusQuery,
+            FirstPartyInitialAdminAnchorQuery firstPartyAnchorQuery,
             InitialAdminBootstrapFactSink factSink,
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
@@ -180,6 +189,7 @@ public class AdministrationPersistenceConfiguration {
                 bootstrapRepository,
                 actorBindingRepository,
                 governedActorStatusQuery,
+                firstPartyAnchorQuery,
                 factSink,
                 idGenerator,
                 transactionExecutor);
