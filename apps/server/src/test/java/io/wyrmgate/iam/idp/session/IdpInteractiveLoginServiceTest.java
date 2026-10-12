@@ -43,7 +43,15 @@ class IdpInteractiveLoginServiceTest {
                 1, now.minusSeconds(60), now.minusSeconds(60));
         AuthenticationSubject subject = new AuthenticationSubject(principalId, identityId, 1, 1);
         VerifiedCredential verified = new VerifiedCredential(principalId, credentialId, 2);
-        IdpBrowserSessionService.EstablishedSession established = mock(IdpBrowserSessionService.EstablishedSession.class);
+        var established = new IdpBrowserSessionService.EstablishedSession(
+                "session-token",
+                new IdpBrowserSessionService.SessionContext(
+                        UUID.randomUUID(),
+                        principalId,
+                        identityId,
+                        now,
+                        now.plusSeconds(1800),
+                        now.plusSeconds(28800)));
 
         when(clients.resolveActive("client-1"))
                 .thenReturn(Optional.of(new SsoClientProtocolQuery.ResolvedClient(tenant, registration)));
