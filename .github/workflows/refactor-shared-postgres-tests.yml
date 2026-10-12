@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Remove redundant per-class Flyway setup
+      - name: Clean transformed sources and audit heavyweight setup
         shell: bash
         run: |
           python - <<'PY'
@@ -28,68 +28,51 @@ jobs:
           import re
 
           root = Path('apps/server/src/test/java')
-          excluded = {
-              'ApplicationFlywayStartupIntegrationTest.java',
-              'SharedPostgresIntegrationDatabase.java',
-          }
           changed = []
-
-          postgres_field = re.compile(
-              r'\n\s*private static final PostgreSQLContainer POSTGRES\s*=\s*'
-              r'io\.wyrmgate\.iam\.platform\.persistence\.SharedPostgresIntegrationDatabase\.container\(\);\s*',
-              re.MULTILINE,
-          )
-          datasource = re.compile(
-              r'DriverManagerDataSource dataSource\s*=\s*new DriverManagerDataSource\(\s*'
-              r'POSTGRES\.getJdbcUrl\(\),\s*POSTGRES\.getUsername\(\),\s*POSTGRES\.getPassword\(\)\);',
-              re.MULTILINE,
-          )
-          flyway = re.compile(
-              r'\s*Flyway flyway = Flyway\.configure\(\)'
-              r'.*?assertFullyMigrated\(flyway\);\s*',
-              re.DOTALL,
+          removable_imports = (
+              'import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;\n',
+              'import org.flywaydb.core.Flyway;\n',
+              'import org.springframework.jdbc.datasource.DriverManagerDataSource;\n',
+              'import org.testcontainers.postgresql.PostgreSQLContainer;\n',
           )
 
           for path in sorted(root.rglob('*.java')):
-              if path.name in excluded:
-                  continue
               text = path.read_text()
               if 'SharedPostgresIntegrationDatabase.reset();' not in text:
                   continue
-
-              updated = datasource.sub(
-                  'var dataSource = io.wyrmgate.iam.platform.persistence.'
-                  'SharedPostgresIntegrationDatabase.dataSource();',
-                  text,
+              updated = text
+              for line in removable_imports:
+                  updated = updated.replace(line, '')
+              updated = re.sub(r'(class\s+\w+[^\{]*\{)\nprivate static', r'\1\n\n    private static', updated)
+              updated = updated.replace(
+                  'SharedPostgresIntegrationDatabase.dataSource();\njdbc =',
+                  'SharedPostgresIntegrationDatabase.dataSource();\n        jdbc =',
               )
-              updated = flyway.sub('\n', updated)
-              updated = postgres_field.sub('\n', updated)
-
-              if 'Flyway' not in updated:
-                  updated = updated.replace('import org.flywaydb.core.Flyway;\n', '')
-              if 'assertFullyMigrated' not in updated:
-                  updated = updated.replace(
-                      'import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;\n',
-                      '',
-                  )
-              if 'PostgreSQLContainer' not in updated:
-                  updated = updated.replace(
-                      'import org.testcontainers.postgresql.PostgreSQLContainer;\n',
-                      '',
-                  )
-              if 'DriverManagerDataSource' not in updated:
-                  updated = updated.replace(
-                      'import org.springframework.jdbc.datasource.DriverManagerDataSource;\n',
-                      '',
-                  )
-
               if updated != text:
                   path.write_text(updated)
                   changed.append(str(path))
 
-          print(f'Cleaned {len(changed)} test classes')
+          allowed_heavy = {
+              root / 'io/wyrmgate/iam/platform/persistence/ApplicationFlywayStartupIntegrationTest.java',
+              root / 'io/wyrmgate/iam/platform/persistence/SharedPostgresIntegrationDatabase.java',
+          }
+          violations = []
+          for path in sorted(root.rglob('*.java')):
+              text = path.read_text()
+              if path not in allowed_heavy and any(token in text for token in (
+                  'new PostgreSQLContainer(', 'POSTGRES.start();', 'Flyway.configure()'
+              )):
+                  violations.append(str(path))
+
+          print(f'Cleaned {len(changed)} transformed test classes')
           for path in changed:
               print(path)
+          if violations:
+              print('Unexpected heavyweight database setup remains:')
+              for path in violations:
+                  print(path)
+              raise SystemExit(1)
+          print('Audit passed: only the shared fixture and dedicated migration test own heavyweight DB setup.')
           PY
       - name: Commit cleanup
         shell: bash
@@ -101,5 +84,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add apps/server/src/test/java
-          git commit -m 'test(server): remove repeated Flyway setup [shared-postgres-refactor]'
+          git commit -m 'test(server): clean shared integration fixtures [shared-postgres-refactor]'
           git push origin HEAD:test/streamline-db-integration-fixtures
