@@ -1,0 +1,91 @@
+name: Refactor shared Postgres tests
+
+on:
+  push:
+    branches:
+      - test/streamline-db-integration-fixtures
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: ${{ !contains(github.event.head_commit.message, '[shared-postgres-refactor]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/streamline-db-integration-fixtures
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Refactor database integration tests
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('apps/server/src/test/java')
+          excluded = {
+              'ApplicationFlywayStartupIntegrationTest.java',
+              'SharedPostgresIntegrationDatabase.java',
+          }
+          changed = []
+
+          declaration = re.compile(
+              r'private static final PostgreSQLContainer POSTGRES\s*=\s*'
+              r'new PostgreSQLContainer\("postgres:18\.4-alpine"\);',
+              re.MULTILINE,
+          )
+          teardown = re.compile(
+              r'\n\s*@AfterAll\s*\n\s*static void [A-Za-z0-9_]+\(\) \{\s*'
+              r'POSTGRES\.stop\(\);\s*\}\s*',
+              re.MULTILINE,
+          )
+
+          for path in sorted(root.rglob('*.java')):
+              if path.name in excluded:
+                  continue
+              text = path.read_text()
+              if 'org.testcontainers.postgresql.PostgreSQLContainer' not in text:
+                  continue
+              if 'POSTGRES.start();' not in text:
+                  continue
+              if 'Flyway.configure' not in text:
+                  continue
+
+              updated = declaration.sub(
+                  'private static final PostgreSQLContainer POSTGRES =\n'
+                  '            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();',
+                  text,
+              )
+              updated = updated.replace(
+                  'POSTGRES.start();',
+                  'io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();',
+              )
+              updated, count = teardown.subn('\n', updated)
+              if count:
+                  updated = updated.replace('import org.junit.jupiter.api.AfterAll;\n', '')
+
+              if updated != text:
+                  path.write_text(updated)
+                  changed.append(str(path))
+
+          print(f'Refactored {len(changed)} test classes')
+          for path in changed:
+              print(path)
+          PY
+      - name: Commit refactor
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No refactor changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/server/src/test/java
+          git commit -m 'test(server): reuse shared postgres across integration classes [shared-postgres-refactor]'
+          git push origin HEAD:test/streamline-db-integration-fixtures
