@@ -36,16 +36,19 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
         int affected = jdbcTemplate.update(
                 """
                 INSERT INTO administration.initial_admin_bootstrap (
-                    id, tenant_id, actor_identity_id, actor_binding_id,
+                    id, tenant_id, actor_identity_id, authentication_anchor_type,
+                    actor_binding_id, actor_principal_id,
                     administrative_role_id, administrative_grant_id,
                     completed_at, correlation_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (tenant_id) DO NOTHING
                 """,
                 bootstrap.id(),
                 tenant.tenantId(),
                 bootstrap.actorIdentityId(),
+                bootstrap.authenticationAnchorType().name(),
                 bootstrap.actorBindingId(),
+                bootstrap.actorPrincipalId(),
                 bootstrap.administrativeRoleId(),
                 bootstrap.administrativeGrantId(),
                 Timestamp.from(bootstrap.completedAt()),
