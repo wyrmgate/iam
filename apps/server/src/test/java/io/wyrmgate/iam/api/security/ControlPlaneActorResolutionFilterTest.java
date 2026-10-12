@@ -28,6 +28,7 @@ class ControlPlaneActorResolutionFilterTest {
     private static final String ISSUER = "https://issuer.example.test";
     private static final String SUBJECT = "operator-123";
     private static final UUID CORRELATION_ID = UUID.fromString("0199d839-8c00-7000-8000-000000000001");
+    private static final IdGenerator IDS = () -> CORRELATION_ID;
 
     @AfterEach
     void clearSecurityContext() {
@@ -37,8 +38,6 @@ class ControlPlaneActorResolutionFilterTest {
     @Test
     void authenticatedButUnboundSubjectFailsClosed() throws Exception {
         ControlPlaneActorResolver resolver = mock(ControlPlaneActorResolver.class);
-        IdGenerator ids = mock(IdGenerator.class);
-        when(ids.nextId()).thenReturn(CORRELATION_ID);
         when(resolver.resolve(new ExternalAuthenticationSubject(ISSUER, SUBJECT)))
                 .thenReturn(Optional.empty());
         authenticate();
@@ -48,7 +47,7 @@ class ControlPlaneActorResolutionFilterTest {
         MockFilterChain chain = new MockFilterChain();
 
         new ControlPlaneActorResolutionFilter(
-                resolver, jwt -> AuthenticationAssuranceContext.baseline(), ids)
+                resolver, jwt -> AuthenticationAssuranceContext.baseline(), IDS)
                 .doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
@@ -61,7 +60,6 @@ class ControlPlaneActorResolutionFilterTest {
     @Test
     void resolvedSubjectPropagatesTrustedActorContextWithoutUsingTokenRolesOrScopes() throws Exception {
         ControlPlaneActorResolver resolver = mock(ControlPlaneActorResolver.class);
-        IdGenerator ids = mock(IdGenerator.class);
         TenantContext tenant = new TenantContext(UUID.fromString("0199d839-8c00-7000-8000-000000000002"));
         AuthenticatedAdministrativeActor actor = new AuthenticatedAdministrativeActor(
                 tenant, UUID.fromString("0199d839-8c00-7000-8000-000000000003"));
@@ -74,7 +72,7 @@ class ControlPlaneActorResolutionFilterTest {
         MockFilterChain chain = new MockFilterChain();
 
         new ControlPlaneActorResolutionFilter(
-                resolver, jwt -> AuthenticationAssuranceContext.baseline(), ids)
+                resolver, jwt -> AuthenticationAssuranceContext.baseline(), IDS)
                 .doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(200);
@@ -84,8 +82,6 @@ class ControlPlaneActorResolutionFilterTest {
     @Test
     void actorResolutionFailureReturnsStableUnavailableError() throws Exception {
         ControlPlaneActorResolver resolver = mock(ControlPlaneActorResolver.class);
-        IdGenerator ids = mock(IdGenerator.class);
-        when(ids.nextId()).thenReturn(CORRELATION_ID);
         when(resolver.resolve(new ExternalAuthenticationSubject(ISSUER, SUBJECT)))
                 .thenThrow(new IllegalStateException("database unavailable"));
         authenticate();
@@ -94,7 +90,7 @@ class ControlPlaneActorResolutionFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         new ControlPlaneActorResolutionFilter(
-                resolver, jwt -> AuthenticationAssuranceContext.baseline(), ids)
+                resolver, jwt -> AuthenticationAssuranceContext.baseline(), IDS)
                 .doFilter(request, response, new MockFilterChain());
 
         assertThat(response.getStatus()).isEqualTo(503);
