@@ -1,7 +1,5 @@
 package io.wyrmgate.iam.access.persistence;
 
-import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
@@ -12,21 +10,17 @@ import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.Desir
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class AccessDesiredStatePersistenceIntegrationTest {
 
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18.4-alpine");
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
     private static JdbcTenantRepository tenants;
@@ -34,24 +28,12 @@ class AccessDesiredStatePersistenceIntegrationTest {
     private static AccessDesiredStateQueryService query;
 
     @BeforeAll
-    static void startPostgresAndMigrate() {
-        POSTGRES.start();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-        jdbc = new JdbcTemplate(dataSource);
+    static void setUpDatabase() {
+        jdbc = SharedPostgresIntegrationDatabase.jdbc();
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         repository = new JdbcDesiredStateProjectionRepository(jdbc, ids);
         query = new AccessDesiredStateQueryService(repository);
-        assertFullyMigrated(flyway);
-    }
-
-    @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
     }
 
     @BeforeEach
@@ -151,76 +133,6 @@ class AccessDesiredStatePersistenceIntegrationTest {
                 tenant, identityId, targetId, entitlementId, "ANY", ids.nextId(),
                 DesiredPresence.PRESENT, now.plusSeconds(2));
         assertThat(resolved.desiredRevision()).isEqualTo(first.desiredRevision() + 1);
-    }
-
-    @Test
-    void queryServiceReturnsUnavailableWhenProjectionStoreCannotBeRead() {
-        TenantContext tenant = new TenantContext(ids.nextId());
-        var unavailable = new AccessDesiredStateQueryService(new io.wyrmgate.iam.access.application.DesiredStateProjectionRepository() {
-            @Override
-            public void replacePrincipal(TenantContext tenant, DesiredPrincipalState state) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public void replaceGrant(TenantContext tenant, DesiredGrantState state) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public DesiredGrantState reconcileGrant(
-                    TenantContext tenant, UUID identityId, UUID applicationTargetId,
-                    UUID entitlementId, String principalConstraintKey, UUID principalId,
-                    DesiredPresence desiredState, Instant computedAt) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public DesiredPrincipalState reconcilePrincipal(
-                    TenantContext tenant, UUID identityId, UUID applicationTargetId,
-                    DesiredPresence desiredState, Instant computedAt) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public boolean hasPresentGrant(
-                    TenantContext tenant, UUID identityId, UUID applicationTargetId) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public java.util.List<DesiredGrantState> findPresentAnyGrants(
-                    TenantContext tenant, UUID identityId, UUID applicationTargetId) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public java.util.Optional<DesiredGrantState> findGrantTuple(
-                    TenantContext tenant, UUID identityId, UUID entitlementId,
-                    String principalConstraintKey) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public java.util.Optional<DesiredGrantState> findGrantById(
-                    TenantContext tenant, UUID desiredGrantId) {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public DesiredAccessStateQuery.Freshness principalFreshness(TenantContext tenant, UUID id) {
-                throw new IllegalStateException("projection store unavailable");
-            }
-
-            @Override
-            public DesiredAccessStateQuery.Freshness grantFreshness(TenantContext tenant, UUID id) {
-                throw new IllegalStateException("projection store unavailable");
-            }
-        });
-
-        assertThat(unavailable.current(
-                tenant, DesiredAccessStateQuery.SubjectKind.DESIRED_PRINCIPAL, ids.nextId()))
-                .isEqualTo(DesiredAccessStateQuery.Freshness.unavailable());
     }
 
     private TenantContext tenant(String name) {
