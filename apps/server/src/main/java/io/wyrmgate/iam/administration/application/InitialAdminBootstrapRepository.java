@@ -7,12 +7,21 @@ import io.wyrmgate.iam.administration.domain.InitialAdminBootstrap;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.UUID;
 
-/** Administration-owned mutation port used only by the one-time first-admin bootstrap operation. */
+/** Administration-owned mutation/query port used only by the first-admin bootstrap operation. */
 public interface InitialAdminBootstrapRepository {
 
+    Optional<InitialAdminBootstrap> findBootstrap(TenantContext tenant);
+
     boolean hasAnyAdministrativeGrant(TenantContext tenant);
+
+    boolean isGrantEffective(
+            TenantContext tenant,
+            UUID grantId,
+            UUID actorIdentityId,
+            Instant at);
 
     boolean claimBootstrap(TenantContext tenant, InitialAdminBootstrap bootstrap);
 

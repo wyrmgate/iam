@@ -53,9 +53,11 @@ export type CurrentAdministrativeAuthority = {
 };
 
 export type AuthSession = { authenticated: boolean };
-export type LoginInput = {
+export type LoginRoute = {
   clientId: string;
   applicationTargetId: string;
+};
+export type LoginInput = LoginRoute & {
   principalKey: string;
   password: string;
 };
@@ -187,6 +189,10 @@ export function withCursor(path: string, cursor?: string | null, extra?: Record<
 
 export async function getAuthSession(signal?: AbortSignal): Promise<AuthSession> {
   return (await apiRequest<AuthSession>(`${API_ROOT}/auth/session`, { signal })).data;
+}
+
+export async function getLoginRoute(signal?: AbortSignal): Promise<LoginRoute> {
+  return (await apiRequest<LoginRoute>(`${API_ROOT}/auth/login-route`, { signal })).data;
 }
 
 export async function signIn(input: LoginInput): Promise<AuthSession> {

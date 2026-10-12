@@ -30,14 +30,35 @@ public class IdpBrowserSessionController {
     private final IdpInteractiveLoginService login;
     private final IdpBrowserSessionService sessions;
     private final IdpCsrfTokenCodec csrf;
+    private final ConsoleLoginRouteQuery consoleLoginRoute;
 
     public IdpBrowserSessionController(
             IdpInteractiveLoginService login,
             IdpBrowserSessionService sessions,
-            IdpCsrfTokenCodec csrf) {
+            IdpCsrfTokenCodec csrf,
+            ConsoleLoginRouteQuery consoleLoginRoute) {
         this.login = login;
         this.sessions = sessions;
         this.csrf = csrf;
+        this.consoleLoginRoute = consoleLoginRoute;
+    }
+
+    @GetMapping(path = "/api/auth/login-route", produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<?> loginRoute() {
+        var route = consoleLoginRoute.resolve();
+        if (route.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .cacheControl(CacheControl.noStore())
+                    .header(HttpHeaders.PRAGMA, "no-cache")
+                    .body(Map.of("error", "login_unavailable"));
+        }
+        var resolved = route.orElseThrow();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(Map.of(
+                        "clientId", resolved.clientId(),
+                        "applicationTargetId", resolved.applicationTargetId().toString()));
     }
 
     @PostMapping(

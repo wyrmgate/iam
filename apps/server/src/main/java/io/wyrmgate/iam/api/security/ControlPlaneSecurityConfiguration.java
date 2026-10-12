@@ -84,7 +84,12 @@ public class ControlPlaneSecurityConfiguration {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/auth/login", "/api/auth/session", "/api/auth/logout").permitAll()
+                        .requestMatchers(
+                                "/api/auth/login-route",
+                                "/api/auth/login",
+                                "/api/auth/session",
+                                "/api/auth/logout")
+                        .permitAll()
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint));

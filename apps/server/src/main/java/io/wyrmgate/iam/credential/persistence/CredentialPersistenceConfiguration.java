@@ -9,6 +9,8 @@ import io.wyrmgate.iam.credential.application.CredentialRepository;
 import io.wyrmgate.iam.credential.application.CredentialRotationService;
 import io.wyrmgate.iam.credential.application.CredentialSecretVerifier;
 import io.wyrmgate.iam.credential.application.CredentialService;
+import io.wyrmgate.iam.credential.application.PasswordCredentialEnrollmentService;
+import io.wyrmgate.iam.credential.application.PasswordSecretEnrollment;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
@@ -27,6 +29,11 @@ public class CredentialPersistenceConfiguration {
     CredentialRepository credentialRepository(
             JdbcTemplate jdbc) {
         return new JdbcCredentialRepository(jdbc);
+    }
+
+    @Bean
+    JdbcLocalPasswordVerifierStore localPasswordVerifierStore(JdbcTemplate jdbc) {
+        return new JdbcLocalPasswordVerifierStore(jdbc);
     }
 
     @Bean
@@ -61,6 +68,19 @@ public class CredentialPersistenceConfiguration {
                 principals,
                 boundaries,
                 ids,
+                transactions);
+    }
+
+    @Bean
+    PasswordCredentialEnrollmentService passwordCredentialEnrollmentService(
+            CredentialRepository credentials,
+            IdentityAccessReferenceQuery principals,
+            PasswordSecretEnrollment secretEnrollment,
+            TransactionExecutor transactions) {
+        return new PasswordCredentialEnrollmentService(
+                credentials,
+                principals,
+                secretEnrollment,
                 transactions);
     }
 

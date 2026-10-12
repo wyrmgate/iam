@@ -21,23 +21,33 @@ public final class JdbcInitialAdminBootstrapFactSink implements InitialAdminBoot
 
     @Override
     public void bootstrapped(TenantContext tenant, InitialAdminBootstrap bootstrap) {
-        String payload = "{\"actorIdentityId\":\"" + bootstrap.actorIdentityId()
-                + "\",\"actorBindingId\":\"" + bootstrap.actorBindingId()
-                + "\",\"administrativeRoleId\":\"" + bootstrap.administrativeRoleId()
-                + "\",\"administrativeGrantId\":\"" + bootstrap.administrativeGrantId() + "\"}";
+        StringBuilder payload = new StringBuilder()
+                .append("{\"actorIdentityId\":\"").append(bootstrap.actorIdentityId())
+                .append("\",\"authenticationAnchorType\":\"").append(bootstrap.authenticationAnchorType())
+                .append("\"");
+        if (bootstrap.actorBindingId() != null) {
+            payload.append(",\"actorBindingId\":\"").append(bootstrap.actorBindingId()).append("\"");
+        }
+        if (bootstrap.actorPrincipalId() != null) {
+            payload.append(",\"actorPrincipalId\":\"").append(bootstrap.actorPrincipalId()).append("\"");
+        }
+        payload.append(",\"administrativeRoleId\":\"").append(bootstrap.administrativeRoleId())
+                .append("\",\"administrativeGrantId\":\"").append(bootstrap.administrativeGrantId())
+                .append("\"}");
+
         outboxRepository.append(
                 tenant,
                 new OutboxEvent(
                         idGenerator.nextId(),
                         "administration.initial-admin-bootstrapped",
-                        1,
+                        2,
                         "initial-admin-bootstrap",
                         bootstrap.id(),
                         1L,
                         bootstrap.completedAt(),
                         bootstrap.correlationId(),
                         null,
-                        payload),
+                        payload.toString()),
                 bootstrap.completedAt());
     }
 }
