@@ -44,7 +44,52 @@ public final class PrincipalCommandService {
             Instant now,
             UUID correlationId,
             UUID causationId) {
+        return createWithId(
+                tenant,
+                ids.nextId(),
+                applicationTargetId,
+                nativePrincipalKey,
+                identityId,
+                now,
+                correlationId,
+                causationId,
+                false);
+    }
+
+    /** Idempotent owner-local command used by fresh-install orchestration. */
+    public Principal ensureInstallationPrincipal(
+            TenantContext tenant,
+            UUID principalId,
+            UUID applicationTargetId,
+            String nativePrincipalKey,
+            UUID identityId,
+            Instant now,
+            UUID correlationId,
+            UUID causationId) {
+        return createWithId(
+                tenant,
+                principalId,
+                applicationTargetId,
+                nativePrincipalKey,
+                identityId,
+                now,
+                correlationId,
+                causationId,
+                true);
+    }
+
+    private Principal createWithId(
+            TenantContext tenant,
+            UUID principalId,
+            UUID applicationTargetId,
+            String nativePrincipalKey,
+            UUID identityId,
+            Instant now,
+            UUID correlationId,
+            UUID causationId,
+            boolean idempotent) {
         Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(principalId, "principalId");
         Objects.requireNonNull(applicationTargetId, "applicationTargetId");
         Objects.requireNonNull(now, "now");
         Objects.requireNonNull(correlationId, "correlationId");
@@ -56,8 +101,8 @@ public final class PrincipalCommandService {
                     "The requested Identity was not found in the tenant.");
         }
 
-        Principal principal = new Principal(
-                ids.nextId(),
+        Principal desired = new Principal(
+                principalId,
                 identityId,
                 applicationTargetId,
                 PrincipalKind.ACCOUNT,
@@ -68,8 +113,28 @@ public final class PrincipalCommandService {
                 now);
 
         return transactions.required(() -> {
-            principals.insert(tenant, principal);
-            Principal persisted = principals.findById(tenant, principal.id())
+            Principal existingById = principals.findById(tenant, principalId).orElse(null);
+            if (existingById != null) {
+                if (idempotent && sameInstallationPrincipal(existingById, desired)) {
+                    return existingById;
+                }
+                throw new PrincipalCommandException(
+                        "principal_id_conflict",
+                        "The preallocated Principal ID already exists with different semantics.");
+            }
+            Principal existingByKey = principals.findByTargetAndNativeKey(
+                    tenant, applicationTargetId, nativePrincipalKey).orElse(null);
+            if (existingByKey != null) {
+                if (idempotent && existingByKey.id().equals(principalId)
+                        && sameInstallationPrincipal(existingByKey, desired)) {
+                    return existingByKey;
+                }
+                throw new PrincipalCommandException(
+                        "principal_native_key_conflict",
+                        "The native Principal key is already used by another Principal on the target.");
+            }
+            principals.insert(tenant, desired);
+            Principal persisted = principals.findById(tenant, desired.id())
                     .orElseThrow(() -> new IllegalStateException(
                             "created principal could not be reloaded"));
             if (persisted.identityId() != null) {
@@ -78,6 +143,14 @@ public final class PrincipalCommandService {
             }
             return persisted;
         });
+    }
+
+    private static boolean sameInstallationPrincipal(Principal existing, Principal desired) {
+        return Objects.equals(existing.identityId(), desired.identityId())
+                && existing.applicationTargetId().equals(desired.applicationTargetId())
+                && existing.kind() == PrincipalKind.ACCOUNT
+                && existing.nativePrincipalKey().equals(desired.nativePrincipalKey())
+                && existing.lifecycleState() == PrincipalLifecycleState.ACTIVE;
     }
 
     public Principal applyProvisioningState(
