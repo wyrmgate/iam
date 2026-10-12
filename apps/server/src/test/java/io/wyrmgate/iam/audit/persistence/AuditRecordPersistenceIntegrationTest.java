@@ -38,6 +38,11 @@ class AuditRecordPersistenceIntegrationTest {
     static void start() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        repository = new JdbcAuditRecordRepository(jdbc);
+        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
 }
 
     @BeforeEach

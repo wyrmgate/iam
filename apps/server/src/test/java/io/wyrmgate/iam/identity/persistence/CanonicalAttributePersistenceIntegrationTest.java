@@ -66,6 +66,23 @@ class CanonicalAttributePersistenceIntegrationTest {
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        outbox = new JdbcOutboxRepository(jdbc);
+        identities = new JdbcIdentityRepository(jdbc);
+        sources = new JdbcSourceCorrelationRepository(jdbc, ids);
+        attributes = new JdbcCanonicalAttributeRepository(jdbc, ids);
+        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
+        facts = new JdbcCanonicalAttributeFactSink(outbox, ids);
+        identityCommands = new IdentityCommandService(
+                identities, new JdbcIdentityFactSink(outbox, ids), ids, transactions);
+        sourceCommands = new SourceCorrelationService(
+                sources, identities, new JdbcSourceCorrelationFactSink(outbox, ids), ids, transactions);
+        configuration = new CanonicalAttributeConfigurationService(
+                attributes, sources, facts, ids, transactions);
+        resolution = new CanonicalAttributeResolutionService(
+                attributes, sources, identities, facts, ids, transactions);
 }
 
     @BeforeEach

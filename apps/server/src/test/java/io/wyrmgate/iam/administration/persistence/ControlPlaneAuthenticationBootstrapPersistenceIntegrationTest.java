@@ -51,6 +51,29 @@ class ControlPlaneAuthenticationBootstrapPersistenceIntegrationTest {
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        identities = new JdbcIdentityRepository(jdbc);
+        JdbcOutboxRepository outbox = new JdbcOutboxRepository(jdbc);
+        TransactionExecutor transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
+        var governedActors = new IdentityGovernedActorStatusQuery(identities);
+        bindings = new JdbcControlPlaneActorBindingRepository(jdbc);
+        bootstrap = new InitialAdminBootstrapService(
+                new JdbcInitialAdminBootstrapRepository(jdbc),
+                bindings,
+                governedActors,
+                new JdbcInitialAdminBootstrapFactSink(outbox, ids),
+                ids,
+                transactions);
+        actorResolver = new ControlPlaneActorResolver(bindings);
+        authorization = new AdministrativeAuthorizationService(
+                new JdbcAdministrativeAuthorizationRepository(jdbc), governedActors);
+        identityCommands = new IdentityCommandService(
+                identities,
+                new JdbcIdentityFactSink(outbox, ids),
+                ids,
+                transactions);
 }
 
     @BeforeEach

@@ -48,6 +48,15 @@ class IntegrationRuntimePersistenceIntegrationTest {
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        json = new ObjectMapper().findAndRegisterModules();
+        var outbox = new JdbcOutboxRepository(jdbc);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
+        repository = new JdbcIntegrationRuntimeRepository(
+                jdbc, json, ids, observedAccessFacts);
+        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
 }
 
     @BeforeEach

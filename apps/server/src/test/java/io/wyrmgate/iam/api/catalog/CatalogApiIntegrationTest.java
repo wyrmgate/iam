@@ -71,6 +71,15 @@ class CatalogApiIntegrationTest {
     static void startPostgres() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        repository = new JdbcCatalogRepository(jdbc);
+        transactions = new SpringTransactionExecutor(
+                new DataSourceTransactionManager(dataSource));
+        commands = new CatalogCommandService(repository, ids, transactions);
+        queries = new CatalogQueryService(repository);
+        idempotency = new JdbcIdempotencyRepository(jdbc, ids);
 }
 
     @BeforeEach

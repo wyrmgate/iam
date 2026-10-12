@@ -107,6 +107,32 @@ class IdentityApiIntegrationTest {
     static void startPostgres() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        identities = new JdbcIdentityRepository(jdbc);
+        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
+        JdbcOutboxRepository outbox = new JdbcOutboxRepository(jdbc);
+        commands = new IdentityCommandService(
+                identities,
+                new JdbcIdentityFactSink(outbox, ids),
+                ids,
+                transactions);
+        idempotency = new JdbcIdempotencyRepository(jdbc, ids);
+        canonicalAttributes = new JdbcCanonicalAttributeRepository(jdbc, ids);
+        sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
+        var canonicalFacts = new JdbcCanonicalAttributeFactSink(outbox, ids);
+        canonicalConfiguration = new CanonicalAttributeConfigurationService(
+                canonicalAttributes, sourceRepository, canonicalFacts, ids, transactions);
+        canonicalResolution = new CanonicalAttributeResolutionService(
+                canonicalAttributes, sourceRepository, identities, canonicalFacts, ids, transactions);
+        CanonicalAttributeResolutionEvaluator evaluator = new CanonicalAttributeResolutionEvaluator();
+        queries = new IdentityQueryService(
+                identities,
+                new JdbcIdentityQueryRepository(jdbc),
+                canonicalAttributes,
+                new JdbcCanonicalAttributeReadRepository(jdbc),
+                evaluator);
 }
 
     @BeforeEach

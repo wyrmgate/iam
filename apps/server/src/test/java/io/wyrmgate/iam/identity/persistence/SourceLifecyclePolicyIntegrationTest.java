@@ -49,6 +49,28 @@ class SourceLifecyclePolicyIntegrationTest {
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        outbox = new JdbcOutboxRepository(jdbc);
+        identityRepository = new JdbcIdentityRepository(jdbc);
+        sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
+        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
+        identities = new IdentityCommandService(
+                identityRepository, new JdbcIdentityFactSink(outbox, ids), ids, transactions);
+        sources = new SourceCorrelationService(
+                sourceRepository,
+                identityRepository,
+                new JdbcSourceCorrelationFactSink(outbox, ids),
+                ids,
+                transactions);
+        policies = new SourceLifecyclePolicyService(
+                sourceRepository,
+                identityRepository,
+                identities,
+                new SourceMappedValueExtractor(new ObjectMapper()),
+                ids,
+                transactions);
 }
 
     @BeforeEach

@@ -77,6 +77,42 @@ class IntegrationAdminApiPersistenceIntegrationTest {
     static void setup() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        outbox = new JdbcOutboxRepository(jdbc);
+        idempotency = new JdbcIdempotencyRepository(jdbc, ids);
+        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
+        identities = new JdbcIdentityRepository(jdbc);
+        identityCommands = new IdentityCommandService(
+                identities, new JdbcIdentityFactSink(outbox, ids), ids, transactions);
+        authorization = new AdministrativeAuthorizationService(
+                new JdbcAdministrativeAuthorizationRepository(jdbc),
+                new IdentityGovernedActorStatusQuery(identities));
+        integration = new JdbcIntegrationAdministrationRepository(jdbc, JSON);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
+        runtime = new JdbcIntegrationRuntimeRepository(jdbc, JSON, ids, observedAccessFacts);
+        var factSink = new JdbcIntegrationAdministrationFactSink(outbox, ids);
+        var commands = new IntegrationAdministrationCommandService(
+                integration, factSink, ids, transactions);
+        var observationMappings = new JdbcIntegrationObservationRepository(jdbc);
+        var mappingCommands = new IntegrationEntitlementMappingService(
+                integration,
+                observationMappings,
+                new CatalogQueryService(new JdbcCatalogRepository(jdbc)),
+                factSink,
+                observedAccessFacts,
+                ids,
+                transactions);
+        mutations = new IntegrationAdminApiMutationService(
+                authorization, commands, integration,
+                mappingCommands, observationMappings,
+                idempotency, transactions,
+                new AuditCommandService(
+                        new JdbcAuditRecordRepository(jdbc),
+                        transactions,
+                        Clock.systemUTC()),
+                ids);
 }
 
     @BeforeEach

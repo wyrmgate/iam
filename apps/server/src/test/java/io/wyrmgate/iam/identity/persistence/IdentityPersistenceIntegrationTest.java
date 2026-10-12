@@ -41,6 +41,17 @@ class IdentityPersistenceIntegrationTest {
     static void startPostgresAndMigrateFromEmptyDatabase() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        idGenerator = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, idGenerator);
+        outbox = new JdbcOutboxRepository(jdbc);
+        identities = new JdbcIdentityRepository(jdbc);
+        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
+        commands = new IdentityCommandService(
+                identities,
+                new JdbcIdentityFactSink(outbox, idGenerator),
+                idGenerator,
+                transactions);
 }
 
     @BeforeEach

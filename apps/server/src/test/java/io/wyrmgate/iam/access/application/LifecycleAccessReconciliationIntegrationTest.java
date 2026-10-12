@@ -57,6 +57,69 @@ class LifecycleAccessReconciliationIntegrationTest {
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        outbox = new JdbcOutboxRepository(jdbc);
+        assignments = new JdbcAccessAssignmentRepository(jdbc);
+        policies = new JdbcLifecycleAccessPolicyRepository(jdbc);
+        TransactionExecutor transactions =
+                new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
+        identityPolicy = new MutableIdentityPolicyQuery();
+        guard = new MutableGuard();
+        approval = new MutableApprovalCommand();
+        applicationTargetId = ids.nextId();
+        roleVersionId = ids.nextId();
+
+        CatalogAccessReferenceQuery catalog =
+                (tenant, entitlementId) ->
+                        CatalogAccessReferenceQuery.EntitlementReference.valid(applicationTargetId);
+        RoleExpansionQuery roles =
+                (tenant, roleId) -> RoleExpansionQuery.Result.available(
+                        roleId,
+                        java.util.List.of(new RoleExpansionQuery.EntitlementPath(
+                                ids.nextId(), applicationTargetId, java.util.List.of(roleVersionId))));
+        IdentityAccessReferenceQuery identityReferences = new IdentityAccessReferenceQuery() {
+            @Override
+            public boolean identityExists(TenantContext tenant, UUID identityId) {
+                return identityPolicy.contexts.containsKey(identityId);
+            }
+
+            @Override
+            public IdentityAccessStatus accessStatus(TenantContext tenant, UUID identityId) {
+                var context = identityPolicy.contexts.get(identityId);
+                if (context == null) return IdentityAccessStatus.notFound();
+                return "ACTIVE".equals(context.lifecycleState())
+                        ? IdentityAccessStatus.eligible(context.lifecycleState(), context.identityRevision())
+                        : IdentityAccessStatus.ineligible(context.lifecycleState(), context.identityRevision());
+            }
+
+            @Override
+            public PrincipalReference principal(TenantContext tenant, UUID principalId) {
+                return PrincipalReference.notFound();
+            }
+
+            @Override
+            public PrincipalSelection selectUniqueActivePrincipal(
+                    TenantContext tenant, UUID identityId, UUID targetId) {
+                return PrincipalSelection.none();
+            }
+        };
+
+        commands = new AccessAssignmentCommandService(
+                assignments,
+                identityReferences,
+                catalog,
+                roles,
+                new JdbcAccessAssignmentFactSink(outbox, ids),
+                new JdbcAccessAssignmentBoundaryScheduler(
+                        new JdbcScheduledWorkRepository(jdbc, ids)),
+                ids,
+                transactions);
+        policyService = new LifecycleAccessPolicyService(
+                policies, identityPolicy, catalog, roles, ids, transactions);
+        reconciler = new LifecycleAccessReconciliationService(
+                outbox, policies, assignments, commands, identityPolicy, guard, approval);
 }
 
     @BeforeEach

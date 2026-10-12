@@ -44,6 +44,18 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
     static void startPostgresAndMigrateFromEmptyDatabase() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        JdbcIdentityRepository identities = new JdbcIdentityRepository(jdbc);
+        identityCommands = new IdentityCommandService(
+                identities,
+                new JdbcIdentityFactSink(new JdbcOutboxRepository(jdbc), ids),
+                ids,
+                new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource)));
+        authorization = new AdministrativeAuthorizationService(
+                new JdbcAdministrativeAuthorizationRepository(jdbc),
+                new IdentityGovernedActorStatusQuery(identities));
 }
 
     @BeforeEach

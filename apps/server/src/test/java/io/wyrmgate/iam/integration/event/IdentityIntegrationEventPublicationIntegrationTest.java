@@ -45,6 +45,18 @@ class IdentityIntegrationEventPublicationIntegrationTest {
     static void startPostgres() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+        jdbc = new JdbcTemplate(dataSource);
+        ids = new UuidV7Generator();
+        tenants = new JdbcTenantRepository(jdbc, ids);
+        outbox = new JdbcOutboxRepository(jdbc);
+        identities = new JdbcIdentityRepository(jdbc);
+        TransactionExecutor transactions =
+                new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
+        commands = new IdentityCommandService(
+                identities,
+                new JdbcIdentityFactSink(outbox, ids),
+                ids,
+                transactions);
 }
 
     @BeforeEach
