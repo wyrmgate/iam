@@ -35,6 +35,27 @@ public final class InitialAdminBootstrapService {
     private final IdGenerator idGenerator;
     private final TransactionExecutor transactionExecutor;
 
+    /**
+     * Compatibility constructor for the ADR-0011 external-only path. First-party bootstrap fails
+     * closed when this constructor is used; normal Spring composition uses the full constructor.
+     */
+    public InitialAdminBootstrapService(
+            InitialAdminBootstrapRepository bootstrapRepository,
+            ControlPlaneActorBindingRepository actorBindingRepository,
+            GovernedActorStatusQuery governedActorStatusQuery,
+            InitialAdminBootstrapFactSink factSink,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        this(
+                bootstrapRepository,
+                actorBindingRepository,
+                governedActorStatusQuery,
+                (tenant, principalId, identityId) -> false,
+                factSink,
+                idGenerator,
+                transactionExecutor);
+    }
+
     public InitialAdminBootstrapService(
             InitialAdminBootstrapRepository bootstrapRepository,
             ControlPlaneActorBindingRepository actorBindingRepository,
