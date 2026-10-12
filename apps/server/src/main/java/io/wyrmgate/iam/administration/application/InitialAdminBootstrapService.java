@@ -30,6 +30,7 @@ public final class InitialAdminBootstrapService {
     private final InitialAdminBootstrapRepository bootstrapRepository;
     private final ControlPlaneActorBindingRepository actorBindingRepository;
     private final GovernedActorStatusQuery governedActorStatusQuery;
+    private final FirstPartyInitialAdminAnchorQuery firstPartyAnchorQuery;
     private final InitialAdminBootstrapFactSink factSink;
     private final IdGenerator idGenerator;
     private final TransactionExecutor transactionExecutor;
@@ -38,12 +39,14 @@ public final class InitialAdminBootstrapService {
             InitialAdminBootstrapRepository bootstrapRepository,
             ControlPlaneActorBindingRepository actorBindingRepository,
             GovernedActorStatusQuery governedActorStatusQuery,
+            FirstPartyInitialAdminAnchorQuery firstPartyAnchorQuery,
             InitialAdminBootstrapFactSink factSink,
             IdGenerator idGenerator,
             TransactionExecutor transactionExecutor) {
         this.bootstrapRepository = Objects.requireNonNull(bootstrapRepository, "bootstrapRepository");
         this.actorBindingRepository = Objects.requireNonNull(actorBindingRepository, "actorBindingRepository");
         this.governedActorStatusQuery = Objects.requireNonNull(governedActorStatusQuery, "governedActorStatusQuery");
+        this.firstPartyAnchorQuery = Objects.requireNonNull(firstPartyAnchorQuery, "firstPartyAnchorQuery");
         this.factSink = Objects.requireNonNull(factSink, "factSink");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator");
         this.transactionExecutor = Objects.requireNonNull(transactionExecutor, "transactionExecutor");
@@ -73,7 +76,7 @@ public final class InitialAdminBootstrapService {
                 tenant, actorIdentityId, externalSubject, now, correlationId));
     }
 
-    /** ADR-0044 first-party bootstrap path. Principal eligibility is revalidated by normal login/session resolution. */
+    /** ADR-0044 first-party bootstrap path with current Principal/Identity eligibility validation. */
     public InitialAdminBootstrapResult bootstrapFirstParty(
             TenantContext tenant,
             UUID actorIdentityId,
@@ -126,6 +129,9 @@ public final class InitialAdminBootstrapService {
             Instant now,
             UUID correlationId) {
         assertBootstrapAllowed(tenant, actorIdentityId);
+        if (!firstPartyAnchorQuery.isEligiblePrincipalForIdentity(tenant, actorPrincipalId, actorIdentityId)) {
+            throw new InitialAdminBootstrapNotAllowedException("actor_principal_not_authentication_eligible_for_identity");
+        }
         return createAdministrationState(
                 tenant,
                 actorIdentityId,
