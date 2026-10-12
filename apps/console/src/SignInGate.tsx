@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { App } from './App';
+import { ShellChrome } from './ShellChrome';
 import { ApiError, getAuthSession, signIn, signOut } from './api';
 
 type GateState = 'checking' | 'first-party-login' | 'authenticated' | 'external-mode';
@@ -62,8 +63,6 @@ export function SignInGate() {
     return <div className="state-card">Checking authentication…</div>;
   }
 
-  if (state === 'external-mode') return <App />;
-
   if (state === 'first-party-login') {
     return (
       <main className="content" style={{ maxWidth: 720, margin: '10vh auto' }}>
@@ -86,15 +85,13 @@ export function SignInGate() {
     );
   }
 
+  if (state === 'external-mode') {
+    return <ShellChrome><App /></ShellChrome>;
+  }
+
   return (
-    <>
-      <button
-        className="button secondary"
-        style={{ position: 'fixed', right: 20, top: 16, zIndex: 20 }}
-        disabled={busy}
-        onClick={() => void logout()}
-      >Sign out</button>
+    <ShellChrome onSignOut={logout} signOutBusy={busy}>
       <App />
-    </>
+    </ShellChrome>
   );
 }
