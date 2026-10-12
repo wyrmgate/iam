@@ -4,6 +4,7 @@ import { SignInGate } from './SignInGate';
 import './styles.css';
 import './shell.css';
 import './shell-bridge.css';
+import './shell-theme.css';
 
 const root = document.getElementById('root');
 
