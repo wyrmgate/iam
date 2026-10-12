@@ -50,6 +50,10 @@ public final class CredentialService {
                 secretReference, "secretReference");
         Objects.requireNonNull(now, "now");
 
+        if (PasswordSecretEnrollment.PROVIDER_TYPE.equals(secretReference.providerType())) {
+            throw new IllegalArgumentException(
+                    "local password verifier references are system-managed and must be enrolled through Credential");
+        }
         if (principals.principal(tenant, principalId).status()
                 == IdentityAccessReferenceQuery.Status.NOT_FOUND) {
             throw new IllegalArgumentException(
