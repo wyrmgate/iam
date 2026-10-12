@@ -29,6 +29,8 @@ IAM_BOOTSTRAP_INSTALLATION_PASSWORD_FILE=/run/secrets/wyrmgate_initial_password
 IAM_BOOTSTRAP_INSTALLATION_CONSOLE_REDIRECT_URI=https://wyrmgate.example/callback
 ```
 
+These environment names are the Spring relaxed-binding form of the `iam.bootstrap.installation.*` properties used by the startup adapter.
+
 The password file is external installation input. Its contents are never copied into `platform.installation_bootstrap`, ordinary IAM state, events, audit, logs or command results.
 
 ## What startup does
