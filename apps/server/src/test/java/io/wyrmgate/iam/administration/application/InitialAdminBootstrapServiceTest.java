@@ -9,7 +9,6 @@ import io.wyrmgate.iam.administration.domain.AdministrativeRole;
 import io.wyrmgate.iam.administration.domain.ControlPlaneActorBinding;
 import io.wyrmgate.iam.administration.domain.ExternalAuthenticationSubject;
 import io.wyrmgate.iam.administration.domain.InitialAdminBootstrap;
-import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
