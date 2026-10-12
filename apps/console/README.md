@@ -40,7 +40,7 @@ OAuth/OIDC scopes, roles, groups and token claims are not interpreted as Wyrmgat
 | `/reviews` | Review campaign list/create/start and reviewer KEEP/REVOKE inbox |
 | `/policies` | Identity source policy, Access lifecycle policy, Governance ACCESS_REQUEST policy lifecycle and exception lookup/revocation |
 | `/credentials` | Principal-scoped Credential metadata, revoke/compromise and durable rotation planning |
-| `/integrations` | ConnectorInstance, ConnectorBinding, ConnectorWorker and entitlement-observation mapping public administration surfaces |
+| `/integrations` | Connector administration plus public read-only provisioning job/task/attempt and reconciliation-run operational status |
 | `/administration` | AdministrativeRole, Grant, Delegation, Elevation and BreakGlass workflows plus current backend-derived actor authority |
 | `/audit` | AuditRecord/evidence reads and durable export/evidence-lifecycle workspaces |
 
@@ -48,13 +48,20 @@ When the authority projection is available, top-level navigation is optimized fr
 
 The UI preserves the project authority distinctions: Identity versus Principal, AccessAssignment versus EffectiveAccess, governance decision versus remediation, connector lifecycle versus provider observation, and Audit evidence versus generic logging.
 
-## Explicit public-API gaps
+## Integration operational visibility
 
-The console does not bypass missing contracts:
+The Integrations **Operations** tab consumes only the accepted public read contract in `integration-operations-v1.json`:
 
-- **#266** — public operator-facing provisioning/reconciliation status. The internal connector-worker protocol is not called by the browser and Integration tables are not queried directly.
+- provisioning jobs;
+- provisioning tasks;
+- immutable provisioning attempts scoped to a task;
+- reconciliation runs.
 
-Issue #265 is implemented by the current Administration-owned self-projection. No browser permission model or token-claim mapping was introduced.
+These views are explicitly labeled operational/non-authoritative. They report Integration-owned fulfillment/reconciliation process state and normalized provider-operation evidence; they do not turn observations into Catalog authority or Access intent.
+
+The browser never calls worker claim, lease renewal, completion, observation-batch or other internal connector-worker execution operations. Public responses do not contain task payloads/idempotency keys, worker lease identifiers/epochs, raw provider metadata/object identifiers, reconciliation checkpoints, completion fingerprints, connector secrets or provider configuration.
+
+Issue #265 and #266 are both implemented without introducing browser-side permission semantics or bypassing owning-capability boundaries.
 
 ## UX and safety conventions
 
