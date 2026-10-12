@@ -19,9 +19,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class JdbcIntegrationOperationalStatusRepositoryTest {
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
+private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
     private static JdbcTemplate jdbc;
     private static JdbcTenantRepository tenants;
     private static JdbcIntegrationOperationalStatusRepository repository;
@@ -29,13 +27,8 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
     @BeforeAll
     static void setup() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-        assertFullyMigrated(flyway);
-        jdbc = new JdbcTemplate(dataSource);
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+jdbc = new JdbcTemplate(dataSource);
         tenants = new JdbcTenantRepository(jdbc, new UuidV7Generator());
         repository = new JdbcIntegrationOperationalStatusRepository(jdbc);
     }

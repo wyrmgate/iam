@@ -38,10 +38,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class SourceAbsenceInferenceIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final Instant NOW = Instant.parse("2026-09-30T04:00:00Z");
+private static final Instant NOW = Instant.parse("2026-09-30T04:00:00Z");
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -59,47 +56,8 @@ class SourceAbsenceInferenceIntegrationTest {
     @BeforeAll
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-
-        jdbc = new JdbcTemplate(dataSource);
-        ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
-        outbox = new JdbcOutboxRepository(jdbc);
-        identityRepository = new JdbcIdentityRepository(jdbc);
-        sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
-        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        identities = new IdentityCommandService(
-                identityRepository, new JdbcIdentityFactSink(outbox, ids), ids, transactions);
-        sources = new SourceCorrelationService(
-                sourceRepository,
-                identityRepository,
-                new JdbcSourceCorrelationFactSink(outbox, ids),
-                ids,
-                transactions);
-        policies = new SourceAbsencePolicyService(sourceRepository, ids, transactions);
-        lifecyclePolicies = new SourceLifecyclePolicyService(
-                sourceRepository,
-                identityRepository,
-                identities,
-                new SourceMappedValueExtractor(new ObjectMapper()),
-                ids,
-                transactions);
-        processor = new SourceAbsenceInferenceService(
-                outbox,
-                sourceRepository,
-                identityRepository,
-                identities,
-                new JdbcSourceAbsenceInferenceWorkSink(outbox, ids),
-                ids,
-                transactions,
-                new ObjectMapper());
-
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void clearRows() {
         jdbc.execute("""

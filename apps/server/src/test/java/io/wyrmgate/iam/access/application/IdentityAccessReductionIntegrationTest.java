@@ -45,10 +45,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class IdentityAccessReductionIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final Instant NOW =
+private static final Instant NOW =
             Instant.parse("2026-09-29T10:00:00Z");
 
     private static JdbcTemplate jdbc;
@@ -69,19 +66,8 @@ class IdentityAccessReductionIntegrationTest {
     @BeforeAll
     static void start() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource =
-                new DriverManagerDataSource(
-                        POSTGRES.getJdbcUrl(),
-                        POSTGRES.getUsername(),
-                        POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .load();
-        flyway.migrate();
-        flyway.validate();
-        assertFullyMigrated(flyway);
-
-        jdbc = new JdbcTemplate(dataSource);
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         transactions = new SpringTransactionExecutor(

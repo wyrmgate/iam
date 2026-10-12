@@ -32,11 +32,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class IdentityPersistenceIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-
-    private static JdbcTemplate jdbc;
+private static JdbcTemplate jdbc;
     private static IdGenerator idGenerator;
     private static JdbcTenantRepository tenants;
     private static JdbcOutboxRepository outbox;
@@ -47,27 +43,8 @@ class IdentityPersistenceIntegrationTest {
     @BeforeAll
     static void startPostgresAndMigrateFromEmptyDatabase() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-
-        jdbc = new JdbcTemplate(dataSource);
-        idGenerator = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, idGenerator);
-        outbox = new JdbcOutboxRepository(jdbc);
-        identities = new JdbcIdentityRepository(jdbc);
-        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        commands = new IdentityCommandService(
-                identities,
-                new JdbcIdentityFactSink(outbox, idGenerator),
-                idGenerator,
-                transactions);
-
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void clearRows() {
         jdbc.execute("""

@@ -37,11 +37,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class SourceCorrelationPersistenceIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-
-    private static JdbcTemplate jdbc;
+private static JdbcTemplate jdbc;
     private static IdGenerator ids;
     private static JdbcTenantRepository tenants;
     private static JdbcOutboxRepository outbox;
@@ -54,33 +50,8 @@ class SourceCorrelationPersistenceIntegrationTest {
     @BeforeAll
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-
-        jdbc = new JdbcTemplate(dataSource);
-        ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
-        outbox = new JdbcOutboxRepository(jdbc);
-        identities = new JdbcIdentityRepository(jdbc);
-        sources = new JdbcSourceCorrelationRepository(jdbc, ids);
-        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        identityCommands = new IdentityCommandService(
-                identities,
-                new JdbcIdentityFactSink(outbox, ids),
-                ids,
-                transactions);
-        sourceCommands = new SourceCorrelationService(
-                sources,
-                identities,
-                new JdbcSourceCorrelationFactSink(outbox, ids),
-                ids,
-                transactions);
-
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void clearRows() {
         jdbc.execute("""

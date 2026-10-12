@@ -54,10 +54,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class CatalogApiIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final String ACTOR_ATTRIBUTE =
+private static final String ACTOR_ATTRIBUTE =
             ControlPlaneActorRequestContext.class.getName() + ".actor";
 
     private static JdbcTemplate jdbc;
@@ -76,22 +73,8 @@ class CatalogApiIntegrationTest {
     @BeforeAll
     static void startPostgres() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-        jdbc = new JdbcTemplate(dataSource);
-        ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
-        repository = new JdbcCatalogRepository(jdbc);
-        transactions = new SpringTransactionExecutor(
-                new DataSourceTransactionManager(dataSource));
-        commands = new CatalogCommandService(repository, ids, transactions);
-        queries = new CatalogQueryService(repository);
-        idempotency = new JdbcIdempotencyRepository(jdbc, ids);
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void reset() {
         jdbc.execute("""

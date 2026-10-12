@@ -60,10 +60,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class CatalogRoleApiIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final String ACTOR_ATTRIBUTE =
+private static final String ACTOR_ATTRIBUTE =
             ControlPlaneActorRequestContext.class.getName() + ".actor";
     private static final Instant NOW =
             Instant.parse("2026-09-26T07:45:00Z");
@@ -87,19 +84,8 @@ class CatalogRoleApiIntegrationTest {
     @BeforeAll
     static void startPostgres() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource =
-                new DriverManagerDataSource(
-                        POSTGRES.getJdbcUrl(),
-                        POSTGRES.getUsername(),
-                        POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .load();
-        flyway.migrate();
-        flyway.validate();
-        assertFullyMigrated(flyway);
-
-        jdbc = new JdbcTemplate(dataSource);
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         catalogRepository = new JdbcCatalogRepository(jdbc);

@@ -39,10 +39,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class LifecycleAccessReconciliationIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final Instant NOW = Instant.parse("2026-09-30T06:30:00Z");
+private static final Instant NOW = Instant.parse("2026-09-30T06:30:00Z");
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -62,78 +59,8 @@ class LifecycleAccessReconciliationIntegrationTest {
     @BeforeAll
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-
-        jdbc = new JdbcTemplate(dataSource);
-        ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
-        outbox = new JdbcOutboxRepository(jdbc);
-        assignments = new JdbcAccessAssignmentRepository(jdbc);
-        policies = new JdbcLifecycleAccessPolicyRepository(jdbc);
-        TransactionExecutor transactions =
-                new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        identityPolicy = new MutableIdentityPolicyQuery();
-        guard = new MutableGuard();
-        approval = new MutableApprovalCommand();
-        applicationTargetId = ids.nextId();
-        roleVersionId = ids.nextId();
-
-        CatalogAccessReferenceQuery catalog =
-                (tenant, entitlementId) ->
-                        CatalogAccessReferenceQuery.EntitlementReference.valid(applicationTargetId);
-        RoleExpansionQuery roles =
-                (tenant, roleId) -> RoleExpansionQuery.Result.available(
-                        roleId,
-                        java.util.List.of(new RoleExpansionQuery.EntitlementPath(
-                                ids.nextId(), applicationTargetId, java.util.List.of(roleVersionId))));
-        IdentityAccessReferenceQuery identityReferences = new IdentityAccessReferenceQuery() {
-            @Override
-            public boolean identityExists(TenantContext tenant, UUID identityId) {
-                return identityPolicy.contexts.containsKey(identityId);
-            }
-
-            @Override
-            public IdentityAccessStatus accessStatus(TenantContext tenant, UUID identityId) {
-                var context = identityPolicy.contexts.get(identityId);
-                if (context == null) return IdentityAccessStatus.notFound();
-                return "ACTIVE".equals(context.lifecycleState())
-                        ? IdentityAccessStatus.eligible(context.lifecycleState(), context.identityRevision())
-                        : IdentityAccessStatus.ineligible(context.lifecycleState(), context.identityRevision());
-            }
-
-            @Override
-            public PrincipalReference principal(TenantContext tenant, UUID principalId) {
-                return PrincipalReference.notFound();
-            }
-
-            @Override
-            public PrincipalSelection selectUniqueActivePrincipal(
-                    TenantContext tenant, UUID identityId, UUID targetId) {
-                return PrincipalSelection.none();
-            }
-        };
-
-        commands = new AccessAssignmentCommandService(
-                assignments,
-                identityReferences,
-                catalog,
-                roles,
-                new JdbcAccessAssignmentFactSink(outbox, ids),
-                new JdbcAccessAssignmentBoundaryScheduler(
-                        new JdbcScheduledWorkRepository(jdbc, ids)),
-                ids,
-                transactions);
-        policyService = new LifecycleAccessPolicyService(
-                policies, identityPolicy, catalog, roles, ids, transactions);
-        reconciler = new LifecycleAccessReconciliationService(
-                outbox, policies, assignments, commands, identityPolicy, guard, approval);
-
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void clearRows() {
         jdbc.execute("""

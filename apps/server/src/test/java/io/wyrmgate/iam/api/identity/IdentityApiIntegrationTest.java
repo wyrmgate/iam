@@ -86,10 +86,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class IdentityApiIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final String ACTOR_ATTRIBUTE = ControlPlaneActorRequestContext.class.getName() + ".actor";
+private static final String ACTOR_ATTRIBUTE = ControlPlaneActorRequestContext.class.getName() + ".actor";
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -112,41 +109,8 @@ class IdentityApiIntegrationTest {
     @BeforeAll
     static void startPostgres() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-
-        jdbc = new JdbcTemplate(dataSource);
-        ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
-        identities = new JdbcIdentityRepository(jdbc);
-        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        JdbcOutboxRepository outbox = new JdbcOutboxRepository(jdbc);
-        commands = new IdentityCommandService(
-                identities,
-                new JdbcIdentityFactSink(outbox, ids),
-                ids,
-                transactions);
-        idempotency = new JdbcIdempotencyRepository(jdbc, ids);
-        canonicalAttributes = new JdbcCanonicalAttributeRepository(jdbc, ids);
-        sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
-        var canonicalFacts = new JdbcCanonicalAttributeFactSink(outbox, ids);
-        canonicalConfiguration = new CanonicalAttributeConfigurationService(
-                canonicalAttributes, sourceRepository, canonicalFacts, ids, transactions);
-        canonicalResolution = new CanonicalAttributeResolutionService(
-                canonicalAttributes, sourceRepository, identities, canonicalFacts, ids, transactions);
-        CanonicalAttributeResolutionEvaluator evaluator = new CanonicalAttributeResolutionEvaluator();
-        queries = new IdentityQueryService(
-                identities,
-                new JdbcIdentityQueryRepository(jdbc),
-                canonicalAttributes,
-                new JdbcCanonicalAttributeReadRepository(jdbc),
-                evaluator);
-
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void resetDatabaseAndController() {
         jdbc.execute("""

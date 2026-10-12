@@ -41,10 +41,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class ScimLocalExecutionIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final Instant NOW = Instant.parse("2026-09-21T08:00:00Z");
+private static final Instant NOW = Instant.parse("2026-09-21T08:00:00Z");
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -60,8 +57,7 @@ class ScimLocalExecutionIntegrationTest {
     @BeforeAll
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         Flyway flyway = Flyway.configure().dataSource(dataSource).load();
         flyway.migrate();
         flyway.validate();

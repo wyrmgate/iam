@@ -37,11 +37,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class AdministrativeAuthorizationPersistenceIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-
-    private static JdbcTemplate jdbc;
+private static JdbcTemplate jdbc;
     private static IdGenerator ids;
     private static JdbcTenantRepository tenants;
     private static IdentityCommandService identityCommands;
@@ -50,27 +46,8 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
     @BeforeAll
     static void startPostgresAndMigrateFromEmptyDatabase() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-
-        jdbc = new JdbcTemplate(dataSource);
-        ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
-        JdbcIdentityRepository identities = new JdbcIdentityRepository(jdbc);
-        identityCommands = new IdentityCommandService(
-                identities,
-                new JdbcIdentityFactSink(new JdbcOutboxRepository(jdbc), ids),
-                ids,
-                new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource)));
-        authorization = new AdministrativeAuthorizationService(
-                new JdbcAdministrativeAuthorizationRepository(jdbc),
-                new IdentityGovernedActorStatusQuery(identities));
-
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void clearRows() {
         jdbc.execute("""

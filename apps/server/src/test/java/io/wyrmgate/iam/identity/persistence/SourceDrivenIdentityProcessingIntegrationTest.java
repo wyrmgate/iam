@@ -43,11 +43,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class SourceDrivenIdentityProcessingIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-
-    private static JdbcTemplate jdbc;
+private static JdbcTemplate jdbc;
     private static IdGenerator ids;
     private static JdbcTenantRepository tenants;
     private static JdbcOutboxRepository outbox;
@@ -66,68 +62,8 @@ class SourceDrivenIdentityProcessingIntegrationTest {
     @BeforeAll
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-
-        jdbc = new JdbcTemplate(dataSource);
-        ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
-        outbox = new JdbcOutboxRepository(jdbc);
-        identityRepository = new JdbcIdentityRepository(jdbc);
-        sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
-        attributeRepository = new JdbcCanonicalAttributeRepository(jdbc, ids);
-        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-
-        identities = new IdentityCommandService(
-                identityRepository,
-                new JdbcIdentityFactSink(outbox, ids),
-                ids,
-                transactions);
-        sources = new SourceCorrelationService(
-                sourceRepository,
-                identityRepository,
-                new JdbcSourceCorrelationFactSink(outbox, ids),
-                ids,
-                transactions);
-        configuration = new CanonicalAttributeConfigurationService(
-                attributeRepository,
-                sourceRepository,
-                new JdbcCanonicalAttributeFactSink(outbox, ids),
-                ids,
-                transactions);
-        resolution = new CanonicalAttributeResolutionService(
-                attributeRepository,
-                sourceRepository,
-                identityRepository,
-                new JdbcCanonicalAttributeFactSink(outbox, ids),
-                ids,
-                transactions);
-        policies = new SourceCorrelationPolicyService(
-                sourceRepository,
-                attributeRepository,
-                ids,
-                transactions);
-        ObjectMapper json = new ObjectMapper();
-        SourceMappedValueExtractor extractor = new SourceMappedValueExtractor(json);
-        lifecyclePolicies = new SourceLifecyclePolicyService(
-                sourceRepository, identityRepository, identities, extractor, ids, transactions);
-        processor = new SourceDrivenIdentityProcessingService(
-                outbox,
-                sourceRepository,
-                attributeRepository,
-                sources,
-                identities,
-                resolution,
-                lifecyclePolicies,
-                extractor,
-                transactions,
-                json);
-
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void clearRows() {
         jdbc.execute("""

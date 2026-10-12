@@ -39,10 +39,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class IntegrationRuntimePersistenceIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final Instant NOW = Instant.parse("2026-09-21T06:00:00Z");
+private static final Instant NOW = Instant.parse("2026-09-21T06:00:00Z");
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
     private static JdbcTenantRepository tenants;
@@ -53,22 +50,8 @@ class IntegrationRuntimePersistenceIntegrationTest {
     @BeforeAll
     static void startPostgresAndMigrate() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-        jdbc = new JdbcTemplate(dataSource);
-        ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
-        json = new ObjectMapper().findAndRegisterModules();
-        var outbox = new JdbcOutboxRepository(jdbc);
-        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
-        repository = new JdbcIntegrationRuntimeRepository(
-                jdbc, json, ids, observedAccessFacts);
-        transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        assertFullyMigrated(flyway);
-    }
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+}
 @BeforeEach
     void clearDatabase() {
         jdbc.execute("""

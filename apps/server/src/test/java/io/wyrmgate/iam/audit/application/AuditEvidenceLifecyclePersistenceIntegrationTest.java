@@ -42,10 +42,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class AuditEvidenceLifecyclePersistenceIntegrationTest {
-
-    private static final PostgreSQLContainer POSTGRES =
-            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();
-    private static final Instant NOW = Instant.parse("2026-10-02T07:00:00Z");
+private static final Instant NOW = Instant.parse("2026-10-02T07:00:00Z");
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
@@ -65,14 +62,8 @@ class AuditEvidenceLifecyclePersistenceIntegrationTest {
     @BeforeAll
     static void start() {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
-        DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway flyway = Flyway.configure().dataSource(dataSource).load();
-        flyway.migrate();
-        flyway.validate();
-        assertFullyMigrated(flyway);
-
-        jdbc = new JdbcTemplate(dataSource);
+        var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
+jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new JdbcTenantRepository(jdbc, ids);
         records = new JdbcAuditRecordRepository(jdbc);
