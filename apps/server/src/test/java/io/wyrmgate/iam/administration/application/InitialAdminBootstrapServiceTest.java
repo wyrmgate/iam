@@ -53,7 +53,21 @@ class InitialAdminBootstrapServiceTest {
 
     private static final class NoMutationBootstrapRepository implements InitialAdminBootstrapRepository {
         @Override
+        public Optional<InitialAdminBootstrap> findBootstrap(TenantContext tenant) {
+            return Optional.empty();
+        }
+
+        @Override
         public boolean hasAnyAdministrativeGrant(TenantContext tenant) {
+            return false;
+        }
+
+        @Override
+        public boolean isGrantEffective(
+                TenantContext tenant,
+                UUID grantId,
+                UUID actorIdentityId,
+                Instant at) {
             return false;
         }
 
