@@ -128,6 +128,16 @@ public final class InitialAdminBootstrapService {
             UUID actorPrincipalId,
             Instant now,
             UUID correlationId) {
+        InitialAdminBootstrap existing = bootstrapRepository.findBootstrap(tenant).orElse(null);
+        if (existing != null) {
+            if (existing.authenticationAnchorType()
+                            == InitialAdminAuthenticationAnchorType.FIRST_PARTY_PRINCIPAL
+                    && existing.actorIdentityId().equals(actorIdentityId)
+                    && existing.actorPrincipalId().equals(actorPrincipalId)) {
+                return resultFrom(existing);
+            }
+            throw new InitialAdminAlreadyBootstrappedException(tenant.tenantId());
+        }
         assertBootstrapAllowed(tenant, actorIdentityId);
         if (!firstPartyAnchorQuery.isEligiblePrincipalForIdentity(tenant, actorPrincipalId, actorIdentityId)) {
             throw new InitialAdminBootstrapNotAllowedException("actor_principal_not_authentication_eligible_for_identity");
@@ -165,6 +175,14 @@ public final class InitialAdminBootstrapService {
                 now,
                 correlationId);
         if (!bootstrapRepository.claimBootstrap(tenant, marker)) {
+            InitialAdminBootstrap raced = bootstrapRepository.findBootstrap(tenant).orElse(null);
+            if (raced != null
+                    && authenticationAnchorType == InitialAdminAuthenticationAnchorType.FIRST_PARTY_PRINCIPAL
+                    && raced.authenticationAnchorType() == authenticationAnchorType
+                    && raced.actorIdentityId().equals(actorIdentityId)
+                    && raced.actorPrincipalId().equals(actorPrincipalId)) {
+                return resultFrom(raced);
+            }
             throw new InitialAdminAlreadyBootstrappedException(tenant.tenantId());
         }
 
@@ -204,14 +222,18 @@ public final class InitialAdminBootstrapService {
         bootstrapRepository.insertGrant(tenant, grant);
         factSink.bootstrapped(tenant, marker);
 
+        return resultFrom(marker);
+    }
+
+    private static InitialAdminBootstrapResult resultFrom(InitialAdminBootstrap marker) {
         return new InitialAdminBootstrapResult(
-                bootstrapId,
-                authenticationAnchorType,
-                actorBindingId,
-                actorPrincipalId,
-                roleId,
-                grantId,
-                correlationId);
+                marker.id(),
+                marker.authenticationAnchorType(),
+                marker.actorBindingId(),
+                marker.actorPrincipalId(),
+                marker.administrativeRoleId(),
+                marker.administrativeGrantId(),
+                marker.correlationId());
     }
 
     private void assertBootstrapAllowed(TenantContext tenant, UUID actorIdentityId) {
