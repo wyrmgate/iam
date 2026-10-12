@@ -27,6 +27,22 @@ The browser calls only same-origin `/api/*` routes. The backend origin must neve
 
 OAuth/OIDC scopes, roles, groups and token claims are not interpreted as Wyrmgate administrative permissions. The console reads `/api/v1/current-administrative-authority` as a no-store, backend-derived point-in-time projection to hide obviously unrelated navigation and to render **My Administrative Authority**. The projection preserves semantic permission, typed scope, source and validity. It is not durable session authority and never replaces operation-time server authorization; a server `403` remains final.
 
+## Application shell
+
+The console uses a compact Wyrmgate workbench shell rather than a conventional persistent full-width sidebar.
+
+- A fixed navigation dock exposes the major product areas: Overview, Identity, Access, Governance, Catalog, Integration, Security and Audit.
+- Product areas with multiple destinations open a transient flyout instead of permanently consuming workspace width.
+- `Cmd/Ctrl+K` opens the command palette. The first tranche supports deterministic navigation only; resource search and semantic actions must not be simulated client-side before matching public API contracts exist.
+- The top bar shows server-derived tenant context, current product location and current governed actor context.
+- The context rail exposes tenant, actor, administrative-eligibility and runtime information without turning browser state into authority.
+- Navigation optimization continues to use `/api/v1/current-administrative-authority`; operation-time server authorization remains final.
+- The Integration dock group includes public provisioning-job, provisioning-task, provisioning-attempt and reconciliation-run read permissions so operators with only operational visibility can still reach the Integration surface.
+- The dock becomes a compact bottom control on narrow screens, while secondary navigation remains an overlay rather than a horizontal menu strip.
+- Reduced-motion preferences disable non-essential shell transitions.
+
+Existing menu pages remain on the prior page-surface styling while they are migrated menu-by-menu. `shell-bridge.css` is an explicit temporary compatibility layer and must be removed once the old page surface is fully replaced by the new console design system.
+
 ## Navigation and coverage
 
 | Route | Public contract coverage |
@@ -44,7 +60,7 @@ OAuth/OIDC scopes, roles, groups and token claims are not interpreted as Wyrmgat
 | `/administration` | AdministrativeRole, Grant, Delegation, Elevation and BreakGlass workflows plus current backend-derived actor authority |
 | `/audit` | AuditRecord/evidence reads and durable export/evidence-lifecycle workspaces |
 
-When the authority projection is available, top-level navigation is optimized from the current effective permission resource types. Scoped authority still leaves its relevant product area visible because resource-level authorization remains a server operation-time decision. If the projection cannot be loaded, the console does not guess: navigation remains available and the server remains authoritative.
+When the authority projection is available, navigation is optimized from the current effective permission resource types. Scoped authority still leaves its relevant product area visible because resource-level authorization remains a server operation-time decision. If the projection cannot be loaded, the console does not guess: navigation remains available and the server remains authoritative.
 
 The UI preserves the project authority distinctions: Identity versus Principal, AccessAssignment versus EffectiveAccess, governance decision versus remediation, connector lifecycle versus provider observation, and Audit evidence versus generic logging.
 
