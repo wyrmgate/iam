@@ -1,8 +1,6 @@
 package io.wyrmgate.iam.api.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import java.util.UUID;
@@ -16,8 +14,7 @@ class SemanticAuthenticationEntryPointTest {
     @Test
     void authenticationFailureIsDataMinimizedAndCorrelated() throws Exception {
         UUID correlationId = UUID.fromString("0199d839-8c00-7000-8000-000000000004");
-        IdGenerator ids = mock(IdGenerator.class);
-        when(ids.nextId()).thenReturn(correlationId);
+        IdGenerator ids = () -> correlationId;
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         new SemanticAuthenticationEntryPoint(ids).commence(
