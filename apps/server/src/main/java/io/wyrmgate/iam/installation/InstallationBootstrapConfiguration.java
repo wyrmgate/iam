@@ -9,6 +9,7 @@ import io.wyrmgate.iam.credential.application.PasswordCredentialEnrollmentServic
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
+import io.wyrmgate.iam.idp.session.ConsoleLoginRouteQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.tenant.TenantProvisioningService;
 import java.io.IOException;
@@ -35,6 +36,13 @@ public class InstallationBootstrapConfiguration {
     @Bean
     InstallationBootstrapRepository installationBootstrapRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcInstallationBootstrapRepository(jdbcTemplate);
+    }
+
+    @Bean
+    ConsoleLoginRouteQuery consoleLoginRouteQuery(
+            InstallationBootstrapRepository repository,
+            SsoClientProtocolQuery protocolClients) {
+        return new InstallationConsoleLoginRouteQuery(repository, protocolClients);
     }
 
     @Bean
