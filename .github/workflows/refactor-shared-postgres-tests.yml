@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Refactor database integration tests
+      - name: Remove redundant per-class Flyway setup
         shell: bash
         run: |
           python - <<'PY'
@@ -34,58 +34,72 @@ jobs:
           }
           changed = []
 
-          declaration = re.compile(
-              r'private static final PostgreSQLContainer POSTGRES\s*=\s*'
-              r'new PostgreSQLContainer\("postgres:18\.4-alpine"\);',
+          postgres_field = re.compile(
+              r'\n\s*private static final PostgreSQLContainer POSTGRES\s*=\s*'
+              r'io\.wyrmgate\.iam\.platform\.persistence\.SharedPostgresIntegrationDatabase\.container\(\);\s*',
               re.MULTILINE,
           )
-          teardown = re.compile(
-              r'\n\s*@AfterAll\s*\n\s*static void [A-Za-z0-9_]+\(\) \{\s*'
-              r'POSTGRES\.stop\(\);\s*\}\s*',
+          datasource = re.compile(
+              r'DriverManagerDataSource dataSource\s*=\s*new DriverManagerDataSource\(\s*'
+              r'POSTGRES\.getJdbcUrl\(\),\s*POSTGRES\.getUsername\(\),\s*POSTGRES\.getPassword\(\)\);',
               re.MULTILINE,
+          )
+          flyway = re.compile(
+              r'\s*Flyway flyway = Flyway\.configure\(\)'
+              r'.*?assertFullyMigrated\(flyway\);\s*',
+              re.DOTALL,
           )
 
           for path in sorted(root.rglob('*.java')):
               if path.name in excluded:
                   continue
               text = path.read_text()
-              if 'org.testcontainers.postgresql.PostgreSQLContainer' not in text:
-                  continue
-              if 'POSTGRES.start();' not in text:
-                  continue
-              if 'Flyway.configure' not in text:
+              if 'SharedPostgresIntegrationDatabase.reset();' not in text:
                   continue
 
-              updated = declaration.sub(
-                  'private static final PostgreSQLContainer POSTGRES =\n'
-                  '            io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.container();',
+              updated = datasource.sub(
+                  'var dataSource = io.wyrmgate.iam.platform.persistence.'
+                  'SharedPostgresIntegrationDatabase.dataSource();',
                   text,
               )
-              updated = updated.replace(
-                  'POSTGRES.start();',
-                  'io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();',
-              )
-              updated, count = teardown.subn('\n', updated)
-              if count:
-                  updated = updated.replace('import org.junit.jupiter.api.AfterAll;\n', '')
+              updated = flyway.sub('\n', updated)
+              updated = postgres_field.sub('\n', updated)
+
+              if 'Flyway' not in updated:
+                  updated = updated.replace('import org.flywaydb.core.Flyway;\n', '')
+              if 'assertFullyMigrated' not in updated:
+                  updated = updated.replace(
+                      'import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;\n',
+                      '',
+                  )
+              if 'PostgreSQLContainer' not in updated:
+                  updated = updated.replace(
+                      'import org.testcontainers.postgresql.PostgreSQLContainer;\n',
+                      '',
+                  )
+              if 'DriverManagerDataSource' not in updated:
+                  updated = updated.replace(
+                      'import org.springframework.jdbc.datasource.DriverManagerDataSource;\n',
+                      '',
+                  )
 
               if updated != text:
                   path.write_text(updated)
                   changed.append(str(path))
 
-          print(f'Refactored {len(changed)} test classes')
+          print(f'Cleaned {len(changed)} test classes')
           for path in changed:
               print(path)
           PY
-      - name: Commit refactor
+      - name: Commit cleanup
         shell: bash
         run: |
           if git diff --quiet; then
-            echo 'No refactor changes required.'
+            echo 'No cleanup changes required.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add apps/server/src/test/java
-          git commit -m 'test(server): reuse shared postgres across integration classes [shared-postgres-refactor]'
+          git commit -m 'test(server): remove repeated Flyway setup [shared-postgres-refactor]'
           git push origin HEAD:test/streamline-db-integration-fixtures
