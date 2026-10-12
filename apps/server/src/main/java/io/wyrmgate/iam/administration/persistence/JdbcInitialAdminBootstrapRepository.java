@@ -61,6 +61,32 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
     }
 
     @Override
+    public boolean isGrantEffective(
+            TenantContext tenant,
+            UUID grantId,
+            UUID actorIdentityId,
+            Instant at) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM administration.administrative_grant
+                WHERE tenant_id = ?
+                  AND id = ?
+                  AND actor_identity_id = ?
+                  AND state = 'ACTIVE'
+                  AND (valid_from IS NULL OR valid_from <= ?)
+                  AND (valid_until IS NULL OR valid_until > ?)
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                grantId,
+                actorIdentityId,
+                Timestamp.from(at),
+                Timestamp.from(at));
+        return count != null && count == 1;
+    }
+
+    @Override
     public boolean claimBootstrap(TenantContext tenant, InitialAdminBootstrap bootstrap) {
         int affected = jdbcTemplate.update(
                 """
