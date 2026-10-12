@@ -1,0 +1,120 @@
+name: Rebuild shared Postgres test refactor
+
+on:
+  push:
+    branches:
+      - test/streamline-db-integration-fixtures
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    if: ${{ !contains(github.event.head_commit.message, '[safe-shared-postgres]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: test/streamline-db-integration-fixtures
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Restore from main and safely refactor database fixtures
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          root = Path('apps/server/src/test/java')
+          paths = subprocess.check_output([
+              'git', 'grep', '-l', 'SharedPostgresIntegrationDatabase.reset();', '--', str(root)
+          ], text=True).splitlines()
+
+          container_field = re.compile(
+              r'\n\s*private static final PostgreSQLContainer POSTGRES\s*=\s*'
+              r'new PostgreSQLContainer\("postgres:18\.4-alpine"\);\s*',
+              re.MULTILINE,
+          )
+          datasource = re.compile(
+              r'DriverManagerDataSource dataSource\s*=\s*new DriverManagerDataSource\(\s*'
+              r'POSTGRES\.getJdbcUrl\(\),\s*POSTGRES\.getUsername\(\),\s*POSTGRES\.getPassword\(\)\);',
+              re.MULTILINE,
+          )
+          flyway_declaration = re.compile(
+              r'\s*Flyway flyway = Flyway\.configure\(\).*?\.load\(\);\s*',
+              re.DOTALL,
+          )
+          teardown = re.compile(
+              r'\n\s*@AfterAll\s*\n\s*static void [A-Za-z0-9_]+\(\) \{\s*'
+              r'POSTGRES\.stop\(\);\s*\}\s*',
+              re.MULTILINE,
+          )
+
+          for raw in paths:
+              path = Path(raw)
+              original = subprocess.check_output(['git', 'show', f'origin/main:{raw}'], text=True)
+              updated = container_field.sub('\n', original)
+              updated = updated.replace(
+                  'POSTGRES.start();',
+                  'io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();',
+              )
+              updated = datasource.sub(
+                  'var dataSource = io.wyrmgate.iam.platform.persistence.'
+                  'SharedPostgresIntegrationDatabase.dataSource();',
+                  updated,
+              )
+              updated = flyway_declaration.sub('\n', updated)
+              updated = re.sub(r'\s*flyway\.migrate\(\);\s*', '\n', updated)
+              updated = re.sub(r'\s*flyway\.validate\(\);\s*', '\n', updated)
+              updated = re.sub(r'\s*assertFullyMigrated\(flyway\);\s*', '\n', updated)
+              updated, stopped = teardown.subn('\n', updated)
+
+              for line in (
+                  'import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFullyMigrated;\n',
+                  'import org.flywaydb.core.Flyway;\n',
+                  'import org.springframework.jdbc.datasource.DriverManagerDataSource;\n',
+                  'import org.testcontainers.postgresql.PostgreSQLContainer;\n',
+              ):
+                  updated = updated.replace(line, '')
+              if stopped:
+                  updated = updated.replace('import org.junit.jupiter.api.AfterAll;\n', '')
+              updated = re.sub(r'(class\s+\w+[^\{]*\{)\nprivate static', r'\1\n\n    private static', updated)
+              updated = updated.replace(
+                  'SharedPostgresIntegrationDatabase.dataSource();\njdbc =',
+                  'SharedPostgresIntegrationDatabase.dataSource();\n        jdbc =',
+              )
+              updated = updated.replace('\n@BeforeEach\n', '\n\n    @BeforeEach\n')
+              path.write_text(updated)
+
+          allowed_heavy = {
+              root / 'io/wyrmgate/iam/platform/persistence/ApplicationFlywayStartupIntegrationTest.java',
+              root / 'io/wyrmgate/iam/platform/persistence/SharedPostgresIntegrationDatabase.java',
+          }
+          violations = []
+          for path in sorted(root.rglob('*.java')):
+              text = path.read_text()
+              if path not in allowed_heavy and any(token in text for token in (
+                  'new PostgreSQLContainer(', 'POSTGRES.start();', 'Flyway.configure()'
+              )):
+                  violations.append(str(path))
+          if violations:
+              raise SystemExit('Unexpected heavyweight setup remains: ' + ', '.join(violations))
+
+          print(f'Safely rebuilt {len(paths)} database integration test classes from main.')
+          print('Audit passed: heavyweight setup is centralized.')
+          PY
+      - name: Commit safe rebuild
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/server/src/test/java
+          if git diff --cached --quiet; then
+            echo 'No changes required.'
+            exit 0
+          fi
+          git commit -m 'test(server): safely centralize database integration fixtures [safe-shared-postgres]'
+          git push origin HEAD:test/streamline-db-integration-fixtures
