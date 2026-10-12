@@ -41,16 +41,61 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
             Set<SsoClientScope> allowedScopes,
             boolean requiresGovernedAccess,
             Instant now) {
+        return createWithIds(
+                tenant,
+                ids.nextId(),
+                "wc_" + ids.nextId().toString().replace("-", ""),
+                applicationId,
+                redirectUris,
+                allowedScopes,
+                requiresGovernedAccess,
+                now,
+                false);
+    }
+
+    /** Idempotent Catalog-owned registration for the fresh-install Console client. */
+    public SsoClientRegistration ensureInstallationClient(
+            TenantContext tenant,
+            UUID registrationId,
+            String clientId,
+            UUID applicationId,
+            Set<String> redirectUris,
+            Set<SsoClientScope> allowedScopes,
+            boolean requiresGovernedAccess,
+            Instant now) {
+        return createWithIds(
+                tenant,
+                registrationId,
+                clientId,
+                applicationId,
+                redirectUris,
+                allowedScopes,
+                requiresGovernedAccess,
+                now,
+                true);
+    }
+
+    private SsoClientRegistration createWithIds(
+            TenantContext tenant,
+            UUID registrationId,
+            String clientId,
+            UUID applicationId,
+            Set<String> redirectUris,
+            Set<SsoClientScope> allowedScopes,
+            boolean requiresGovernedAccess,
+            Instant now,
+            boolean idempotent) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(registrationId, "registrationId");
+        Objects.requireNonNull(now, "now");
         return transactions.required(() -> {
             var application = catalog.findApplication(tenant, applicationId)
                     .orElseThrow(() -> new IllegalArgumentException("application does not exist"));
             if (application.lifecycleState() != CatalogLifecycleState.ACTIVE) {
                 throw new IllegalArgumentException("application is retired");
             }
-            UUID id = ids.nextId();
-            String clientId = "wc_" + ids.nextId().toString().replace("-", "");
-            SsoClientRegistration registration = new SsoClientRegistration(
-                    id,
+            SsoClientRegistration desired = new SsoClientRegistration(
+                    registrationId,
                     applicationId,
                     clientId,
                     redirectUris,
@@ -60,9 +105,38 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
                     1,
                     now,
                     now);
-            registrations.insert(tenant, registration);
-            return registration;
+            SsoClientRegistration existing = registrations.find(tenant, registrationId).orElse(null);
+            if (existing != null) {
+                if (idempotent && sameInstallationClient(existing, desired)) {
+                    return existing;
+                }
+                throw new IllegalStateException("SSO registration ID already exists with different semantics");
+            }
+            Optional<ResolvedClient> existingByClientId = registrations.findActiveProtocolClient(clientId);
+            if (existingByClientId.isPresent()) {
+                SsoClientRegistration registration = existingByClientId.get().registration();
+                if (idempotent
+                        && existingByClientId.get().tenant().equals(tenant)
+                        && registration.id().equals(registrationId)
+                        && sameInstallationClient(registration, desired)) {
+                    return registration;
+                }
+                throw new IllegalStateException("SSO client_id is already registered");
+            }
+            registrations.insert(tenant, desired);
+            return desired;
         });
+    }
+
+    private static boolean sameInstallationClient(
+            SsoClientRegistration existing,
+            SsoClientRegistration desired) {
+        return existing.applicationId().equals(desired.applicationId())
+                && existing.clientId().equals(desired.clientId())
+                && existing.redirectUris().equals(desired.redirectUris())
+                && existing.allowedScopes().equals(desired.allowedScopes())
+                && existing.requiresGovernedAccess() == desired.requiresGovernedAccess()
+                && existing.lifecycleState() == SsoClientLifecycleState.ACTIVE;
     }
 
     public SsoClientRegistration replaceConfiguration(
