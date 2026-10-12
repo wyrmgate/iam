@@ -46,7 +46,7 @@ Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 - [ADR-0036 Audit EvidenceSnapshot, material display snapshot and integrity metadata](0036-audit-evidence-snapshot-material-integrity.md)
 - [ADR-0037 Audit SIEM delivery boundary](0037-audit-siem-delivery.md)
 - [ADR-0038 Provenance-fenced source suspension restoration](0038-provenance-fenced-source-suspension-restoration.md)
-- [ADR-0039 Exact DECIMAL, DATE and DATETIME lifecycle-access predicates](0039-exact-temporal-decimal-lifecycle-access-predicates.md)
+- [ADR-0039 Exact DECIMAL, DATE and DATETIME lifecycle-access predicates](0039-exact-temporal-decimal-lifecycle-predicates.md)
 - [ADR-0040 Typed MULTI membership for lifecycle-access policy](0040-typed-multi-membership-lifecycle-access-predicates.md)
 - [ADR-0041 Typed MULTI expected-set lifecycle-access predicates](0041-typed-multi-expected-set-lifecycle-access-predicates.md)
 - [ADR-0042 First-party identity provider and single sign-on](0042-first-party-identity-provider-and-sso.md)
