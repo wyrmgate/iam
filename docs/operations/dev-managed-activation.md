@@ -20,7 +20,7 @@ The topology is DEV only. It does not define or close OD-005 production HA/DR, S
 
 ## Railway service settings
 
-The selected Railway service should use:
+The selected Railway DEV service should use:
 
 - repository: `wyrmgate/iam`;
 - branch: `main`;
@@ -53,20 +53,47 @@ Optional integration-event, SIEM, connector-worker, break-glass notification, si
 
 Do not commit or paste real secrets into issues, PRs, documentation or ordinary logs.
 
+## Fresh DEV installation bootstrap
+
+For a new empty DEV database, use ADR-0044 fresh-install bootstrap. Railway's secret-variable boundary is the preferred DEV password source:
+
+```text
+IAM_BOOTSTRAP_INSTALLATION_ENABLED=true
+IAM_BOOTSTRAP_INSTALLATION_TENANT_DISPLAY_NAME=Wyrmgate
+IAM_BOOTSTRAP_INSTALLATION_IDENTITY_DISPLAY_NAME=Initial Administrator
+IAM_BOOTSTRAP_INSTALLATION_USERNAME=admin
+IAM_BOOTSTRAP_INSTALLATION_PASSWORD=<temporary Railway secret>
+IAM_BOOTSTRAP_INSTALLATION_CONSOLE_REDIRECT_URI=https://wyrmgate-iam-dev.pages.dev/callback
+```
+
+Mark `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` as a Railway secret. Do not configure `IAM_BOOTSTRAP_INSTALLATION_PASSWORD_FILE` at the same time.
+
+After startup reaches the irreversible `SEALED` state and normal username/password login is verified:
+
+1. remove `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` from Railway;
+2. disable or remove `IAM_BOOTSTRAP_INSTALLATION_ENABLED`;
+3. redeploy/restart under normal configuration if Railway does not already restart because of the variable change.
+
+A sealed deployment checks its durable installation seal before resolving bootstrap secret input, so post-seal restarts do not require the temporary secret and cannot reopen installation bootstrap.
+
+See [`fresh-install-bootstrap.md`](fresh-install-bootstrap.md) for recovery/resume and the alternative secret-file input.
+
 ## Activation procedure
 
 1. Select a reviewed `main` SHA with required GitHub checks green.
 2. Confirm Railway `Wait for CI` is enabled and the deployment is associated with that exact reviewed SHA.
 3. Confirm Railway is building the checked-in `apps/server/Dockerfile` from repository root.
 4. Confirm required Neon database variables are present in Railway secret/configuration storage.
-5. Deploy and wait for Railway's `/actuator/health` gate to return 2xx.
-6. Verify the deployed server reports healthy over the public Railway HTTPS origin.
-7. Verify `public.flyway_schema_history` records the repository current migration version successfully; for the current v0.8 repository checkpoint this is Flyway V60.
-8. Verify the server is using non-production DEV data and that tenant isolation checks pass.
-9. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin.
-10. Exercise the console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
-11. Verify the selected Neon recovery window and perform or record an isolation-safe recovery check before destructive migration/data tests.
-12. Record non-secret activation evidence: deployed SHA, Railway environment/service identifier, health result, Flyway version, database branch/project identifier, console routing result and recovery-check result.
+5. If this is a fresh empty database, configure and execute the fresh-install bootstrap above.
+6. Deploy and wait for Railway's `/actuator/health` gate to return 2xx.
+7. Verify the deployed server reports healthy over the public Railway HTTPS origin.
+8. Verify `public.flyway_schema_history` records the repository current migration version successfully; the ADR-0044 implementation checkpoint extends persistence through Flyway V67.
+9. Verify the server is using non-production DEV data and that tenant isolation checks pass.
+10. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin.
+11. Exercise the console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
+12. Verify normal Console username/password login and a protected Administration operation after bootstrap is sealed.
+13. Verify the selected Neon recovery window and perform or record an isolation-safe recovery check before destructive migration/data tests.
+14. Record non-secret activation evidence: deployed SHA, Railway environment/service identifier, health result, Flyway version, database branch/project identifier, console routing/login result and recovery-check result.
 
 ## Cloudflare Pages contract
 
@@ -115,9 +142,11 @@ Managed DEV activation is complete only when all of the following are true:
 - the current Railway service deploys a reviewed green `main` SHA;
 - Railway `/actuator/health` is healthy;
 - Flyway is confirmed at the repository current migration version;
+- a fresh installation, when applicable, has reached `SEALED` and the temporary bootstrap secret has been removed;
 - the service uses the intended Neon DEV database and non-production data;
 - tenant isolation verification passes;
 - Cloudflare Pages `/api/*` routes to the intended Railway DEV origin;
+- normal Console authentication and a protected Administration operation succeed;
 - the Neon recovery path has been verified for the current environment;
 - no real secret exists in Git or ordinary logs;
 - repository DEV topology documentation matches the deployed environment.
