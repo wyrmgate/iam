@@ -6,6 +6,7 @@ import {
   type SystemInfo,
 } from './api';
 import { OverviewPage } from './OverviewPage';
+import { RequestsApprovalsPage } from './RequestsApprovalsPage';
 import { useConsolePathname } from './consoleLocation';
 import {
   identityDetailPath,
@@ -19,7 +20,7 @@ import { AdministrationWorkspace } from './workspaces/AdministrationWorkspace';
 import { AuditWorkspace } from './workspaces/AuditWorkspace';
 import { CatalogWorkspace } from './workspaces/CatalogWorkspace';
 import { CredentialsWorkspace } from './workspaces/CredentialsWorkspace';
-import { PoliciesWorkspace, RequestsWorkspace, ReviewsWorkspace } from './workspaces/GovernanceWorkspace';
+import { PoliciesWorkspace, ReviewsWorkspace } from './workspaces/GovernanceWorkspace';
 import { IdentityWorkspace } from './workspaces/IdentityWorkspace';
 import { IntegrationsWorkspace } from './workspaces/IntegrationsWorkspace';
 import { PrincipalsWorkspace } from './workspaces/PrincipalsWorkspace';
@@ -70,7 +71,7 @@ export function App() {
       {route === 'principals' && <PrincipalsWorkspace />}
       {route === 'catalog' && <CatalogWorkspace />}
       {route === 'access' && <AccessWorkspace />}
-      {route === 'requests' && <RequestsWorkspace />}
+      {route === 'requests' && <RequestsApprovalsPage />}
       {route === 'reviews' && <ReviewsWorkspace />}
       {route === 'policies' && <PoliciesWorkspace />}
       {route === 'credentials' && <CredentialsWorkspace />}
