@@ -26,6 +26,8 @@ Page migrations should build from the local Wyrmgate-facing primitives rather th
 - `ConfirmDialog` for deliberate confirmation of materially harmful operations;
 - `Button`, `TextInput`, `SelectInput`, `CheckboxInput`, `Modal` and `SidePanel` for common interaction controls.
 
+`DataTable` keeps the small-table composition model and the stable `./ui` import boundary while standardizing enterprise-density presentation and horizontal overflow. Callers may provide `ariaLabel` or `ariaLabelledBy`, plus an optional visible or visually hidden caption. `DataTableRow` supplies domain-neutral hover/selected affordances for interactive rows, `DataTableActionCell` keeps row actions consistently aligned, and `DataTableStateRow` provides shared empty/loading placement without deciding what a domain-specific state means. Column meaning, formatting, API pagination/filter behavior and semantic actions remain in feature/workspace code.
+
 `Page` has deliberate `narrow`, `standard` and `wide` content-width modes. Shell chrome owns viewport/navigation spacing; capability pages own only their bounded content width and internal composition. Page implementations must not compensate for navigation width with page-specific offsets.
 
 These primitives are a project-owned compatibility layer. Their public shape should stay driven by Wyrmgate Console needs rather than mirroring every MUI option.
