@@ -30,8 +30,11 @@ These primitives are a project-owned compatibility layer. Their public shape sho
 ## Migration status
 
 - First-party sign-in uses the project-owned UI boundary.
-- **My Administrative Authority** now uses shared page, state, surface and data-table primitives.
-- **Integration operational status** (provisioning jobs/tasks/attempts and reconciliation runs) now uses shared page, tabs, lookup, state and data-table primitives.
+- **Overview** uses shared page and enterprise surface primitives.
+- **Identities** list/create/detail, canonical-value disclosure and lifecycle/correction actions use shared page, surface, state, table, status and confirmation primitives.
+- Identity deactivation/decommission, merge and split confirmations now use the project-owned `ConfirmDialog` rather than browser-native confirmation UI; the underlying semantic commands, ETag and idempotency contracts are unchanged.
+- **My Administrative Authority** uses shared page, state, surface and data-table primitives.
+- **Integration operational status** (provisioning jobs/tasks/attempts and reconciliation runs) uses shared page, tabs, lookup, state and data-table primitives.
 - The remaining semantic workspaces continue to retain their existing CSS classes while they are migrated page-by-page.
 
-Future tranches should preserve the same API, authorization and IAM semantic boundaries while moving Identity, Access, Governance, Catalog, Credential, Integration administration, Administration workflows and Audit onto these reusable primitives.
+Future tranches should preserve the same API, authorization and IAM semantic boundaries while moving Principal, Access, Governance, Catalog, Credential, Integration administration, Administration workflows and Audit onto these reusable primitives.
