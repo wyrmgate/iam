@@ -11,7 +11,8 @@ const sources = await readConsoleSources({
   forms: 'ui/forms.tsx',
   provider: 'ui/WyrmgateUiProvider.tsx',
   semanticWorkspace: 'SemanticWorkspace.tsx',
-  shell: 'shell-foundation.css',
+  shellFoundation: 'shell-foundation.css',
+  shellTheme: 'shell-theme.css',
   tabs: 'ui/tabs.tsx',
   tokens: 'ui/designTokens.ts',
 });
@@ -46,11 +47,12 @@ test('keyboard focus remains visible and reduced motion remains respected', () =
     /scrollBehavior: 'auto !important'/,
   );
   assertSourceContains(
-    sources.shell,
+    sources.shellTheme,
     /button:focus-visible/,
     /command-input-row:focus-within/,
     /prefers-reduced-motion: reduce/,
   );
+  assertSourceContains(sources.shellFoundation, /prefers-reduced-motion: reduce/);
 });
 
 test('form help, validation, and read-only state are exposed to assistive technology', () => {

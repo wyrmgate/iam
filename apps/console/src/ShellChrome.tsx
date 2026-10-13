@@ -11,8 +11,6 @@ import {
   shellGroupFor,
   shellGroups,
   visibleConsoleRoutes,
-  type ShellGroup,
-  type ShellGroupId,
 } from './consoleNavigation';
 import { useConsolePathname } from './consoleLocation';
 
@@ -34,13 +32,10 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   const [authorityUnavailable, setAuthorityUnavailable] = useState(false);
   const [system, setSystem] = useState<SystemInfo | null>(null);
   const [systemUnavailable, setSystemUnavailable] = useState(false);
-  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const [openGroup, setOpenGroup] = useState<ShellGroupId | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedCommand, setSelectedCommand] = useState(0);
-  const [contextOpen, setContextOpen] = useState(false);
   const [actorOpen, setActorOpen] = useState(false);
 
   const currentRoute = activeRouteFor(pathname);
@@ -84,13 +79,9 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setCommandOpen((value) => !value);
-        return;
-      }
-      if (event.key === 'Escape') {
+      } else if (event.key === 'Escape') {
         setCommandOpen(false);
-        setOpenGroup(null);
         setActorOpen(false);
-        setContextOpen(false);
         setMobileNavigationOpen(false);
       }
     };
@@ -99,7 +90,6 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   }, []);
 
   useEffect(() => {
-    setOpenGroup(null);
     setActorOpen(false);
     setMobileNavigationOpen(false);
   }, [pathname]);
@@ -112,17 +102,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
     navigateConsole(path);
     setCommandOpen(false);
     setQuery('');
-    setOpenGroup(null);
     setMobileNavigationOpen(false);
-  }
-
-  function activateCollapsedGroup(group: ShellGroup) {
-    const destinations = allowedRoutes.filter((route) => route.group === group.id);
-    if (destinations.length === 1) {
-      openRoute(destinations[0].path);
-      return;
-    }
-    setOpenGroup((current) => current === group.id ? null : group.id);
   }
 
   function commandKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -141,138 +121,93 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
     }
   }
 
-  const flyoutRoutes = openGroup ? allowedRoutes.filter((route) => route.group === openGroup) : [];
   const currentGroup = currentRoute ? shellGroupFor(currentRoute.group) : null;
-  const runtimeOnline = Boolean(system && system.status.toLowerCase() !== 'unavailable');
   const currentGroupLabel = currentGroup?.label ?? 'Console';
   const currentRouteLabel = currentRoute?.label ?? 'Page not found';
+  const runtimeOnline = Boolean(system && system.status.toLowerCase() !== 'unavailable');
 
   return (
-    <div className={`product-shell ${navigationCollapsed ? 'nav-collapsed' : ''}`}>
+    <div className="product-shell">
       <aside className={`navigation-dock ${mobileNavigationOpen ? 'mobile-open' : ''}`} aria-label="Product navigation">
         <button className="dock-brand" aria-label="Wyrmgate overview" onClick={() => openRoute('/')}>
           <span className="dock-brand-glyph" aria-hidden="true">W</span>
-          <span className="dock-brand-copy"><strong>Wyrmgate</strong><small>IAM Console</small></span>
+          <span className="dock-brand-copy"><strong>Wyrmgate</strong><small>IAM operator console</small></span>
         </button>
 
         <nav className="dock-primary" aria-label="Primary navigation">
           {allowedGroups.map((group) => {
             const destinations = allowedRoutes.filter((route) => route.group === group.id);
             const active = currentRoute?.group === group.id;
-            const singleDestination = destinations.length === 1 ? destinations[0] : null;
             return (
-              <div className={`dock-group ${active ? 'active' : ''}`} key={group.id}>
-                <button
-                  className={`dock-item dock-group-trigger ${active ? 'active' : ''}`}
-                  aria-label={group.label}
-                  aria-expanded={destinations.length > 1 ? openGroup === group.id : undefined}
-                  onClick={() => singleDestination ? openRoute(singleDestination.path) : activateCollapsedGroup(group)}
-                >
+              <section className={`dock-group ${active ? 'active' : ''}`} key={group.id} aria-label={group.label}>
+                <div className="dock-group-heading">
                   <span className="dock-code" aria-hidden="true">{group.code}</span>
-                  <span className="dock-label">{group.label}</span>
-                  {destinations.length > 1 ? <span className="dock-chevron" aria-hidden="true">›</span> : null}
-                  <span className="dock-hover-label">{group.label}</span>
-                </button>
-                {destinations.length > 1 ? (
-                  <div className="dock-subroutes">
-                    {destinations.map((route) => (
-                      <button
-                        key={route.path}
-                        className={currentRoute?.path === route.path ? 'active' : ''}
-                        onClick={() => openRoute(route.path)}
-                      >
-                        {route.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+                  <span>{group.label}</span>
+                </div>
+                <div className="dock-subroutes">
+                  {destinations.map((route) => (
+                    <button
+                      key={route.path}
+                      className={currentRoute?.id === route.id ? 'active' : ''}
+                      aria-current={currentRoute?.id === route.id ? 'page' : undefined}
+                      onClick={() => openRoute(route.path)}
+                    >
+                      <span>{route.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
             );
           })}
         </nav>
 
         <div className="dock-utility">
-          <button className="dock-item dock-utility-item" aria-label="Open command palette" onClick={() => setCommandOpen(true)}>
-            <span className="dock-code" aria-hidden="true">⌘</span>
-            <span className="dock-label">Navigate</span>
-            <span className="dock-shortcut">{navigator.platform.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl K'}</span>
-            <span className="dock-hover-label">Command palette</span>
+          <button className="dock-command" onClick={() => setCommandOpen(true)}>
+            <span>Quick navigation</span>
+            <kbd>{navigator.platform.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl K'}</kbd>
           </button>
-          <button className="dock-item dock-utility-item runtime-dock" aria-label="Open runtime context" onClick={() => setContextOpen(true)}>
+          <div className="dock-runtime" aria-label="Runtime status">
             <span className={`runtime-dot ${runtimeOnline ? 'online' : ''}`} aria-hidden="true" />
-            <span className="dock-label">{systemUnavailable ? 'Runtime unavailable' : system ? system.status : 'Checking runtime'}</span>
-            <span className="dock-hover-label">Runtime context</span>
-          </button>
-          <button
-            className="dock-item dock-collapse"
-            aria-label={navigationCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-            onClick={() => {
-              setNavigationCollapsed((value) => !value);
-              setOpenGroup(null);
-            }}
-          >
-            <span className="dock-code" aria-hidden="true">{navigationCollapsed ? '»' : '«'}</span>
-            <span className="dock-label">Collapse navigation</span>
-            <span className="dock-hover-label">{navigationCollapsed ? 'Expand navigation' : 'Collapse navigation'}</span>
-          </button>
-        </div>
-
-        {navigationCollapsed && openGroup && (
-          <div className="dock-flyout" role="menu" aria-label={`${shellGroupFor(openGroup).label} navigation`}>
-            <div className="flyout-heading">
-              <span>{shellGroupFor(openGroup).code}</span>
-              <strong>{shellGroupFor(openGroup).label}</strong>
-            </div>
-            <div className="flyout-routes">
-              {flyoutRoutes.map((route) => (
-                <button
-                  key={route.path}
-                  className={currentRoute?.path === route.path ? 'active' : ''}
-                  role="menuitem"
-                  onClick={() => openRoute(route.path)}
-                >
-                  <span>{route.label}</span>
-                  <span aria-hidden="true">↗</span>
-                </button>
-              ))}
-            </div>
+            <span>{systemUnavailable ? 'Runtime unavailable' : system ? system.status : 'Checking runtime'}</span>
           </div>
-        )}
+        </div>
       </aside>
 
       {mobileNavigationOpen ? <button className="mobile-nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavigationOpen(false)} /> : null}
-      {navigationCollapsed && openGroup ? <button className="shell-scrim" aria-label="Close navigation flyout" onClick={() => setOpenGroup(null)} /> : null}
 
       <section className="shell-stage">
         <header className="shell-topbar">
           <div className="shell-location">
             <button className="mobile-menu-trigger" aria-label="Open navigation" onClick={() => setMobileNavigationOpen(true)}>☰</button>
-            <span className="shell-scope">{authority ? `Tenant ${shortId(authority.tenantId)}` : authorityUnavailable ? 'Tenant unavailable' : 'Resolving tenant'}</span>
-            <span className="shell-separator" aria-hidden="true">/</span>
-            <span className="shell-breadcrumb"><strong>{currentGroupLabel}</strong><span>›</span>{currentRouteLabel}</span>
+            <div className="shell-location-copy">
+              <span className="shell-eyebrow">{currentGroupLabel}</span>
+              <strong>{currentRouteLabel}</strong>
+            </div>
           </div>
+
           <div className="shell-actions">
+            <div className="shell-context-summary" aria-label="Current server-derived context">
+              <span><small>Tenant</small>{authority ? shortId(authority.tenantId) : authorityUnavailable ? 'Unavailable' : 'Resolving…'}</span>
+              <span className="runtime-summary"><small>Runtime</small><span className={`runtime-dot ${runtimeOnline ? 'online' : ''}`} aria-hidden="true" />{systemUnavailable ? 'Unavailable' : system ? system.status : 'Checking…'}</span>
+            </div>
             <button className="command-trigger" onClick={() => setCommandOpen(true)}>
               <span>Navigate</span><kbd>{navigator.platform.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl K'}</kbd>
-            </button>
-            <button className={`context-trigger ${contextOpen ? 'active' : ''}`} aria-label="Open context rail" onClick={() => setContextOpen((value) => !value)}>
-              Context
             </button>
             <div className="actor-control">
               <button className="actor-trigger" aria-expanded={actorOpen} onClick={() => setActorOpen((value) => !value)}>
                 <span className="actor-mark" aria-hidden="true">{authority?.actorIdentityId.slice(0, 2).toUpperCase() ?? '—'}</span>
-                <span className="actor-copy"><strong>Actor</strong><small>{shortId(authority?.actorIdentityId)}</small></span>
+                <span className="actor-copy"><strong>Current actor</strong><small>{shortId(authority?.actorIdentityId)}</small></span>
                 <span aria-hidden="true">⌄</span>
               </button>
-              {actorOpen && (
+              {actorOpen ? (
                 <div className="actor-menu">
-                  <p className="menu-kicker">Current actor</p>
+                  <p className="menu-kicker">Server-derived session context</p>
                   <strong>{shortId(authority?.actorIdentityId)}</strong>
-                  <span>{authority ? `${authority.authorities.length} effective authority source${authority.authorities.length === 1 ? '' : 's'}` : 'Authority projection unavailable'}</span>
-                  <button onClick={() => openRoute('/administration')}>My administrative authority</button>
+                  <span>{authority ? `${authority.authorities.length} effective administrative authority source${authority.authorities.length === 1 ? '' : 's'}` : 'Authority projection unavailable'}</span>
+                  <button onClick={() => openRoute('/administration')}>View my administrative authority</button>
                   {onSignOut ? <button disabled={signOutBusy} onClick={() => void onSignOut()}>{signOutBusy ? 'Signing out…' : 'Sign out'}</button> : <span className="external-session-note">Session managed externally</span>}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         </header>
@@ -280,41 +215,24 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
         <main className="shell-workspace">{children}</main>
       </section>
 
-      <aside className={`context-rail ${contextOpen ? 'open' : ''}`} aria-hidden={!contextOpen}>
-        <div className="context-rail-header">
-          <div><span className="menu-kicker">Wyrmgate context</span><strong>{currentGroupLabel}</strong></div>
-          <button aria-label="Close context" onClick={() => setContextOpen(false)}>×</button>
-        </div>
-        <dl className="context-list">
-          <div><dt>Surface</dt><dd>{currentRouteLabel}</dd></div>
-          <div><dt>Tenant</dt><dd className="mono">{shortId(authority?.tenantId)}</dd></div>
-          <div><dt>Actor identity</dt><dd className="mono">{shortId(authority?.actorIdentityId)}</dd></div>
-          <div><dt>Administrative eligibility</dt><dd>{authority ? (authority.administrativelyEligible ? 'Eligible' : 'Not eligible') : 'Unavailable'}</dd></div>
-          <div><dt>Authority sources</dt><dd>{authority?.authorities.length ?? '—'}</dd></div>
-          <div><dt>Runtime</dt><dd>{systemUnavailable ? 'Unavailable' : system ? `${system.name} · ${system.status}` : 'Checking…'}</dd></div>
-          <div><dt>Endpoint</dt><dd className="mono">{window.location.hostname}</dd></div>
-        </dl>
-        <p className="context-note">This rail reflects server-derived shell context. It does not infer administrative permission from browser claims.</p>
-      </aside>
-
-      {commandOpen && (
+      {commandOpen ? (
         <div className="command-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) setCommandOpen(false); }}>
-          <section className="command-palette" role="dialog" aria-modal="true" aria-label="Wyrmgate command palette">
+          <section className="command-palette" role="dialog" aria-modal="true" aria-label="Wyrmgate navigation">
             <div className="command-input-row">
-              <span aria-hidden="true">⌘</span>
+              <span aria-hidden="true">⌕</span>
               <input
                 autoFocus
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={commandKeyDown}
-                placeholder="Navigate Wyrmgate…"
-                aria-label="Search navigation commands"
+                placeholder="Go to a Wyrmgate workspace…"
+                aria-label="Search navigation destinations"
               />
               <kbd>Esc</kbd>
             </div>
             <div className="command-results">
-              <div className="command-section-label">Navigate</div>
-              {paletteRoutes.length === 0 && <div className="command-empty">No available destination matches that query.</div>}
+              <div className="command-section-label">Workspaces</div>
+              {paletteRoutes.length === 0 ? <div className="command-empty">No available destination matches that query.</div> : null}
               {paletteRoutes.map((route, index) => (
                 <button
                   key={route.path}
@@ -330,7 +248,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
             <footer className="command-footer"><span>↑ ↓ Select</span><span>Enter Open</span><span>Server authorization remains final</span></footer>
           </section>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
