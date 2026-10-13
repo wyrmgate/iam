@@ -16,9 +16,29 @@ Do not enable the legacy external `iam.bootstrap.initial-admin` adapter at the s
 
 ## Prepare the initial password
 
-Create a local file readable only by the Wyrmgate process/operator boundary. The file contains only the initial administrator password. A single trailing newline is ignored.
+The trusted startup adapter accepts exactly one of two password sources before installation is sealed:
 
-Example deployment configuration:
+1. `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` — a temporary deployment-secret value, preferred for managed DEV/runtime platforms such as Railway where secret variables are the normal operator boundary; or
+2. `IAM_BOOTSTRAP_INSTALLATION_PASSWORD_FILE` — a local operator-controlled secret file, preferred where an ephemeral secret mount/file is available.
+
+Do not configure both. The startup adapter fails closed if both are present or if neither is present before `SEALED`.
+
+### Managed deployment secret example
+
+```text
+IAM_BOOTSTRAP_INSTALLATION_ENABLED=true
+IAM_BOOTSTRAP_INSTALLATION_TENANT_DISPLAY_NAME=Wyrmgate
+IAM_BOOTSTRAP_INSTALLATION_IDENTITY_DISPLAY_NAME=Initial Administrator
+IAM_BOOTSTRAP_INSTALLATION_USERNAME=admin
+IAM_BOOTSTRAP_INSTALLATION_PASSWORD=<temporary deployment secret>
+IAM_BOOTSTRAP_INSTALLATION_CONSOLE_REDIRECT_URI=https://wyrmgate.example/callback
+```
+
+Mark `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` as a secret in the deployment platform. Do not place its value in source control, command output, tickets, screenshots or ordinary logs.
+
+### Secret-file example
+
+Create a local file readable only by the Wyrmgate process/operator boundary. The file contains only the initial administrator password. A single trailing newline is ignored.
 
 ```text
 IAM_BOOTSTRAP_INSTALLATION_ENABLED=true
@@ -31,7 +51,7 @@ IAM_BOOTSTRAP_INSTALLATION_CONSOLE_REDIRECT_URI=https://wyrmgate.example/callbac
 
 These environment names are the Spring relaxed-binding form of the `iam.bootstrap.installation.*` properties used by the startup adapter.
 
-The password file is external installation input. Its contents are never copied into `platform.installation_bootstrap`, ordinary IAM state, events, audit, logs or command results.
+The password is ephemeral external installation input regardless of source. It is passed only to Credential enrollment/verification and is never copied into `platform.installation_bootstrap`, ordinary IAM state, events, audit, logs or command results.
 
 ## What startup does
 
@@ -55,7 +75,7 @@ Each capability owns its authoritative mutation. The installation service does n
 
 ## Interruption and resume
 
-Restart with the same non-secret installation inputs and the same password file.
+Restart with the same non-secret installation inputs and the same password through the same selected secret source.
 
 All capability object IDs are preallocated in the durable plan. If a capability transaction committed but its checkpoint did not, replay verifies/reuses the exact object instead of creating a duplicate.
 
@@ -79,12 +99,14 @@ Only then does the deployment process advance `VERIFIED -> SEALED`.
 
 After `SEALED`:
 
-1. disable `IAM_BOOTSTRAP_INSTALLATION_ENABLED`;
-2. remove/unmount the initial password file;
+1. disable or remove `IAM_BOOTSTRAP_INSTALLATION_ENABLED`;
+2. remove `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` from deployment configuration, or remove/unmount the password file, depending on the selected source;
 3. restart under normal configuration if needed;
 4. open the Wyrmgate Console and authenticate with the configured username and password;
 5. verify a protected Administration operation succeeds through normal session authentication plus Administration authorization;
 6. create the normal administrator/delegation/recovery posture required for the deployment rather than retaining installation material.
+
+A sealed deployment checks the durable seal before resolving bootstrap secret input. Therefore normal restarts after `SEALED` do not require either password source and stale/missing bootstrap secret configuration cannot reopen installation.
 
 The Console UI/runtime supplies its configured `client_id` and ApplicationTarget to the local authentication contract. The human login experience is username + password; those hidden routing selectors do not become user-selected Tenant input.
 
@@ -92,6 +114,7 @@ The Console UI/runtime supplies its configured `client_id` and ApplicationTarget
 
 - There is no `/api/bootstrap` endpoint.
 - There is no permanent `admin/admin`, root user, wildcard grant or reusable bootstrap password.
+- Managed deployment secret variables may remain recoverable in provider-internal configuration/history according to that provider's controls; remove the temporary bootstrap variable immediately after `SEALED` and use the file/secret-mount option where a tighter secret lifecycle is required.
 - The local verifier provider is `wyrmgate-local-password-v1` and is system-managed by Credential; ordinary Credential creation cannot select it.
 - The private local verifier store contains salted one-way PBKDF2-HMAC-SHA-256 material, not plaintext or reversible password material.
 - `platform.installation_bootstrap` contains non-secret plan data and the irreversible seal only.
