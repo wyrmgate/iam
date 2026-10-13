@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const viewportCss = await readFile(new URL('../src/auth-login-viewport.css', import.meta.url), 'utf8');
+const signInGate = await readFile(new URL('../src/SignInGate.tsx', import.meta.url), 'utf8');
 const main = await readFile(new URL('../src/main.tsx', import.meta.url), 'utf8');
 
 test('enterprise login owns dynamic viewport containment', () => {
@@ -15,13 +16,29 @@ test('enterprise login owns dynamic viewport containment', () => {
   assert.match(viewportCss, /\.auth-network[\s\S]*overflow:\s*hidden/);
 });
 
+test('desktop login uses a balanced, compact enterprise composition', () => {
+  assert.match(viewportCss, /grid-template-columns:\s*minmax\(0,\s*1\.02fr\)\s*minmax\(30rem,\s*\.98fr\)/);
+  assert.match(viewportCss, /\.auth-form-wrap-enterprise[\s\S]*max-width:\s*28rem/);
+  assert.match(viewportCss, /\.auth-input \.MuiOutlinedInput-root[\s\S]*min-height:\s*3\.65rem/);
+  assert.match(viewportCss, /\.auth-core-face[\s\S]*transform:\s*none/);
+});
+
 test('short desktop viewports compact instead of forcing the login taller', () => {
   assert.match(viewportCss, /@media \(min-width: 981px\) and \(max-height: 800px\)/);
   assert.match(viewportCss, /\.auth-form-panel-enterprise[\s\S]*padding:/);
-  assert.match(viewportCss, /\.auth-network[\s\S]*36dvh/);
+  assert.match(viewportCss, /\.auth-network[\s\S]*34dvh/);
 });
 
 test('stacked tablet and mobile layouts do not inherit desktop dynamic viewport minimums', () => {
-  assert.match(viewportCss, /@media \(max-width: 980px\)[\s\S]*\.auth-brand-panel-enterprise[\s\S]*min-height:\s*43rem/);
+  assert.match(viewportCss, /@media \(max-width: 980px\)[\s\S]*\.auth-brand-panel-enterprise[\s\S]*min-height:\s*40rem/);
   assert.match(viewportCss, /@media \(max-width: 680px\)[\s\S]*\.auth-form-panel-enterprise[\s\S]*min-height:\s*auto/);
+});
+
+test('sign-in surface exposes only supported authentication controls', () => {
+  assert.doesNotMatch(signInGate, /auth-language-control|auth-form-topbar/);
+  assert.doesNotMatch(signInGate, /auth-security-card/);
+  assert.match(signInGate, /Server resolved/);
+  assert.match(signInGate, /Secure server-managed session/);
+  assert.match(signInGate, /Tenant routing is resolved by Wyrmgate/);
+  assert.doesNotMatch(signInGate, /Forgot password|Remember me|Sign in with/);
 });
