@@ -38,7 +38,8 @@ test('legacy application frame is removed and shell chrome remains the single fr
   assert.doesNotMatch(app, /className="sidebar"/);
   assert.doesNotMatch(app, /className="content"/);
   assert.doesNotMatch(app, /aria-label="Primary navigation"/);
-  assert.match(shell, /className=\{`product-shell/);
+  assert.match(shell, /className=(?:"product-shell"|\{`product-shell)/);
+  assert.match(shell, /<aside[\s\S]*aria-label="Product navigation"/);
   assert.match(shell, /<main className="shell-workspace">\{children\}<\/main>/);
 });
 

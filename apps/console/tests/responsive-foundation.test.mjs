@@ -1,8 +1,9 @@
 import test from 'node:test';
 import { assertSourceContains, assertSourceExcludes, readConsoleSources } from './helpers/source-contract.mjs';
 
-const { shell, page } = await readConsoleSources({
+const { shell, shellBase, page } = await readConsoleSources({
   shell: 'shell-foundation.css',
+  shellBase: 'shell.css',
   page: 'ui/page.tsx',
 });
 
@@ -30,32 +31,31 @@ test('responsive page foundation keeps table form and dialog ownership outside t
 
 test('shell grid and workspace cannot force avoidable horizontal overflow', () => {
   assertSourceContains(
-    shell,
-    /\.product-shell\s*\{[\s\S]*min-width:\s*0;[\s\S]*max-width:\s*100%/,
-    /\.shell-stage\s*\{[\s\S]*min-width:\s*0;[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%/,
-    /\.shell-workspace\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*box-sizing:\s*border-box/,
-    /\.product-shell \.app-shell > \.content\s*\{[\s\S]*min-width:\s*0;[\s\S]*max-width:\s*100%;[\s\S]*box-sizing:\s*border-box/,
+    shellBase,
+    /\.product-shell\s*\{[\s\S]*grid-template-columns:[\s\S]*minmax\(0, 1fr\)/,
+    /\.shell-stage\s*\{[\s\S]*min-width:\s*0;[\s\S]*width:\s*100%/,
+    /\.shell-workspace\s*\{[\s\S]*min-width:\s*0;[\s\S]*width:\s*100%;[\s\S]*box-sizing:\s*border-box/,
+    /\.product-shell \.app-shell > \.content\s*\{[\s\S]*min-width:\s*0;[\s\S]*max-width:\s*100%/,
   );
 });
 
-test('narrow and zoom-equivalent widths retain reachable shell context without semantic substitution', () => {
+test('narrow and zoom-equivalent widths retain reachable navigation and current location', () => {
   assertSourceContains(
     shell,
     /@media \(max-width: 760px\)/,
-    /\.navigation-dock,[\s\S]*max-width:\s*calc\(100vw - 44px\)/,
-    /\.shell-location\s*\{[\s\S]*overflow:\s*hidden/,
-    /\.shell-scope\s*\{[\s\S]*text-overflow:\s*ellipsis/,
-    /\.context-rail\s*\{[\s\S]*max-width:\s*calc\(100vw - 24px\)/,
-    /@media \(max-width: 480px\)/,
-    /@media \(max-width: 360px\)/,
+    /\.navigation-dock\s*\{[\s\S]*max-width:\s*calc\(100vw - 44px\)/,
+    /\.navigation-dock\.mobile-open\s*\{[\s\S]*transform:\s*translateX\(0\)/,
+    /\.mobile-menu-trigger\s*\{[\s\S]*display:\s*grid/,
+    /\.shell-location-copy strong\s*\{[\s\S]*max-width:\s*42vw/,
+    /@media \(max-width: 420px\)/,
   );
-  assertSourceExcludes(shell, /display:\s*none;[^}]*\.context-trigger/);
+  assertSourceExcludes(shell, /nth-of-type\(n\+6\)[\s\S]*display:\s*none/);
 });
 
 test('reduced-motion shell behavior remains explicit', () => {
   assertSourceContains(
     shell,
     /@media \(prefers-reduced-motion: reduce\)/,
-    /\.product-shell,[\s\S]*\.navigation-dock[\s\S]*transition:\s*none/,
+    /\.navigation-dock\s*\{[\s\S]*transition:\s*none/,
   );
 });
