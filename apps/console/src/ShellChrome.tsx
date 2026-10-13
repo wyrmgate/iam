@@ -7,7 +7,6 @@ import {
 } from './api';
 import {
   activeRouteFor,
-  CONSOLE_NAVIGATION_EVENT,
   navigateConsole,
   shellGroupFor,
   shellGroups,
@@ -15,26 +14,13 @@ import {
   type ShellGroup,
   type ShellGroupId,
 } from './consoleNavigation';
+import { useConsolePathname } from './consoleLocation';
 
 type ShellChromeProps = {
   children: ReactNode;
   onSignOut?: () => Promise<void> | void;
   signOutBusy?: boolean;
 };
-
-function usePathname() {
-  const [pathname, setPathname] = useState(window.location.pathname);
-  useEffect(() => {
-    const onLocationChange = () => setPathname(window.location.pathname);
-    window.addEventListener('popstate', onLocationChange);
-    window.addEventListener(CONSOLE_NAVIGATION_EVENT, onLocationChange);
-    return () => {
-      window.removeEventListener('popstate', onLocationChange);
-      window.removeEventListener(CONSOLE_NAVIGATION_EVENT, onLocationChange);
-    };
-  }, []);
-  return pathname;
-}
 
 function shortId(value: string | undefined | null): string {
   if (!value) return 'Unavailable';
@@ -43,7 +29,7 @@ function shortId(value: string | undefined | null): string {
 }
 
 export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellChromeProps) {
-  const pathname = usePathname();
+  const pathname = useConsolePathname();
   const [authority, setAuthority] = useState<CurrentAdministrativeAuthority | null>(null);
   const [authorityUnavailable, setAuthorityUnavailable] = useState(false);
   const [system, setSystem] = useState<SystemInfo | null>(null);
