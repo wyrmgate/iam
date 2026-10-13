@@ -145,7 +145,7 @@ const theme = createTheme({
     MuiTableRow: {
       styleOverrides: {
         root: {
-          '&.MuiTableRow-hover:hover': { backgroundColor: '#f3f7fb' },
+          '&.MuiTableRow-hover:hover': { backgroundColor: tokens.color.neutral.surfaceSubtle },
           '&.Mui-selected, &.Mui-selected:hover': {
             backgroundColor: tokens.color.product.accentSubtle,
             boxShadow: `inset 3px 0 ${tokens.color.product.accent}`,
@@ -164,8 +164,8 @@ const theme = createTheme({
           verticalAlign: 'middle',
         },
         head: {
-          backgroundColor: '#f3f6fa',
-          color: '#536276',
+          backgroundColor: tokens.color.neutral.surfaceSubtle,
+          color: tokens.color.neutral.textSecondary,
           fontWeight: 750,
           fontSize: '0.75rem',
           letterSpacing: '.015em',
