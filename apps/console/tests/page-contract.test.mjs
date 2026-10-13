@@ -8,6 +8,7 @@ const {
   navigation,
   shellFoundation,
   ui,
+  uiPage,
   pages,
   semanticWorkspace,
   integrationOperations,
@@ -19,6 +20,7 @@ const {
   navigation: 'consoleNavigation.ts',
   shellFoundation: 'shell-foundation.css',
   ui: 'ui/index.tsx',
+  uiPage: 'ui/page.tsx',
   pages: 'ControlPlanePages.tsx',
   semanticWorkspace: 'SemanticWorkspace.tsx',
   integrationOperations: 'IntegrationOperationsPage.tsx',
@@ -82,14 +84,15 @@ test('mobile navigation exposes all destinations instead of hiding later groups'
   );
 });
 
-test('page foundation exposes deliberate width modes and a reusable toolbar', () => {
+test('page foundation exposes deliberate width modes and a reusable toolbar through the stable ui barrel', () => {
   assertSourceContains(
-    ui,
+    uiPage,
     /type PageWidth = 'narrow' \| 'standard' \| 'wide'/,
     /data-page-width=\{width\}/,
     /export function PageToolbar/,
     /minWidth:\s*0/,
   );
+  assertSourceContains(ui, /export \{ Page, PageHeader, PageToolbar, Surface \} from '\.\/page'/);
 });
 
 test('browser client enforces same-origin API routing', () => {
