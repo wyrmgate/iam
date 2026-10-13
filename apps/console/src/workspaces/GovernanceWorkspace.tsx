@@ -2,30 +2,6 @@ import { V1_ROOT } from '../api';
 import { type Spec, Workspace, WorkspaceTabs } from '../SemanticWorkspace';
 import { iso, list, nullable } from './workspaceSpecHelpers';
 
-const approvalSpec: Spec = {
-  eyebrow: 'Governance · approval evidence',
-  title: 'Approval Inbox',
-  description: 'Current-stage approval work for the governed approver. Approval cases and decisions are Governance process/evidence state; they do not mutate Access directly.',
-  list: list(`${V1_ROOT}/governance/approval-inbox`),
-  detail: (id) => `${V1_ROOT}/governance/approvals/${encodeURIComponent(id)}`,
-  columns: ['subjectKind', 'subjectId', 'state', 'currentStageOrdinal'],
-  actions: [
-    {
-      label: 'Approve current stage',
-      path: (id) => `${V1_ROOT}/governance/approvals/${encodeURIComponent(id)}/approve`,
-      fields: [{ name: 'reason', label: 'Decision reason', type: 'textarea', help: 'Optional evidence recorded with this immutable approval decision.' }],
-      body: (values) => ({ reason: nullable(values.reason) }),
-    },
-    {
-      label: 'Reject current stage',
-      path: (id) => `${V1_ROOT}/governance/approvals/${encodeURIComponent(id)}/reject`,
-      destructive: true,
-      fields: [{ name: 'reason', label: 'Decision reason', type: 'textarea', help: 'Optional evidence recorded with this immutable rejection decision.' }],
-      body: (values) => ({ reason: nullable(values.reason) }),
-    },
-  ],
-};
-
 const campaignSpec: Spec = {
   eyebrow: 'Governance · review campaign',
   title: 'Review Campaigns',
@@ -79,56 +55,6 @@ const remediationSpec: Spec = {
   description: 'Lookup durable remediation process state created by a REVOKE decision. APPLIED means Access accepted the authoritative reduction; it does not mean provider removal is complete.',
   detail: (id) => `${V1_ROOT}/governance/review-remediations/${encodeURIComponent(id)}`,
 };
-
-const requestItemSpec: Spec = {
-  eyebrow: 'Governance · request item',
-  title: 'Request Item Status',
-  description: 'Inspect the governable unit inside an AccessRequest. Evaluation, approval, authorization, Access application, and provider fulfillment are intentionally distinct states.',
-  detail: (id) => `${V1_ROOT}/governance/request-items/${encodeURIComponent(id)}`,
-};
-
-function AccessRequestPage() {
-  const spec: Spec = {
-    eyebrow: 'Governance · access request',
-    title: 'Access Requests',
-    description: 'Create a typed self-service DRAFT request, inspect its items, then submit the request for durable Governance evaluation. The server remains authoritative for eligibility, policy, approval, and authorization.',
-    detail: (id) => `${V1_ROOT}/governance/access-requests/${encodeURIComponent(id)}`,
-    create: {
-      path: `${V1_ROOT}/governance/access-requests`,
-      fields: [
-        { name: 'beneficiaryIdentityId', label: 'Beneficiary Identity ID', required: true, help: 'The accepted self-service contract requires the beneficiary to be the authenticated governed Identity.' },
-        { name: 'targetKind', label: 'Requested target kind', type: 'select', options: ['ROLE', 'ENTITLEMENT'], required: true, help: 'Choose exactly one typed Catalog target kind.' },
-        { name: 'targetId', label: 'Requested target ID', required: true, help: 'Stable Role or Entitlement identifier matching the selected target kind.' },
-        { name: 'principalConstraintKind', label: 'Principal constraint', type: 'select', options: ['ANY', 'SPECIFIC'], required: true, help: 'ANY allows accepted realization semantics; SPECIFIC additionally requires a Principal ID.' },
-        { name: 'specificPrincipalId', label: 'Specific Principal ID', help: 'Required by the server only when the principal constraint is SPECIFIC.' },
-        { name: 'validFrom', label: 'Valid from', type: 'datetime-local', help: 'Optional requested access start. Leave empty for no explicit lower bound.' },
-        { name: 'validUntil', label: 'Valid until', type: 'datetime-local', help: 'Optional requested access end. Leave empty for no explicit upper bound.' },
-      ],
-      body: (values) => ({
-        beneficiaryIdentityId: values.beneficiaryIdentityId,
-        items: [{
-          targetKind: values.targetKind,
-          targetId: values.targetId,
-          principalConstraintKind: values.principalConstraintKind,
-          specificPrincipalId: nullable(values.specificPrincipalId),
-          validFrom: values.validFrom ? iso(values.validFrom) : null,
-          validUntil: values.validUntil ? iso(values.validUntil) : null,
-        }],
-      }),
-    },
-    actions: [{ label: 'Submit for Governance evaluation', path: (id) => `${V1_ROOT}/governance/access-requests/${encodeURIComponent(id)}/submit` }],
-  };
-
-  return <Workspace spec={spec} />;
-}
-
-export function RequestsWorkspace() {
-  return <WorkspaceTabs tabs={[
-    { id: 'request', label: 'Access request', content: <AccessRequestPage /> },
-    { id: 'item', label: 'Request item status', content: <Workspace spec={requestItemSpec} /> },
-    { id: 'approval', label: 'Approval evidence', content: <Workspace spec={approvalSpec} /> },
-  ]} />;
-}
 
 export function ReviewsWorkspace() {
   return <WorkspaceTabs tabs={[
