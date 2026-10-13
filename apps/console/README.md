@@ -27,6 +27,21 @@ The browser calls only same-origin `/api/*` routes. The backend origin must neve
 
 OAuth/OIDC scopes, roles, groups and token claims are not interpreted as Wyrmgate administrative permissions. The console reads `/api/v1/current-administrative-authority` as a no-store, backend-derived point-in-time projection to hide obviously unrelated navigation and to render **My Administrative Authority**. The projection preserves semantic permission, typed scope, source and validity. It is not durable session authority and never replaces operation-time server authorization; a server `403` remains final.
 
+## Enterprise design system
+
+The Console uses one deterministic enterprise visual system across authentication, shell chrome and all currently implemented IAM workspaces.
+
+- Light application surfaces prioritize dense administrative readability over decorative dashboard styling.
+- A dark navy navigation dock provides stable product-area orientation without consuming full sidebar width.
+- A white contextual top bar keeps tenant, current product location, command navigation and governed actor context visible.
+- Tables, forms, resource details, state surfaces, tabs and semantic action controls share one border, spacing, typography and state vocabulary.
+- Authentication uses a dedicated split enterprise sign-in surface while preserving server-side tenant routing and the no-browser-token-storage boundary.
+- Success, warning, danger and lifecycle colors are semantic and deliberately separate from the blue product accent.
+- Narrow-screen layouts preserve the same semantic navigation and operation surfaces instead of substituting simplified browser authority.
+- Reduced-motion preferences disable non-essential transitions.
+
+The previous temporary `shell-bridge.css` compatibility layer has been removed. Existing public semantic pages now render directly within the same design system rather than carrying a separate legacy dark page surface.
+
 ## Application shell
 
 The console uses a compact Wyrmgate workbench shell rather than a conventional persistent full-width sidebar.
@@ -40,8 +55,6 @@ The console uses a compact Wyrmgate workbench shell rather than a conventional p
 - The Integration dock group includes public provisioning-job, provisioning-task, provisioning-attempt and reconciliation-run read permissions so operators with only operational visibility can still reach the Integration surface.
 - The dock becomes a compact bottom control on narrow screens, while secondary navigation remains an overlay rather than a horizontal menu strip.
 - Reduced-motion preferences disable non-essential shell transitions.
-
-Existing menu pages remain on the prior page-surface styling while they are migrated menu-by-menu. `shell-bridge.css` is an explicit temporary compatibility layer and must be removed once the old page surface is fully replaced by the new console design system.
 
 ## Navigation and coverage
 
