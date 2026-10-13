@@ -8,8 +8,11 @@ import {
   DataTable,
   Page,
   PageHeader,
+  PageToolbar,
   SelectInput,
+  SidePanel,
   StatePanel,
+  StatusChip,
   Surface,
   Tab,
   TabPanel,
@@ -57,7 +60,23 @@ export type Spec = {
 };
 
 const redacted = /(secret|password|token|private|raw|configuration|referenceKey)/i;
+const technicalField = /^(id|tenantId|revision|createdAt|updatedAt|etag)$/i;
 const asText = (value: any) => value === null || value === undefined || value === '' ? '—' : typeof value === 'object' ? '[structured]' : String(value);
+
+function fieldLabel(value: string) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function resourceLabel(resource: Resource, fallback: string) {
+  for (const key of ['displayName', 'name', 'principalKey', 'username', 'code', 'id']) {
+    const value = resource[key];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return fallback;
+}
 
 function ErrorState({ error }: { error: unknown }) {
   let title = 'Request failed';
@@ -140,7 +159,7 @@ function SemanticForm({ fields, label, warning, onSubmit }: { fields: Field[]; l
   }
 
   return (
-    <Box component="form" onSubmit={submit} sx={{ display: 'grid', gap: 2 }}>
+    <Box component="form" onSubmit={submit} sx={{ display: 'grid', gap: 2.5, p: 3 }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
         {fields.map((field) => (
           <FieldControl key={field.name} field={field} value={values[field.name]} onChange={(value) => setValues((current) => ({ ...current, [field.name]: value }))} />
@@ -163,15 +182,37 @@ function SemanticForm({ fields, label, warning, onSubmit }: { fields: Field[]; l
   );
 }
 
-function Details({ resource }: { resource: Resource }) {
+function DetailFields({ resource }: { resource: Resource }) {
+  const entries = Object.entries(resource);
+  const primary = entries.filter(([key]) => !technicalField.test(key));
+  const technical = entries.filter(([key]) => technicalField.test(key));
+
+  function fieldGrid(values: Array<[string, any]>) {
+    return (
+      <Box component="dl" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 0, m: 0 }}>
+        {values.map(([key, value]) => (
+          <Box key={key} sx={{ minWidth: 0, py: 1.25, pr: 2, borderBottom: 1, borderColor: 'divider' }}>
+            <Typography component="dt" variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{fieldLabel(key)}</Typography>
+            <Typography component="dd" variant="body2" sx={{ m: 0, mt: 0.35, overflowWrap: 'anywhere', fontWeight: 550 }}>
+              {redacted.test(key) ? 'Configured / redacted' : asText(value)}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+    );
+  }
+
   return (
-    <Box component="dl" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 1.25, m: 0 }}>
-      {Object.entries(resource).map(([key, value]) => (
-        <Box key={key} sx={{ minWidth: 0, p: 1.25, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
-          <Typography component="dt" variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700 }}>{key}</Typography>
-          <Typography component="dd" variant="body2" sx={{ m: 0, mt: 0.5, overflowWrap: 'anywhere' }}>{redacted.test(key) ? 'Configured / redacted' : asText(value)}</Typography>
+    <Box sx={{ display: 'grid', gap: 2 }}>
+      {primary.length ? fieldGrid(primary) : <StatePanel>No additional resource attributes were returned.</StatePanel>}
+      {technical.length ? (
+        <Box component="details" sx={{ borderTop: 1, borderColor: 'divider', pt: 1.5 }}>
+          <Typography component="summary" variant="body2" sx={{ cursor: 'pointer', color: 'text.secondary', fontWeight: 700 }}>
+            Technical identifiers and revision metadata
+          </Typography>
+          <Box sx={{ mt: 1 }}>{fieldGrid(technical)}</Box>
         </Box>
-      ))}
+      ) : null}
     </Box>
   );
 }
@@ -186,8 +227,10 @@ export function Workspace({ spec }: { spec: Spec }) {
   const [actionValues, setActionValues] = useState<Values>({});
   const [pendingAction, setPendingAction] = useState('');
   const [confirmation, setConfirmation] = useState<Action | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const items = pages.flatMap((page) => page.items);
   const next = pages.at(-1)?.nextCursor ?? null;
+  const selectedLabel = detail ? resourceLabel(detail.data, id || spec.title) : null;
 
   useEffect(() => {
     if (!spec.list) return;
@@ -208,6 +251,7 @@ export function Workspace({ spec }: { spec: Spec }) {
     try {
       setDetail(await apiRequest<Resource>(spec.detail(target)));
       setId(target);
+      setActionValues({});
     } catch (cause) {
       setError(cause);
       setDetail(null);
@@ -235,6 +279,7 @@ export function Workspace({ spec }: { spec: Spec }) {
       setId(createdId);
       setDetail(result);
     }
+    setCreateOpen(false);
     setRefresh((value) => value + 1);
   }
 
@@ -278,73 +323,107 @@ export function Workspace({ spec }: { spec: Spec }) {
     void executeAction(action);
   }
 
-  return (
-    <Page>
-      <PageHeader eyebrow={spec.eyebrow} title={spec.title} description={spec.description} />
+  const actions = spec.create ? <Button variant="contained" onClick={() => setCreateOpen(true)}>Create {spec.title.replace(/s$/, '')}</Button> : undefined;
 
-      {spec.create ? (
-        <Surface title="Create" description="Create through the accepted semantic resource contract.">
-          <SemanticForm fields={spec.create.fields} label="Create" warning={spec.create.warning} onSubmit={create} />
-        </Surface>
-      ) : null}
+  return (
+    <Page width="wide">
+      <PageHeader eyebrow={spec.eyebrow} title={spec.title} description={spec.description} actions={actions} />
 
       {error !== null ? <ErrorState error={error} /> : null}
 
-      {spec.list ? (
-        <>
-          {loading && items.length === 0 ? <StatePanel>Loading…</StatePanel> : null}
-          {!loading && items.length === 0 && error === null ? <StatePanel>No resources found.</StatePanel> : null}
-          {items.length > 0 ? (
-            <Surface title="Resources">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: spec.list ? 'minmax(0, 1.45fr) minmax(22rem, .75fr)' : '1fr' }, gap: 2.5, alignItems: 'start' }}>
+        {spec.list ? (
+          <Surface
+            title="Collection"
+            description={loading && items.length === 0 ? 'Loading current resources…' : `${items.length} resource${items.length === 1 ? '' : 's'} loaded from the current server view.`}
+            actions={<StatusChip label={loading ? 'Loading' : next ? 'More available' : 'Current page loaded'} color={loading ? 'info' : 'default'} />}
+          >
+            {loading && items.length === 0 ? <StatePanel>Loading…</StatePanel> : null}
+            {!loading && items.length === 0 && error === null ? <StatePanel title="No resources found">There are no resources in the current server result.</StatePanel> : null}
+            {items.length > 0 ? (
               <DataTable minWidth={820} ariaLabel={`${spec.title} resources`}>
                 <TableHead>
                   <TableRow>
-                    {(spec.columns ?? ['id']).map((column) => <TableCell key={column} component="th" scope="col">{column}</TableCell>)}
-                    <TableCell component="th" scope="col" align="right">Open</TableCell>
+                    {(spec.columns ?? ['id']).map((column) => <TableCell key={column} component="th" scope="col">{fieldLabel(column)}</TableCell>)}
+                    <TableCell component="th" scope="col" align="right">Details</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {items.map((item, index) => (
-                    <TableRow key={String(item.id ?? index)} hover>
-                      {(spec.columns ?? ['id']).map((column) => <TableCell key={column}>{redacted.test(column) ? 'Redacted' : asText(item[column])}</TableCell>)}
-                      <TableCell align="right">{typeof item.id === 'string' ? <Button size="small" variant="text" onClick={() => void lookup(item.id)}>View</Button> : null}</TableCell>
-                    </TableRow>
-                  ))}
+                  {items.map((item, index) => {
+                    const itemId = typeof item.id === 'string' ? item.id : null;
+                    const selected = Boolean(itemId && itemId === id);
+                    return (
+                      <TableRow key={String(item.id ?? index)} hover selected={selected}>
+                        {(spec.columns ?? ['id']).map((column) => <TableCell key={column}>{redacted.test(column) ? 'Redacted' : asText(item[column])}</TableCell>)}
+                        <TableCell align="right">{itemId ? <Button size="small" variant={selected ? 'outlined' : 'text'} onClick={() => void lookup(itemId)}>{selected ? 'Selected' : 'Open'}</Button> : null}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </DataTable>
-            </Surface>
-          ) : null}
-          {next ? <Button variant="outlined" disabled={loading} onClick={() => void loadMore()} sx={{ justifySelf: 'start' }}>{loading ? 'Loading…' : 'Load more'}</Button> : null}
-        </>
-      ) : null}
+            ) : null}
+            {next ? (
+              <PageToolbar sx={{ mt: 1.5 }}>
+                <Button variant="outlined" disabled={loading} onClick={() => void loadMore()}>{loading ? 'Loading…' : 'Load more'}</Button>
+              </PageToolbar>
+            ) : null}
+          </Surface>
+        ) : null}
 
-      <Surface title="Open resource">
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: { sm: 'center' } }}>
-          <TextInput label="Resource ID" value={id} onChange={(event) => setId(event.target.value)} sx={{ flex: 1 }} />
-          <Button variant="outlined" disabled={!id} onClick={() => void lookup()}>Lookup</Button>
-        </Box>
-      </Surface>
-
-      {detail ? (
-        <Surface title="Resource detail" description="Secret-shaped fields remain redacted from generic rendering.">
-          <Details resource={detail.data} />
-          {spec.actions?.length ? (
-            <Box sx={{ display: 'grid', gap: 2, mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-              {spec.actions.map((action) => (
-                <Box key={action.label} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: action.fields?.length ? 'minmax(0, 1fr) auto' : 'auto' }, gap: 1.5, alignItems: 'end' }}>
-                  {action.fields?.length ? (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.25 }}>
-                      {action.fields.map((field) => <FieldControl key={field.name} field={field} value={actionValues[field.name]} onChange={(value) => setActionValues((current) => ({ ...current, [field.name]: value }))} />)}
+        <Box sx={{ display: 'grid', gap: 2 }}>
+          {detail ? (
+            <Surface
+              title={selectedLabel ?? 'Selected resource'}
+              description="Current server representation. Secret-shaped fields remain redacted and mutations continue to use the accepted semantic operations."
+              actions={detail.etag ? <StatusChip label="Revision protected" color="info" /> : undefined}
+              sx={{ position: { xl: spec.list ? 'sticky' : 'static' }, top: { xl: spec.list ? 92 : 'auto' } }}
+            >
+              <DetailFields resource={detail.data} />
+              {spec.actions?.length ? (
+                <Box sx={{ display: 'grid', gap: 2, mt: 2.5, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                  <Box>
+                    <Typography variant="subtitle2">Available operations</Typography>
+                    <Typography variant="caption" color="text.secondary">Actions apply to the selected resource and remain subject to current server authorization and revision rules.</Typography>
+                  </Box>
+                  {spec.actions.map((action) => (
+                    <Box key={action.label} sx={{ display: 'grid', gap: 1.25, p: 1.5, border: 1, borderColor: action.destructive ? 'error.light' : 'divider', borderRadius: 1, bgcolor: action.destructive ? 'error.50' : 'background.default' }}>
+                      {action.fields?.length ? (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.25 }}>
+                          {action.fields.map((field) => <FieldControl key={field.name} field={field} value={actionValues[field.name]} onChange={(value) => setActionValues((current) => ({ ...current, [field.name]: value }))} />)}
+                        </Box>
+                      ) : null}
+                      <Button color={action.destructive ? 'error' : 'primary'} variant={action.destructive ? 'outlined' : 'contained'} disabled={Boolean(pendingAction)} onClick={() => requestAction(action)} sx={{ justifySelf: 'start' }}>
+                        {pendingAction === action.label ? 'Working…' : action.label}
+                      </Button>
                     </Box>
-                  ) : null}
-                  <Button color={action.destructive ? 'error' : 'primary'} variant="outlined" disabled={Boolean(pendingAction)} onClick={() => requestAction(action)}>
-                    {pendingAction === action.label ? 'Working…' : action.label}
-                  </Button>
+                  ))}
                 </Box>
-              ))}
-            </Box>
-          ) : null}
-        </Surface>
+              ) : null}
+            </Surface>
+          ) : (
+            <Surface title={spec.list ? 'Select a resource' : 'Open resource'} description={spec.list ? 'Choose a row from the collection to inspect current state and available operations.' : 'Open a resource through its accepted semantic identifier.'}>
+              <StatePanel title={spec.list ? 'Nothing selected' : 'Resource not loaded'}>
+                {spec.list ? 'Select Open on a collection row. Direct identifier lookup remains available below for support and advanced workflows.' : 'Enter the resource identifier below to load its current server representation.'}
+              </StatePanel>
+            </Surface>
+          )}
+        </Box>
+      </Box>
+
+      <Box component="details" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper', px: 2, py: 1.5 }}>
+        <Typography component="summary" variant="body2" sx={{ cursor: 'pointer', fontWeight: 700 }}>
+          Advanced: open directly by resource ID
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: { sm: 'center' }, mt: 1.5 }}>
+          <TextInput label="Resource ID" value={id} onChange={(event) => setId(event.target.value)} sx={{ flex: 1 }} />
+          <Button variant="outlined" disabled={!id} onClick={() => void lookup()}>Open resource</Button>
+        </Box>
+      </Box>
+
+      {spec.create ? (
+        <SidePanel open={createOpen} title={`Create ${spec.title.replace(/s$/, '')}`} description="Create through the accepted semantic resource contract. Server authorization and validation remain final." onClose={() => setCreateOpen(false)}>
+          <SemanticForm fields={spec.create.fields} label="Create" warning={spec.create.warning} onSubmit={create} />
+        </SidePanel>
       ) : null}
 
       <ConfirmDialog
