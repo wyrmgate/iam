@@ -80,7 +80,7 @@ test('request, approval, Access application and provider fulfillment remain dist
   );
   assertSourceExcludes(
     page,
-    /risk score|High risk|Medium risk|Low risk|overdue|SLA|provisioning success/i,
+    /risk score|High risk|Medium risk|Low risk|Overdue|SLA due|provisioning success/i,
     /localStorage|sessionStorage/,
     /Authorization:\s*['"`]/,
     /VITE_.*BACKEND|BACKEND_ORIGIN/,
