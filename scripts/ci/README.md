@@ -2,26 +2,33 @@
 
 Reusable CI support logic belongs here when it is substantial enough not to live directly in workflow YAML.
 
+## Component-aware CI
+
+`scripts/ci/component-changes.sh` is the shared change classifier for the monorepo application workflows. The workflows themselves still start for pull requests and `main` pushes, but expensive component-specific jobs run only when their inputs changed.
+
+The classifier keeps these boundaries explicit:
+
+- `apps/server/**` drives server build, server-container and Railway server-contract work;
+- `apps/console/**` drives console build, console-container and Cloudflare Pages contract work;
+- dependency audits are scoped to the corresponding server or console dependency manifests;
+- workflow files, the classifier itself, and genuinely shared build inputs deliberately widen the affected set;
+- manual dispatch validates all components;
+- repository-wide secret and filesystem security scans remain global rather than being path-filtered.
+
+A console-only source change therefore does not compile the Java server, build/scan the server image, resolve the Maven dependency tree, or publish a new server image. The inverse applies to server-only source changes.
+
 ## Core CI
 
-The initial workflow lives in `.github/workflows/ci.yml` and deliberately keeps simple commands in the workflow or root Makefile rather than hiding them behind CI-only scripts.
-
-Stable required-check candidates:
-
-- `server`
-- `console`
-- `repository`
-
-Developers should be able to reproduce the application checks locally with:
+The workflow lives in `.github/workflows/ci.yml`. Component builds remain reproducible locally with:
 
 ```bash
 make server-build
 make console-build
 ```
 
-Repository validation checks Compose rendering and rejects committed generated directories or non-example `.env` files.
+The `server` and `console` jobs are conditional on the component classifier. Repository validation remains a lightweight whole-repository job because it checks Compose rendering, machine-readable API contracts, CI support scripts, and repository hygiene.
 
-Security scanning, dependency vulnerability policy, secret scanning, CodeQL, and container scanning belong to the security-CI sprint rather than this baseline.
+Security scanning, dependency vulnerability policy, secret scanning, and container scanning remain separate workflows. Component-specific work in those workflows uses the same change classifier so the decision is consistent.
 
 ## GitHub Actions run retention
 
