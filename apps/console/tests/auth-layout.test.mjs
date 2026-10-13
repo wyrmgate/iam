@@ -19,10 +19,18 @@ test('enterprise login owns dynamic viewport containment', () => {
 
 test('desktop login gives the brand surface more weight than the sign-in surface', () => {
   assert.match(viewportCss, /grid-template-columns:\s*minmax\(0,\s*1\.45fr\)\s*minmax\(27rem,\s*\.85fr\)/);
-  assert.match(viewportCss, /\.auth-form-wrap-enterprise[\s\S]*max-width:\s*25rem/);
-  assert.match(viewportCss, /\.auth-input \.MuiOutlinedInput-root[\s\S]*min-height:\s*3\.4rem/);
+  assert.match(viewportCss, /\.auth-form-wrap-enterprise[\s\S]*max-width:\s*24rem/);
   assert.match(viewportCss, /@media \(max-width: 1250px\) and \(min-width: 981px\)[\s\S]*1\.18fr[\s\S]*\.82fr/);
   assert.match(viewportCss, /\.auth-core-face[\s\S]*transform:\s*none/);
+});
+
+test('required sign-in fields are compact without exposing raw mandatory asterisks', () => {
+  assert.match(signInGate, /label="Username"[\s\S]*required/);
+  assert.match(signInGate, /label="Password"[\s\S]*required/);
+  assert.match(viewportCss, /\.auth-input \.MuiFormLabel-asterisk[\s\S]*display:\s*none/);
+  assert.match(viewportCss, /\.auth-input \.MuiOutlinedInput-root[\s\S]*min-height:\s*3\.05rem/);
+  assert.match(viewportCss, /\.auth-input \.MuiInputLabel-root[\s\S]*font-size:\s*\.8rem/);
+  assert.match(viewportCss, /\.auth-input-icon svg[\s\S]*width:\s*1\.05rem/);
 });
 
 test('control-plane core keeps the Wyrmgate mark and label readable', () => {
