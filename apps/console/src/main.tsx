@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { SignInGate } from './SignInGate';
 import { WyrmgateUiProvider } from './ui/WyrmgateUiProvider';
 import './styles.css';
+import './auth-login.css';
 import './shell.css';
 import './shell-theme.css';
 
