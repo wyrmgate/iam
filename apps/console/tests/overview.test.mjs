@@ -33,12 +33,12 @@ test('overview keeps governance, fulfillment, reconciliation, and audit semantic
     /Immutable provider execution attempts; not Governance authorization/,
     /Run outcome and effective completeness remain separate/,
     /Actor-scoped Governance evidence only/,
+    /not a tenant risk score/,
     /Audit evidence signals, not current authorization or incident state/,
     /unavailable data is never shown as zero/,
   );
   assertSourceExcludes(
     overview,
-    /risk score/i,
     /localStorage|sessionStorage/,
     /Authorization:\s*['"`]/,
     /VITE_.*BACKEND|BACKEND_ORIGIN/,
