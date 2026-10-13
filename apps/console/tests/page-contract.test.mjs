@@ -5,6 +5,7 @@ import test from 'node:test';
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const shell = await readFile(new URL('../src/ShellChrome.tsx', import.meta.url), 'utf8');
 const pages = await readFile(new URL('../src/ControlPlanePages.tsx', import.meta.url), 'utf8');
+const semanticWorkspace = await readFile(new URL('../src/SemanticWorkspace.tsx', import.meta.url), 'utf8');
 const integrationOperations = await readFile(new URL('../src/IntegrationOperationsPage.tsx', import.meta.url), 'utf8');
 const authorityPage = await readFile(new URL('../src/CurrentAdministrativeAuthorityPage.tsx', import.meta.url), 'utf8');
 const api = await readFile(new URL('../src/api.ts', import.meta.url), 'utf8');
@@ -49,14 +50,14 @@ test('browser client enforces same-origin API routing', () => {
 });
 
 test('console never uses browser storage for tokens, secrets, or authority', () => {
-  const source = `${app}\n${shell}\n${pages}\n${integrationOperations}\n${authorityPage}\n${api}`;
+  const source = `${app}\n${shell}\n${pages}\n${semanticWorkspace}\n${integrationOperations}\n${authorityPage}\n${api}`;
   assert.doesNotMatch(source, /localStorage|sessionStorage/);
   assert.doesNotMatch(source, /Authorization:\s*['"`]/);
   assert.doesNotMatch(source, /connector-worker\/v1|provisioning-tasks\/.+:claim|lease\/renew/);
 });
 
 test('server authorization and accepted public surfaces stay explicit', () => {
-  assert.match(pages, /Server authorization is final/);
+  assert.match(semanticWorkspace, /Server authorization is final/);
   assert.doesNotMatch(pages, /issue=\{265\}/);
   assert.doesNotMatch(pages, /issue=\{266\}/);
   assert.match(pages, /CurrentAdministrativeAuthorityPage/);
@@ -77,13 +78,13 @@ test('integration operations consume only public read APIs and preserve authorit
 });
 
 test('secret-shaped detail fields are redacted', () => {
-  assert.match(pages, /secret\|password\|token\|private\|raw\|configuration\|referenceKey/i);
-  assert.match(pages, /Configured \/ redacted/);
+  assert.match(semanticWorkspace, /secret\|password\|token\|private\|raw\|configuration\|referenceKey/i);
+  assert.match(semanticWorkspace, /Configured \/ redacted/);
 });
 
 test('authoritative mutations retain revision and idempotency semantics', () => {
   assert.match(api, /If-Match/);
   assert.match(api, /Idempotency-Key/);
-  assert.match(pages, /requireEtag/);
-  assert.match(pages, /idempotent/);
+  assert.match(semanticWorkspace, /requireEtag/);
+  assert.match(semanticWorkspace, /idempotent/);
 });
