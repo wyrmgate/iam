@@ -44,8 +44,9 @@ Tenant display remains server-derived. The shell does not invent browser-control
 
 ## Migration status
 
-- First-party sign-in uses the project-owned UI boundary and now presents the enterprise Wyrmgate gate visual: a responsive split authentication surface with an animated control-plane topology showing Identity, Tenant, Credential, Access, Governance, Integration and Audit relationships. The animation is presentation-only and honors reduced-motion preferences.
-- The sign-in page continues to use only the accepted server-routed first-party login contract. Tenant remains server-resolved from the registered Console route, password visibility is local presentation state only, and no unsupported password-recovery, remember-me or upstream-SSO action is fabricated by the browser.
+- First-party sign-in uses the project-owned UI boundary and presents a balanced enterprise split authentication surface with a bounded control-plane topology and compact credential form. The topology shows Identity, Tenant, Credential, Access, Governance, Integration and Audit relationships; its animation is presentation-only and honors reduced-motion preferences.
+- The sign-in page exposes only implemented authentication interactions. Tenant remains server-resolved from the registered Console route, password visibility is local presentation state only, and no inactive language selector, password-recovery, remember-me or upstream-SSO action is fabricated by the browser.
+- The sign-in page continues to use only the accepted server-routed first-party login contract. The server owns Tenant routing, session state and operation-time authority; authentication secrets are not persisted in browser storage.
 - The application shell now has a labeled collapsible desktop navigation rail, complete mobile navigation, command palette, server-derived context and actor controls. The shared route registry separates assigned work from administrative configuration without changing domain ownership.
 - Base page primitives now expose narrow/standard/wide content widths plus a reusable toolbar so page-specific redesigns can land on a stable shell foundation.
 - **Overview** uses shared page and enterprise surface primitives.
