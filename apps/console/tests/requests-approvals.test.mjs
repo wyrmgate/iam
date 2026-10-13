@@ -91,7 +91,7 @@ test('page consumes one bounded presentation query and supports Overview deep li
   assertSourceContains(
     api,
     /\/console\/requests-and-approvals/,
-    /window, approvalSort/,
+    /window: RequestsWindow[\s\S]*approvalSort: ApprovalSort/,
   );
   assertSourceContains(
     page,
