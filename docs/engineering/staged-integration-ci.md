@@ -43,9 +43,10 @@ When a task belongs to an active integration tranche:
 
 - Console tests plus TypeScript/production build when Console files changed;
 - server build/tests when server files changed;
-- an aggregate `integration-quality` result that fails when a selected fast check fails or is cancelled.
+- a cheap `repository-fast` check for CI-script syntax and repository hygiene on every integration PR;
+- an aggregate `integration-quality` result that fails when component classification, repository hygiene, or a selected fast component check fails or is cancelled.
 
-The lightweight gate intentionally does **not** replace Security CI, Container CI, DEV Deployment Contract, release checks, or other main-bound verification.
+The lightweight gate intentionally does **not** run Docker Compose validation, API-contract validation, Security CI, Container CI, DEV Deployment Contract, release checks, publishing, deployment, or other main-bound release verification.
 
 ## Integration branch responsibility
 
@@ -100,4 +101,4 @@ Pooling changes does not weaken the final security or deployment boundary:
 
 Issue #312 uses `integration/console-ui/wave-1` as the first staged integration branch.
 
-UI-011/#328 reached `main` immediately before this model was established, so the pilot integration branch was fast-forwarded to include that accepted baseline. Remaining Wave-1 work should target the integration branch. The final Console Wave-1 integration PR will target `main` and run the normal full gate once for the converged tranche.
+UI-011/#328 and UI-021/#329 reached `main` while the pilot was being established, so the pilot integration branch was reconciled to include those accepted baselines plus the staged-CI bootstrap. UI-010/#327 was then merged into the pool. Remaining Wave-1 work should target the integration branch. The final Console Wave-1 integration PR will target `main` and run the normal full gate once for the converged tranche.
