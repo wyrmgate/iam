@@ -1,0 +1,109 @@
+name: Integration CI
+
+on:
+  pull_request:
+    branches:
+      - 'integration/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-ci-${{ github.event.pull_request.base.ref || github.ref }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: component-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      server: ${{ steps.classify.outputs.core_server }}
+      console: ${{ steps.classify.outputs.core_console }}
+    steps:
+      - name: Checkout history for change classification
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed components
+        id: classify
+        run: bash scripts/ci/component-changes.sh
+
+  server:
+    name: server-fast
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: apps/server/pom.xml
+
+      - name: Verify server
+        run: make server-build
+
+  console:
+    name: console-fast
+    needs: changes
+    if: needs.changes.outputs.console == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/console/package.json
+
+      - name: Install console dependencies
+        run: npm --prefix apps/console install --no-audit --no-fund
+
+      - name: Test console
+        run: npm --prefix apps/console test
+
+      - name: Typecheck and build console
+        run: npm --prefix apps/console run build
+
+  integration-quality:
+    name: integration-quality
+    needs: [changes, server, console]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all selected fast checks to pass
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ needs.changes.result }}" != "success" ]]; then
+            echo "Component classification failed." >&2
+            exit 1
+          fi
+
+          for result in "${{ needs.server.result }}" "${{ needs.console.result }}"; do
+            case "${result}" in
+              success|skipped) ;;
+              *)
+                echo "A selected integration check failed or was cancelled: ${result}" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "Lightweight integration validation passed."
+          echo "Full Core/Security/Container/DEV gates remain required on the integration -> main PR."
