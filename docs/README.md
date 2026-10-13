@@ -38,6 +38,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`api/governance-contracts.md`](api/governance-contracts.md) — self-service AccessRequest and reusable Approval inbox/evidence/decision API contract.
 - [`api/connector-worker-protocol.md`](api/connector-worker-protocol.md) — OD-004 remote connector-worker v1 session, leasing, fencing, result, observation, and compatibility contract.
 - [`api/integration-administration.md`](api/integration-administration.md) — governed ConnectorInstance/Binding/worker control-plane management API, permissions, revisions, idempotency and secret boundary.
+- [`engineering/console-ui-work-control.md`](engineering/console-ui-work-control.md) — repository-local coordination ledger for concurrent Console/UI branches, ownership, shared-surface locks and integration state; it does not redefine IAM architecture or contracts.
 - [`operations/fresh-install-bootstrap.md`](operations/fresh-install-bootstrap.md) — ADR-0044 standalone first-install activation, interruption/resume, irreversible seal and transition to normal username/password Console authentication.
 - [`operations/scim-principal-connector.md`](operations/scim-principal-connector.md) — SCIM 2.0 principal and Group provider adapter, observation/membership semantics, secret-resolution edge, reconciliation coverage and provider-error semantics.
 - [`engineering/dev-cd.md`](engineering/dev-cd.md) — current DEV deployment contract.
