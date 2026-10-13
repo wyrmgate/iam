@@ -7,6 +7,7 @@ const shell = await readFile(new URL('../src/ShellChrome.tsx', import.meta.url),
 const navigation = await readFile(new URL('../src/consoleNavigation.ts', import.meta.url), 'utf8');
 const shellFoundation = await readFile(new URL('../src/shell-foundation.css', import.meta.url), 'utf8');
 const ui = await readFile(new URL('../src/ui/index.tsx', import.meta.url), 'utf8');
+const uiPage = await readFile(new URL('../src/ui/page.tsx', import.meta.url), 'utf8');
 const pages = await readFile(new URL('../src/ControlPlanePages.tsx', import.meta.url), 'utf8');
 const semanticWorkspace = await readFile(new URL('../src/SemanticWorkspace.tsx', import.meta.url), 'utf8');
 const integrationOperations = await readFile(new URL('../src/IntegrationOperationsPage.tsx', import.meta.url), 'utf8');
@@ -61,11 +62,12 @@ test('mobile navigation exposes all destinations instead of hiding later groups'
   assert.match(shellFoundation, /\.dock-primary \.dock-item:nth-of-type\(n\+6\)[\s\S]*display:\s*grid/);
 });
 
-test('page foundation exposes deliberate width modes and a reusable toolbar', () => {
-  assert.match(ui, /type PageWidth = 'narrow' \| 'standard' \| 'wide'/);
-  assert.match(ui, /data-page-width=\{width\}/);
-  assert.match(ui, /export function PageToolbar/);
-  assert.match(ui, /minWidth:\s*0/);
+test('page foundation exposes deliberate width modes and a reusable toolbar through the stable ui barrel', () => {
+  assert.match(uiPage, /type PageWidth = 'narrow' \| 'standard' \| 'wide'/);
+  assert.match(uiPage, /data-page-width=\{width\}/);
+  assert.match(uiPage, /export function PageToolbar/);
+  assert.match(uiPage, /minWidth:\s*0/);
+  assert.match(ui, /export \{ Page, PageHeader, PageToolbar, Surface \} from '\.\/page'/);
 });
 
 test('browser client enforces same-origin API routing', () => {
