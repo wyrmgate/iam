@@ -25,11 +25,11 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 | Work ID | Issue | State | Owner / agent | Branch | Actual base / stacked on | Logical dependencies | Shared surfaces / locks | Allowed overlap | Forbidden overlap | PR | Merge / verification |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | UI-000 | #313 | DONE | issue #313 agent | `docs/ui-work-control-ledger` | `main` at `a23733c` | #312 coordination model | Coordination docs only; no runtime lock | May run with UI-151, UI-020, UI-140 | Console implementation behavior, shared component contracts | #318 | Squash-merged to `main` as `37f5f7c`; all PR CI checks passed; issue #313 closed completed |
-| UI-151 | #314 | IN_PROGRESS | issue #314 agent | `refactor/ui-component-decomposition` | `main` | None; structural refactor only | Temporary structural ownership of decomposition targets while changing them; no semantic redesign lock | May run with UI-000, UI-020, UI-140; preserve stable `./ui` boundary | Route semantics, broad test-harness redesign, auth-login files, intentional primitive API redesign | — | Not merged |
-| UI-020 | #315 | READY | unclaimed / agent placeholder | `feat/ui-addressable-routes` | `main` | May require rebase if UI-151 moves `App.tsx` or page files | Owns route/deep-link semantics, `consoleNavigation.ts`, and routing integration in `App.tsx` while active | May run with UI-000, UI-151, UI-140 | Shared primitive redesign, broad harness redesign, unsupported route/API semantics | — | Not merged |
-| UI-140 | #316 | READY | unclaimed / agent placeholder | `test/ui-console-harness` | `main` | Rebase if UI-151 moves a test target | Owns reusable non-auth test harness/helper work while active | May run with UI-000, UI-151, UI-020; prefer new helper files | Product behavior, route semantics, primitive redesign | — | Not merged |
+| UI-151 | #314 | DONE | issue #314 agent | final integration: `refactor/ui-component-decomposition-final` | rebased/integrated on current `main` after UI-140/#320 and UI-020/#321 merged | Structural refactor only; reconciled with already merged routing and reusable test-harness work | `src/ui` structural decomposition lock RELEASED | Wave 0 work converged without changing route/auth/API semantics; stable `./ui` boundary preserved | Intentional primitive API redesign, theme redesign, route semantics, auth semantics | #325 | Original #319 and intermediate #324 superseded; #325 passed Core CI, Security CI, DEV Deployment Contract and Container CI, squash-merged as `f3fe27b`; issue #314 closed completed |
+| UI-020 | #315 | DONE | issue #315 agent | `feat/ui-addressable-routes` | `main` | Route/deep-link semantics and navigation integration | Route/navigation lock RELEASED | Reconciled before UI-151 final integration | Shared primitive redesign, broad harness redesign, unsupported route/API semantics | #321 | Squash-merged to `main` as `167e96c`; issue #315 closed completed |
+| UI-140 | #316 | DONE | issue #316 agent | `test/ui-console-harness` | `main` | Reusable non-auth Console test harness | Test-harness lock RELEASED | Harness preserved by UI-151 final integration | Product behavior, route semantics, primitive redesign | #320 | Squash-merged to `main` as `7e90c5c`; issue #316 closed completed |
 
-The four initial branches were created from the same `main` baseline and are intended to run concurrently. If issue-thread state is newer than this table, update this document in the coordinating PR/branch rather than treating the stale row as authority.
+Wave 0 is complete. UI-000, UI-151, UI-020 and UI-140 are all merged, verified and closed. The structural `src/ui` decomposition now provides focused ownership modules for later shared-foundation work, while routing and reusable test-harness semantics remain independently owned by their accepted implementations.
 
 ## Login composition status
 
@@ -47,14 +47,14 @@ PR #311 merged into `main` as commit `a23733c` on 13 October 2026. The temporary
 
 ### Wave 0 — coordination and structural preparation
 
-Run these from `main` concurrently:
+Completed:
 
 1. UI-000 — repo-local work-control ledger (`docs/ui-work-control-ledger`)
-2. UI-151 — component/file decomposition (`refactor/ui-component-decomposition`)
+2. UI-151 — component/file decomposition (final integration via `refactor/ui-component-decomposition-final`)
 3. UI-020 — URL-addressable routing (`feat/ui-addressable-routes`)
 4. UI-140 — reusable Console test harness (`test/ui-console-harness`)
 
-There is no required merge ordering among these four. UI-151 should merge before the later shared-primitive fan-out. UI-020 may need a normal rebase if UI-151 moves routing/page files structurally. UI-140 should prefer helper additions and narrow non-auth test edits to stay low-conflict.
+The initial four tasks were intentionally run concurrently and reconciled before final integration. UI-151 ultimately merged after UI-020 and UI-140, preserving both route semantics and the reusable harness while establishing smaller shared-primitive ownership units.
 
 ### Wave 1 — shared visual foundation
 
@@ -79,9 +79,9 @@ Use this section for temporary locks. Add the task/issue, exact surface, reason 
 | Surface | Owner | Status | Reason / release condition |
 | --- | --- | --- | --- |
 | Login composition files formerly owned by PR #311 | PR #311 | RELEASED | PR #311 merged into `main` at `a23733c` |
-| `src/ui` decomposition targets | UI-151 / #314 | ACTIVE-STRUCTURAL | Structural decomposition only; release when the refactor PR merges/closes. Does not grant semantic redesign ownership. |
-| `consoleNavigation.ts` route semantics and `App.tsx` routing integration | UI-020 / #315 | RESERVED | Becomes active when #315 is claimed; release when its PR merges/closes. Structural moves by UI-151 must preserve this semantic ownership. |
-| Reusable Console test harness | UI-140 / #316 | RESERVED | Becomes active when #316 is claimed; release when its PR merges/closes. |
+| `src/ui` decomposition targets | UI-151 / #314 | RELEASED | Final reconciled implementation merged through PR #325 as `f3fe27b`; future public-contract changes require a new explicit owner |
+| `consoleNavigation.ts` route semantics and `App.tsx` routing integration | UI-020 / #315 | RELEASED | PR #321 merged as `167e96c`; future route-semantic changes require a new explicit owner |
+| Reusable Console test harness | UI-140 / #316 | RELEASED | PR #320 merged as `7e90c5c`; future broad harness changes require a new explicit owner |
 
 ## PR and integration checklist
 
