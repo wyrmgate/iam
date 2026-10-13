@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { App } from './App';
+import { AuthControlPlaneGraphic, AuthIcon } from './AuthControlPlaneGraphic';
 import { ShellChrome } from './ShellChrome';
 import { Alert, Button, CircularProgress, TextInput } from './ui';
 import { ApiError, getAuthSession, getLoginRoute, signIn, signOut, type LoginRoute } from './api';
@@ -13,6 +14,7 @@ export function SignInGate() {
   const [loginRoute, setLoginRoute] = useState<LoginRoute | null>(null);
   const [principalKey, setPrincipalKey] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -86,62 +88,104 @@ export function SignInGate() {
 
   if (state === 'first-party-login') {
     return (
-      <main className="auth-shell">
-        <section className="auth-brand-panel" aria-label="Wyrmgate IAM">
-          <div className="auth-wordmark">
-            <span className="auth-mark" aria-hidden="true">W</span>
+      <main className="auth-shell auth-shell-enterprise">
+        <section className="auth-brand-panel auth-brand-panel-enterprise" aria-label="Wyrmgate IAM">
+          <div className="auth-brand-ambient auth-brand-ambient-one" aria-hidden="true" />
+          <div className="auth-brand-ambient auth-brand-ambient-two" aria-hidden="true" />
+
+          <div className="auth-wordmark auth-wordmark-enterprise">
+            <span className="auth-mark auth-mark-enterprise" aria-hidden="true">W</span>
             <span className="auth-wordmark-copy">
               <strong>Wyrmgate IAM</strong>
-              <span>Identity governance and access management</span>
+              <span>Identity Governance and Access Management</span>
             </span>
           </div>
 
-          <div className="auth-brand-copy">
-            <p className="eyebrow">Enterprise identity control plane</p>
-            <h1>Govern identity, access, and administration from one trusted plane.</h1>
-            <p>Wyrmgate brings governed identities, first-party authentication, access intent, lifecycle policy, integrations, and audit evidence into a single security boundary.</p>
+          <div className="auth-enterprise-copy">
+            <p className="auth-enterprise-eyebrow">One identity control plane</p>
+            <h1>People. Access. Governance. <span>Connected.</span></h1>
+            <p>Wyrmgate unifies identities, credentials, access, governance and integrations across your enterprise.</p>
           </div>
 
-          <div className="auth-trust-row" aria-label="Security characteristics">
-            <span>Server-side tenant routing</span>
-            <span>Governed administrative authority</span>
-            <span>No browser bearer-token storage</span>
-          </div>
+          <AuthControlPlaneGraphic />
         </section>
 
-        <section className="auth-form-panel">
-          <div className="auth-form-wrap">
-            <header>
-              <p className="eyebrow">Secure access</p>
-              <h2>Sign in to Wyrmgate</h2>
-              <p>Use your governed Wyrmgate principal credentials to continue.</p>
+        <section className="auth-form-panel auth-form-panel-enterprise">
+          <div className="auth-form-topbar" aria-hidden="true">
+            <span className="auth-language-control"><AuthIcon name="globe" /> English <AuthIcon name="chevron" /></span>
+          </div>
+
+          <div className="auth-form-wrap auth-form-wrap-enterprise">
+            <header className="auth-form-header-enterprise">
+              <p className="auth-form-eyebrow">Sign in</p>
+              <h2>Continue to Wyrmgate</h2>
+              <p>Sign in with your organisation credentials.</p>
             </header>
 
             {error && <Alert severity="error" role="alert" className="auth-error">{error}</Alert>}
 
-            <form className="auth-form" onSubmit={(event) => void submit(event)}>
+            <form className="auth-form auth-form-enterprise" onSubmit={(event) => void submit(event)}>
+              <div className="auth-route-field" aria-label="Tenant routing">
+                <span className="auth-route-field-label">Tenant</span>
+                <span className="auth-route-field-value"><AuthIcon name="building" /> Server resolved</span>
+                <span className="auth-route-field-note">Selected from the registered Console client route.</span>
+              </div>
+
               <TextInput
+                className="auth-input"
                 label="Username"
                 autoComplete="username"
                 autoFocus
                 required
                 value={principalKey}
                 onChange={(event) => setPrincipalKey(event.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: <span className="auth-input-icon"><AuthIcon name="user" /></span>,
+                  },
+                }}
               />
+
               <TextInput
+                className="auth-input"
                 label="Password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: <span className="auth-input-icon"><AuthIcon name="lock" /></span>,
+                    endAdornment: (
+                      <button
+                        type="button"
+                        className="auth-password-toggle"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword((value) => !value)}
+                      >
+                        <AuthIcon name={showPassword ? 'visibilityOff' : 'visibility'} />
+                      </button>
+                    ),
+                  },
+                }}
               />
-              <Button type="submit" variant="contained" disabled={busy || !loginRoute}>
-                {busy ? 'Signing in…' : 'Sign in'}
+
+              <div className="auth-session-context">
+                <span><AuthIcon name="shield" /> Secure server-managed session</span>
+                <span>Tenant routing is not browser-controlled</span>
+              </div>
+
+              <Button type="submit" variant="contained" className="auth-submit" disabled={busy || !loginRoute}>
+                <span>{busy ? 'Signing in…' : 'Sign in'}</span>
+                {!busy && <AuthIcon name="right" />}
               </Button>
             </form>
 
-            <p className="auth-security-note">Tenant routing and administrative authority are resolved by the server. Authentication secrets are not written to browser storage.</p>
+            <div className="auth-security-card">
+              <AuthIcon name="info" />
+              <p>Tenant routing and administrative authority are resolved by the server. Authentication secrets are not written to browser storage.</p>
+            </div>
           </div>
         </section>
       </main>
