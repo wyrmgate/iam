@@ -73,24 +73,65 @@ export function SignInGate() {
   }
 
   if (state === 'checking') {
-    return <div className="state-card">Checking authentication…</div>;
+    return (
+      <main className="auth-loading" aria-live="polite">
+        <div className="auth-loading-card">
+          <span className="auth-spinner" aria-hidden="true" />
+          <span>Establishing secure session context…</span>
+        </div>
+      </main>
+    );
   }
 
   if (state === 'first-party-login') {
     return (
-      <main className="content" style={{ maxWidth: 720, margin: '10vh auto' }}>
-        <section className="page-stack">
-          <header className="page-header">
-            <p className="eyebrow">Wyrmgate IAM</p>
-            <h1>Sign in</h1>
-            <p>Tenant and administrative authority are resolved server-side. The browser stores no bearer or refresh token.</p>
-          </header>
-          {error && <div className="state-card state-error" role="alert">{error}</div>}
-          <form className="card form-grid" onSubmit={(event) => void submit(event)}>
-            <label><span>Username</span><input autoComplete="username" required value={principalKey} onChange={(event) => setPrincipalKey(event.target.value)} /></label>
-            <label><span>Password</span><input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-            <button className="button" disabled={busy || !loginRoute}>{busy ? 'Signing in…' : 'Sign in'}</button>
-          </form>
+      <main className="auth-shell">
+        <section className="auth-brand-panel" aria-label="Wyrmgate IAM">
+          <div className="auth-wordmark">
+            <span className="auth-mark" aria-hidden="true">W</span>
+            <span className="auth-wordmark-copy">
+              <strong>Wyrmgate IAM</strong>
+              <span>Identity governance and access management</span>
+            </span>
+          </div>
+
+          <div className="auth-brand-copy">
+            <p className="eyebrow">Enterprise identity control plane</p>
+            <h1>Govern identity, access, and administration from one trusted plane.</h1>
+            <p>Wyrmgate brings governed identities, first-party authentication, access intent, lifecycle policy, integrations, and audit evidence into a single security boundary.</p>
+          </div>
+
+          <div className="auth-trust-row" aria-label="Security characteristics">
+            <span>Server-side tenant routing</span>
+            <span>Governed administrative authority</span>
+            <span>No browser bearer-token storage</span>
+          </div>
+        </section>
+
+        <section className="auth-form-panel">
+          <div className="auth-form-wrap">
+            <header>
+              <p className="eyebrow">Secure access</p>
+              <h2>Sign in to Wyrmgate</h2>
+              <p>Use your governed Wyrmgate principal credentials to continue.</p>
+            </header>
+
+            {error && <div className="state-card state-error auth-error" role="alert">{error}</div>}
+
+            <form className="auth-form" onSubmit={(event) => void submit(event)}>
+              <label>
+                <span>Username</span>
+                <input autoComplete="username" autoFocus required value={principalKey} onChange={(event) => setPrincipalKey(event.target.value)} />
+              </label>
+              <label>
+                <span>Password</span>
+                <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
+              </label>
+              <button className="button" disabled={busy || !loginRoute}>{busy ? 'Signing in…' : 'Sign in'}</button>
+            </form>
+
+            <p className="auth-security-note">Tenant routing and administrative authority are resolved by the server. Authentication secrets are not written to browser storage.</p>
+          </div>
         </section>
       </main>
     );
