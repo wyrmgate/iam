@@ -19,7 +19,7 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 - Changes to `src/ui` public primitives/`WyrmgateUiProvider`, `SemanticWorkspace`, `consoleNavigation.ts`, `ShellChrome.tsx`, `App.tsx` routing/entry composition, or shared/global CSS/theme require an explicit temporary owner when the public contract or behavior changes.
 - A structural move by one task does not transfer semantic ownership from another task. Rebase rather than independently redefining the same concern.
 - Business rules, Tenant resolution, governed-actor resolution and Administration authorization remain server-side. UI work must not invent unsupported APIs, generic status mutation, browser authority or secret-bearing flows.
-- The short-lived Wave-2 integration pool is retired after promotion PR #354. UI-018 is serialized cross-cutting work and may target `main` directly under the isolated-work exception recorded in #346/#312.
+- The short-lived Wave-2 integration pool is retired after promotion PR #354. UI-018 was serialized cross-cutting work and targeted `main` directly under the isolated-work exception recorded in #346/#312.
 
 ## Active ledger
 
@@ -39,13 +39,13 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 | UI-015 | #343 | DONE | issue #343 agent | `feat/ui-dialog-foundation` | Wave-2 baseline `a9018533` | UI-011 / Wave 1 | Dialog primitive lock RELEASED | UI-012 through UI-014, UI-016, UI-017 | IAM operation semantics, ETag/idempotency, auth dialogs | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
 | UI-016 | #344 | DONE | issue #344 agent | `feat/ui-responsive-foundation` | Wave-2 baseline `a9018533` | UI-011 / UI-021 | Responsive foundation lock RELEASED | UI-012 through UI-015, UI-017 | Route/navigation meaning, capability layouts, token redesign | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
 | UI-017 | #345 | DONE | issue #345 agent | `feat/ui-tabs-foundation` | Wave-2 baseline `a9018533` | UI-011 / Wave 1 | Tabs primitive lock RELEASED | UI-012 through UI-016 | URL routing/view semantics, capability tab content | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
-| UI-018 | #346 | IN_REVIEW | issue #346 agent | `test/ui-accessibility-baseline` | exact reviewed `main` at `3606b858c732594708ea65120567c70c409a3ecd` | UI-012 through UI-017 DONE | Serialized accessibility-only lock across converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | Non-overlapping capability work only | IAM/domain/API/auth/routing semantics, new workflows, unrelated visual redesign | #355 | PR #355 opened direct to `main`; exact Wave-2 merge base preserved; PR CI/review in progress |
+| UI-018 | #346 | DONE | issue #346 agent | `test/ui-accessibility-baseline` | exact reviewed `main` at `3606b858c732594708ea65120567c70c409a3ecd` | UI-012 through UI-017 DONE | Accessibility lock RELEASED after merge | Capability fan-out may proceed subject to its own ownership/locks | IAM/domain/API/auth/routing semantics, new workflows, unrelated visual redesign | #355 | PR gates Core/Security/Container/DEV all green on tree `9b392e84`; squash-merged to `main` as `fa7882354086e38d3a1ad899c93304c48963b58a` with the identical tree; issue #346 closed completed |
 
 ## Current phase
 
 Wave 0 and Wave 1 are complete. Wave 2 is **DONE / VERIFIED**: UI-012 through UI-017 converged in `integration/console-ui/wave-2`, promotion PR #354 passed the release-quality gate, and the exact reviewed result was merged to `main` as `3606b858c732594708ea65120567c70c409a3ecd`. The Wave-2 pool is retired and must not receive additional feature work.
 
-UI-018 / #346 is the serialized Wave-3 accessibility baseline and is **IN_REVIEW** in PR #355. It validates and repairs the converged shared foundation for keyboard traversal, focus visibility/restoration, dialog semantics, tabs, form labeling/errors, table names/headers, contrast, reduced motion and narrow-screen reachability. It must preserve IAM requirements, API behavior, authentication/authorization semantics and route meaning. Capability-workspace fan-out remains after this baseline unless a task is demonstrably non-overlapping.
+UI-018 / #346 is **DONE / VERIFIED**. PR #355 established the serialized Wave-3 accessibility baseline and was squash-merged to `main` as `fa7882354086e38d3a1ad899c93304c48963b58a`. The merged commit has the same Git tree (`9b392e843d37de512236795642c2feab8bcdfc25`) as the PR head that passed Core CI, Security CI, Container CI and DEV Deployment Contract. The serialized accessibility lock is released. Capability-workspace fan-out may proceed subject to capability ownership and any new explicit shared-surface locks.
 
 ## Shared-foundation acceptance history
 
@@ -57,8 +57,9 @@ The post-Wave-0 audit deliberately separated shared presentation contracts from 
 - UI-015 / #343 — accessible dialog/confirmation association, focus behavior, busy/dismiss policy and narrow-screen sizing.
 - UI-016 / #344 — responsive shared page/shell foundation without changing navigation meaning.
 - UI-017 / #345 — accessible, overflow-safe shared tabs with route-agnostic tab/panel relationship hooks.
+- UI-018 / #346 — cross-cutting focus visibility, checkbox validation semantics, semantic table headers/naming, tab/panel relationships, reduced-motion and shared-token contrast regression coverage without changing IAM/API/auth/routing semantics.
 
-UI-018 owns only the cross-cutting validation and accessibility repairs that become visible after those contracts converge. `SemanticWorkspace` may consume shared hooks but must not become a generic IAM domain model or redefine API behavior.
+`SemanticWorkspace` consumes shared accessibility hooks but remains a presentation consumer; it is not a generic IAM domain model and does not redefine API behavior.
 
 ## Concurrency waves
 
@@ -76,11 +77,11 @@ DONE: UI-012 through UI-017. All six task branches started from the reviewed Wav
 
 ### Wave 3 — accessibility baseline
 
-IN_REVIEW: UI-018 / #346 on `test/ui-accessibility-baseline` via PR #355, based exactly on `3606b858c732594708ea65120567c70c409a3ecd`. This is serialized cross-cutting work. Direct-to-`main` is allowed by the issue-specific isolated-work exception.
+DONE / VERIFIED: UI-018 / #346 was implemented on `test/ui-accessibility-baseline` from exact baseline `3606b858c732594708ea65120567c70c409a3ecd`, passed all four release-quality PR gates, and was promoted directly to `main` through PR #355 as `fa7882354086e38d3a1ad899c93304c48963b58a`.
 
 ### Wave 4 — capability workspace fan-out
 
-Capability workspaces may fan out after UI-018 across Identity, Principal, Catalog, Access, Governance, Credential, Integration, Administration and Audit. Capability ownership remains canonical IAM ownership; this split is only a UI implementation coordination mechanism.
+READY: capability workspaces may fan out across Identity, Principal, Catalog, Access, Governance, Credential, Integration, Administration and Audit, subject to issue-specific dependencies and shared-surface ownership. Capability ownership remains canonical IAM ownership; this split is only a UI implementation coordination mechanism.
 
 ## Shared-surface lock register
 
@@ -92,15 +93,15 @@ Use this section for temporary locks. Add the task/issue, exact surface, reason 
 | `src/ui` decomposition targets | UI-151 / #314 | RELEASED | Final reconciled implementation merged through PR #325 |
 | `consoleNavigation.ts` route semantics and `App.tsx` routing integration | UI-020 / #315 | RELEASED | PR #321 merged; route contract remains independently governed |
 | Reusable Console test harness | UI-140 / #316 | RELEASED | PR #320 merged; later focused tests may extend it without redefining product behavior |
-| `src/ui/WyrmgateUiProvider.tsx` global theme/token behavior | UI-011 / #328 | RELEASED | Token baseline merged; accessibility-only focus repair is temporarily covered by UI-018 below |
+| `src/ui/WyrmgateUiProvider.tsx` global theme/token behavior | UI-011 / #328 | RELEASED | Token baseline merged; UI-018 accessibility-only focus repair completed through #355 |
 | Wave-2 primitive modules (`table.tsx`, `forms.tsx`, `state.tsx`, `dialogs.tsx`, responsive foundation, `tabs.tsx`) | UI-012 through UI-017 | RELEASED | Wave 2 promoted and verified through #354 at `3606b858...` |
-| Cross-cutting accessibility surfaces: converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | UI-018 / #346 | ACTIVE | Serialized until PR #355 merges/closes or explicitly releases the lock; no IAM/API/auth/routing semantic changes permitted |
+| Cross-cutting accessibility surfaces: converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | UI-018 / #346 | RELEASED | PR #355 merged to `main` as `fa788235...`; exact merged tree passed the release-quality PR gates |
 
 ## PR and integration checklist
 
 When a task opens a PR, record the PR number in the active ledger and update #312 if it introduces or changes a shared-surface lock. Before marking a row `READY_FOR_INTEGRATION` or later, verify that the branch still has the recorded ancestry, its scope did not absorb another task's concern, canonical IAM/API/security semantics remain unchanged unless separately approved, and task-specific tests/checks are green.
 
-For UI-018 specifically, verify keyboard-only shared patterns, visible focus and return-focus behavior, dialog/tab/form/table semantics, shared-token contrast, reduced-motion behavior, narrow-screen reachability, Console tests, typecheck and production build. The branch must remain descended from the reviewed Wave-2 promotion and must not reuse the retired Wave-2 integration pool.
+For accessibility-related follow-up work, retain the UI-018 regression baseline covering visible focus, dialog focus behavior, tab/form/table semantics, shared-token contrast, reduced motion and narrow-screen reachability. Any future route, IAM, API or authorization semantic change remains outside that baseline and must be governed independently.
 
 After merge, set `MERGED`, complete required verification, then set `VERIFIED` and finally `DONE`. If a merged change requires follow-up correction before verification, keep it out of `DONE` and record the follow-up dependency.
 
