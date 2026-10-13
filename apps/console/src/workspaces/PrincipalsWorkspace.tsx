@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { ApiError, apiRequest, type ApiResult, V1_ROOT, withCursor } from '../api';
 import {
   Box,
@@ -89,7 +89,7 @@ function PrincipalErrorState({ error, context }: { error: unknown; context: Erro
   );
 }
 
-function DetailDatum({ label, children }: { label: string; children: React.ReactNode }) {
+function DetailDatum({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Box sx={{ minWidth: 0, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
       <Typography component="dt" variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 700 }}>
@@ -279,7 +279,7 @@ export function PrincipalsWorkspace() {
       <PageHeader
         eyebrow="Identity"
         title="Principals"
-        description="Operate Identity-owned technical accounts without treating them as governed Identities or provider observations. Registration creates an uncorrelated Principal; correlation is an explicit one-way operation."
+        description="Technical account authority owned by Identity. Operate Identity-owned technical accounts without treating them as governed Identities or provider observations. Registration creates an uncorrelated Principal; correlation is an explicit one-way operation."
       />
 
       <StatePanel state="informational" title="Principal is the technical account, not the governed subject">
