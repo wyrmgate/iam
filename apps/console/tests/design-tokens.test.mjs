@@ -40,9 +40,12 @@ test('enterprise density baseline is centralized in shared defaults', () => {
   ]) {
     assert.match(provider, new RegExp(`${component}: \\{`));
   }
-  assert.match(provider, /controlHeight: 36/);
-  assert.match(provider, /compactControlHeight: 32/);
-  assert.match(provider, /tableRowHeight: 40/);
+  assert.match(tokens, /controlHeight: 36/);
+  assert.match(tokens, /compactControlHeight: 32/);
+  assert.match(tokens, /tableRowHeight: 40/);
+  assert.match(provider, /tokens\.density\.controlHeight/);
+  assert.match(provider, /tokens\.density\.compactControlHeight/);
+  assert.match(provider, /tokens\.density\.tableRowHeight/);
 });
 
 test('theme preserves reduced-motion behavior globally', () => {
