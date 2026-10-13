@@ -3,6 +3,17 @@
   --shell-navigation-collapsed-width: 68px;
 }
 
+.product-shell button:focus-visible,
+.context-rail button:focus-visible,
+.command-palette button:focus-visible {
+  outline: 3px solid #8bb7e8;
+  outline-offset: 2px;
+}
+
+.command-input-row:focus-within {
+  box-shadow: inset 0 0 0 2px #8bb7e8;
+}
+
 .product-shell {
   grid-template-columns: var(--shell-navigation-width) minmax(0, 1fr);
   min-width: 0;
