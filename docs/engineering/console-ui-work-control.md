@@ -39,13 +39,13 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 | UI-015 | #343 | DONE | issue #343 agent | `feat/ui-dialog-foundation` | Wave-2 baseline `a9018533` | UI-011 / Wave 1 | Dialog primitive lock RELEASED | UI-012 through UI-014, UI-016, UI-017 | IAM operation semantics, ETag/idempotency, auth dialogs | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
 | UI-016 | #344 | DONE | issue #344 agent | `feat/ui-responsive-foundation` | Wave-2 baseline `a9018533` | UI-011 / UI-021 | Responsive foundation lock RELEASED | UI-012 through UI-015, UI-017 | Route/navigation meaning, capability layouts, token redesign | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
 | UI-017 | #345 | DONE | issue #345 agent | `feat/ui-tabs-foundation` | Wave-2 baseline `a9018533` | UI-011 / Wave 1 | Tabs primitive lock RELEASED | UI-012 through UI-016 | URL routing/view semantics, capability tab content | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
-| UI-018 | #346 | IN_PROGRESS | issue #346 agent | `test/ui-accessibility-baseline` | exact reviewed `main` at `3606b858c732594708ea65120567c70c409a3ecd` | UI-012 through UI-017 DONE | Serialized accessibility-only lock across converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | Non-overlapping capability work only | IAM/domain/API/auth/routing semantics, new workflows, unrelated visual redesign | — | Branch ancestry confirmed; coordination claim recorded in #312; implementation/verification in progress |
+| UI-018 | #346 | IN_REVIEW | issue #346 agent | `test/ui-accessibility-baseline` | exact reviewed `main` at `3606b858c732594708ea65120567c70c409a3ecd` | UI-012 through UI-017 DONE | Serialized accessibility-only lock across converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | Non-overlapping capability work only | IAM/domain/API/auth/routing semantics, new workflows, unrelated visual redesign | #355 | PR #355 opened direct to `main`; exact Wave-2 merge base preserved; PR CI/review in progress |
 
 ## Current phase
 
 Wave 0 and Wave 1 are complete. Wave 2 is **DONE / VERIFIED**: UI-012 through UI-017 converged in `integration/console-ui/wave-2`, promotion PR #354 passed the release-quality gate, and the exact reviewed result was merged to `main` as `3606b858c732594708ea65120567c70c409a3ecd`. The Wave-2 pool is retired and must not receive additional feature work.
 
-UI-018 / #346 is the serialized Wave-3 accessibility baseline. It validates and repairs the converged shared foundation for keyboard traversal, focus visibility/restoration, dialog semantics, tabs, form labeling/errors, table names/headers, contrast, reduced motion and narrow-screen reachability. It must preserve IAM requirements, API behavior, authentication/authorization semantics and route meaning. Capability-workspace fan-out remains after this baseline unless a task is demonstrably non-overlapping.
+UI-018 / #346 is the serialized Wave-3 accessibility baseline and is **IN_REVIEW** in PR #355. It validates and repairs the converged shared foundation for keyboard traversal, focus visibility/restoration, dialog semantics, tabs, form labeling/errors, table names/headers, contrast, reduced motion and narrow-screen reachability. It must preserve IAM requirements, API behavior, authentication/authorization semantics and route meaning. Capability-workspace fan-out remains after this baseline unless a task is demonstrably non-overlapping.
 
 ## Shared-foundation acceptance history
 
@@ -76,7 +76,7 @@ DONE: UI-012 through UI-017. All six task branches started from the reviewed Wav
 
 ### Wave 3 — accessibility baseline
 
-IN_PROGRESS: UI-018 / #346 on `test/ui-accessibility-baseline`, based exactly on `3606b858c732594708ea65120567c70c409a3ecd`. This is serialized cross-cutting work. Direct-to-`main` is allowed by the issue-specific isolated-work exception.
+IN_REVIEW: UI-018 / #346 on `test/ui-accessibility-baseline` via PR #355, based exactly on `3606b858c732594708ea65120567c70c409a3ecd`. This is serialized cross-cutting work. Direct-to-`main` is allowed by the issue-specific isolated-work exception.
 
 ### Wave 4 — capability workspace fan-out
 
@@ -94,7 +94,7 @@ Use this section for temporary locks. Add the task/issue, exact surface, reason 
 | Reusable Console test harness | UI-140 / #316 | RELEASED | PR #320 merged; later focused tests may extend it without redefining product behavior |
 | `src/ui/WyrmgateUiProvider.tsx` global theme/token behavior | UI-011 / #328 | RELEASED | Token baseline merged; accessibility-only focus repair is temporarily covered by UI-018 below |
 | Wave-2 primitive modules (`table.tsx`, `forms.tsx`, `state.tsx`, `dialogs.tsx`, responsive foundation, `tabs.tsx`) | UI-012 through UI-017 | RELEASED | Wave 2 promoted and verified through #354 at `3606b858...` |
-| Cross-cutting accessibility surfaces: converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | UI-018 / #346 | ACTIVE | Serialized until the UI-018 PR merges/closes or explicitly releases the lock; no IAM/API/auth/routing semantic changes permitted |
+| Cross-cutting accessibility surfaces: converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | UI-018 / #346 | ACTIVE | Serialized until PR #355 merges/closes or explicitly releases the lock; no IAM/API/auth/routing semantic changes permitted |
 
 ## PR and integration checklist
 
