@@ -29,9 +29,9 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 | UI-020 | #315 | DONE | issue #315 agent | `feat/ui-addressable-routes` | `main` | Route/deep-link semantics and navigation integration | Route/navigation lock RELEASED | Reconciled before UI-151 final integration | Shared primitive redesign, broad harness redesign, unsupported route/API semantics | #321 | Squash-merged to `main` as `167e96c`; issue #315 closed completed |
 | UI-140 | #316 | DONE | issue #316 agent | `test/ui-console-harness` | `main` | Reusable non-auth Console test harness | Test-harness lock RELEASED | Harness preserved by UI-151 final integration | Product behavior, route semantics, primitive redesign | #320 | Squash-merged to `main` as `7e90c5c`; issue #316 closed completed |
 | UI-010 | #327 | DONE | issue #327 agent | `docs/ui-shared-foundation-audit` | `main` at `f33bfb0`; integrated through `integration/console-ui/wave-1` | Wave 0 complete; audit current foundation before primitive fan-out | Coordination docs lock RELEASED; no runtime lock | UI-011, UI-021, UI-030 | Production UI behavior, shared primitive contracts, routing/auth/API semantics | #332 | Documentation-only audit; PR checks passed; squash-merged to `integration/console-ui/wave-1` as `b1bef57`; issue #327 closed completed |
-| UI-011 | #328 | READY | issue #328 agent | `feat/ui-design-tokens` | `main` at `f33bfb0` | Wave 0 complete | **EXCLUSIVE when claimed:** `src/ui/WyrmgateUiProvider.tsx` and global theme/token behavior | UI-010, UI-021, UI-030 | DataTable/forms/state/dialog public behavior, routes, capability redesign | — | Must merge before Wave 2 primitive branches are cut |
-| UI-021 | #329 | READY | issue #329 agent | `refactor/ui-legacy-routing-cleanup` | `main` at `f33bfb0` | UI-020 merged | When claimed: residual legacy routing/frame cleanup in `App.tsx` and adjacent obsolete helpers; route contract itself remains unchanged | UI-010, UI-011, UI-030 | Route URL/meaning changes, shared primitive/theme redesign | — | Rebase if concurrent work changes same entry-composition lines |
-| UI-030 | #330 | IN_PROGRESS | issue #330 agent | `feat/ui-overview-refinement` | `main` at `f33bfb0` | Existing shared primitives only | Overview page composition only; no shared primitive lock | UI-010, UI-011, UI-021 | Theme/tokens, shared primitive APIs, routing, auth/API semantics | — | Agent reported IN_PROGRESS; rebase after UI-011 if density change materially affects composition |
+| UI-011 | #328 | DONE | issue #328 agent | `feat/ui-design-tokens` | `main` at `f33bfb0`; rebased before integration | Wave 0 complete | Global theme/token lock RELEASED | UI-010, UI-021, UI-030 | DataTable/forms/state/dialog public behavior, routes, capability redesign | #331 | Core/Security/Container/DEV checks green; squash-merged to `main` as `3e203256`; issue #328 closed completed |
+| UI-021 | #329 | DONE | issue #329 agent | `refactor/ui-legacy-routing-cleanup` | rebased onto token baseline before merge | UI-020 merged | Residual routing/frame lock RELEASED | UI-010, UI-011, UI-030 | Route URL/meaning changes, shared primitive/theme redesign | #336 | Core/Security/Container/DEV checks green; squash-merged to `main` as `c2821dbe`; issue #329 closed completed |
+| UI-030 | #330 | DONE | issue #330 agent | `feat/ui-overview-refinement` | reconciled onto current `integration/console-ui/wave-1` after UI-011 and UI-021 | Existing shared primitives only; UI-011 density baseline and UI-021 frame cleanup preserved | Overview page composition lock RELEASED; no shared primitive lock | UI-010, UI-011, UI-021 | Theme/tokens, shared primitive APIs, routing, auth/API semantics | #333 | Integration CI green including Console tests/typecheck/build; squash-merged to `integration/console-ui/wave-1` as `3301244`; final Wave-1 pool PR carries release-quality verification to `main` |
 
 Wave 0 is complete. UI-000, UI-151, UI-020 and UI-140 are all merged, verified and closed. The structural `src/ui` decomposition now provides focused ownership modules for later shared-foundation work, while routing and reusable test-harness semantics remain independently owned by their accepted implementations.
 
@@ -111,14 +111,14 @@ The initial four tasks were intentionally run concurrently and reconciled before
 
 ### Wave 1 — shared visual foundation and convergence
 
-Current tranche:
+Current tranche is fully implemented at task level and converged in `integration/console-ui/wave-1`:
 
-1. UI-010 / #327 — shared-foundation audit (`docs/ui-shared-foundation-audit`), coordination docs only.
-2. UI-011 / #328 — design-token/density normalization (`feat/ui-design-tokens`), one temporary global theme owner.
-3. UI-021 / #329 — residual legacy routing/frame cleanup (`refactor/ui-legacy-routing-cleanup`), preserving UI-020 route semantics.
-4. UI-030 / #330 — Overview refinement (`feat/ui-overview-refinement`), consuming shared primitives unchanged.
+1. UI-010 / #327 — DONE — shared-foundation audit (`docs/ui-shared-foundation-audit`), coordination docs only.
+2. UI-011 / #328 — DONE — design-token/density normalization (`feat/ui-design-tokens`), merged to `main` through #331.
+3. UI-021 / #329 — DONE — residual legacy routing/frame cleanup (`refactor/ui-legacy-routing-cleanup`), merged to `main` through #336 while preserving UI-020 route semantics.
+4. UI-030 / #330 — DONE — Overview refinement (`feat/ui-overview-refinement`), merged to the Wave-1 pool through #333 with Integration CI green.
 
-UI-010, UI-011, UI-021 and UI-030 may run concurrently under their issue boundaries. UI-011 is the only owner of global theme/token behavior during this tranche.
+The final `integration/console-ui/wave-1` release-candidate PR to `main` is the Wave-1 release-quality gate. After it merges and post-merge verification is green, Wave 2 branches may be cut from that converged `main` baseline.
 
 ### Wave 2 — parallel shared primitives
 
@@ -143,9 +143,9 @@ Use this section for temporary locks. Add the task/issue, exact surface, reason 
 | `consoleNavigation.ts` route semantics and `App.tsx` routing integration | UI-020 / #315 | RELEASED | PR #321 merged as `167e96c`; future route-semantic changes require a new explicit owner |
 | Reusable Console test harness | UI-140 / #316 | RELEASED | PR #320 merged as `7e90c5c`; future broad harness changes require a new explicit owner |
 | Coordination documentation in `docs/engineering/console-ui-work-control.md` | UI-010 / #327 | RELEASED | Shared-foundation audit integrated through PR #332 as `b1bef57`; issue #327 closed completed |
-| `src/ui/WyrmgateUiProvider.tsx` and global theme/token behavior | UI-011 / #328 | RESERVED | Becomes ACTIVE when #328 starts; release after merge/close. Other tasks may consume tokens but must not redefine them |
-| Residual legacy routing/frame cleanup in `App.tsx` and adjacent obsolete helpers | UI-021 / #329 | RESERVED | Becomes ACTIVE when #329 starts; route contract is not part of this lock |
-| Overview page composition | UI-030 / #330 | ACTIVE | #330 agent reported IN_PROGRESS; no shared primitive/theme lock |
+| `src/ui/WyrmgateUiProvider.tsx` and global theme/token behavior | UI-011 / #328 | RELEASED | PR #331 merged to `main` as `3e203256`; future token/theme changes require a new explicit owner |
+| Residual legacy routing/frame cleanup in `App.tsx` and adjacent obsolete helpers | UI-021 / #329 | RELEASED | PR #336 merged to `main` as `c2821dbe`; route contract remains independently governed |
+| Overview page composition | UI-030 / #330 | RELEASED | PR #333 merged to `integration/console-ui/wave-1` as `3301244`; final pool PR carries release-quality verification |
 
 ## PR and integration checklist
 
