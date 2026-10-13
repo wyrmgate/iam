@@ -69,36 +69,25 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
         justifyContent: 'space-between',
         alignItems: { xs: 'stretch', md: actions ? 'flex-start' : 'stretch' },
         gap: 2,
+        pb: 0.5,
       }}
     >
       <Box sx={{ maxWidth: '64rem', minWidth: 0, overflowWrap: 'anywhere' }}>
         {eyebrow ? (
-          <Typography
-            component="p"
-            variant="overline"
-            sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '.1em', lineHeight: 1.6 }}
-          >
+          <Typography component="p" variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '.1em', lineHeight: 1.6 }}>
             {eyebrow}
           </Typography>
         ) : null}
-        <Typography
-          component="h1"
-          variant="h4"
-          sx={{ mt: eyebrow ? 0.25 : 0, mb: description ? 0.75 : 0, overflowWrap: 'anywhere' }}
-        >
+        <Typography component="h1" variant="h4" sx={{ mt: eyebrow ? 0.25 : 0, mb: description ? 0.75 : 0, overflowWrap: 'anywhere' }}>
           {title}
         </Typography>
         {description ? (
-          <Typography component="p" color="text.secondary" sx={{ lineHeight: 1.65, m: 0, overflowWrap: 'anywhere' }}>
+          <Typography component="p" color="text.secondary" sx={{ maxWidth: '58rem', lineHeight: 1.6, m: 0, overflowWrap: 'anywhere' }}>
             {description}
           </Typography>
         ) : null}
       </Box>
-      {actions ? (
-        <Box sx={{ ...responsiveActionGroup, flex: { md: '0 1 auto' } }}>
-          {actions}
-        </Box>
-      ) : null}
+      {actions ? <Box sx={{ ...responsiveActionGroup, flex: { md: '0 1 auto' }, pt: { md: 0.5 } }}>{actions}</Box> : null}
     </Box>
   );
 }
@@ -125,15 +114,7 @@ export function PageToolbar({ children, leading, sx, ...props }: PageToolbarProp
       {...props}
     >
       {leading ? <Box sx={{ minWidth: 0, maxWidth: '100%', flex: '1 1 auto', overflowWrap: 'anywhere' }}>{leading}</Box> : null}
-      <Box
-        sx={{
-          ...responsiveActionGroup,
-          justifyContent: { xs: 'flex-start', sm: 'flex-end' },
-          flex: { sm: '0 1 auto' },
-        }}
-      >
-        {children}
-      </Box>
+      <Box sx={{ ...responsiveActionGroup, justifyContent: { xs: 'flex-start', sm: 'flex-end' }, flex: { sm: '0 1 auto' } }}>{children}</Box>
     </Box>
   );
 }
@@ -156,6 +137,9 @@ export function Surface({ children, title, description, actions, sx, ...props }:
         boxSizing: 'border-box',
         p: { xs: 2, md: 2.5 },
         borderColor: 'divider',
+        borderRadius: 1.25,
+        bgcolor: 'background.paper',
+        boxShadow: '0 1px 2px rgba(23, 32, 51, .035)',
         overflowWrap: 'anywhere',
         '& > *': { minWidth: 0, maxWidth: '100%' },
         ...sx,
@@ -173,12 +157,15 @@ export function Surface({ children, title, description, actions, sx, ...props }:
             alignItems: { xs: 'stretch', sm: actions ? 'flex-start' : 'stretch' },
             gap: 1.5,
             mb: 2,
+            pb: title || description ? 1.75 : 0,
+            borderBottom: title || description ? 1 : 0,
+            borderColor: 'divider',
           }}
         >
           <Box sx={{ minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
-            {title ? <Typography component="h2" variant="h6" sx={{ overflowWrap: 'anywhere' }}>{title}</Typography> : null}
+            {title ? <Typography component="h2" variant="h6" sx={{ overflowWrap: 'anywhere', color: 'text.primary' }}>{title}</Typography> : null}
             {description ? (
-              <Typography color="text.secondary" variant="body2" sx={{ mt: title ? 0.5 : 0, lineHeight: 1.55, overflowWrap: 'anywhere' }}>
+              <Typography color="text.secondary" variant="body2" sx={{ mt: title ? 0.5 : 0, maxWidth: '58rem', lineHeight: 1.55, overflowWrap: 'anywhere' }}>
                 {description}
               </Typography>
             ) : null}
