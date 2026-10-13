@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build server image for validation
         uses: docker/build-push-action@v7
@@ -80,7 +80,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build console image for validation
         uses: docker/build-push-action@v7
@@ -121,7 +121,7 @@ jobs:
         uses: docker/setup-qemu-action@v4
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.1.2
@@ -194,7 +194,7 @@ jobs:
         uses: docker/setup-qemu-action@v4
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.1.2
