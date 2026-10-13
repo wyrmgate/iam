@@ -145,6 +145,7 @@ export function CheckboxInput({
               ...slotProps,
               input: {
                 'aria-describedby': descriptionId,
+                'aria-invalid': Boolean(error) || undefined,
                 'aria-readonly': readOnly || undefined,
               },
             }}

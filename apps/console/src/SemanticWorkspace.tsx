@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useId, useMemo, useState } from 'react';
 import { ApiError, apiDownload, apiRequest, type ApiResult } from './api';
 import {
   Box,
@@ -12,6 +12,7 @@ import {
   StatePanel,
   Surface,
   Tab,
+  TabPanel,
   TableBody,
   TableCell,
   TableHead,
@@ -19,6 +20,7 @@ import {
   Tabs,
   TextInput,
   Typography,
+  getTabA11yProps,
 } from './ui';
 
 export type Resource = Record<string, any>;
@@ -294,9 +296,12 @@ export function Workspace({ spec }: { spec: Spec }) {
           {!loading && items.length === 0 && error === null ? <StatePanel>No resources found.</StatePanel> : null}
           {items.length > 0 ? (
             <Surface title="Resources">
-              <DataTable minWidth={820}>
+              <DataTable minWidth={820} ariaLabel={`${spec.title} resources`}>
                 <TableHead>
-                  <TableRow>{(spec.columns ?? ['id']).map((column) => <TableCell key={column}>{column}</TableCell>)}<TableCell align="right">Open</TableCell></TableRow>
+                  <TableRow>
+                    {(spec.columns ?? ['id']).map((column) => <TableCell key={column} component="th" scope="col">{column}</TableCell>)}
+                    <TableCell component="th" scope="col" align="right">Open</TableCell>
+                  </TableRow>
                 </TableHead>
                 <TableBody>
                   {items.map((item, index) => (
@@ -359,13 +364,21 @@ export function Workspace({ spec }: { spec: Spec }) {
 
 export function WorkspaceTabs({ tabs }: { tabs: Array<{ id: string; label: string; content: ReactNode }> }) {
   const [active, setActive] = useState(tabs[0]?.id ?? '');
-  const current = tabs.find((tab) => tab.id === active) ?? tabs[0];
+  const generatedGroupId = useId();
+  const groupId = `workspace-views-${generatedGroupId}`;
+
   return (
     <>
       <Tabs value={active} onChange={(_event, value: string) => setActive(value)} aria-label="Workspace views">
-        {tabs.map((tab) => <Tab key={tab.id} value={tab.id} label={tab.label} />)}
+        {tabs.map((tab) => (
+          <Tab key={tab.id} value={tab.id} label={tab.label} {...getTabA11yProps(groupId, tab.id)} />
+        ))}
       </Tabs>
-      {current?.content}
+      {tabs.map((tab) => (
+        <TabPanel key={tab.id} groupId={groupId} tabId={tab.id} active={tab.id === active}>
+          {tab.content}
+        </TabPanel>
+      ))}
     </>
   );
 }

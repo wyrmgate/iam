@@ -94,6 +94,16 @@ const theme = createTheme({
         },
       },
     },
+    MuiButtonBase: {
+      styleOverrides: {
+        root: {
+          '&:focus-visible': {
+            outline: `3px solid ${tokens.color.product.accentFocus}`,
+            outlineOffset: 2,
+          },
+        },
+      },
+    },
     MuiButton: {
       defaultProps: { disableElevation: true, size: 'small' },
       styleOverrides: {
