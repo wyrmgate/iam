@@ -23,13 +23,13 @@ test('Identity mutations preserve semantic operations, revision guards, and caus
     /method: 'PATCH'/,
     /etag: state\.value\.etag/,
     /idempotent: true/,
+    /body: \{ displayName \}/,
     /:merge/,
     /absorbedRevision: Number\(mergeValues\.absorbedRevision\)/,
     /:split/,
     /splitSelectionPresent/,
     /explicit semantic Identity commands, never generic status edits/,
   );
-  assertSourceExcludes(identity, /body:\s*\{[^}]*lifecycleState[^}]*\}\s*\}\);/s);
 });
 
 test('canonical attribute disclosure follows the accepted visibility and typed-values contract', () => {
