@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { ApiError, V1_ROOT, apiRequest, withCursor } from '../api';
 import { type Spec, Workspace, WorkspaceTabs } from '../SemanticWorkspace';
 import {
@@ -105,7 +105,7 @@ function parentLabel(parent: CatalogParent, kind: ScopeKind) {
   return `${primary}${code}${type}${lifecycle}`;
 }
 
-function ParentScope({ kind, children }: { kind: ScopeKind; children: (parentId: string, parent?: CatalogParent) => React.ReactNode }) {
+function ParentScope({ kind, children }: { kind: ScopeKind; children: (parentId: string, parent?: CatalogParent) => ReactNode }) {
   const config = kind === 'application'
     ? { label: 'Application', plural: 'Applications', path: `${V1_ROOT}/applications` }
     : { label: 'Role', plural: 'Roles', path: `${V1_ROOT}/roles` };
@@ -210,7 +210,7 @@ function ParentScope({ kind, children }: { kind: ScopeKind; children: (parentId:
           <TextInput
             label={`Known ${config.label} ID`}
             value={manualId}
-            helperText={`Fallback for scoped operators who know the governed parent ID; server authorization still decides access.`}
+            helperText="Fallback for scoped operators who know the governed parent ID; server authorization still decides access."
             onChange={(event) => {
               setManualId(event.target.value);
               setSelectedId('');
