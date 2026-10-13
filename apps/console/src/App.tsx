@@ -26,6 +26,7 @@ import {
   RequestsPage,
   ReviewsPage,
 } from './ControlPlanePages';
+import { OverviewPage } from './OverviewPage';
 import { useConsolePathname } from './consoleLocation';
 import {
   identityDetailPath,
@@ -620,7 +621,7 @@ export function App() {
 
   return (
     <>
-      {route === 'overview' && <Overview system={system} authority={authority} />}
+      {route === 'overview' && <OverviewPage system={system} authority={authority} />}
       {route === 'identities' && <Identities selectedId={identityId} onSelect={(id) => go(id ? identityDetailPath(id) : '/identities')} />}
       {route === 'principals' && <PrincipalsPage />}
       {route === 'catalog' && <CatalogPage />}
