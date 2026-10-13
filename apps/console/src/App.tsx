@@ -26,11 +26,34 @@ import {
   RequestsPage,
   ReviewsPage,
 } from './ControlPlanePages';
+import {
+  Box,
+  Button,
+  ConfirmDialog,
+  DataTable,
+  Page,
+  PageHeader,
+  StatePanel,
+  StatusChip,
+  Surface,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextInput,
+  Typography,
+} from './ui';
 
 type LoadState<T> =
   | { status: 'loading' }
   | { status: 'ready'; value: T }
   | { status: 'error'; error: unknown };
+
+type IdentityConfirmation =
+  | { kind: 'lifecycle'; action: IdentityLifecycleAction }
+  | { kind: 'merge' }
+  | { kind: 'split' }
+  | null;
 
 function usePathname() {
   const [pathname, setPathname] = useState(window.location.pathname);
@@ -63,47 +86,57 @@ function formatError(error: unknown): { title: string; detail: string } {
 function ErrorPanel({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const copy = formatError(error);
   return (
-    <div className="state-card state-error" role="alert">
-      <strong>{copy.title}</strong>
-      <span>{copy.detail}</span>
-      {onRetry && <button className="button secondary" onClick={onRetry}>Retry</button>}
-    </div>
+    <StatePanel
+      severity="error"
+      title={copy.title}
+      action={onRetry ? <Button variant="outlined" size="small" onClick={onRetry}>Retry</Button> : undefined}
+    >
+      {copy.detail}
+    </StatePanel>
   );
 }
 
 function Overview({ system, authority }: { system: LoadState<SystemInfo>; authority: LoadState<CurrentAdministrativeAuthority> }) {
+  const authoritySummary = authority.status === 'ready'
+    ? authority.value.administrativelyEligible
+      ? `${authority.value.authorities.length} effective source${authority.value.authorities.length === 1 ? '' : 's'}`
+      : 'Not administratively eligible'
+    : authority.status === 'loading' ? 'Checking…' : 'Unavailable';
+
   return (
-    <section className="page-stack">
-      <header className="page-header">
-        <p className="eyebrow">Control plane</p>
-        <h1>Overview</h1>
-        <p>Operator console for authoritative Wyrmgate IAM workflows. Business decisions and authorization remain server-side.</p>
-      </header>
-      <div className="card-grid">
-        <article className="card">
-          <span className="label">Runtime</span>
-          {system.status === 'loading' && <strong>Checking…</strong>}
-          {system.status === 'ready' && <><strong>{system.value.name}</strong><span>{system.value.status}</span></>}
-          {system.status === 'error' && <span>Unavailable</span>}
-        </article>
-        <article className="card">
-          <span className="label">Trust boundary</span>
-          <strong>Server-derived</strong>
-          <span>Tenant, governed actor, and administrative authority are never inferred from browser claims.</span>
-        </article>
-        <article className="card">
-          <span className="label">API routing</span>
-          <strong>Same origin</strong>
-          <span>The browser uses only <code>/api/*</code>; backend origin configuration stays at the edge.</span>
-        </article>
-        <article className="card">
-          <span className="label">Authority visibility</span>
-          {authority.status === 'loading' && <><strong>Checking…</strong><span>Loading current backend-derived authority.</span></>}
-          {authority.status === 'error' && <><strong>Unavailable</strong><span>Navigation remains visible; operation-time server authorization is still final.</span></>}
-          {authority.status === 'ready' && <><strong>{authority.value.administrativelyEligible ? `${authority.value.authorities.length} effective source${authority.value.authorities.length === 1 ? '' : 's'}` : 'Not administratively eligible'}</strong><span>Navigation is optimized from the current no-store Administration projection. A server 403 remains final.</span></>}
-        </article>
-      </div>
-    </section>
+    <Page>
+      <PageHeader
+        eyebrow="Control plane"
+        title="Overview"
+        description="Operator console for authoritative Wyrmgate IAM workflows. Business decisions and authorization remain server-side."
+      />
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' }, gap: 2 }}>
+        <Surface title="Runtime" sx={{ minHeight: 160 }}>
+          <Typography variant="h6" sx={{ mb: 0.75 }}>
+            {system.status === 'loading' ? 'Checking…' : system.status === 'ready' ? system.value.name : 'Unavailable'}
+          </Typography>
+          <Typography color="text.secondary" variant="body2">
+            {system.status === 'ready' ? system.value.status : system.status === 'loading' ? 'Resolving current runtime status.' : 'Runtime status could not be loaded.'}
+          </Typography>
+        </Surface>
+        <Surface title="Trust boundary" sx={{ minHeight: 160 }}>
+          <Typography variant="h6" sx={{ mb: 0.75 }}>Server-derived</Typography>
+          <Typography color="text.secondary" variant="body2">Tenant, governed actor, and administrative authority are never inferred from browser claims.</Typography>
+        </Surface>
+        <Surface title="API routing" sx={{ minHeight: 160 }}>
+          <Typography variant="h6" sx={{ mb: 0.75 }}>Same origin</Typography>
+          <Typography color="text.secondary" variant="body2">The browser uses only <code>/api/*</code>; backend origin configuration stays at the edge.</Typography>
+        </Surface>
+        <Surface title="Authority visibility" sx={{ minHeight: 160 }}>
+          <Typography variant="h6" sx={{ mb: 0.75 }}>{authoritySummary}</Typography>
+          <Typography color="text.secondary" variant="body2">
+            {authority.status === 'error'
+              ? 'Navigation remains available; operation-time server authorization is still final.'
+              : 'Navigation is optimized from the current no-store Administration projection. A server 403 remains final.'}
+          </Typography>
+        </Surface>
+      </Box>
+    </Page>
   );
 }
 
@@ -117,11 +150,49 @@ function lifecycleActions(identity: IdentityResource): IdentityLifecycleAction[]
   }
 }
 
+function lifecycleChipColor(state: IdentityResource['lifecycleState']): 'success' | 'warning' | 'default' | 'info' {
+  if (state === 'ACTIVE') return 'success';
+  if (state === 'SUSPENDED') return 'warning';
+  if (state === 'PENDING') return 'info';
+  return 'default';
+}
+
+function confirmationCopy(confirmation: IdentityConfirmation, identityName: string) {
+  if (!confirmation) return { title: '', body: '', label: 'Confirm' };
+  if (confirmation.kind === 'merge') {
+    return {
+      title: 'Merge Identity?',
+      body: 'Merge permanently decommissions the absorbed Identity and moves only Identity-owned relationships. This administrative correction cannot be treated as a generic account merge.',
+      label: 'Merge Identity',
+    };
+  }
+  if (confirmation.kind === 'split') {
+    return {
+      title: 'Split Identity?',
+      body: 'Split creates a new PENDING Identity and moves only explicitly selected Identity-owned relationships. Review the selected source records and Principals before continuing.',
+      label: 'Split Identity',
+    };
+  }
+  if (confirmation.action === 'decommission') {
+    return {
+      title: 'Decommission Identity?',
+      body: `Decommissioning ${identityName} is terminal. Confirm this authoritative Identity lifecycle change.`,
+      label: 'Decommission',
+    };
+  }
+  return {
+    title: `Deactivate ${identityName}?`,
+    body: 'This changes authoritative Identity lifecycle state. Downstream provider realization remains a separate asynchronous concern.',
+    label: 'Deactivate',
+  };
+}
+
 function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: () => void }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LoadState<{ identity: IdentityResource; etag: string }>>({ status: 'loading' });
   const [mutationError, setMutationError] = useState<unknown>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<IdentityConfirmation>(null);
   const [displayName, setDisplayName] = useState('');
   const [mergeValues, setMergeValues] = useState({ absorbedIdentityId: '', absorbedRevision: '', reason: '' });
   const [splitValues, setSplitValues] = useState({ newDisplayName: '', sourceRecordIds: '', principalIds: '', reason: '' });
@@ -151,72 +222,249 @@ function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: ()
     return () => controller.abort();
   }, [identityId, reloadKey]);
 
-  async function runAction(action: IdentityLifecycleAction) {
+  async function executeLifecycleAction(action: IdentityLifecycleAction) {
     if (state.status !== 'ready') return;
-    const destructive = action === 'deactivate' || action === 'decommission';
-    const prompt = action === 'decommission'
-      ? 'Decommissioning is terminal. Confirm this authoritative Identity lifecycle change.'
-      : `Confirm ${action} for ${state.value.identity.displayName}?`;
-    if (destructive && !window.confirm(prompt)) return;
-
-    setPendingAction(action); setMutationError(null);
+    setPendingAction(action);
+    setMutationError(null);
     try {
       const result = await transitionIdentity(identityId, action, state.value.etag);
       if (!result.etag) throw new Error('Mutation response did not include the required ETag');
       setState({ status: 'ready', value: { identity: result.data, etag: result.etag } });
-    } catch (error) { setMutationError(error); }
-    finally { setPendingAction(null); }
+    } catch (error) {
+      setMutationError(error);
+    } finally {
+      setPendingAction(null);
+      setConfirmation(null);
+    }
+  }
+
+  function requestLifecycleAction(action: IdentityLifecycleAction) {
+    if (action === 'deactivate' || action === 'decommission') {
+      setConfirmation({ kind: 'lifecycle', action });
+      return;
+    }
+    void executeLifecycleAction(action);
   }
 
   async function updateName() {
     if (state.status !== 'ready') return;
-    setPendingAction('rename'); setMutationError(null);
+    setPendingAction('rename');
+    setMutationError(null);
     try {
-      const result = await apiRequest<IdentityResource>(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}`, { method: 'PATCH', etag: state.value.etag, idempotent: true, body: { displayName } });
+      const result = await apiRequest<IdentityResource>(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}`, {
+        method: 'PATCH',
+        etag: state.value.etag,
+        idempotent: true,
+        body: { displayName },
+      });
       if (!result.etag) throw new Error('Identity update did not return ETag');
       setState({ status: 'ready', value: { identity: result.data, etag: result.etag } });
-    } catch (error) { setMutationError(error); } finally { setPendingAction(null); }
+    } catch (error) {
+      setMutationError(error);
+    } finally {
+      setPendingAction(null);
+    }
   }
 
-  async function merge() {
-    if (state.status !== 'ready' || !window.confirm('Merge permanently decommissions the absorbed Identity and moves only Identity-owned relationships. Continue?')) return;
-    setPendingAction('merge'); setMutationError(null);
+  async function executeMerge() {
+    if (state.status !== 'ready') return;
+    setPendingAction('merge');
+    setMutationError(null);
     try {
-      await apiRequest(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}:merge`, { method: 'POST', etag: state.value.etag, idempotent: true, body: { absorbedIdentityId: mergeValues.absorbedIdentityId, absorbedRevision: Number(mergeValues.absorbedRevision), reason: mergeValues.reason } });
-      setReloadKey((v) => v + 1);
-    } catch (error) { setMutationError(error); } finally { setPendingAction(null); }
+      await apiRequest(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}:merge`, {
+        method: 'POST',
+        etag: state.value.etag,
+        idempotent: true,
+        body: {
+          absorbedIdentityId: mergeValues.absorbedIdentityId,
+          absorbedRevision: Number(mergeValues.absorbedRevision),
+          reason: mergeValues.reason,
+        },
+      });
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      setMutationError(error);
+    } finally {
+      setPendingAction(null);
+      setConfirmation(null);
+    }
   }
 
-  async function split() {
-    if (state.status !== 'ready' || !window.confirm('Split creates a new PENDING Identity and moves only explicitly selected Identity-owned relationships. Continue?')) return;
-    setPendingAction('split'); setMutationError(null);
+  async function executeSplit() {
+    if (state.status !== 'ready') return;
+    setPendingAction('split');
+    setMutationError(null);
     try {
-      await apiRequest(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}:split`, { method: 'POST', etag: state.value.etag, idempotent: true, body: { newDisplayName: splitValues.newDisplayName, sourceRecordIds: splitValues.sourceRecordIds.split(/[\n,]/).map((v) => v.trim()).filter(Boolean), principalIds: splitValues.principalIds.split(/[\n,]/).map((v) => v.trim()).filter(Boolean), reason: splitValues.reason } });
-      setReloadKey((v) => v + 1);
-    } catch (error) { setMutationError(error); } finally { setPendingAction(null); }
+      await apiRequest(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}:split`, {
+        method: 'POST',
+        etag: state.value.etag,
+        idempotent: true,
+        body: {
+          newDisplayName: splitValues.newDisplayName,
+          sourceRecordIds: splitValues.sourceRecordIds.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
+          principalIds: splitValues.principalIds.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
+          reason: splitValues.reason,
+        },
+      });
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      setMutationError(error);
+    } finally {
+      setPendingAction(null);
+      setConfirmation(null);
+    }
   }
+
+  async function confirmAction() {
+    if (!confirmation) return;
+    if (confirmation.kind === 'lifecycle') {
+      await executeLifecycleAction(confirmation.action);
+      return;
+    }
+    if (confirmation.kind === 'merge') {
+      await executeMerge();
+      return;
+    }
+    await executeSplit();
+  }
+
+  const currentIdentity = state.status === 'ready' ? state.value.identity : null;
+  const confirmCopy = confirmationCopy(confirmation, currentIdentity?.displayName ?? 'this Identity');
 
   return (
-    <section className="page-stack">
-      <button className="back-link" onClick={onBack}>← Identities</button>
-      {state.status === 'loading' && <div className="state-card">Loading authoritative Identity…</div>}
+    <Page>
+      <Button variant="text" onClick={onBack} sx={{ justifySelf: 'start' }}>← Identities</Button>
+      {state.status === 'loading' && <StatePanel>Loading authoritative Identity…</StatePanel>}
       {state.status === 'error' && <ErrorPanel error={state.error} onRetry={() => setReloadKey((value) => value + 1)} />}
       {state.status === 'ready' && (
         <>
-          <header className="page-header split-header">
-            <div><p className="eyebrow">Identity · authoritative state</p><h1>{state.value.identity.displayName}</h1><p className="mono">{state.value.identity.id}</p></div>
-            <span className={`pill state-${state.value.identity.lifecycleState.toLowerCase()}`}>{state.value.identity.lifecycleState}</span>
-          </header>
+          <PageHeader
+            eyebrow="Identity · authoritative state"
+            title={state.value.identity.displayName}
+            description={<span className="mono">{state.value.identity.id}</span>}
+            actions={<StatusChip label={state.value.identity.lifecycleState} color={lifecycleChipColor(state.value.identity.lifecycleState)} />}
+          />
+
           {mutationError && <ErrorPanel error={mutationError} onRetry={() => setReloadKey((value) => value + 1)} />}
-          <dl className="detail-grid card"><div><dt>Type</dt><dd>{state.value.identity.type}</dd></div><div><dt>Revision</dt><dd>{state.value.identity.revision}</dd></div><div><dt>Created</dt><dd>{new Date(state.value.identity.createdAt).toLocaleString()}</dd></div><div><dt>Updated</dt><dd>{new Date(state.value.identity.updatedAt).toLocaleString()}</dd></div></dl>
-          <section className="card action-card"><div><span className="label">Display name</span><p>Non-lifecycle metadata uses PATCH with ETag/If-Match.</p></div><div className="inline-form"><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /><button className="button secondary" disabled={pendingAction !== null || !displayName.trim()} onClick={() => void updateName()}>{pendingAction === 'rename' ? 'Saving…' : 'Save name'}</button></div></section>
-          <section className="card action-card"><div><span className="label">Lifecycle actions</span><p>Explicit semantic commands; provider-side realization remains asynchronous/separate.</p></div><div className="action-row">{lifecycleActions(state.value.identity).map((action) => <button key={action} className={action === 'decommission' ? 'button danger' : 'button secondary'} disabled={pendingAction !== null} onClick={() => void runAction(action)}>{pendingAction === action ? 'Working…' : action[0].toUpperCase() + action.slice(1)}</button>)}</div></section>
-          <section className="card"><span className="label">Canonical attributes</span><p>Governed effective values only; classification authorization and redaction are enforced by the server.</p>{canonical === null && <span>Unavailable or not authorized.</span>}{canonical?.length === 0 && <span>No canonical attributes.</span>}{canonical && canonical.length > 0 && <div className="table-wrap compact-table"><table><thead><tr><th>Key</th><th>Status</th><th>Classification</th><th>Value</th></tr></thead><tbody>{canonical.map((attribute, index) => <tr key={String(attribute.definitionId ?? index)}><td>{String(attribute.key ?? '—')}</td><td>{String(attribute.resolutionStatus ?? '—')}</td><td>{String(attribute.classification ?? '—')}</td><td>{attribute.valueRedacted === true ? 'Redacted' : attribute.value ? '[authorized value]' : '—'}</td></tr>)}</tbody></table></div>}</section>
-          <details className="card expandable"><summary>Merge administrative correction</summary><div className="form-grid"><label><span>Absorbed Identity ID</span><input value={mergeValues.absorbedIdentityId} onChange={(e) => setMergeValues((v) => ({ ...v, absorbedIdentityId: e.target.value }))} /></label><label><span>Absorbed revision</span><input type="number" value={mergeValues.absorbedRevision} onChange={(e) => setMergeValues((v) => ({ ...v, absorbedRevision: e.target.value }))} /></label><label><span>Reason</span><textarea value={mergeValues.reason} onChange={(e) => setMergeValues((v) => ({ ...v, reason: e.target.value }))} /></label></div><button className="button danger" disabled={pendingAction !== null} onClick={() => void merge()}>Merge Identity</button></details>
-          <details className="card expandable"><summary>Split administrative correction</summary><div className="form-grid"><label><span>New display name</span><input value={splitValues.newDisplayName} onChange={(e) => setSplitValues((v) => ({ ...v, newDisplayName: e.target.value }))} /></label><label><span>Source record IDs</span><textarea placeholder="one UUID per line" value={splitValues.sourceRecordIds} onChange={(e) => setSplitValues((v) => ({ ...v, sourceRecordIds: e.target.value }))} /></label><label><span>Principal IDs</span><textarea placeholder="one UUID per line" value={splitValues.principalIds} onChange={(e) => setSplitValues((v) => ({ ...v, principalIds: e.target.value }))} /></label><label><span>Reason</span><textarea value={splitValues.reason} onChange={(e) => setSplitValues((v) => ({ ...v, reason: e.target.value }))} /></label></div><button className="button danger" disabled={pendingAction !== null} onClick={() => void split()}>Split Identity</button></details>
+
+          <Surface title="Identity details">
+            <dl className="detail-grid">
+              <div><dt>Type</dt><dd>{state.value.identity.type}</dd></div>
+              <div><dt>Revision</dt><dd>{state.value.identity.revision}</dd></div>
+              <div><dt>Created</dt><dd>{new Date(state.value.identity.createdAt).toLocaleString()}</dd></div>
+              <div><dt>Updated</dt><dd>{new Date(state.value.identity.updatedAt).toLocaleString()}</dd></div>
+            </dl>
+          </Surface>
+
+          <Surface
+            title="Display name"
+            description="Non-lifecycle metadata uses PATCH with ETag/If-Match."
+            actions={(
+              <Button
+                variant="outlined"
+                disabled={pendingAction !== null || !displayName.trim()}
+                onClick={() => void updateName()}
+              >
+                {pendingAction === 'rename' ? 'Saving…' : 'Save name'}
+              </Button>
+            )}
+          >
+            <TextInput label="Display name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+          </Surface>
+
+          <Surface title="Lifecycle actions" description="Explicit semantic commands; provider-side realization remains asynchronous and separate.">
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {lifecycleActions(state.value.identity).map((action) => (
+                <Button
+                  key={action}
+                  variant="outlined"
+                  color={action === 'decommission' ? 'error' : 'primary'}
+                  disabled={pendingAction !== null}
+                  onClick={() => requestLifecycleAction(action)}
+                >
+                  {pendingAction === action ? 'Working…' : action[0].toUpperCase() + action.slice(1)}
+                </Button>
+              ))}
+              {lifecycleActions(state.value.identity).length === 0 && (
+                <Typography color="text.secondary" variant="body2">No lifecycle commands are available from DECOMMISSIONED.</Typography>
+              )}
+            </Box>
+          </Surface>
+
+          <Surface
+            title="Canonical attributes"
+            description="Governed effective values only; classification authorization and redaction are enforced by the server."
+          >
+            {canonical === null && <StatePanel severity="warning">Canonical attributes are unavailable or not authorized.</StatePanel>}
+            {canonical?.length === 0 && <StatePanel>No canonical attributes.</StatePanel>}
+            {canonical && canonical.length > 0 && (
+              <DataTable minWidth={720}>
+                <TableHead>
+                  <TableRow><TableCell>Key</TableCell><TableCell>Status</TableCell><TableCell>Classification</TableCell><TableCell>Value</TableCell></TableRow>
+                </TableHead>
+                <TableBody>
+                  {canonical.map((attribute, index) => (
+                    <TableRow key={String(attribute.definitionId ?? index)} hover>
+                      <TableCell>{String(attribute.key ?? '—')}</TableCell>
+                      <TableCell>{String(attribute.resolutionStatus ?? '—')}</TableCell>
+                      <TableCell>{String(attribute.classification ?? '—')}</TableCell>
+                      <TableCell>{attribute.valueRedacted === true ? 'Redacted' : attribute.value ? '[authorized value]' : '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </DataTable>
+            )}
+          </Surface>
+
+          <Surface title="Merge administrative correction" description="Moves only Identity-owned relationships and permanently decommissions the absorbed Identity.">
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+              <TextInput label="Absorbed Identity ID" value={mergeValues.absorbedIdentityId} onChange={(event) => setMergeValues((value) => ({ ...value, absorbedIdentityId: event.target.value }))} />
+              <TextInput label="Absorbed revision" type="number" value={mergeValues.absorbedRevision} onChange={(event) => setMergeValues((value) => ({ ...value, absorbedRevision: event.target.value }))} />
+              <TextInput label="Reason" multiline minRows={3} value={mergeValues.reason} onChange={(event) => setMergeValues((value) => ({ ...value, reason: event.target.value }))} sx={{ gridColumn: { md: '1 / -1' } }} />
+            </Box>
+            <Button
+              color="error"
+              variant="outlined"
+              sx={{ mt: 2 }}
+              disabled={pendingAction !== null || !mergeValues.absorbedIdentityId || !mergeValues.absorbedRevision || !mergeValues.reason.trim()}
+              onClick={() => setConfirmation({ kind: 'merge' })}
+            >
+              Merge Identity
+            </Button>
+          </Surface>
+
+          <Surface title="Split administrative correction" description="Creates a new PENDING Identity and moves only explicitly selected Identity-owned relationships.">
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+              <TextInput label="New display name" value={splitValues.newDisplayName} onChange={(event) => setSplitValues((value) => ({ ...value, newDisplayName: event.target.value }))} />
+              <TextInput label="Reason" value={splitValues.reason} onChange={(event) => setSplitValues((value) => ({ ...value, reason: event.target.value }))} />
+              <TextInput label="Source record IDs" multiline minRows={3} placeholder="one UUID per line" value={splitValues.sourceRecordIds} onChange={(event) => setSplitValues((value) => ({ ...value, sourceRecordIds: event.target.value }))} />
+              <TextInput label="Principal IDs" multiline minRows={3} placeholder="one UUID per line" value={splitValues.principalIds} onChange={(event) => setSplitValues((value) => ({ ...value, principalIds: event.target.value }))} />
+            </Box>
+            <Button
+              color="error"
+              variant="outlined"
+              sx={{ mt: 2 }}
+              disabled={pendingAction !== null || !splitValues.newDisplayName.trim() || !splitValues.reason.trim()}
+              onClick={() => setConfirmation({ kind: 'split' })}
+            >
+              Split Identity
+            </Button>
+          </Surface>
+
+          <ConfirmDialog
+            open={confirmation !== null}
+            title={confirmCopy.title}
+            confirmLabel={confirmCopy.label}
+            destructive
+            busy={pendingAction !== null}
+            onCancel={() => setConfirmation(null)}
+            onConfirm={() => void confirmAction()}
+          >
+            {confirmCopy.body}
+          </ConfirmDialog>
         </>
       )}
-    </section>
+    </Page>
   );
 }
 
@@ -231,16 +479,119 @@ function Identities({ selectedId, onSelect }: { selectedId?: string; onSelect: (
 
   useEffect(() => {
     if (selectedId) return;
-    const controller = new AbortController(); setState('loading'); setPages([]);
-    listIdentities(undefined, controller.signal).then((page) => { setPages([page]); setState('ready'); }).catch((cause: unknown) => { if (cause instanceof DOMException && cause.name === 'AbortError') return; setError(cause); setState('error'); });
+    const controller = new AbortController();
+    setState('loading');
+    setPages([]);
+    listIdentities(undefined, controller.signal)
+      .then((page) => {
+        setPages([page]);
+        setState('ready');
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError(cause);
+        setState('error');
+      });
     return () => controller.abort();
   }, [reloadKey, selectedId]);
 
-  async function loadMore() { if (!nextCursor) return; setState('loading'); try { const page = await listIdentities(nextCursor); setPages((current) => [...current, page]); setState('ready'); } catch (cause) { setError(cause); setState('error'); } }
-  async function createIdentity() { try { await apiRequest(`${V1_ROOT}/identities`, { method: 'POST', idempotent: true, body: { type: create.type, profile: { kind: create.type }, lifecycleState: create.lifecycleState, displayName: create.displayName } }); setCreate({ type: 'PERSON', lifecycleState: 'PENDING', displayName: '' }); setReloadKey((v) => v + 1); } catch (cause) { setError(cause); setState('error'); } }
+  async function loadMore() {
+    if (!nextCursor) return;
+    setState('loading');
+    try {
+      const page = await listIdentities(nextCursor);
+      setPages((current) => [...current, page]);
+      setState('ready');
+    } catch (cause) {
+      setError(cause);
+      setState('error');
+    }
+  }
+
+  async function createIdentity() {
+    try {
+      await apiRequest(`${V1_ROOT}/identities`, {
+        method: 'POST',
+        idempotent: true,
+        body: {
+          type: create.type,
+          profile: { kind: create.type },
+          lifecycleState: create.lifecycleState,
+          displayName: create.displayName,
+        },
+      });
+      setCreate({ type: 'PERSON', lifecycleState: 'PENDING', displayName: '' });
+      setReloadKey((value) => value + 1);
+    } catch (cause) {
+      setError(cause);
+      setState('error');
+    }
+  }
 
   if (selectedId) return <IdentityDetail identityId={selectedId} onBack={() => onSelect()} />;
-  return <section className="page-stack"><header className="page-header"><p className="eyebrow">Identity</p><h1>Identities</h1><p>Governed subjects. Principal technical accounts and provider observations remain distinct concepts.</p></header><details className="card expandable"><summary>Create Identity</summary><div className="form-grid"><label><span>Type</span><select value={create.type} onChange={(e) => setCreate((v) => ({ ...v, type: e.target.value }))}><option>PERSON</option><option>SERVICE</option><option>WORKLOAD</option></select></label><label><span>Initial lifecycle</span><select value={create.lifecycleState} onChange={(e) => setCreate((v) => ({ ...v, lifecycleState: e.target.value }))}><option>PENDING</option><option>ACTIVE</option><option>SUSPENDED</option><option>INACTIVE</option></select></label><label><span>Display name</span><input value={create.displayName} onChange={(e) => setCreate((v) => ({ ...v, displayName: e.target.value }))} /></label></div><button className="button" disabled={!create.displayName.trim()} onClick={() => void createIdentity()}>Create Identity</button></details>{state === 'loading' && identities.length === 0 && <div className="state-card">Loading identities…</div>}{state === 'error' && <ErrorPanel error={error} onRetry={() => setReloadKey((value) => value + 1)} />}{state !== 'error' && identities.length === 0 && state === 'ready' && <div className="state-card">No governed identities found.</div>}{identities.length > 0 && <div className="table-wrap"><table><thead><tr><th>Name</th><th>Type</th><th>Lifecycle</th><th>Revision</th><th><span className="sr-only">Open</span></th></tr></thead><tbody>{identities.map((identity) => <tr key={identity.id}><td><strong>{identity.displayName}</strong><span className="mono subline">{identity.id}</span></td><td>{identity.type}</td><td><span className={`pill state-${identity.lifecycleState.toLowerCase()}`}>{identity.lifecycleState}</span></td><td>{identity.revision}</td><td><button className="text-button" onClick={() => onSelect(identity.id)}>View</button></td></tr>)}</tbody></table></div>}{nextCursor && <button className="button secondary load-more" disabled={state === 'loading'} onClick={() => void loadMore()}>{state === 'loading' ? 'Loading…' : 'Load more'}</button>}</section>;
+
+  return (
+    <Page>
+      <PageHeader
+        eyebrow="Identity"
+        title="Identities"
+        description="Governed subjects. Principal technical accounts and provider observations remain distinct concepts."
+      />
+
+      <Surface title="Create Identity" description="Create a governed subject with explicit type and initial lifecycle state.">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5 }}>
+          <label>
+            <Typography component="span" variant="body2" sx={{ display: 'block', mb: 0.5, fontWeight: 700 }}>Type</Typography>
+            <select value={create.type} onChange={(event) => setCreate((value) => ({ ...value, type: event.target.value }))}>
+              <option>PERSON</option><option>SERVICE</option><option>WORKLOAD</option>
+            </select>
+          </label>
+          <label>
+            <Typography component="span" variant="body2" sx={{ display: 'block', mb: 0.5, fontWeight: 700 }}>Initial lifecycle</Typography>
+            <select value={create.lifecycleState} onChange={(event) => setCreate((value) => ({ ...value, lifecycleState: event.target.value }))}>
+              <option>PENDING</option><option>ACTIVE</option><option>SUSPENDED</option><option>INACTIVE</option>
+            </select>
+          </label>
+          <TextInput label="Display name" value={create.displayName} onChange={(event) => setCreate((value) => ({ ...value, displayName: event.target.value }))} />
+        </Box>
+        <Button variant="contained" sx={{ mt: 2 }} disabled={!create.displayName.trim()} onClick={() => void createIdentity()}>Create Identity</Button>
+      </Surface>
+
+      {state === 'loading' && identities.length === 0 && <StatePanel>Loading identities…</StatePanel>}
+      {state === 'error' && <ErrorPanel error={error} onRetry={() => setReloadKey((value) => value + 1)} />}
+      {state !== 'error' && identities.length === 0 && state === 'ready' && <StatePanel>No governed identities found.</StatePanel>}
+
+      {identities.length > 0 && (
+        <Surface title="Governed identities" description="Authoritative Identity resources; technical Principals remain separate.">
+          <DataTable minWidth={820}>
+            <TableHead>
+              <TableRow><TableCell>Name</TableCell><TableCell>Type</TableCell><TableCell>Lifecycle</TableCell><TableCell>Revision</TableCell><TableCell align="right">Open</TableCell></TableRow>
+            </TableHead>
+            <TableBody>
+              {identities.map((identity) => (
+                <TableRow key={identity.id} hover>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{identity.displayName}</Typography>
+                    <Typography variant="caption" color="text.secondary" className="mono">{identity.id}</Typography>
+                  </TableCell>
+                  <TableCell>{identity.type}</TableCell>
+                  <TableCell><StatusChip label={identity.lifecycleState} color={lifecycleChipColor(identity.lifecycleState)} /></TableCell>
+                  <TableCell>{identity.revision}</TableCell>
+                  <TableCell align="right"><Button size="small" variant="text" onClick={() => onSelect(identity.id)}>View</Button></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </DataTable>
+        </Surface>
+      )}
+
+      {nextCursor && (
+        <Button variant="outlined" disabled={state === 'loading'} onClick={() => void loadMore()} sx={{ justifySelf: 'start' }}>
+          {state === 'loading' ? 'Loading…' : 'Load more'}
+        </Button>
+      )}
+    </Page>
+  );
 }
 
 type RouteKey = 'overview' | 'identities' | 'principals' | 'catalog' | 'access' | 'requests' | 'reviews' | 'policies' | 'credentials' | 'integrations' | 'administration' | 'audit' | 'not-found';
@@ -273,8 +624,28 @@ export function App() {
   const [pathname, setPathname] = usePathname();
   const [system, setSystem] = useState<LoadState<SystemInfo>>({ status: 'loading' });
   const [authority, setAuthority] = useState<LoadState<CurrentAdministrativeAuthority>>({ status: 'loading' });
-  useEffect(() => { const controller = new AbortController(); getSystemInfo(controller.signal).then((value) => setSystem({ status: 'ready', value })).catch((error: unknown) => { if (error instanceof DOMException && error.name === 'AbortError') return; setSystem({ status: 'error', error }); }); return () => controller.abort(); }, []);
-  useEffect(() => { const controller = new AbortController(); getCurrentAdministrativeAuthority(controller.signal).then((value) => setAuthority({ status: 'ready', value })).catch((error: unknown) => { if (error instanceof DOMException && error.name === 'AbortError') return; setAuthority({ status: 'error', error }); }); return () => controller.abort(); }, [pathname]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getSystemInfo(controller.signal)
+      .then((value) => setSystem({ status: 'ready', value }))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setSystem({ status: 'error', error });
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getCurrentAdministrativeAuthority(controller.signal)
+      .then((value) => setAuthority({ status: 'ready', value }))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setAuthority({ status: 'error', error });
+      });
+    return () => controller.abort();
+  }, [pathname]);
 
   const identityMatch = pathname.match(/^\/identities\/([^/]+)$/);
   const exact = nav.find((item) => item.path === pathname);
@@ -282,5 +653,39 @@ export function App() {
   const visibleNav = visibleNavigation(authority);
   function go(path: string) { navigate(path, setPathname); }
 
-  return <div className="app-shell"><aside className="sidebar"><a className="brand" href="/" onClick={(event) => { event.preventDefault(); go('/'); }}><span className="brand-mark">W</span><span><strong>Wyrmgate</strong><small>IAM Console</small></span></a><nav aria-label="Primary navigation">{visibleNav.map((item) => <a key={item.path} className={route === item.route ? 'active' : ''} href={item.path} onClick={(event) => { event.preventDefault(); go(item.path); }}>{item.label}</a>)}</nav><div className="sidebar-footer"><span className={`status-dot ${system.status === 'ready' ? 'online' : ''}`} /><span>{system.status === 'ready' ? system.value.status : system.status === 'loading' ? 'Checking runtime' : 'Runtime unavailable'}</span></div></aside><main className="content" id="main-content">{route === 'overview' && <Overview system={system} authority={authority} />}{route === 'identities' && <Identities selectedId={identityMatch ? decodeURIComponent(identityMatch[1]) : undefined} onSelect={(id) => go(id ? `/identities/${encodeURIComponent(id)}` : '/identities')} />}{route === 'principals' && <PrincipalsPage />}{route === 'catalog' && <CatalogPage />}{route === 'access' && <AccessPage />}{route === 'requests' && <RequestsPage />}{route === 'reviews' && <ReviewsPage />}{route === 'policies' && <PoliciesPage />}{route === 'credentials' && <CredentialsPage />}{route === 'integrations' && <IntegrationsPage />}{route === 'administration' && <AdministrationPage />}{route === 'audit' && <AuditPage />}{route === 'not-found' && <section className="page-stack"><header className="page-header"><p className="eyebrow">404</p><h1>Page not found</h1></header><button className="button secondary" onClick={() => go('/')}>Return to overview</button></section>}</main></div>;
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <a className="brand" href="/" onClick={(event) => { event.preventDefault(); go('/'); }}>
+          <span className="brand-mark">W</span><span><strong>Wyrmgate</strong><small>IAM Console</small></span>
+        </a>
+        <nav aria-label="Primary navigation">
+          {visibleNav.map((item) => (
+            <a key={item.path} className={route === item.route ? 'active' : ''} href={item.path} onClick={(event) => { event.preventDefault(); go(item.path); }}>{item.label}</a>
+          ))}
+        </nav>
+        <div className="sidebar-footer"><span className={`status-dot ${system.status === 'ready' ? 'online' : ''}`} /><span>{system.status === 'ready' ? system.value.status : system.status === 'loading' ? 'Checking runtime' : 'Runtime unavailable'}</span></div>
+      </aside>
+      <main className="content" id="main-content">
+        {route === 'overview' && <Overview system={system} authority={authority} />}
+        {route === 'identities' && <Identities selectedId={identityMatch ? decodeURIComponent(identityMatch[1]) : undefined} onSelect={(id) => go(id ? `/identities/${encodeURIComponent(id)}` : '/identities')} />}
+        {route === 'principals' && <PrincipalsPage />}
+        {route === 'catalog' && <CatalogPage />}
+        {route === 'access' && <AccessPage />}
+        {route === 'requests' && <RequestsPage />}
+        {route === 'reviews' && <ReviewsPage />}
+        {route === 'policies' && <PoliciesPage />}
+        {route === 'credentials' && <CredentialsPage />}
+        {route === 'integrations' && <IntegrationsPage />}
+        {route === 'administration' && <AdministrationPage />}
+        {route === 'audit' && <AuditPage />}
+        {route === 'not-found' && (
+          <Page>
+            <PageHeader eyebrow="404" title="Page not found" description="The requested Console route is not available." />
+            <Button variant="outlined" onClick={() => go('/')} sx={{ justifySelf: 'start' }}>Return to overview</Button>
+          </Page>
+        )}
+      </main>
+    </div>
+  );
 }
