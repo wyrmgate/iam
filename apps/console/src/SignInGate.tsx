@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { App } from './App';
 import { ShellChrome } from './ShellChrome';
+import { Alert, Button, CircularProgress, TextInput } from './ui';
 import { ApiError, getAuthSession, getLoginRoute, signIn, signOut, type LoginRoute } from './api';
 
 type GateState = 'checking' | 'first-party-login' | 'authenticated' | 'external-mode';
@@ -76,7 +77,7 @@ export function SignInGate() {
     return (
       <main className="auth-loading" aria-live="polite">
         <div className="auth-loading-card">
-          <span className="auth-spinner" aria-hidden="true" />
+          <CircularProgress size={20} thickness={5} aria-hidden="true" />
           <span>Establishing secure session context…</span>
         </div>
       </main>
@@ -116,18 +117,28 @@ export function SignInGate() {
               <p>Use your governed Wyrmgate principal credentials to continue.</p>
             </header>
 
-            {error && <div className="state-card state-error auth-error" role="alert">{error}</div>}
+            {error && <Alert severity="error" role="alert" className="auth-error">{error}</Alert>}
 
             <form className="auth-form" onSubmit={(event) => void submit(event)}>
-              <label>
-                <span>Username</span>
-                <input autoComplete="username" autoFocus required value={principalKey} onChange={(event) => setPrincipalKey(event.target.value)} />
-              </label>
-              <label>
-                <span>Password</span>
-                <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
-              </label>
-              <button className="button" disabled={busy || !loginRoute}>{busy ? 'Signing in…' : 'Sign in'}</button>
+              <TextInput
+                label="Username"
+                autoComplete="username"
+                autoFocus
+                required
+                value={principalKey}
+                onChange={(event) => setPrincipalKey(event.target.value)}
+              />
+              <TextInput
+                label="Password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <Button type="submit" variant="contained" disabled={busy || !loginRoute}>
+                {busy ? 'Signing in…' : 'Sign in'}
+              </Button>
             </form>
 
             <p className="auth-security-note">Tenant routing and administrative authority are resolved by the server. Authentication secrets are not written to browser storage.</p>
