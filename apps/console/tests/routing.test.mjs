@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+const location = await readFile(new URL('../src/consoleLocation.ts', import.meta.url), 'utf8');
 const shell = await readFile(new URL('../src/ShellChrome.tsx', import.meta.url), 'utf8');
 const navigation = await readFile(new URL('../src/consoleNavigation.ts', import.meta.url), 'utf8');
 const redirects = await readFile(new URL('../public/_redirects', import.meta.url), 'utf8');
@@ -23,11 +24,22 @@ const primaryPaths = [
 
 test('application routing is derived from the shared navigation registry', () => {
   assert.match(app, /matchConsoleRoute\(pathname\)/);
-  assert.match(app, /visibleConsoleRoutes/);
+  assert.match(app, /navigateConsole\(path\)/);
+  assert.doesNotMatch(app, /visibleConsoleRoutes/);
   assert.doesNotMatch(app, /const nav:\s*NavItem\[\]/);
   assert.doesNotMatch(app, /pathname\.match\(\/\^\\\/identities/);
+  assert.match(shell, /visibleConsoleRoutes\(authority\)/);
   assert.match(navigation, /export function matchConsoleRoute/);
   assert.match(navigation, /return null;/);
+});
+
+test('legacy application frame is removed and shell chrome remains the single frame owner', () => {
+  assert.doesNotMatch(app, /className="app-shell"/);
+  assert.doesNotMatch(app, /className="sidebar"/);
+  assert.doesNotMatch(app, /className="content"/);
+  assert.doesNotMatch(app, /aria-label="Primary navigation"/);
+  assert.match(shell, /className=\{`product-shell/);
+  assert.match(shell, /<main className="shell-workspace">\{children\}<\/main>/);
 });
 
 test('all current primary workspaces have stable directly served URLs', () => {
@@ -49,13 +61,16 @@ test('identity detail is the supported addressable subview and unknown routes st
   assert.match(app, /title="Page not found"/);
 });
 
-test('in-app navigation and browser history update both app and shell location', () => {
+test('in-app navigation and browser history use one shared pathname subscription helper', () => {
   assert.match(navigation, /window\.history\.pushState/);
   assert.match(navigation, /CONSOLE_NAVIGATION_EVENT/);
-  assert.match(app, /addEventListener\('popstate'/);
-  assert.match(app, /addEventListener\(CONSOLE_NAVIGATION_EVENT/);
-  assert.match(shell, /addEventListener\('popstate'/);
-  assert.match(shell, /addEventListener\(CONSOLE_NAVIGATION_EVENT/);
+  assert.match(location, /addEventListener\('popstate'/);
+  assert.match(location, /addEventListener\(CONSOLE_NAVIGATION_EVENT/);
+  assert.match(location, /removeEventListener\('popstate'/);
+  assert.match(app, /useConsolePathname\(\)/);
+  assert.match(shell, /useConsolePathname\(\)/);
+  assert.doesNotMatch(app, /addEventListener\('popstate'/);
+  assert.doesNotMatch(shell, /addEventListener\('popstate'/);
   assert.match(shell, /navigateConsole\(path\)/);
 });
 

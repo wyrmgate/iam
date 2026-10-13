@@ -26,12 +26,11 @@ import {
   RequestsPage,
   ReviewsPage,
 } from './ControlPlanePages';
+import { useConsolePathname } from './consoleLocation';
 import {
-  CONSOLE_NAVIGATION_EVENT,
-  consoleRoutes,
   identityDetailPath,
   matchConsoleRoute,
-  visibleConsoleRoutes,
+  navigateConsole,
   type ConsoleRouteId,
 } from './consoleNavigation';
 import {
@@ -62,28 +61,6 @@ type IdentityConfirmation =
   | { kind: 'merge' }
   | { kind: 'split' }
   | null;
-
-function usePathname() {
-  const [pathname, setPathname] = useState(window.location.pathname);
-  useEffect(() => {
-    const onLocationChange = () => setPathname(window.location.pathname);
-    window.addEventListener('popstate', onLocationChange);
-    window.addEventListener(CONSOLE_NAVIGATION_EVENT, onLocationChange);
-    return () => {
-      window.removeEventListener('popstate', onLocationChange);
-      window.removeEventListener(CONSOLE_NAVIGATION_EVENT, onLocationChange);
-    };
-  }, []);
-  return [pathname, setPathname] as const;
-}
-
-function navigate(path: string, setPathname: (path: string) => void) {
-  if (window.location.pathname === path) return;
-  window.history.pushState({}, '', path);
-  setPathname(path);
-  window.dispatchEvent(new Event(CONSOLE_NAVIGATION_EVENT));
-  window.scrollTo({ top: 0 });
-}
 
 function formatError(error: unknown): { title: string; detail: string } {
   if (error instanceof ApiError) {
@@ -609,12 +586,8 @@ function Identities({ selectedId, onSelect }: { selectedId?: string; onSelect: (
 
 type RouteKey = ConsoleRouteId | 'not-found';
 
-function visibleNavigation(authority: LoadState<CurrentAdministrativeAuthority>) {
-  return visibleConsoleRoutes(authority.status === 'ready' ? authority.value : null);
-}
-
 export function App() {
-  const [pathname, setPathname] = usePathname();
+  const pathname = useConsolePathname();
   const [system, setSystem] = useState<LoadState<SystemInfo>>({ status: 'loading' });
   const [authority, setAuthority] = useState<LoadState<CurrentAdministrativeAuthority>>({ status: 'loading' });
 
@@ -643,42 +616,28 @@ export function App() {
   const routeMatch = matchConsoleRoute(pathname);
   const route: RouteKey = routeMatch?.route.id ?? 'not-found';
   const identityId = routeMatch?.params.identityId;
-  const visibleNav = visibleNavigation(authority);
-  function go(path: string) { navigate(path, setPathname); }
+  function go(path: string) { navigateConsole(path); }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="/" onClick={(event) => { event.preventDefault(); go('/'); }}>
-          <span className="brand-mark">W</span><span><strong>Wyrmgate</strong><small>IAM Console</small></span>
-        </a>
-        <nav aria-label="Primary navigation">
-          {visibleNav.map((item) => (
-            <a key={item.path} className={route === item.id ? 'active' : ''} href={item.path} onClick={(event) => { event.preventDefault(); go(item.path); }}>{item.label}</a>
-          ))}
-        </nav>
-        <div className="sidebar-footer"><span className={`status-dot ${system.status === 'ready' ? 'online' : ''}`} /><span>{system.status === 'ready' ? system.value.status : system.status === 'loading' ? 'Checking runtime' : 'Runtime unavailable'}</span></div>
-      </aside>
-      <main className="content" id="main-content">
-        {route === 'overview' && <Overview system={system} authority={authority} />}
-        {route === 'identities' && <Identities selectedId={identityId} onSelect={(id) => go(id ? identityDetailPath(id) : '/identities')} />}
-        {route === 'principals' && <PrincipalsPage />}
-        {route === 'catalog' && <CatalogPage />}
-        {route === 'access' && <AccessPage />}
-        {route === 'requests' && <RequestsPage />}
-        {route === 'reviews' && <ReviewsPage />}
-        {route === 'policies' && <PoliciesPage />}
-        {route === 'credentials' && <CredentialsPage />}
-        {route === 'integrations' && <IntegrationsPage />}
-        {route === 'administration' && <AdministrationPage />}
-        {route === 'audit' && <AuditPage />}
-        {route === 'not-found' && (
-          <Page>
-            <PageHeader eyebrow="404" title="Page not found" description="The requested Console route is not available." />
-            <Button variant="outlined" onClick={() => go('/')} sx={{ justifySelf: 'start' }}>Return to overview</Button>
-          </Page>
-        )}
-      </main>
-    </div>
+    <>
+      {route === 'overview' && <Overview system={system} authority={authority} />}
+      {route === 'identities' && <Identities selectedId={identityId} onSelect={(id) => go(id ? identityDetailPath(id) : '/identities')} />}
+      {route === 'principals' && <PrincipalsPage />}
+      {route === 'catalog' && <CatalogPage />}
+      {route === 'access' && <AccessPage />}
+      {route === 'requests' && <RequestsPage />}
+      {route === 'reviews' && <ReviewsPage />}
+      {route === 'policies' && <PoliciesPage />}
+      {route === 'credentials' && <CredentialsPage />}
+      {route === 'integrations' && <IntegrationsPage />}
+      {route === 'administration' && <AdministrationPage />}
+      {route === 'audit' && <AuditPage />}
+      {route === 'not-found' && (
+        <Page>
+          <PageHeader eyebrow="404" title="Page not found" description="The requested Console route is not available." />
+          <Button variant="outlined" onClick={() => go('/')} sx={{ justifySelf: 'start' }}>Return to overview</Button>
+        </Page>
+      )}
+    </>
   );
 }
