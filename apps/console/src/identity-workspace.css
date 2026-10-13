@@ -336,6 +336,18 @@
 .identity-merge-target strong { display: block; font-size: .78rem; }
 .identity-merge-target small { display: block; margin-top: 2px; color: #64748b; font-size: .67rem; }
 
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 @media (max-width: 900px) {
   .identity-overview-grid { grid-template-columns: 1fr; }
 }
@@ -349,7 +361,7 @@
   .identity-toolbar { align-items: stretch; display: grid; }
   .identity-toolbar-actions { justify-content: flex-start; }
   .identity-panel-header { padding: 13px; }
-  .identity-table-wrap { display: none; }
+  .identity-panel > .identity-table-wrap { display: none; }
   .identity-mobile-list { display: grid; gap: 8px; padding: 10px; background: #f8fafc; }
   .identity-mobile-item {
     display: grid;
