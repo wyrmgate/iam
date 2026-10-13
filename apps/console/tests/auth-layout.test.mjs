@@ -17,15 +17,16 @@ test('enterprise login owns dynamic viewport containment', () => {
   assert.match(viewportCss, /\.auth-network[\s\S]*overflow:\s*hidden/);
 });
 
-test('desktop login uses a balanced, compact enterprise composition', () => {
-  assert.match(viewportCss, /grid-template-columns:\s*minmax\(0,\s*1\.02fr\)\s*minmax\(30rem,\s*\.98fr\)/);
-  assert.match(viewportCss, /\.auth-form-wrap-enterprise[\s\S]*max-width:\s*28rem/);
-  assert.match(viewportCss, /\.auth-input \.MuiOutlinedInput-root[\s\S]*min-height:\s*3\.65rem/);
+test('desktop login gives the brand surface more weight than the sign-in surface', () => {
+  assert.match(viewportCss, /grid-template-columns:\s*minmax\(0,\s*1\.45fr\)\s*minmax\(27rem,\s*\.85fr\)/);
+  assert.match(viewportCss, /\.auth-form-wrap-enterprise[\s\S]*max-width:\s*25rem/);
+  assert.match(viewportCss, /\.auth-input \.MuiOutlinedInput-root[\s\S]*min-height:\s*3\.4rem/);
+  assert.match(viewportCss, /@media \(max-width: 1250px\) and \(min-width: 981px\)[\s\S]*1\.18fr[\s\S]*\.82fr/);
   assert.match(viewportCss, /\.auth-core-face[\s\S]*transform:\s*none/);
 });
 
 test('control-plane core keeps the Wyrmgate mark and label readable', () => {
-  assert.match(graphic, /className="auth-core-logo">W</);
+  assert.match(graphic, /className="auth-core-logo">W/);
   assert.match(graphic, /<strong>Wyrmgate IAM<\/strong>/);
   assert.match(graphic, /<small>Identity control plane<\/small>/);
   assert.match(viewportCss, /\.auth-core-face[\s\S]*display:\s*flex/);
