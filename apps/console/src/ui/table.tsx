@@ -102,7 +102,7 @@ export function DataTableActionCell({ align = 'right', sx, ...props }: TableCell
       align={align}
       sx={[
         {
-          width: 1,
+          width: '1%',
           whiteSpace: 'nowrap',
         },
         ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
