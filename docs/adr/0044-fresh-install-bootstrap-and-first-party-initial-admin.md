@@ -102,7 +102,9 @@ The first-party tenant bootstrap is replay-safe only when the existing immutable
 
 ### PASSWORD enrollment and secret boundary
 
-The operator supplies the initial password only to the trusted installation adapter for immediate Credential-owned enrollment. The baseline startup adapter reads it from a local operator-controlled password file; the durable installation process never persists it.
+The operator supplies the initial password only to the trusted installation adapter for immediate Credential-owned enrollment. The durable installation process never persists it.
+
+The startup adapter may accept the password from exactly one trusted deployment-local secret source: a temporary secret configuration value or an operator-controlled secret file. Those are implementation/operations choices at the adapter boundary, not IAM state. Managed platforms may prefer a temporary secret variable; environments with ephemeral secret mounts may prefer a file. Configuring both sources fails closed.
 
 Credential owns a private local verifier store behind `CredentialSecretVerifier`/enrollment semantics. The baseline local provider persists salted PBKDF2-HMAC-SHA-256 verifier material under a system-managed opaque `SecretReference`; the ordinary Credential creation path cannot select that provider type.
 
@@ -133,11 +135,11 @@ Verification reads current semantic state; it does not infer success merely beca
 
 ### Bootstrap adapter boundary
 
-The fresh-install entrypoint is an explicit deployment/operator adapter. The baseline implementation is a conditional startup `ApplicationRunner` enabled only by `iam.bootstrap.installation.enabled=true`; it reads the initial password from the configured local password file and invokes the durable service.
+The fresh-install entrypoint is an explicit deployment/operator adapter. The baseline implementation is a conditional startup `ApplicationRunner` enabled only by `iam.bootstrap.installation.enabled=true`. Before `SEALED`, it resolves exactly one configured trusted password source and invokes the durable service.
 
 It is not exposed as a reusable unauthenticated remote endpoint. Any future remote bootstrap mechanism requires a separate accepted security design covering trusted operator authentication, anti-replay, network exposure, secret handling and seal enforcement.
 
-After `SEALED`, the adapter checks the durable seal before reading the password file and invokes no capability mutations. Operators should disable the bootstrap setting and remove the external password file after successful installation.
+After `SEALED`, the adapter checks the durable seal before resolving any password source and invokes no capability mutations. Operators should disable the bootstrap setting and remove the temporary deployment secret or external password file after successful installation. Normal post-seal startup must not require bootstrap secret material.
 
 ### Audit and evidence
 
@@ -153,6 +155,7 @@ Audit failure must not retroactively rewrite a successfully committed capability
 - Platform owns the narrow creation semantic for the first Tenant isolation root; this is not a new business capability or a generic unauthenticated tenant-creation API.
 - Identity, Catalog and Credential expose owner-local idempotent semantics used with preallocated installation identifiers so recovery does not depend on a distributed transaction.
 - The local PASSWORD verifier provider is system-managed and private to Credential.
+- The trusted startup adapter supports mutually exclusive deployment-secret and secret-file password sources without changing durable bootstrap semantics.
 - The initial Console Application/Target/client values are explicit installation outputs rather than hidden framework defaults.
 - Normal login begins only after the process verifies current semantic postconditions and seals itself.
 - Losing all administrators after sealing remains a separate governed recovery feature and cannot reuse installation bootstrap.
