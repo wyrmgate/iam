@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SignInGate } from './SignInGate';
+import { WyrmgateUiProvider } from './ui/WyrmgateUiProvider';
 import './styles.css';
 import './shell.css';
 import './shell-theme.css';
@@ -13,6 +14,8 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <SignInGate />
+    <WyrmgateUiProvider>
+      <SignInGate />
+    </WyrmgateUiProvider>
   </StrictMode>,
 );
