@@ -116,7 +116,7 @@ export function CurrentAdministrativeAuthorityPage() {
                 <TableBody>
                   {state.value.authorities.map((authority) => (
                     <TableRow key={`${authority.source}:${authority.sourceId}:${authority.permission.key}:${scopeLabel(authority)}`} hover>
-                      <TableCell><Typography variant="body2" fontWeight={700}>{authority.permission.key}</Typography></TableCell>
+                      <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{authority.permission.key}</Typography></TableCell>
                       <TableCell>{scopeLabel(authority)}</TableCell>
                       <TableCell>{authority.source.replaceAll('_', ' ')}</TableCell>
                       <TableCell>{authority.validUntil ? new Date(authority.validUntil).toLocaleString() : 'No explicit expiry'}</TableCell>
