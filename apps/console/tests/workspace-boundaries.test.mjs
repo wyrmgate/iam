@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+import { access } from 'node:fs/promises';
+import test from 'node:test';
+import { assertSourceContains, assertSourceExcludes, readConsoleSources } from './helpers/source-contract.mjs';
+
+const sources = await readConsoleSources({
+  app: 'App.tsx',
+  identity: 'workspaces/IdentityWorkspace.tsx',
+  principals: 'workspaces/PrincipalsWorkspace.tsx',
+  catalog: 'workspaces/CatalogWorkspace.tsx',
+  access: 'workspaces/AccessWorkspace.tsx',
+  governance: 'workspaces/GovernanceWorkspace.tsx',
+  credential: 'workspaces/CredentialsWorkspace.tsx',
+  integration: 'workspaces/IntegrationsWorkspace.tsx',
+  administration: 'workspaces/AdministrationWorkspace.tsx',
+  audit: 'workspaces/AuditWorkspace.tsx',
+  helpers: 'workspaces/workspaceSpecHelpers.ts',
+});
+
+test('App is runtime and route composition rather than a capability implementation hotspot', () => {
+  assertSourceContains(
+    sources.app,
+    /\.\/workspaces\/IdentityWorkspace/,
+    /\.\/workspaces\/PrincipalsWorkspace/,
+    /\.\/workspaces\/CatalogWorkspace/,
+    /\.\/workspaces\/AccessWorkspace/,
+    /\.\/workspaces\/GovernanceWorkspace/,
+    /\.\/workspaces\/CredentialsWorkspace/,
+    /\.\/workspaces\/IntegrationsWorkspace/,
+    /\.\/workspaces\/AdministrationWorkspace/,
+    /\.\/workspaces\/AuditWorkspace/,
+    /matchConsoleRoute\(pathname\)/,
+    /getCurrentAdministrativeAuthority/,
+    /getSystemInfo/,
+  );
+  assertSourceExcludes(
+    sources.app,
+    /ControlPlanePages/,
+    /V1_ROOT/,
+    /apiRequest/,
+    /getIdentity/,
+    /listIdentities/,
+    /transitionIdentity/,
+  );
+});
+
+test('legacy multi-capability ControlPlanePages hotspot is removed', async () => {
+  await assert.rejects(access(new URL('../src/ControlPlanePages.tsx', import.meta.url)));
+});
+
+test('each Wave 4 ownership surface has a focused implementation file', () => {
+  assertSourceContains(sources.identity, /export function IdentityWorkspace/, /\/identities/);
+  assertSourceContains(sources.principals, /export function PrincipalsWorkspace/, /\/principals/, /Technical account authority owned by Identity/);
+  assertSourceContains(sources.catalog, /export function CatalogWorkspace/, /\/applications/, /\/roles/);
+  assertSourceContains(sources.access, /export function AccessWorkspace/, /\/access-assignments/, /\/effective-access/);
+  assertSourceContains(sources.governance, /export function RequestsWorkspace/, /export function ReviewsWorkspace/, /export function PoliciesWorkspace/, /\/governance\//);
+  assertSourceContains(sources.credential, /export function CredentialsWorkspace/, /\/credentials/);
+  assertSourceContains(sources.integration, /export function IntegrationsWorkspace/, /\/connectors/, /IntegrationOperationsPage/);
+  assertSourceContains(sources.administration, /export function AdministrationWorkspace/, /\/administrative-/, /CurrentAdministrativeAuthorityPage/);
+  assertSourceContains(sources.audit, /export function AuditWorkspace/, /\/audit-records/, /\/evidence-snapshots/);
+});
+
+test('shared workspace helpers remain presentation-neutral and do not redefine capability contracts', () => {
+  assertSourceContains(sources.helpers, /withCursor/, /nullable/, /iso/, /csv/, /list/);
+  assertSourceExcludes(
+    sources.helpers,
+    /SemanticWorkspace/,
+    /\.\.\/ui/,
+    /administrative-|governance\/|access-assignments|credentials|connectors|audit-records|identities|principals|applications/,
+  );
+});

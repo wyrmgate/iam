@@ -40,12 +40,15 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 | UI-016 | #344 | DONE | issue #344 agent | `feat/ui-responsive-foundation` | Wave-2 baseline `a9018533` | UI-011 / UI-021 | Responsive foundation lock RELEASED | UI-012 through UI-015, UI-017 | Route/navigation meaning, capability layouts, token redesign | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
 | UI-017 | #345 | DONE | issue #345 agent | `feat/ui-tabs-foundation` | Wave-2 baseline `a9018533` | UI-011 / Wave 1 | Tabs primitive lock RELEASED | UI-012 through UI-016 | URL routing/view semantics, capability tab content | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
 | UI-018 | #346 | DONE | issue #346 agent | `test/ui-accessibility-baseline` | exact reviewed `main` at `3606b858c732594708ea65120567c70c409a3ecd` | UI-012 through UI-017 DONE | Accessibility lock RELEASED after merge | Capability fan-out may proceed subject to its own ownership/locks | IAM/domain/API/auth/routing semantics, new workflows, unrelated visual redesign | #355 | PR gates Core/Security/Container/DEV all green on tree `9b392e84`; squash-merged to `main` as `fa7882354086e38d3a1ad899c93304c48963b58a` with the identical tree; issue #346 closed completed |
+| UI-019 | #357 | IN_REVIEW | issue #357 agent | `refactor/ui-capability-page-decomposition` | exact `main` at `c996a4ffc6573d52ecf9dd850f67ae8b25345685` | UI-018 DONE / Wave 4 structural preparation | `App.tsx` composition and capability-workspace decomposition lock ACTIVE until PR merge/close | Documentation and unrelated server work; later capability tasks after rebase on merged structure | IAM/domain/API/auth/routing semantics, shared primitive contracts, visual redesign, capability feature behavior | #358 | PR #358 open directly to `main`; local workspace-boundary source-contract test 4/4 and TypeScript syntax validation passed; full PR gates remain authoritative |
 
 ## Current phase
 
 Wave 0 and Wave 1 are complete. Wave 2 is **DONE / VERIFIED**: UI-012 through UI-017 converged in `integration/console-ui/wave-2`, promotion PR #354 passed the release-quality gate, and the exact reviewed result was merged to `main` as `3606b858c732594708ea65120567c70c409a3ecd`. The Wave-2 pool is retired and must not receive additional feature work.
 
-UI-018 / #346 is **DONE / VERIFIED**. PR #355 established the serialized Wave-3 accessibility baseline and was squash-merged to `main` as `fa7882354086e38d3a1ad899c93304c48963b58a`. The merged commit has the same Git tree (`9b392e843d37de512236795642c2feab8bcdfc25`) as the PR head that passed Core CI, Security CI, Container CI and DEV Deployment Contract. The serialized accessibility lock is released. Capability-workspace fan-out may proceed subject to capability ownership and any new explicit shared-surface locks.
+UI-018 / #346 is **DONE / VERIFIED**. PR #355 established the serialized Wave-3 accessibility baseline and was squash-merged to `main` as `fa7882354086e38d3a1ad899c93304c48963b58a`. The merged commit has the same Git tree (`9b392e843d37de512236795642c2feab8bcdfc25`) as the PR head that passed Core CI, Security CI, Container CI and DEV Deployment Contract. The serialized accessibility lock is released.
+
+UI-019 / #357 is **IN REVIEW** through PR #358 as the serialized Wave-4 structural preparation. It is limited to moving the existing capability workspace implementations out of `App.tsx` / `ControlPlanePages.tsx`, retaining existing route, API/auth/domain, accessibility and shared-primitive behavior. Capability feature fan-out should rebase onto the merged UI-019 ownership layout rather than independently re-splitting the same files.
 
 ## Shared-foundation acceptance history
 
@@ -81,7 +84,21 @@ DONE / VERIFIED: UI-018 / #346 was implemented on `test/ui-accessibility-baselin
 
 ### Wave 4 — capability workspace fan-out
 
-READY: capability workspaces may fan out across Identity, Principal, Catalog, Access, Governance, Credential, Integration, Administration and Audit, subject to issue-specific dependencies and shared-surface ownership. Capability ownership remains canonical IAM ownership; this split is only a UI implementation coordination mechanism.
+UI-019 / #357 is the serialized structural handoff that establishes stable implementation ownership surfaces before capability feature tasks fan out. The decomposition is an implementation coordination boundary only; canonical capability and Principal ownership do not change.
+
+| Wave-4 ownership surface | Console route(s) | Implementation file after UI-019 | Semantic ownership note |
+| --- | --- | --- | --- |
+| Identity | `/identities`, `/identities/:identityId` | `apps/console/src/workspaces/IdentityWorkspace.tsx` | Identity capability |
+| Principal | `/principals` | `apps/console/src/workspaces/PrincipalsWorkspace.tsx` | Separate UI ownership surface; Principal remains Identity-owned canonical state |
+| Catalog | `/catalog` | `apps/console/src/workspaces/CatalogWorkspace.tsx` | Catalog capability |
+| Access | `/access` | `apps/console/src/workspaces/AccessWorkspace.tsx` | Access capability |
+| Governance | `/requests`, `/reviews`, `/policies` | `apps/console/src/workspaces/GovernanceWorkspace.tsx` | Governance capability; source-policy lookup remains the existing accepted Identity endpoint consumed by this workspace |
+| Credential | `/credentials` | `apps/console/src/workspaces/CredentialsWorkspace.tsx` | Credential capability |
+| Integration | `/integrations` | `apps/console/src/workspaces/IntegrationsWorkspace.tsx` | Integration capability; `IntegrationOperationsPage` remains a focused child consumer |
+| Administration | `/administration` | `apps/console/src/workspaces/AdministrationWorkspace.tsx` | Administration capability; current-authority projection remains server-owned |
+| Audit | `/audit` | `apps/console/src/workspaces/AuditWorkspace.tsx` | Audit capability |
+
+`apps/console/src/workspaces/workspaceSpecHelpers.ts` is shared only for existing cursor/value normalization helpers (`list`, `nullable`, `iso`, `csv`). It is not a domain model, route registry, authorization layer or replacement for typed capability semantics. `App.tsx` remains the route/runtime composition owner, while `SemanticWorkspace` and `src/ui` retain their existing shared presentation contracts.
 
 ## Shared-surface lock register
 
@@ -96,6 +113,7 @@ Use this section for temporary locks. Add the task/issue, exact surface, reason 
 | `src/ui/WyrmgateUiProvider.tsx` global theme/token behavior | UI-011 / #328 | RELEASED | Token baseline merged; UI-018 accessibility-only focus repair completed through #355 |
 | Wave-2 primitive modules (`table.tsx`, `forms.tsx`, `state.tsx`, `dialogs.tsx`, responsive foundation, `tabs.tsx`) | UI-012 through UI-017 | RELEASED | Wave 2 promoted and verified through #354 at `3606b858...` |
 | Cross-cutting accessibility surfaces: converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | UI-018 / #346 | RELEASED | PR #355 merged to `main` as `fa788235...`; exact merged tree passed the release-quality PR gates |
+| `App.tsx` structural composition, legacy `ControlPlanePages.tsx`, and new `src/workspaces/*` ownership layout | UI-019 / #357 | ACTIVE | Structural-only decomposition; release when PR #358 merges/closes after parity checks and required gates |
 
 ## PR and integration checklist
 
