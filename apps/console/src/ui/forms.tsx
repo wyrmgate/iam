@@ -21,7 +21,7 @@ type TextInputProps = Omit<TextFieldProps, 'variant'> & {
   readOnly?: boolean;
 };
 
-export function TextInput({ id, helperText, readOnly = false, InputProps, ...props }: TextInputProps) {
+export function TextInput({ id, helperText, readOnly = false, slotProps, ...props }: TextInputProps) {
   const generatedId = useId();
   const fieldId = id ?? `wyrmgate-field-${generatedId.replaceAll(':', '')}`;
 
@@ -30,7 +30,7 @@ export function TextInput({ id, helperText, readOnly = false, InputProps, ...pro
       id={fieldId}
       variant="outlined"
       helperText={helperText}
-      InputProps={{ ...InputProps, readOnly }}
+      slotProps={{ ...slotProps, input: { readOnly } }}
       {...props}
     />
   );
@@ -71,7 +71,7 @@ export function SelectInput<T extends SelectValue = string>({
   readOnly = false,
   onChange,
   onValueChange,
-  InputProps,
+  slotProps,
   ...props
 }: SelectInputProps<T>) {
   const generatedId = useId();
@@ -87,7 +87,7 @@ export function SelectInput<T extends SelectValue = string>({
       id={fieldId}
       select
       variant="outlined"
-      InputProps={{ ...InputProps, readOnly }}
+      slotProps={{ ...slotProps, input: { readOnly } }}
       onChange={handleChange}
       {...props}
     >
@@ -125,7 +125,7 @@ export function CheckboxInput({
   disabled = false,
   readOnly = false,
   onChange,
-  inputProps,
+  slotProps,
   ...props
 }: CheckboxInputProps) {
   const generatedId = useId();
@@ -141,10 +141,12 @@ export function CheckboxInput({
             id={fieldId}
             checked={checked}
             disabled={disabled}
-            inputProps={{
-              ...inputProps,
-              'aria-describedby': descriptionId,
-              'aria-readonly': readOnly || undefined,
+            slotProps={{
+              ...slotProps,
+              input: {
+                'aria-describedby': descriptionId,
+                'aria-readonly': readOnly || undefined,
+              },
             }}
             onChange={(event) => {
               if (!readOnly) onChange(event.target.checked);
