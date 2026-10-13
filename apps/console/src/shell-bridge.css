@@ -1,9 +1,0 @@
-/* Temporary compatibility layer while existing menu pages migrate to the new shell design system. */
-.shell-stage,
-.shell-workspace {
-  background: #0a0e14;
-}
-
-.product-shell .app-shell > .content {
-  color: var(--text);
-}

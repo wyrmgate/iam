@@ -1,76 +1,214 @@
 :root {
-  --shell-ink: #171a1e;
-  --shell-muted: #697178;
-  --shell-paper: #f2f1ec;
-  --shell-canvas: #fbfaf6;
-  --shell-line: #d5d3cc;
-  --shell-accent: #4d7184;
-  --shell-accent-soft: #dce8ed;
+  --shell-ink: #172033;
+  --shell-muted: #66758a;
+  --shell-paper: #f4f7fb;
+  --shell-canvas: #f8fafc;
+  --shell-line: #d9e1ea;
+  --shell-accent: #235ea7;
+  --shell-accent-soft: #eaf2fb;
+  --shell-shadow: 0 20px 60px rgba(15, 23, 42, .13);
 }
 
-/*
- * Wyrmgate shell palette refinement.
- * Keep semantic success/warning/danger colors owned by their components; this
- * layer only tunes neutral shell chrome and the product accent.
- */
+.product-shell {
+  background: var(--shell-paper);
+}
+
 .navigation-dock {
-  background: #14181c;
-  border-right-color: #2c3238;
+  background: #0f1d2d;
+  border-right-color: #25384c;
+  box-shadow: 6px 0 24px rgba(15, 29, 45, .08);
+}
+
+.dock-brand {
+  height: 68px;
+  border-bottom-color: #25384c;
 }
 
 .dock-brand-glyph {
-  border-color: #5d6d78;
-  color: #f1eee7;
-  background: linear-gradient(145deg, rgba(90, 122, 140, .18), rgba(255, 255, 255, .015));
+  width: 36px;
+  height: 36px;
+  border-color: #52708e;
+  border-radius: 10px 3px 10px 3px;
+  color: #f4f8fc;
+  background: linear-gradient(145deg, rgba(85, 145, 204, .22), rgba(255, 255, 255, .025));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025);
+}
+
+.dock-primary,
+.dock-utility {
+  gap: 5px;
+  padding-inline: 9px;
+}
+
+.dock-item {
+  min-height: 46px;
+  border-radius: 8px;
+  color: #8ea1b6;
 }
 
 .dock-item:hover,
 .dock-item:focus-visible {
-  background: #20272d;
+  background: #182b40;
+  color: #f5f8fb;
 }
 
 .dock-item.active {
-  background: #232d34;
-  color: #f2f4f4;
+  background: #1c3550;
+  color: #ffffff;
 }
 
 .dock-item.active::before {
   width: 3px;
-  background: #8eafbf;
-  box-shadow: 0 0 16px rgba(142, 175, 191, .28);
+  height: 24px;
+  left: -9px;
+  background: #65a7e8;
+  box-shadow: 0 0 16px rgba(101, 167, 232, .32);
+}
+
+.dock-hover-label {
+  border-color: #31485f;
+  background: #102236;
+  color: #f7f9fb;
+  box-shadow: 0 12px 30px rgba(6, 15, 25, .24);
+}
+
+.dock-flyout {
+  border-color: #2a4057;
+  background: #102235;
+  box-shadow: 20px 18px 60px rgba(6, 15, 25, .24);
+}
+
+.flyout-heading { border-bottom-color: #294057; }
+.flyout-heading span { color: #7ea3c6; }
+.flyout-heading strong { color: #f5f8fb; }
+.flyout-routes button { color: #aec0d2; }
+.flyout-routes button:hover,
+.flyout-routes button:focus-visible,
+.flyout-routes button.active { background: #18304a; color: #fff; }
+
+.shell-stage {
+  background: #f8fafc;
 }
 
 .shell-topbar {
-  background: rgba(251, 250, 246, .95);
+  min-height: 68px;
+  padding-inline: 28px;
+  border-bottom-color: var(--shell-line);
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, .02);
+}
+
+.shell-scope { color: #78879a; font-weight: 600; }
+.shell-breadcrumb { color: #435166; }
+.shell-breadcrumb strong { color: #172033; }
+.shell-breadcrumb span { color: #9aabba; }
+
+.command-trigger,
+.context-trigger,
+.actor-trigger {
+  min-height: 38px;
+  border-color: #d4dde7;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .025);
 }
 
 .command-trigger:hover,
 .context-trigger:hover,
 .actor-trigger:hover {
-  border-color: #b8c3c9;
-  background: rgba(77, 113, 132, .045);
+  border-color: #afbdcc;
+  background: #f8fafc;
 }
 
 .context-trigger.active {
-  border-color: #839faa;
+  border-color: #9fbce0;
   background: var(--shell-accent-soft);
-  color: #294b5a;
+  color: #164987;
 }
 
-.command-results button.selected {
-  background: #e8eff2;
-  box-shadow: inset 3px 0 #7697a7;
+.command-trigger kbd,
+.command-input-row kbd {
+  border-color: #cfd9e4;
+  border-bottom-color: #bcc9d6;
+  background: #f7f9fc;
+  color: #69798d;
 }
 
-.command-input-row > span {
-  color: #52798d;
+.actor-mark {
+  border-radius: 7px 2px 7px 2px;
+  background: #173b60;
+  color: #fff;
+}
+
+.actor-copy strong { color: #263449; }
+.actor-copy small { color: #7b899b; }
+
+.actor-menu,
+.command-palette {
+  border-color: #d3dce6;
+  background: #fff;
+  box-shadow: var(--shell-shadow);
+}
+
+.actor-menu button { border-top-color: #e2e8ef; }
+.actor-menu button:hover { color: #164987; }
+
+.shell-workspace {
+  background: #f8fafc;
+}
+
+.product-shell .app-shell > .content {
+  padding: clamp(26px, 3.5vw, 52px);
+  color: var(--text);
 }
 
 .context-rail {
-  background: #f7f5ef;
+  top: 68px;
+  border-left-color: #d7e0e9;
+  background: #fff;
+  box-shadow: -18px 0 55px rgba(15, 23, 42, .09);
+}
+
+.context-rail-header { border-bottom-color: #e1e7ee; }
+.context-list div { border-bottom-color: #e7ecf2; }
+.context-list dt { color: #748397; font-weight: 650; }
+.context-note { color: #748397; }
+
+.command-backdrop {
+  background: rgba(15, 23, 42, .34);
+  backdrop-filter: blur(4px);
+}
+
+.command-palette {
+  border-radius: 12px;
+  color: #172033;
+}
+
+.command-input-row { border-bottom-color: #e0e6ed; }
+.command-input-row > span { color: #235ea7; }
+.command-input-row input { color: #172033; }
+.command-results button { color: #172033; }
+.command-results button.selected {
+  background: #edf4fb;
+  box-shadow: inset 3px 0 #4d8ed0;
+}
+.command-results button small,
+.command-section-label { color: #77869a; }
+
+.runtime-dot { background: #b15f68; box-shadow: 0 0 0 3px rgba(177, 95, 104, .12); }
+.runtime-dot.online { background: #4d9a6e; box-shadow: 0 0 0 3px rgba(77, 154, 110, .12); }
+
+@media (max-width: 760px) {
+  .shell-topbar { min-height: 58px; padding-inline: 14px; }
+  .shell-scope, .shell-separator { display: none; }
+  .command-trigger > span, .context-trigger { display: none; }
+  .actor-copy { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
 @media (prefers-color-scheme: dark) {
-  /* Keep shell theme deterministic until explicit multi-theme support exists. */
   :root { color-scheme: light; }
 }
