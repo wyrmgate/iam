@@ -3,29 +3,18 @@ import { assertSourceContains, assertSourceExcludes, readConsoleSource } from '.
 
 const governanceWorkspace = await readConsoleSource('workspaces/GovernanceWorkspace.tsx');
 
-test('Governance requests separate request creation, request-item status, and approval evidence', () => {
+test('Governance generic workspace now owns reviews and policies only', () => {
   assertSourceContains(
     governanceWorkspace,
-    /Create a typed self-service DRAFT request/,
-    /Request Item Status/,
-    /Approval evidence/,
-    /Evaluation, approval, authorization, Access application, and provider fulfillment are intentionally distinct states/,
-    /Approval cases and decisions are Governance process\/evidence state; they do not mutate Access directly/,
+    /export function ReviewsWorkspace/,
+    /export function PoliciesWorkspace/,
   );
-});
-
-test('Access request form keeps typed target, principal constraint, and optional validity explicit', () => {
-  assertSourceContains(
+  assertSourceExcludes(
     governanceWorkspace,
-    /Requested target kind/,
-    /ROLE/,
-    /ENTITLEMENT/,
-    /Principal constraint/,
-    /ANY/,
-    /SPECIFIC/,
-    /Valid from/,
-    /Valid until/,
-    /Submit for Governance evaluation/,
+    /export function RequestsWorkspace/,
+    /Approval Inbox/,
+    /Request Item Status/,
+    /AccessRequestPage/,
   );
 });
 
@@ -53,12 +42,9 @@ test('Governance policy and exception presentation preserves typed versioned and
   );
 });
 
-test('Governance workspace uses only accepted existing Governance and Identity source-policy routes', () => {
+test('remaining Governance workspace uses only accepted review, policy, exception and Identity source-policy routes', () => {
   assertSourceContains(
     governanceWorkspace,
-    /\/governance\/access-requests/,
-    /\/governance\/request-items/,
-    /\/governance\/approval-inbox/,
     /\/governance\/review-campaigns/,
     /\/governance\/review-inbox/,
     /\/governance\/review-remediations/,
@@ -68,6 +54,7 @@ test('Governance workspace uses only accepted existing Governance and Identity s
   );
   assertSourceExcludes(
     governanceWorkspace,
+    /\/governance\/access-requests|\/governance\/approval-inbox|\/governance\/request-items/,
     /GovernanceFinding|dynamic reviewer|manager rule|generic status|expressionJson|jsonPath|\/provisioning-|\/connector-/,
   );
 });
