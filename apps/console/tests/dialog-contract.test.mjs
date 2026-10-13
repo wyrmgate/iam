@@ -28,7 +28,7 @@ test('busy dialogs block accidental dismissal and duplicate confirmation', () =>
   assertSourceContains(
     dialogs,
     /if \(busy\) return/,
-    /disableEscapeKeyDown=\{busy \|\| !dismissOnEscape\}/,
+    /onClose=\{handleClose\}/,
     /disabled=\{busy\}/,
     /aria-busy=\{busy \|\| undefined\}/,
     /\{busy \? 'Working…' : confirmLabel\}/,
