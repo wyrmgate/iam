@@ -1,47 +1,41 @@
 import test from 'node:test';
 import { assertSourceContains, assertSourceExcludes, readConsoleSources } from './helpers/source-contract.mjs';
 
-const { app, overview } = await readConsoleSources({
+const { app, overview, api, styles } = await readConsoleSources({
   app: 'App.tsx',
   overview: 'OverviewPage.tsx',
+  api: 'iamOperationsApi.ts',
+  styles: 'iam-operations.css',
 });
 
-test('overview prioritizes current server-derived operator context', () => {
+test('overview implements the IAM Operations golden-page hierarchy', () => {
   assertSourceContains(
     overview,
-    /Current control-plane context/,
-    /label="Runtime"/,
-    /label="Tenant"/,
-    /label="Governed actor"/,
-    /authorityValue\?\.tenantId/,
-    /authorityValue\?\.actorIdentityId/,
-    /authorityValue\.evaluatedAt/,
-    /authorityValue\.authorities\.length/,
+    /IAM Operations/,
+    /What needs my attention right now, and is IAM operating correctly\?/,
+    /Pending approvals/,
+    /Pending reviews/,
+    /Final provisioning failures/,
+    /Failed reconciliations/,
+    /My Work/,
+    /Provisioning Health/,
+    /Reconciliation Health/,
+    /My Governance Activity/,
+    /Security & Administration Evidence/,
+    /Environment Snapshot/,
   );
 });
 
-test('overview makes loading, runtime failure, authority failure, and empty authority explicit', () => {
+test('overview keeps governance, fulfillment, reconciliation, and audit semantics distinct', () => {
   assertSourceContains(
     overview,
-    /Loading current control-plane context/,
-    /Runtime status unavailable/,
-    /Administrative authority unavailable/,
-    /Authority projection unavailable/,
-    /No effective administrative authority sources/,
-    /StatePanel/,
-    /StatusChip/,
-  );
-});
-
-test('overview preserves control-plane trust and authorization boundaries', () => {
-  assertSourceContains(
-    overview,
-    /server-derived operating context/i,
-    /no-store point-in-time Administration projection/,
-    /operation-time server authorization remains final/,
-    /browser does not guess current authority/,
-    /browser calls only \/api\/\*/,
-    /server 403 remains final/,
+    /Assigned Governance decisions/,
+    /Immutable provider execution attempts; not Governance authorization/,
+    /Run outcome and effective completeness remain separate/,
+    /Actor-scoped Governance evidence only/,
+    /not a tenant risk score/,
+    /Audit evidence signals, not current authorization or incident state/,
+    /unavailable data is never shown as zero/,
   );
   assertSourceExcludes(
     overview,
@@ -52,16 +46,35 @@ test('overview preserves control-plane trust and authorization boundaries', () =
   );
 });
 
-test('overview consumes existing shared UI primitives and is wired through the application route', () => {
+test('overview uses a bounded first-party read model rather than cursor-page aggregation', () => {
+  assertSourceContains(
+    api,
+    /\/console\/iam-operations/,
+    /window, workType, workSort/,
+    /OverviewStatus/,
+    /NOT_AUTHORIZED/,
+    /UNAVAILABLE/,
+  );
+  assertSourceContains(
+    overview,
+    /getIamOperationsOverview/,
+    /AbortController/,
+    /No counts are inferred from browser state/,
+  );
+  assertSourceExcludes(overview, /while\s*\([^)]*cursor|nextCursor/);
+});
+
+test('overview is responsive and accessible while remaining wired to the root route', () => {
   assertSourceContains(
     overview,
     /from '\.\/ui'/,
     /<Page width="wide">/,
-    /<PageHeader/,
-    /<Surface/,
-    /<StatePanel/,
-    /<StatusChip/,
+    /aria-live="polite"/,
+    /View data table/,
+    /<caption className="sr-only">/,
+    /prefers-reduced-motion|iam-chart-table/,
   );
+  assertSourceContains(styles, /@media\(max-width:760px\)/, /@media\(prefers-reduced-motion:reduce\)/, /iam-attention-grid/);
   assertSourceContains(app, /OverviewPage/, /route === 'overview'/);
   assertSourceExcludes(overview, /WyrmgateUiProvider|createTheme|ThemeProvider/);
 });
