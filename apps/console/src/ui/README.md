@@ -31,7 +31,8 @@ These primitives are a project-owned compatibility layer. Their public shape sho
 
 ## Migration status
 
-- First-party sign-in uses the project-owned UI boundary.
+- First-party sign-in uses the project-owned UI boundary and now presents the enterprise Wyrmgate gate visual: a responsive split authentication surface with an animated control-plane topology showing Identity, Tenant, Credential, Access, Governance, Integration and Audit relationships. The animation is presentation-only and honors reduced-motion preferences.
+- The sign-in page continues to use only the accepted server-routed first-party login contract. Tenant remains server-resolved from the registered Console route, password visibility is local presentation state only, and no unsupported password-recovery, remember-me or upstream-SSO action is fabricated by the browser.
 - **Overview** uses shared page and enterprise surface primitives.
 - **Identities** list/create/detail, canonical-value disclosure and lifecycle/correction actions use shared page, surface, state, table, status and confirmation primitives.
 - Identity deactivation/decommission, merge and split confirmations use the project-owned `ConfirmDialog` rather than browser-native confirmation UI; the underlying semantic commands, ETag and idempotency contracts are unchanged.
