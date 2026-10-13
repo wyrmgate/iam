@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const viewportCss = await readFile(new URL('../src/auth-login-viewport.css', import.meta.url), 'utf8');
+const graphic = await readFile(new URL('../src/AuthControlPlaneGraphic.tsx', import.meta.url), 'utf8');
 const signInGate = await readFile(new URL('../src/SignInGate.tsx', import.meta.url), 'utf8');
 const main = await readFile(new URL('../src/main.tsx', import.meta.url), 'utf8');
 
@@ -21,6 +22,15 @@ test('desktop login uses a balanced, compact enterprise composition', () => {
   assert.match(viewportCss, /\.auth-form-wrap-enterprise[\s\S]*max-width:\s*28rem/);
   assert.match(viewportCss, /\.auth-input \.MuiOutlinedInput-root[\s\S]*min-height:\s*3\.65rem/);
   assert.match(viewportCss, /\.auth-core-face[\s\S]*transform:\s*none/);
+});
+
+test('control-plane core keeps the Wyrmgate mark and label readable', () => {
+  assert.match(graphic, /className="auth-core-logo">W</);
+  assert.match(graphic, /<strong>Wyrmgate IAM<\/strong>/);
+  assert.match(graphic, /<small>Identity control plane<\/small>/);
+  assert.match(viewportCss, /\.auth-core-face[\s\S]*display:\s*flex/);
+  assert.match(viewportCss, /\.auth-core-logo[\s\S]*width:\s*2\.55rem/);
+  assert.match(viewportCss, /\.auth-core-copy[\s\S]*text-align:\s*left/);
 });
 
 test('short desktop viewports compact instead of forcing the login taller', () => {
