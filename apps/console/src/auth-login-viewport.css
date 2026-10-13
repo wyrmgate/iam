@@ -1,10 +1,9 @@
 /*
- * Login viewport containment.
+ * Enterprise login composition and viewport containment.
  *
- * Keep the enterprise authentication composition intact while making the
- * shell responsive to the browser's usable viewport. This file is loaded
- * after the visual login stylesheet so these rules own sizing/containment,
- * not the product styling itself.
+ * This file is loaded after the visual authentication stylesheet. It owns the
+ * responsive composition, usable viewport sizing and final density of the
+ * sign-in surface while preserving the server-routed authentication contract.
  */
 
 html,
@@ -40,7 +39,7 @@ body {
   min-width: 0;
   min-height: 100vh;
   min-height: 100dvh;
-  grid-template-columns: minmax(0, 1.12fr) minmax(28rem, .88fr);
+  grid-template-columns: minmax(0, 1.02fr) minmax(30rem, .98fr);
   overflow-x: clip;
 }
 
@@ -60,33 +59,41 @@ body {
 
 .auth-brand-panel-enterprise {
   grid-template-rows: auto auto minmax(0, 1fr);
-  gap: clamp(.75rem, 1.6dvh, 1.2rem);
+  gap: clamp(.8rem, 1.7dvh, 1.25rem);
   padding:
-    clamp(1.5rem, 3.2dvh, 3rem)
-    clamp(2.25rem, 4.2vw, 5rem)
-    clamp(1.5rem, 3.4dvh, 3.2rem);
+    clamp(1.5rem, 3.2dvh, 2.75rem)
+    clamp(2.5rem, 4.2vw, 5rem)
+    clamp(1.5rem, 3.4dvh, 2.75rem);
 }
 
 .auth-enterprise-copy {
+  max-width: 42rem;
   min-height: 0;
-  padding-top: clamp(.35rem, 1.5dvh, 1.35rem);
+  padding-top: clamp(.35rem, 1.25dvh, 1rem);
 }
 
 .auth-enterprise-copy h1 {
-  font-size: clamp(2.45rem, 3.7vw, 4.5rem);
-  line-height: 1;
+  max-width: 40rem;
+  font-size: clamp(2.8rem, 3.35vw, 4.05rem);
+  line-height: .99;
+  letter-spacing: -.045em;
 }
 
 .auth-enterprise-copy > p:last-child {
-  margin-top: .85rem;
-  line-height: 1.55;
+  max-width: 36rem;
+  margin-top: .8rem;
+  font-size: clamp(.92rem, 1vw, 1.04rem);
+  line-height: 1.52;
 }
 
 .auth-network {
-  width: min(100%, 52rem);
-  height: clamp(18rem, 42dvh, 27rem);
+  width: min(100%, 46rem);
+  height: clamp(18rem, 39dvh, 23rem);
   min-width: 0;
   min-height: 0;
+  align-self: end;
+  justify-self: center;
+  margin-top: 0;
   overflow: hidden;
   contain: layout paint;
 }
@@ -97,39 +104,150 @@ body {
   overflow: hidden;
 }
 
-/* Keep the outer cards inside the visualization's paint box. */
 .auth-network-node {
-  width: clamp(7.25rem, 18%, 9.7rem);
+  width: clamp(7.5rem, 18%, 8.65rem);
+  min-height: 4.75rem;
   max-width: calc(100% - 1rem);
+  padding: .5rem .45rem .55rem;
 }
 
-.auth-network > .auth-network-node:nth-child(3) {
-  transform: translate(-50%, calc(-50% + 1.7rem));
+.auth-network-node-icon {
+  width: 1.8rem;
+  height: 1.8rem;
+  margin-top: -1.35rem;
 }
 
-.auth-network > .auth-network-node:nth-child(6) {
-  transform: translate(calc(-50% + 1.2rem), -50%);
+.auth-network-node strong {
+  font-size: .7rem;
 }
 
-.auth-network > .auth-network-node:nth-child(7) {
-  transform: translate(calc(-50% - 1.2rem), -50%);
+.auth-network-node small {
+  max-width: 7.4rem;
+  font-size: .54rem;
+  line-height: 1.32;
+}
+
+.auth-core {
+  width: 12.75rem;
+  height: 6.6rem;
+}
+
+.auth-core-layer,
+.auth-core-face {
+  border-radius: .9rem;
+}
+
+.auth-core-layer-three {
+  transform: translateY(.85rem) scale(.92);
+  opacity: .24;
+}
+
+.auth-core-layer-two {
+  transform: translateY(.42rem) scale(.96);
+  opacity: .48;
+}
+
+.auth-core-face {
+  transform: none;
+  gap: .18rem;
+  border-color: rgba(76, 195, 255, .72);
+  background: linear-gradient(160deg, rgba(18, 87, 178, .96), rgba(7, 37, 85, .96));
+  box-shadow: 0 18px 34px rgba(0,0,0,.3), 0 0 32px rgba(0,111,255,.18), inset 0 0 30px rgba(37,155,255,.18);
+}
+
+.auth-core-face > * {
+  transform: none;
+}
+
+.auth-core-mark {
+  font-size: 1.65rem;
+}
+
+.auth-core-face strong {
+  font-size: .82rem;
+}
+
+.auth-core-face small {
+  font-size: .6rem;
 }
 
 .auth-form-panel-enterprise {
-  padding:
-    clamp(3.25rem, 6dvh, 5.25rem)
-    clamp(2rem, 5vw, 6rem)
-    clamp(2rem, 5dvh, 4.5rem);
+  padding: clamp(2.5rem, 5dvh, 4.5rem) clamp(2.5rem, 5vw, 6rem);
 }
 
 .auth-form-wrap-enterprise {
   width: 100%;
-  max-width: 31rem;
+  max-width: 28rem;
+}
+
+.auth-form-header-enterprise {
+  margin-bottom: 1.7rem;
+}
+
+.auth-form-header-enterprise h2 {
+  margin-bottom: .5rem;
+  font-size: clamp(1.9rem, 2.15vw, 2.25rem);
+  line-height: 1.08;
+  letter-spacing: -.035em;
+  font-weight: 720;
+}
+
+.auth-form-header-enterprise > p:last-child {
+  font-size: .94rem;
+  line-height: 1.5;
+}
+
+.auth-form-enterprise {
+  gap: .9rem;
+}
+
+.auth-route-field {
+  min-height: 3.75rem;
+  gap: .12rem;
+  padding: .72rem .9rem .62rem 2.85rem;
+}
+
+.auth-route-field-value {
+  gap: .55rem;
+  font-size: .86rem;
+}
+
+.auth-route-field-value svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.auth-route-field-note {
+  font-size: .62rem;
+}
+
+.auth-input .MuiOutlinedInput-root {
+  min-height: 3.65rem;
+}
+
+.auth-input .MuiInputBase-input {
+  padding-top: .82rem;
+  padding-bottom: .82rem;
+}
+
+.auth-session-context {
+  gap: .75rem;
+  font-size: .68rem;
+  line-height: 1.35;
+}
+
+.auth-session-context > span:last-child {
+  text-align: right;
+}
+
+.auth-submit.MuiButton-root {
+  min-height: 3.15rem;
+  margin-top: .05rem;
 }
 
 @media (max-width: 1250px) and (min-width: 981px) {
   .auth-shell-enterprise {
-    grid-template-columns: minmax(0, 1.06fr) minmax(27rem, .94fr);
+    grid-template-columns: minmax(0, 1fr) minmax(28rem, 1fr);
   }
 
   .auth-brand-panel-enterprise {
@@ -137,10 +255,18 @@ body {
     padding-right: clamp(2rem, 3vw, 3rem);
   }
 
+  .auth-enterprise-copy h1 {
+    font-size: clamp(2.55rem, 3.7vw, 3.45rem);
+  }
+
   .auth-network {
-    height: clamp(17.5rem, 40dvh, 24rem);
-    transform: scale(.92);
-    transform-origin: center bottom;
+    width: min(100%, 42rem);
+    height: clamp(17rem, 37dvh, 21rem);
+  }
+
+  .auth-form-panel-enterprise {
+    padding-left: clamp(2rem, 4vw, 4rem);
+    padding-right: clamp(2rem, 4vw, 4rem);
   }
 }
 
@@ -150,74 +276,67 @@ body {
  */
 @media (min-width: 981px) and (max-height: 800px) {
   .auth-brand-panel-enterprise {
-    gap: .6rem;
-    padding-top: 1.25rem;
-    padding-bottom: 1.25rem;
+    gap: .55rem;
+    padding-top: 1.15rem;
+    padding-bottom: 1.15rem;
   }
 
   .auth-enterprise-copy {
-    padding-top: .2rem;
+    padding-top: .15rem;
   }
 
   .auth-enterprise-copy h1 {
-    font-size: clamp(2.15rem, 3.35vw, 3.25rem);
+    font-size: clamp(2.15rem, 3vw, 3.05rem);
   }
 
   .auth-enterprise-copy > p:last-child {
-    margin-top: .55rem;
-    font-size: .9rem;
-    line-height: 1.45;
+    margin-top: .5rem;
+    font-size: .86rem;
+    line-height: 1.4;
   }
 
   .auth-network {
-    height: clamp(15.5rem, 36dvh, 19rem);
-    transform: scale(.88);
-    transform-origin: center bottom;
+    width: min(100%, 40rem);
+    height: clamp(14.5rem, 34dvh, 17.5rem);
+  }
+
+  .auth-network-node {
+    min-height: 4.2rem;
   }
 
   .auth-form-panel-enterprise {
-    padding: 3rem clamp(1.75rem, 4vw, 4.5rem) 1.35rem;
-  }
-
-  .auth-form-topbar {
-    top: 1rem;
-    right: clamp(1.4rem, 3vw, 2.5rem);
+    padding: 2.25rem clamp(1.75rem, 4vw, 4.5rem) 1.25rem;
   }
 
   .auth-form-header-enterprise {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1.1rem;
   }
 
   .auth-form-header-enterprise h2 {
-    font-size: clamp(1.8rem, 2.2vw, 2.2rem);
+    font-size: clamp(1.7rem, 2vw, 2rem);
   }
 
   .auth-form-enterprise {
-    gap: .78rem;
+    gap: .7rem;
   }
 
   .auth-route-field {
-    min-height: 3.6rem;
-    padding-top: .72rem;
-    padding-bottom: .58rem;
+    min-height: 3.35rem;
+    padding-top: .62rem;
+    padding-bottom: .5rem;
   }
 
   .auth-input .MuiOutlinedInput-root {
-    min-height: 3.5rem;
+    min-height: 3.35rem;
   }
 
   .auth-input .MuiInputBase-input {
-    padding-top: .82rem;
-    padding-bottom: .82rem;
+    padding-top: .7rem;
+    padding-bottom: .7rem;
   }
 
   .auth-submit.MuiButton-root {
-    min-height: 3.05rem;
-  }
-
-  .auth-security-card {
-    margin-top: 1.2rem;
-    padding: .8rem .9rem;
+    min-height: 2.9rem;
   }
 }
 
@@ -226,33 +345,70 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* Preserve the established stacked composition without desktop 100dvh forcing. */
   .auth-brand-panel-enterprise {
-    min-height: 43rem;
+    min-height: 40rem;
   }
 
   .auth-form-panel-enterprise {
-    min-height: 42rem;
+    min-height: 38rem;
+  }
+
+  .auth-enterprise-copy {
+    max-width: 38rem;
   }
 
   .auth-network {
+    width: min(100%, 44rem);
     height: auto;
-    min-height: 25rem;
+    min-height: 22rem;
     contain: layout paint;
+  }
+
+  .auth-form-wrap-enterprise {
+    max-width: 29rem;
   }
 }
 
 @media (max-width: 680px) {
   .auth-brand-panel-enterprise {
-    min-height: 31rem;
+    min-height: 29rem;
+    padding: 1.5rem;
+  }
+
+  .auth-enterprise-copy h1 {
+    font-size: clamp(2.2rem, 11vw, 3rem);
+  }
+
+  .auth-enterprise-copy > p:last-child {
+    font-size: .88rem;
   }
 
   .auth-network {
     height: auto;
-    min-height: 15rem;
+    min-height: 14rem;
+    transform: scale(.92);
+    transform-origin: center bottom;
+  }
+
+  .auth-network-node small {
+    display: none;
+  }
+
+  .auth-network-node {
+    min-height: 3.65rem;
   }
 
   .auth-form-panel-enterprise {
     min-height: auto;
+    padding: 3rem 1.5rem;
+  }
+
+  .auth-session-context {
+    display: grid;
+    gap: .35rem;
+  }
+
+  .auth-session-context > span:last-child {
+    text-align: left;
   }
 }
