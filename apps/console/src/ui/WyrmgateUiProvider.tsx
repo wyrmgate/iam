@@ -86,10 +86,10 @@ const theme = createTheme({
           borderRadius: tokens.shape.radiusControl,
           paddingInline: 12,
           letterSpacing: 0,
-        },
-        containedPrimary: {
-          boxShadow: '0 1px 1px rgba(18, 42, 66, .12)',
-          '&:hover': { boxShadow: '0 2px 5px rgba(18, 42, 66, .16)' },
+          '&.MuiButton-containedPrimary': {
+            boxShadow: '0 1px 1px rgba(18, 42, 66, .12)',
+            '&:hover': { boxShadow: '0 2px 5px rgba(18, 42, 66, .16)' },
+          },
         },
         outlined: {
           backgroundColor: tokens.color.neutral.surface,
