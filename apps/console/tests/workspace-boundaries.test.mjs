@@ -51,7 +51,7 @@ test('legacy multi-capability ControlPlanePages hotspot is removed', async () =>
 });
 
 test('each capability ownership surface has a focused implementation file', () => {
-  assertSourceContains(sources.requests, /export function RequestsApprovalsPage/, /requests-and-approvals/, /My Approval Work/, /My Requests/);
+  assertSourceContains(sources.requests, /export function RequestsApprovalsPage/, /My Approval Work/, /My Requests/, /New Request/);
   assertSourceContains(sources.identity, /export function IdentityWorkspace/, /\/identities/);
   assertSourceContains(sources.principals, /export function PrincipalsWorkspace/, /\/principals/, /Technical account authority owned by Identity/);
   assertSourceContains(sources.catalog, /export function CatalogWorkspace/, /\/applications/, /\/roles/);
