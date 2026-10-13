@@ -22,12 +22,12 @@ import {
   TextField,
   Typography,
   type AlertProps,
+  type BoxProps,
   type ButtonProps,
   type ChipProps,
   type DialogProps,
   type DrawerProps,
   type PaperProps,
-  type StackProps,
   type TabProps,
   type TabsProps,
   type TextFieldProps,
@@ -74,18 +74,23 @@ export function SidePanel({ children, ...props }: DrawerProps & { children: Reac
   );
 }
 
-type PageProps = StackProps & { children: ReactNode };
+type PageProps = Omit<BoxProps, 'children'> & { children: ReactNode };
 
 export function Page({ children, sx, ...props }: PageProps) {
   return (
-    <Stack
+    <Box
       component="section"
-      spacing={2.5}
-      sx={{ width: 'min(82rem, 100%)', mx: 'auto', ...sx }}
+      sx={{
+        width: 'min(82rem, 100%)',
+        mx: 'auto',
+        display: 'grid',
+        gap: 2.5,
+        ...sx,
+      }}
       {...props}
     >
       {children}
-    </Stack>
+    </Box>
   );
 }
 
@@ -98,12 +103,15 @@ type PageHeaderProps = {
 
 export function PageHeader({ eyebrow, title, description, actions }: PageHeaderProps) {
   return (
-    <Stack
+    <Box
       component="header"
-      direction={{ xs: 'column', md: actions ? 'row' : 'column' }}
-      justifyContent="space-between"
-      alignItems={{ xs: 'stretch', md: actions ? 'flex-start' : 'stretch' }}
-      spacing={2}
+      sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', md: actions ? 'row' : 'column' },
+        justifyContent: 'space-between',
+        alignItems: { xs: 'stretch', md: actions ? 'flex-start' : 'stretch' },
+        gap: 2,
+      }}
     >
       <Box sx={{ maxWidth: 960 }}>
         {eyebrow ? (
@@ -124,8 +132,12 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
           </Typography>
         ) : null}
       </Box>
-      {actions ? <Stack direction="row" spacing={1} flexWrap="wrap">{actions}</Stack> : null}
-    </Stack>
+      {actions ? (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {actions}
+        </Box>
+      ) : null}
+    </Box>
   );
 }
 
@@ -140,19 +152,26 @@ export function Surface({ children, title, description, actions, sx, ...props }:
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderColor: 'divider', ...sx }} {...props}>
       {(title || description || actions) ? (
-        <Stack
-          direction={{ xs: 'column', sm: actions ? 'row' : 'column' }}
-          justifyContent="space-between"
-          alignItems={{ xs: 'stretch', sm: actions ? 'flex-start' : 'stretch' }}
-          spacing={1.5}
-          sx={{ mb: 2 }}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: actions ? 'row' : 'column' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: actions ? 'flex-start' : 'stretch' },
+            gap: 1.5,
+            mb: 2,
+          }}
         >
           <Box>
             {title ? <Typography component="h2" variant="h6">{title}</Typography> : null}
             {description ? <Typography color="text.secondary" variant="body2" sx={{ mt: title ? 0.5 : 0, lineHeight: 1.55 }}>{description}</Typography> : null}
           </Box>
-          {actions ? <Stack direction="row" spacing={1} flexWrap="wrap">{actions}</Stack> : null}
-        </Stack>
+          {actions ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {actions}
+            </Box>
+          ) : null}
+        </Box>
       ) : null}
       {children}
     </Paper>
