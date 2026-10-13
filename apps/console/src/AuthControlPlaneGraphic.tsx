@@ -132,9 +132,11 @@ export function AuthControlPlaneGraphic() {
         <div className="auth-core-layer auth-core-layer-three" />
         <div className="auth-core-layer auth-core-layer-two" />
         <div className="auth-core-face">
-          <span className="auth-core-mark">W</span>
-          <strong>Wyrmgate IAM</strong>
-          <small>Single control plane</small>
+          <span className="auth-core-logo">W</span>
+          <span className="auth-core-copy">
+            <strong>Wyrmgate IAM</strong>
+            <small>Identity control plane</small>
+          </span>
         </div>
       </div>
 
