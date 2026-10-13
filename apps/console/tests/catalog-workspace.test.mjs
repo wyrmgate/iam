@@ -13,7 +13,7 @@ test('Catalog workspace makes Application hierarchy and governed parent scope ex
     /Known \$\{config\.label\} ID/,
     /server authorization still decides access/,
     /apiRequest<CatalogPage<CatalogParent>>\(withCursor\(config\.path/,
-    /Load more \{config\.plural\}/,
+    /Load more \$\{config\.plural\}/,
   );
 });
 
