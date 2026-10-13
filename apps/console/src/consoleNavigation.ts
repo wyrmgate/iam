@@ -18,12 +18,32 @@ export type ShellGroup = {
   label: string;
 };
 
+export type ConsoleRouteId =
+  | 'overview'
+  | 'requests'
+  | 'reviews'
+  | 'identities'
+  | 'principals'
+  | 'access'
+  | 'policies'
+  | 'catalog'
+  | 'integrations'
+  | 'credentials'
+  | 'administration'
+  | 'audit';
+
 export type ConsoleRoute = {
+  id: ConsoleRouteId;
   path: string;
   label: string;
   group: ShellGroupId;
   resourceTypes?: string[];
   visibleWithoutAdministrativeEligibility?: boolean;
+};
+
+export type ConsoleRouteMatch = {
+  route: ConsoleRoute;
+  params: Readonly<Record<string, string>>;
 };
 
 export const shellGroups: ShellGroup[] = [
@@ -40,25 +60,58 @@ export const shellGroups: ShellGroup[] = [
 ];
 
 export const consoleRoutes: ConsoleRoute[] = [
-  { path: '/', label: 'Overview', group: 'overview', visibleWithoutAdministrativeEligibility: true },
-  { path: '/requests', label: 'Requests & approvals', group: 'work', visibleWithoutAdministrativeEligibility: true },
-  { path: '/reviews', label: 'Reviews', group: 'work', visibleWithoutAdministrativeEligibility: true },
-  { path: '/identities', label: 'Identities', group: 'identity', resourceTypes: ['identity', 'canonical-attribute-value'] },
-  { path: '/principals', label: 'Principals', group: 'identity', resourceTypes: ['principal', 'source-correlation-policy', 'source-lifecycle-policy', 'source-absence-policy'] },
-  { path: '/access', label: 'Access assignments', group: 'access', resourceTypes: ['access-assignment', 'effective-access', 'lifecycle-access-policy'] },
-  { path: '/policies', label: 'Policies & exceptions', group: 'governance', resourceTypes: ['governance-policy', 'governance-exception', 'source-correlation-policy', 'source-lifecycle-policy', 'source-absence-policy'] },
-  { path: '/catalog', label: 'Catalog', group: 'catalog', resourceTypes: ['application', 'sso-client', 'application-target', 'entitlement', 'role', 'role-version'] },
-  { path: '/integrations', label: 'Integrations', group: 'integration', resourceTypes: ['connector', 'connector-binding', 'connector-worker', 'entitlement-observation-mapping', 'provisioning-job', 'provisioning-task', 'provisioning-attempt', 'reconciliation-run'] },
-  { path: '/credentials', label: 'Credentials', group: 'credentials', resourceTypes: ['credential', 'credential-rotation'] },
-  { path: '/administration', label: 'Administration', group: 'administration', visibleWithoutAdministrativeEligibility: true },
-  { path: '/audit', label: 'Audit', group: 'audit', resourceTypes: ['audit', 'evidence-snapshot'] },
+  { id: 'overview', path: '/', label: 'Overview', group: 'overview', visibleWithoutAdministrativeEligibility: true },
+  { id: 'requests', path: '/requests', label: 'Requests & approvals', group: 'work', visibleWithoutAdministrativeEligibility: true },
+  { id: 'reviews', path: '/reviews', label: 'Reviews', group: 'work', visibleWithoutAdministrativeEligibility: true },
+  { id: 'identities', path: '/identities', label: 'Identities', group: 'identity', resourceTypes: ['identity', 'canonical-attribute-value'] },
+  { id: 'principals', path: '/principals', label: 'Principals', group: 'identity', resourceTypes: ['principal', 'source-correlation-policy', 'source-lifecycle-policy', 'source-absence-policy'] },
+  { id: 'access', path: '/access', label: 'Access assignments', group: 'access', resourceTypes: ['access-assignment', 'effective-access', 'lifecycle-access-policy'] },
+  { id: 'policies', path: '/policies', label: 'Policies & exceptions', group: 'governance', resourceTypes: ['governance-policy', 'governance-exception', 'source-correlation-policy', 'source-lifecycle-policy', 'source-absence-policy'] },
+  { id: 'catalog', path: '/catalog', label: 'Catalog', group: 'catalog', resourceTypes: ['application', 'sso-client', 'application-target', 'entitlement', 'role', 'role-version'] },
+  { id: 'integrations', path: '/integrations', label: 'Integrations', group: 'integration', resourceTypes: ['connector', 'connector-binding', 'connector-worker', 'entitlement-observation-mapping', 'provisioning-job', 'provisioning-task', 'provisioning-attempt', 'reconciliation-run'] },
+  { id: 'credentials', path: '/credentials', label: 'Credentials', group: 'credentials', resourceTypes: ['credential', 'credential-rotation'] },
+  { id: 'administration', path: '/administration', label: 'Administration', group: 'administration', visibleWithoutAdministrativeEligibility: true },
+  { id: 'audit', path: '/audit', label: 'Audit', group: 'audit', resourceTypes: ['audit', 'evidence-snapshot'] },
 ];
 
-export function activeRouteFor(pathname: string): ConsoleRoute {
-  if (/^\/identities\/[^/]+$/.test(pathname)) {
-    return consoleRoutes.find((route) => route.path === '/identities')!;
+function decodedPathSegment(value: string): string | null {
+  try {
+    const decoded = decodeURIComponent(value);
+    return decoded.length > 0 ? decoded : null;
+  } catch {
+    return null;
   }
-  return consoleRoutes.find((route) => route.path === pathname) ?? consoleRoutes[0];
+}
+
+export function matchConsoleRoute(pathname: string): ConsoleRouteMatch | null {
+  const exact = consoleRoutes.find((route) => route.path === pathname);
+  if (exact) return { route: exact, params: {} };
+
+  const identityMatch = /^\/identities\/([^/]+)$/.exec(pathname);
+  if (identityMatch) {
+    const identityId = decodedPathSegment(identityMatch[1]);
+    const route = consoleRoutes.find((candidate) => candidate.id === 'identities');
+    if (identityId && route) return { route, params: { identityId } };
+  }
+
+  return null;
+}
+
+export function activeRouteFor(pathname: string): ConsoleRoute | null {
+  return matchConsoleRoute(pathname)?.route ?? null;
+}
+
+export function identityDetailPath(identityId: string): string {
+  return `/identities/${encodeURIComponent(identityId)}`;
+}
+
+export const CONSOLE_NAVIGATION_EVENT = 'wyrmgate:console-navigation';
+
+export function navigateConsole(path: string): void {
+  if (window.location.pathname === path) return;
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new Event(CONSOLE_NAVIGATION_EVENT));
+  window.scrollTo({ top: 0 });
 }
 
 export function visibleConsoleRoutes(authority: CurrentAdministrativeAuthority | null): ConsoleRoute[] {
