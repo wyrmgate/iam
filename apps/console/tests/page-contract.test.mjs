@@ -77,21 +77,22 @@ test('shared navigation registry exposes every operator page', () => {
   assertSourceContains(shell, /consoleNavigation/);
 });
 
-test('application shell uses labeled collapsible navigation, command palette, and server-derived context', () => {
+test('application shell uses persistent labeled navigation, command acceleration, and server-derived context', () => {
   assertSourceContains(
     shell,
     /navigation-dock/,
-    /dock-label/,
-    /navigationCollapsed/,
+    /dock-group-heading/,
+    /dock-subroutes/,
     /mobileNavigationOpen/,
     /command-palette/,
-    /context-rail/,
+    /Quick navigation/,
+    /shell-context-summary/,
     /getCurrentAdministrativeAuthority/,
     /getSystemInfo/,
     /Server authorization remains final/,
   );
   assertSourceContains(navigation, /provisioning-job/, /reconciliation-run/);
-  assertSourceExcludes(shell, /localStorage|sessionStorage/);
+  assertSourceExcludes(shell, /localStorage|sessionStorage/, /navigationCollapsed|context-rail/);
 });
 
 test('assigned governance work remains discoverable without generic administrative eligibility', () => {
@@ -103,13 +104,14 @@ test('assigned governance work remains discoverable without generic administrati
   );
 });
 
-test('mobile navigation exposes all destinations instead of hiding later groups', () => {
+test('mobile navigation keeps every allowed destination reachable in the drawer', () => {
   assertSourceContains(
     shellFoundation,
     /navigation-dock\.mobile-open/,
     /mobile-nav-scrim/,
-    /\.dock-primary \.dock-item:nth-of-type\(n\+6\)[\s\S]*display:\s*grid/,
+    /\.navigation-dock\s*\{[\s\S]*max-width:\s*calc\(100vw - 44px\)/,
   );
+  assertSourceExcludes(shellFoundation, /nth-of-type\(n\+6\)[\s\S]*display:\s*none/);
 });
 
 test('page foundation exposes deliberate width modes and a reusable toolbar through the stable ui barrel', () => {
