@@ -210,63 +210,94 @@ body {
 
 .auth-form-wrap-enterprise {
   width: 100%;
-  max-width: 25rem;
+  max-width: 24rem;
 }
 
 .auth-form-header-enterprise {
-  margin-bottom: 1.45rem;
+  margin-bottom: 1.25rem;
 }
 
 .auth-form-header-enterprise h2 {
-  margin-bottom: .42rem;
-  font-size: clamp(1.72rem, 1.8vw, 2rem);
+  margin-bottom: .38rem;
+  font-size: clamp(1.66rem, 1.72vw, 1.9rem);
   line-height: 1.08;
   letter-spacing: -.035em;
   font-weight: 720;
 }
 
 .auth-form-header-enterprise > p:last-child {
-  font-size: .88rem;
-  line-height: 1.48;
+  font-size: .84rem;
+  line-height: 1.46;
 }
 
 .auth-form-enterprise {
-  gap: .78rem;
+  gap: .68rem;
 }
 
 .auth-route-field {
-  min-height: 3.45rem;
-  gap: .1rem;
-  padding: .65rem .82rem .55rem 2.65rem;
+  min-height: 3.15rem;
+  gap: .08rem;
+  padding: .56rem .78rem .48rem 2.55rem;
+}
+
+.auth-route-field-label {
+  font-size: .68rem;
 }
 
 .auth-route-field-value {
-  gap: .48rem;
-  font-size: .81rem;
+  gap: .44rem;
+  font-size: .79rem;
 }
 
 .auth-route-field-value svg {
-  width: 1rem;
-  height: 1rem;
+  width: .96rem;
+  height: .96rem;
 }
 
 .auth-route-field-note {
-  font-size: .6rem;
+  font-size: .58rem;
 }
 
 .auth-input .MuiOutlinedInput-root {
-  min-height: 3.4rem;
+  min-height: 3.05rem;
+}
+
+.auth-input .MuiInputLabel-root {
+  font-size: .8rem;
+}
+
+.auth-input .MuiFormLabel-asterisk {
+  display: none;
 }
 
 .auth-input .MuiInputBase-input {
-  padding-top: .72rem;
-  padding-bottom: .72rem;
-  font-size: .9rem;
+  padding-top: .6rem;
+  padding-bottom: .6rem;
+  font-size: .87rem;
+}
+
+.auth-input-icon {
+  margin-right: .62rem;
+}
+
+.auth-input-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.auth-password-toggle {
+  width: 1.95rem;
+  height: 1.95rem;
+}
+
+.auth-password-toggle svg {
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .auth-session-context {
-  gap: .65rem;
-  font-size: .65rem;
+  gap: .6rem;
+  font-size: .62rem;
   line-height: 1.35;
 }
 
@@ -275,9 +306,9 @@ body {
 }
 
 .auth-submit.MuiButton-root {
-  min-height: 3rem;
-  margin-top: .04rem;
-  font-size: .88rem;
+  min-height: 2.85rem;
+  margin-top: .02rem;
+  font-size: .86rem;
 }
 
 @media (max-width: 1250px) and (min-width: 981px) {
@@ -305,7 +336,7 @@ body {
   }
 
   .auth-form-wrap-enterprise {
-    max-width: 24rem;
+    max-width: 23rem;
   }
 }
 
@@ -359,34 +390,34 @@ body {
   }
 
   .auth-form-header-enterprise {
-    margin-bottom: 1rem;
+    margin-bottom: .9rem;
   }
 
   .auth-form-header-enterprise h2 {
-    font-size: clamp(1.55rem, 1.7vw, 1.82rem);
+    font-size: clamp(1.5rem, 1.62vw, 1.74rem);
   }
 
   .auth-form-enterprise {
-    gap: .64rem;
+    gap: .58rem;
   }
 
   .auth-route-field {
-    min-height: 3.15rem;
-    padding-top: .56rem;
-    padding-bottom: .46rem;
+    min-height: 2.95rem;
+    padding-top: .5rem;
+    padding-bottom: .42rem;
   }
 
   .auth-input .MuiOutlinedInput-root {
-    min-height: 3.15rem;
+    min-height: 2.95rem;
   }
 
   .auth-input .MuiInputBase-input {
-    padding-top: .62rem;
-    padding-bottom: .62rem;
+    padding-top: .54rem;
+    padding-bottom: .54rem;
   }
 
   .auth-submit.MuiButton-root {
-    min-height: 2.8rem;
+    min-height: 2.7rem;
   }
 }
 
@@ -415,7 +446,7 @@ body {
   }
 
   .auth-form-wrap-enterprise {
-    max-width: 27rem;
+    max-width: 25rem;
   }
 }
 
@@ -463,7 +494,7 @@ body {
   }
 
   .auth-form-wrap-enterprise {
-    max-width: 25rem;
+    max-width: 24rem;
   }
 
   .auth-session-context {
