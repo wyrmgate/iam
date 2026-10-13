@@ -28,6 +28,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -54,16 +55,30 @@ public final class IamOperationsController {
     private final AdministrativeAuthorizationService authorization;
     private final IdGenerator ids;
 
-    public IamOperationsController(GovernanceOperationsOverviewQuery governance, IntegrationOperationsOverviewQuery integration,
-            AuditOperationsOverviewQuery audit, IdentityOperationsOverviewQuery identity, AccessOperationsOverviewQuery access,
-            CatalogOperationsOverviewQuery catalog, AdministrativeAuthorizationService authorization, IdGenerator ids) {
-        this.governance = governance; this.integration = integration; this.audit = audit; this.identity = identity;
-        this.access = access; this.catalog = catalog; this.authorization = authorization; this.ids = ids;
+    public IamOperationsController(
+            GovernanceOperationsOverviewQuery governance,
+            IntegrationOperationsOverviewQuery integration,
+            AuditOperationsOverviewQuery audit,
+            IdentityOperationsOverviewQuery identity,
+            AccessOperationsOverviewQuery access,
+            CatalogOperationsOverviewQuery catalog,
+            AdministrativeAuthorizationService authorization,
+            IdGenerator ids) {
+        this.governance = governance;
+        this.integration = integration;
+        this.audit = audit;
+        this.identity = identity;
+        this.access = access;
+        this.catalog = catalog;
+        this.authorization = authorization;
+        this.ids = ids;
     }
 
     @GetMapping("/iam-operations")
-    ResponseEntity<IamOperationsOverviewResource> overview(@RequestParam(defaultValue = "7d") String window,
-            @RequestParam(defaultValue = "ALL") String workType, @RequestParam(defaultValue = "OLDEST") String workSort,
+    ResponseEntity<IamOperationsOverviewResource> overview(
+            @RequestParam(defaultValue = "7d") String window,
+            @RequestParam(defaultValue = "ALL") String workType,
+            @RequestParam(defaultValue = "OLDEST") String workSort,
             HttpServletRequest request) {
         UUID correlationId = correlationId(request);
         AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
@@ -71,19 +86,26 @@ public final class IamOperationsController {
         WindowSpec spec = window(window, asOf, correlationId);
         WorkType parsedType = workType(workType, correlationId);
         WorkSort parsedSort = workSort(workSort, correlationId);
-        Result<GovernanceOperationsOverviewQuery.Snapshot> governanceResult = safe(() -> governance.snapshot(actor.tenant(), actor.identityId(),
-                spec.from(), spec.until(), parsedType, parsedSort, 10));
+
+        Result<GovernanceOperationsOverviewQuery.Snapshot> governanceResult = safe(() ->
+                governance.snapshot(actor.tenant(), actor.identityId(), spec.from(), spec.until(), parsedType, parsedSort, 10));
 
         boolean attemptRead = allowed(actor, IntegrationOperationalPermissions.PROVISIONING_ATTEMPT_READ, "provisioning-attempt", asOf);
         boolean taskRead = allowed(actor, IntegrationOperationalPermissions.PROVISIONING_TASK_READ, "provisioning-task", asOf);
         boolean reconciliationRead = allowed(actor, IntegrationOperationalPermissions.RECONCILIATION_RUN_READ, "reconciliation-run", asOf);
-        Result<Long> finalFailures = attemptRead ? safe(() -> integration.finalProvisioningFailures(actor.tenant(), spec.from(), spec.until())) : Result.notAuthorized();
+
+        Result<Long> finalFailures = attemptRead
+                ? safe(() -> integration.finalProvisioningFailures(actor.tenant(), spec.from(), spec.until()))
+                : Result.notAuthorized();
         Result<IntegrationOperationsOverviewQuery.Provisioning> provisioning = attemptRead && taskRead
-                ? safe(() -> integration.provisioning(actor.tenant(), spec.from(), spec.until(), spec.bucketUnit(), spec.bucketCount())) : Result.notAuthorized();
+                ? safe(() -> integration.provisioning(actor.tenant(), spec.from(), spec.until(), spec.bucketUnit(), spec.bucketCount()))
+                : Result.notAuthorized();
         Result<IntegrationOperationsOverviewQuery.Reconciliation> reconciliation = reconciliationRead
-                ? safe(() -> integration.reconciliation(actor.tenant(), spec.from(), spec.until(), 6)) : Result.notAuthorized();
+                ? safe(() -> integration.reconciliation(actor.tenant(), spec.from(), spec.until(), 6))
+                : Result.notAuthorized();
         Result<AuditOperationsOverviewQuery.Evidence> evidence = allowed(actor, AdministrativePermissions.AUDIT_READ, "audit", asOf)
-                ? safe(() -> audit.evidence(actor.tenant(), spec.from(), spec.until(), 5)) : Result.notAuthorized();
+                ? safe(() -> audit.evidence(actor.tenant(), spec.from(), spec.until(), 5))
+                : Result.notAuthorized();
 
         MetricResource activeIdentities = metric(actor, AdministrativePermissions.IDENTITY_READ, "identity", asOf,
                 () -> identity.activeIdentities(actor.tenant()));
@@ -96,119 +118,237 @@ public final class IamOperationsController {
         MetricResource connectors = metric(actor, AdministrativePermissions.CONNECTOR_READ, "connector", asOf,
                 () -> integration.activeConnectors(actor.tenant()));
 
-        AttentionResource attention = new AttentionResource(governanceResult.metric(v -> v.pendingApprovals()), governanceResult.metric(v -> v.pendingReviews()),
-                finalFailures.metric(v -> v), reconciliation.metric(v -> v.failedInWindow()));
+        AttentionResource attention = new AttentionResource(
+                governanceResult.metric(GovernanceOperationsOverviewQuery.Snapshot::pendingApprovals),
+                governanceResult.metric(GovernanceOperationsOverviewQuery.Snapshot::pendingReviews),
+                finalFailures.metric(Long::longValue),
+                reconciliation.metric(IntegrationOperationsOverviewQuery.Reconciliation::failedInWindow));
         MyWorkResource myWork = work(governanceResult, parsedType, parsedSort, asOf);
         GovernanceActivityResource governanceActivity = governanceActivity(governanceResult, asOf);
         ProvisioningResource provisioningResource = provisioning(provisioning, asOf);
         ReconciliationResource reconciliationResource = reconciliation(reconciliation, asOf);
         SecurityEvidenceResource securityResource = evidence(evidence, asOf);
-        EnvironmentResource environment = new EnvironmentResource(asOf, activeIdentities, uncorrelatedPrincipals, activeAssignments, applications, connectors);
-        boolean partial = !governanceResult.available() || !finalFailures.available() || !provisioning.available() || !reconciliation.available()
-                || !evidence.available() || !AVAILABLE.equals(activeIdentities.status()) || !AVAILABLE.equals(uncorrelatedPrincipals.status())
-                || !AVAILABLE.equals(activeAssignments.status()) || !AVAILABLE.equals(applications.status()) || !AVAILABLE.equals(connectors.status());
-        IamOperationsOverviewResource body = new IamOperationsOverviewResource(asOf, partial, actor.tenant().tenantId(),
-                new WindowResource(spec.preset(), spec.from(), spec.until()), attention, myWork, provisioningResource,
-                reconciliationResource, governanceActivity, securityResource, environment);
-        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").header("X-Correlation-Id", correlationId.toString()).body(body);
+        EnvironmentResource environment = new EnvironmentResource(
+                asOf, activeIdentities, uncorrelatedPrincipals, activeAssignments, applications, connectors);
+
+        boolean partial = !governanceResult.available()
+                || !finalFailures.available()
+                || !provisioning.available()
+                || !reconciliation.available()
+                || !evidence.available()
+                || !AVAILABLE.equals(activeIdentities.status())
+                || !AVAILABLE.equals(uncorrelatedPrincipals.status())
+                || !AVAILABLE.equals(activeAssignments.status())
+                || !AVAILABLE.equals(applications.status())
+                || !AVAILABLE.equals(connectors.status());
+
+        IamOperationsOverviewResource body = new IamOperationsOverviewResource(
+                asOf,
+                partial,
+                actor.tenant().tenantId(),
+                new WindowResource(spec.preset(), spec.from(), spec.until()),
+                attention,
+                myWork,
+                provisioningResource,
+                reconciliationResource,
+                governanceActivity,
+                securityResource,
+                environment);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header("X-Correlation-Id", correlationId.toString())
+                .body(body);
     }
 
-    private MetricResource metric(AuthenticatedAdministrativeActor actor, AdministrativePermission permission, String resourceType,
-            Instant now, Supplier<Long> query) {
-        if (!allowed(actor, permission, resourceType, now)) return new MetricResource(NOT_AUTHORIZED, null);
-        return safe(query).metric(v -> v);
+    private MetricResource metric(
+            AuthenticatedAdministrativeActor actor,
+            AdministrativePermission permission,
+            String resourceType,
+            Instant now,
+            Supplier<Long> query) {
+        if (!allowed(actor, permission, resourceType, now)) {
+            return new MetricResource(NOT_AUTHORIZED, null);
+        }
+        return safe(query).metric(Long::longValue);
     }
 
-    private boolean allowed(AuthenticatedAdministrativeActor actor, AdministrativePermission permission, String resourceType, Instant now) {
-        return authorization.authorize(actor, permission, AdministrativeResource.collection(resourceType), now).allowed();
+    private boolean allowed(
+            AuthenticatedAdministrativeActor actor,
+            AdministrativePermission permission,
+            String resourceType,
+            Instant now) {
+        return authorization.authorize(
+                actor,
+                permission,
+                AdministrativeResource.collection(resourceType),
+                now).allowed();
     }
 
-    private static MyWorkResource work(Result<GovernanceOperationsOverviewQuery.Snapshot> result, WorkType type, WorkSort sort, Instant asOf) {
-        if (!result.available()) return new MyWorkResource(result.status(), UNKNOWN, asOf, type.name(), sort.name(), null, null, null, List.of());
+    private static MyWorkResource work(
+            Result<GovernanceOperationsOverviewQuery.Snapshot> result,
+            WorkType type,
+            WorkSort sort,
+            Instant asOf) {
+        if (!result.available()) {
+            return new MyWorkResource(result.status(), UNKNOWN, asOf, type.name(), sort.name(), null, null, null, List.of());
+        }
         var value = result.value();
-        List<WorkItemResource> items = value.workItems().stream().map(item -> new WorkItemResource(item.kind(), item.id(), item.subjectKind(),
-                item.subjectId(), item.stageOrdinal(), item.createdAt())).toList();
-        return new MyWorkResource(AVAILABLE, FRESH, asOf, type.name(), sort.name(), value.pendingApprovals() + value.pendingReviews(),
+        List<WorkItemResource> items = value.workItems().stream()
+                .map(item -> new WorkItemResource(
+                        item.kind(), item.id(), item.subjectKind(), item.subjectId(), item.stageOrdinal(), item.createdAt()))
+                .toList();
+        return new MyWorkResource(
+                AVAILABLE, FRESH, asOf, type.name(), sort.name(), value.pendingApprovals() + value.pendingReviews(),
                 value.pendingApprovals(), value.pendingReviews(), items);
     }
 
-    private static GovernanceActivityResource governanceActivity(Result<GovernanceOperationsOverviewQuery.Snapshot> result, Instant asOf) {
-        if (!result.available()) return new GovernanceActivityResource(result.status(), UNKNOWN, asOf, null, null, null, null);
+    private static GovernanceActivityResource governanceActivity(
+            Result<GovernanceOperationsOverviewQuery.Snapshot> result,
+            Instant asOf) {
+        if (!result.available()) {
+            return new GovernanceActivityResource(result.status(), UNKNOWN, asOf, null, null, null, null);
+        }
         var totals = result.value().decisions();
-        return new GovernanceActivityResource(AVAILABLE, FRESH, asOf, totals.approvals(), totals.rejections(), totals.keeps(), totals.revokes());
+        return new GovernanceActivityResource(
+                AVAILABLE, FRESH, asOf, totals.approvals(), totals.rejections(), totals.keeps(), totals.revokes());
     }
 
-    private static ProvisioningResource provisioning(Result<IntegrationOperationsOverviewQuery.Provisioning> result, Instant asOf) {
-        if (!result.available()) return new ProvisioningResource(result.status(), UNKNOWN, asOf, null, List.of(), List.of());
+    private static ProvisioningResource provisioning(
+            Result<IntegrationOperationsOverviewQuery.Provisioning> result,
+            Instant asOf) {
+        if (!result.available()) {
+            return new ProvisioningResource(result.status(), UNKNOWN, asOf, null, List.of(), List.of());
+        }
         var value = result.value();
-        return new ProvisioningResource(AVAILABLE, FRESH, asOf,
-                new ProvisioningSummaryResource(value.runningTasksNow(), value.succeededAttempts(), value.retryableFailedAttempts(), value.finalFailedAttempts()),
-                value.trend().stream().map(b -> new AttemptBucketResource(b.bucketStart(), b.succeeded(), b.failedRetryable(), b.failedFinal())).toList(),
-                value.failureCategories().stream().map(c -> new FailureCategoryResource(c.category(), c.count())).toList());
+        return new ProvisioningResource(
+                AVAILABLE,
+                FRESH,
+                asOf,
+                new ProvisioningSummaryResource(
+                        value.runningTasksNow(), value.succeededAttempts(), value.retryableFailedAttempts(), value.finalFailedAttempts()),
+                value.trend().stream()
+                        .map(bucket -> new AttemptBucketResource(
+                                bucket.bucketStart(), bucket.succeeded(), bucket.failedRetryable(), bucket.failedFinal()))
+                        .toList(),
+                value.failureCategories().stream()
+                        .map(category -> new FailureCategoryResource(category.category(), category.count()))
+                        .toList());
     }
 
-    private static ReconciliationResource reconciliation(Result<IntegrationOperationsOverviewQuery.Reconciliation> result, Instant asOf) {
-        if (!result.available()) return new ReconciliationResource(result.status(), UNKNOWN, asOf, null, List.of());
+    private static ReconciliationResource reconciliation(
+            Result<IntegrationOperationsOverviewQuery.Reconciliation> result,
+            Instant asOf) {
+        if (!result.available()) {
+            return new ReconciliationResource(result.status(), UNKNOWN, asOf, null, List.of());
+        }
         var value = result.value();
-        return new ReconciliationResource(AVAILABLE, FRESH, asOf,
-                new ReconciliationSummaryResource(value.runningNow(), value.failedInWindow(), value.completeSucceededInWindow(), value.lastCompleteAt(), value.lastCompleteRunId()),
-                value.recentRuns().stream().map(r -> new ReconciliationRunResource(r.id(), r.connectorBindingId(), r.state(), r.effectiveCompleteness(),
-                        r.failureCode(), r.startedAt(), r.completedAt())).toList());
+        return new ReconciliationResource(
+                AVAILABLE,
+                FRESH,
+                asOf,
+                new ReconciliationSummaryResource(
+                        value.runningNow(), value.failedInWindow(), value.completeSucceededInWindow(),
+                        value.lastCompleteAt(), value.lastCompleteRunId()),
+                value.recentRuns().stream()
+                        .map(run -> new ReconciliationRunResource(
+                                run.id(), run.connectorBindingId(), run.state(), run.effectiveCompleteness(), run.failureCode(),
+                                run.startedAt(), run.completedAt()))
+                        .toList());
     }
 
-    private static SecurityEvidenceResource evidence(Result<AuditOperationsOverviewQuery.Evidence> result, Instant asOf) {
-        if (!result.available()) return new SecurityEvidenceResource(result.status(), UNKNOWN, asOf, null, null, List.of());
+    private static SecurityEvidenceResource evidence(
+            Result<AuditOperationsOverviewQuery.Evidence> result,
+            Instant asOf) {
+        if (!result.available()) {
+            return new SecurityEvidenceResource(result.status(), UNKNOWN, asOf, null, null, List.of());
+        }
         var value = result.value();
-        return new SecurityEvidenceResource(AVAILABLE, FRESH, asOf, value.deniedCount(), value.failureCount(), value.recent().stream()
-                .map(i -> new AuditEvidenceItemResource(i.id(), i.occurredAt(), i.actionType(), i.resourceType(), i.resourceId(), i.outcome(), i.correlationId())).toList());
+        return new SecurityEvidenceResource(
+                AVAILABLE,
+                FRESH,
+                asOf,
+                value.deniedCount(),
+                value.failureCount(),
+                value.recent().stream()
+                        .map(item -> new AuditEvidenceItemResource(
+                                item.id(), item.occurredAt(), item.actionType(), item.resourceType(), item.resourceId(),
+                                item.outcome(), item.correlationId()))
+                        .toList());
     }
 
     private static WorkType workType(String raw, UUID correlationId) {
-        try { return WorkType.valueOf(raw.trim().toUpperCase(Locale.ROOT)); }
-        catch (RuntimeException invalid) { throw IamOperationsApiException.validation(correlationId, "workType must be ALL, APPROVAL, or REVIEW."); }
+        try {
+            return WorkType.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (RuntimeException invalid) {
+            throw IamOperationsApiException.validation(correlationId, "workType must be ALL, APPROVAL, or REVIEW.");
+        }
     }
+
     private static WorkSort workSort(String raw, UUID correlationId) {
-        try { return WorkSort.valueOf(raw.trim().toUpperCase(Locale.ROOT)); }
-        catch (RuntimeException invalid) { throw IamOperationsApiException.validation(correlationId, "workSort must be OLDEST or NEWEST."); }
+        try {
+            return WorkSort.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (RuntimeException invalid) {
+            throw IamOperationsApiException.validation(correlationId, "workSort must be OLDEST or NEWEST.");
+        }
     }
+
     private static WindowSpec window(String raw, Instant now, UUID correlationId) {
         String value = raw.trim().toLowerCase(Locale.ROOT);
         if ("24h".equals(value)) {
             Instant from = now.truncatedTo(ChronoUnit.HOURS).minus(23, ChronoUnit.HOURS);
-            return new WindowSpec("24h", from, from.plus(24, ChronoUnit.HOURS), BucketUnit.HOUR, 24);
+            return new WindowSpec("24h", from, now, BucketUnit.HOUR, 24);
         }
         LocalDate today = now.atZone(ZoneOffset.UTC).toLocalDate();
         if ("7d".equals(value)) {
             Instant from = today.minusDays(6).atStartOfDay(ZoneOffset.UTC).toInstant();
-            return new WindowSpec("7d", from, today.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant(), BucketUnit.DAY, 7);
+            return new WindowSpec("7d", from, now, BucketUnit.DAY, 7);
         }
         if ("30d".equals(value)) {
             Instant from = today.minusDays(29).atStartOfDay(ZoneOffset.UTC).toInstant();
-            return new WindowSpec("30d", from, today.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant(), BucketUnit.DAY, 30);
+            return new WindowSpec("30d", from, now, BucketUnit.DAY, 30);
         }
         throw IamOperationsApiException.validation(correlationId, "window must be 24h, 7d, or 30d.");
     }
 
     private UUID correlationId(HttpServletRequest request) {
-        Object current = request.getAttribute(CORRELATION_ATTRIBUTE); if (current instanceof UUID id) return id;
+        Object current = request.getAttribute(CORRELATION_ATTRIBUTE);
+        if (current instanceof UUID id) return id;
         String header = request.getHeader("X-Correlation-Id");
-        if (header == null) { UUID id = ids.nextId(); request.setAttribute(CORRELATION_ATTRIBUTE, id); return id; }
-        try { UUID id = UUID.fromString(header); request.setAttribute(CORRELATION_ATTRIBUTE, id); return id; }
-        catch (IllegalArgumentException invalid) { UUID id = ids.nextId(); request.setAttribute(CORRELATION_ATTRIBUTE, id);
-            throw IamOperationsApiException.validation(id, "X-Correlation-Id must be a UUID."); }
+        if (header == null) {
+            UUID id = ids.nextId();
+            request.setAttribute(CORRELATION_ATTRIBUTE, id);
+            return id;
+        }
+        try {
+            UUID id = UUID.fromString(header);
+            request.setAttribute(CORRELATION_ATTRIBUTE, id);
+            return id;
+        } catch (IllegalArgumentException invalid) {
+            UUID id = ids.nextId();
+            request.setAttribute(CORRELATION_ATTRIBUTE, id);
+            throw IamOperationsApiException.validation(id, "X-Correlation-Id must be a UUID.");
+        }
     }
 
     private static <T> Result<T> safe(Supplier<T> supplier) {
-        try { return Result.available(Objects.requireNonNull(supplier.get())); } catch (RuntimeException unavailable) { return Result.unavailable(); }
+        try {
+            return Result.available(Objects.requireNonNull(supplier.get()));
+        } catch (DataAccessException unavailable) {
+            return Result.unavailable();
+        }
     }
+
     private record WindowSpec(String preset, Instant from, Instant until, BucketUnit bucketUnit, int bucketCount) {}
+
     private record Result<T>(String status, T value) {
         static <T> Result<T> available(T value) { return new Result<>(AVAILABLE, value); }
         static <T> Result<T> notAuthorized() { return new Result<>(NOT_AUTHORIZED, null); }
         static <T> Result<T> unavailable() { return new Result<>(UNAVAILABLE, null); }
         boolean available() { return AVAILABLE.equals(status); }
         MetricResource metric(java.util.function.ToLongFunction<T> extractor) {
-            return available() ? new MetricResource(AVAILABLE, extractor.applyAsLong(value)) : new MetricResource(status, null);
+            return available()
+                    ? new MetricResource(AVAILABLE, extractor.applyAsLong(value))
+                    : new MetricResource(status, null);
         }
     }
 }
