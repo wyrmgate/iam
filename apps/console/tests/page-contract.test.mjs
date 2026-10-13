@@ -9,7 +9,15 @@ const {
   shellFoundation,
   ui,
   uiPage,
-  pages,
+  identityWorkspace,
+  principalsWorkspace,
+  catalogWorkspace,
+  accessWorkspace,
+  governanceWorkspace,
+  credentialsWorkspace,
+  integrationsWorkspace,
+  administrationWorkspace,
+  auditWorkspace,
   semanticWorkspace,
   integrationOperations,
   authorityPage,
@@ -21,12 +29,32 @@ const {
   shellFoundation: 'shell-foundation.css',
   ui: 'ui/index.tsx',
   uiPage: 'ui/page.tsx',
-  pages: 'ControlPlanePages.tsx',
+  identityWorkspace: 'workspaces/IdentityWorkspace.tsx',
+  principalsWorkspace: 'workspaces/PrincipalsWorkspace.tsx',
+  catalogWorkspace: 'workspaces/CatalogWorkspace.tsx',
+  accessWorkspace: 'workspaces/AccessWorkspace.tsx',
+  governanceWorkspace: 'workspaces/GovernanceWorkspace.tsx',
+  credentialsWorkspace: 'workspaces/CredentialsWorkspace.tsx',
+  integrationsWorkspace: 'workspaces/IntegrationsWorkspace.tsx',
+  administrationWorkspace: 'workspaces/AdministrationWorkspace.tsx',
+  auditWorkspace: 'workspaces/AuditWorkspace.tsx',
   semanticWorkspace: 'SemanticWorkspace.tsx',
   integrationOperations: 'IntegrationOperationsPage.tsx',
   authorityPage: 'CurrentAdministrativeAuthorityPage.tsx',
   api: 'api.ts',
 });
+
+const workspaceSources = [
+  identityWorkspace,
+  principalsWorkspace,
+  catalogWorkspace,
+  accessWorkspace,
+  governanceWorkspace,
+  credentialsWorkspace,
+  integrationsWorkspace,
+  administrationWorkspace,
+  auditWorkspace,
+].join('\n');
 
 const requiredRoutes = [
   '/identities',
@@ -101,7 +129,7 @@ test('browser client enforces same-origin API routing', () => {
 });
 
 test('console never uses browser storage for tokens, secrets, or authority', () => {
-  const source = `${app}\n${shell}\n${navigation}\n${pages}\n${semanticWorkspace}\n${integrationOperations}\n${authorityPage}\n${api}`;
+  const source = `${app}\n${shell}\n${navigation}\n${workspaceSources}\n${semanticWorkspace}\n${integrationOperations}\n${authorityPage}\n${api}`;
   assertSourceExcludes(
     source,
     /localStorage|sessionStorage/,
@@ -112,8 +140,9 @@ test('console never uses browser storage for tokens, secrets, or authority', () 
 
 test('server authorization and accepted public surfaces stay explicit', () => {
   assertSourceContains(semanticWorkspace, /Server authorization is final/);
-  assertSourceExcludes(pages, /issue=\{265\}/, /issue=\{266\}/);
-  assertSourceContains(pages, /CurrentAdministrativeAuthorityPage/, /IntegrationOperationsPage/);
+  assertSourceExcludes(workspaceSources, /issue=\{265\}/, /issue=\{266\}/);
+  assertSourceContains(administrationWorkspace, /CurrentAdministrativeAuthorityPage/);
+  assertSourceContains(integrationsWorkspace, /IntegrationOperationsPage/);
   assertSourceContains(api, /current-administrative-authority/);
   assertSourceContains(navigation, /visibleConsoleRoutes/);
   assertSourceContains(authorityPage, /operation is re-authorized by the server/);
