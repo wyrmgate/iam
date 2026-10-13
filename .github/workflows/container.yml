@@ -12,9 +12,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: component-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      server: ${{ steps.classify.outputs.container_server }}
+      console: ${{ steps.classify.outputs.container_console }}
+    steps:
+      - name: Checkout history for change classification
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed components
+        id: classify
+        run: bash scripts/ci/component-changes.sh
+
   server-image:
     name: server-image
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -49,7 +69,8 @@ jobs:
 
   console-image:
     name: console-image
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.console == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -82,27 +103,16 @@ jobs:
           exit-code: '1'
           format: table
 
-  publish-images:
-    name: publish-${{ matrix.name }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  publish-server-image:
+    name: publish-server
+    needs: changes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       packages: write
       id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: server
-            image: ghcr.io/wyrmgate/iam-server
-            dockerfile: apps/server/Dockerfile
-            cache_scope: server-image
-          - name: console
-            image: ghcr.io/wyrmgate/iam-console
-            dockerfile: apps/console/Dockerfile
-            cache_scope: console-image
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -125,27 +135,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish multi-arch image
+      - name: Build and publish server image
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: apps/server/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ matrix.image }}:sha-${{ github.sha }}
+          tags: ghcr.io/wyrmgate/iam-server:sha-${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha,scope=${{ matrix.cache_scope }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
+          cache-from: type=gha,scope=server-image
+          cache-to: type=gha,mode=max,scope=server-image
 
       - name: Scan published image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ matrix.image }}@${{ steps.build.outputs.digest }}
+          image-ref: ghcr.io/wyrmgate/iam-server@${{ steps.build.outputs.digest }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: '1'
@@ -153,13 +163,86 @@ jobs:
 
       - name: Sign published image by digest
         env:
-          IMAGE: ${{ matrix.image }}
+          IMAGE: ghcr.io/wyrmgate/iam-server
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Verify keyless signature
         env:
-          IMAGE: ${{ matrix.image }}
+          IMAGE: ghcr.io/wyrmgate/iam-server
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-identity "https://github.com/wyrmgate/iam/.github/workflows/container.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+  publish-console-image:
+    name: publish-console
+    needs: changes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.console == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: 'v3.1.2'
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish console image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/console/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/wyrmgate/iam-console:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=console-image
+          cache-to: type=gha,mode=max,scope=console-image
+
+      - name: Scan published image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/wyrmgate/iam-console@${{ steps.build.outputs.digest }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      - name: Sign published image by digest
+        env:
+          IMAGE: ghcr.io/wyrmgate/iam-console
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Verify keyless signature
+        env:
+          IMAGE: ghcr.io/wyrmgate/iam-console
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           cosign verify "${IMAGE}@${DIGEST}" \
