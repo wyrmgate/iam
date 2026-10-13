@@ -1,0 +1,12 @@
+/identities /index.html 200
+/identities/* /index.html 200
+/principals /index.html 200
+/catalog /index.html 200
+/access /index.html 200
+/requests /index.html 200
+/reviews /index.html 200
+/policies /index.html 200
+/credentials /index.html 200
+/integrations /index.html 200
+/administration /index.html 200
+/audit /index.html 200

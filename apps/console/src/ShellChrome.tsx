@@ -7,7 +7,8 @@ import {
 } from './api';
 import {
   activeRouteFor,
-  consoleRoutes,
+  CONSOLE_NAVIGATION_EVENT,
+  navigateConsole,
   shellGroupFor,
   shellGroups,
   visibleConsoleRoutes,
@@ -24,19 +25,15 @@ type ShellChromeProps = {
 function usePathname() {
   const [pathname, setPathname] = useState(window.location.pathname);
   useEffect(() => {
-    const onPopState = () => setPathname(window.location.pathname);
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    const onLocationChange = () => setPathname(window.location.pathname);
+    window.addEventListener('popstate', onLocationChange);
+    window.addEventListener(CONSOLE_NAVIGATION_EVENT, onLocationChange);
+    return () => {
+      window.removeEventListener('popstate', onLocationChange);
+      window.removeEventListener(CONSOLE_NAVIGATION_EVENT, onLocationChange);
+    };
   }, []);
   return pathname;
-}
-
-function navigate(path: string) {
-  if (window.location.pathname !== path) {
-    window.history.pushState({}, '', path);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function shortId(value: string | undefined | null): string {
@@ -126,7 +123,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   }, [query, commandOpen]);
 
   function openRoute(path: string) {
-    navigate(path);
+    navigateConsole(path);
     setCommandOpen(false);
     setQuery('');
     setOpenGroup(null);
@@ -159,8 +156,10 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   }
 
   const flyoutRoutes = openGroup ? allowedRoutes.filter((route) => route.group === openGroup) : [];
-  const currentGroup = shellGroupFor(currentRoute.group);
+  const currentGroup = currentRoute ? shellGroupFor(currentRoute.group) : null;
   const runtimeOnline = Boolean(system && system.status.toLowerCase() !== 'unavailable');
+  const currentGroupLabel = currentGroup?.label ?? 'Console';
+  const currentRouteLabel = currentRoute?.label ?? 'Page not found';
 
   return (
     <div className={`product-shell ${navigationCollapsed ? 'nav-collapsed' : ''}`}>
@@ -173,7 +172,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
         <nav className="dock-primary" aria-label="Primary navigation">
           {allowedGroups.map((group) => {
             const destinations = allowedRoutes.filter((route) => route.group === group.id);
-            const active = currentRoute.group === group.id;
+            const active = currentRoute?.group === group.id;
             const singleDestination = destinations.length === 1 ? destinations[0] : null;
             return (
               <div className={`dock-group ${active ? 'active' : ''}`} key={group.id}>
@@ -193,7 +192,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
                     {destinations.map((route) => (
                       <button
                         key={route.path}
-                        className={currentRoute.path === route.path ? 'active' : ''}
+                        className={currentRoute?.path === route.path ? 'active' : ''}
                         onClick={() => openRoute(route.path)}
                       >
                         {route.label}
@@ -242,7 +241,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
               {flyoutRoutes.map((route) => (
                 <button
                   key={route.path}
-                  className={currentRoute.path === route.path ? 'active' : ''}
+                  className={currentRoute?.path === route.path ? 'active' : ''}
                   role="menuitem"
                   onClick={() => openRoute(route.path)}
                 >
@@ -264,7 +263,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
             <button className="mobile-menu-trigger" aria-label="Open navigation" onClick={() => setMobileNavigationOpen(true)}>☰</button>
             <span className="shell-scope">{authority ? `Tenant ${shortId(authority.tenantId)}` : authorityUnavailable ? 'Tenant unavailable' : 'Resolving tenant'}</span>
             <span className="shell-separator" aria-hidden="true">/</span>
-            <span className="shell-breadcrumb"><strong>{currentGroup.label}</strong><span>›</span>{currentRoute.label}</span>
+            <span className="shell-breadcrumb"><strong>{currentGroupLabel}</strong><span>›</span>{currentRouteLabel}</span>
           </div>
           <div className="shell-actions">
             <button className="command-trigger" onClick={() => setCommandOpen(true)}>
@@ -297,11 +296,11 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
 
       <aside className={`context-rail ${contextOpen ? 'open' : ''}`} aria-hidden={!contextOpen}>
         <div className="context-rail-header">
-          <div><span className="menu-kicker">Wyrmgate context</span><strong>{currentGroup.label}</strong></div>
+          <div><span className="menu-kicker">Wyrmgate context</span><strong>{currentGroupLabel}</strong></div>
           <button aria-label="Close context" onClick={() => setContextOpen(false)}>×</button>
         </div>
         <dl className="context-list">
-          <div><dt>Surface</dt><dd>{currentRoute.label}</dd></div>
+          <div><dt>Surface</dt><dd>{currentRouteLabel}</dd></div>
           <div><dt>Tenant</dt><dd className="mono">{shortId(authority?.tenantId)}</dd></div>
           <div><dt>Actor identity</dt><dd className="mono">{shortId(authority?.actorIdentityId)}</dd></div>
           <div><dt>Administrative eligibility</dt><dd>{authority ? (authority.administrativelyEligible ? 'Eligible' : 'Not eligible') : 'Unavailable'}</dd></div>
