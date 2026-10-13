@@ -15,8 +15,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: component-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      server: ${{ steps.classify.outputs.core_server }}
+      console: ${{ steps.classify.outputs.core_console }}
+    steps:
+      - name: Checkout history for change classification
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed components
+        id: classify
+        run: bash scripts/ci/component-changes.sh
+
   server:
     name: server
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -36,6 +55,8 @@ jobs:
 
   console:
     name: console
+    needs: changes
+    if: needs.changes.outputs.console == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -73,7 +94,9 @@ jobs:
         run: python3 scripts/verify-api-contracts.py
 
       - name: Validate CI support scripts
-        run: bash -n scripts/ci/actions-retention.sh
+        run: |
+          bash -n scripts/ci/actions-retention.sh
+          bash -n scripts/ci/component-changes.sh
 
       - name: Validate repository hygiene
         shell: bash
