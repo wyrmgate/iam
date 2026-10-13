@@ -5,6 +5,7 @@ import { assertSourceContains, assertSourceExcludes, readConsoleSources } from '
 
 const sources = await readConsoleSources({
   app: 'App.tsx',
+  requests: 'RequestsApprovalsPage.tsx',
   identity: 'workspaces/IdentityWorkspace.tsx',
   principals: 'workspaces/PrincipalsWorkspace.tsx',
   catalog: 'workspaces/CatalogWorkspace.tsx',
@@ -20,6 +21,7 @@ const sources = await readConsoleSources({
 test('App is runtime and route composition rather than a capability implementation hotspot', () => {
   assertSourceContains(
     sources.app,
+    /\.\/RequestsApprovalsPage/,
     /\.\/workspaces\/IdentityWorkspace/,
     /\.\/workspaces\/PrincipalsWorkspace/,
     /\.\/workspaces\/CatalogWorkspace/,
@@ -48,12 +50,14 @@ test('legacy multi-capability ControlPlanePages hotspot is removed', async () =>
   await assert.rejects(access(new URL('../src/ControlPlanePages.tsx', import.meta.url)));
 });
 
-test('each Wave 4 ownership surface has a focused implementation file', () => {
+test('each capability ownership surface has a focused implementation file', () => {
+  assertSourceContains(sources.requests, /export function RequestsApprovalsPage/, /requests-and-approvals/, /My Approval Work/, /My Requests/);
   assertSourceContains(sources.identity, /export function IdentityWorkspace/, /\/identities/);
   assertSourceContains(sources.principals, /export function PrincipalsWorkspace/, /\/principals/, /Technical account authority owned by Identity/);
   assertSourceContains(sources.catalog, /export function CatalogWorkspace/, /\/applications/, /\/roles/);
   assertSourceContains(sources.access, /export function AccessWorkspace/, /\/access-assignments/, /\/effective-access/);
-  assertSourceContains(sources.governance, /export function RequestsWorkspace/, /export function ReviewsWorkspace/, /export function PoliciesWorkspace/, /\/governance\//);
+  assertSourceContains(sources.governance, /export function ReviewsWorkspace/, /export function PoliciesWorkspace/, /\/governance\//);
+  assertSourceExcludes(sources.governance, /export function RequestsWorkspace/);
   assertSourceContains(sources.credential, /export function CredentialsWorkspace/, /\/credentials/);
   assertSourceContains(sources.integration, /export function IntegrationsWorkspace/, /\/connectors/, /IntegrationOperationsPage/);
   assertSourceContains(sources.administration, /export function AdministrationWorkspace/, /\/administrative-/, /CurrentAdministrativeAuthorityPage/);
