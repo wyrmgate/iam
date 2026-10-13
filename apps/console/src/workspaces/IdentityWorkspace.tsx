@@ -15,8 +15,11 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
+  Modal,
   Page,
   PageHeader,
+  PageToolbar,
+  SelectInput,
   StatePanel,
   StatusChip,
   Surface,
@@ -77,7 +80,7 @@ function ErrorPanel({ error, onRetry }: { error: unknown; onRetry?: () => void }
   const copy = formatError(error);
   return (
     <StatePanel
-      severity="error"
+      state="error"
       title={copy.title}
       action={onRetry ? <Button variant="outlined" size="small" onClick={onRetry}>Refresh</Button> : undefined}
     >
@@ -96,10 +99,11 @@ function lifecycleActions(identity: IdentityResource): IdentityLifecycleAction[]
   }
 }
 
-function lifecycleChipColor(state: IdentityResource['lifecycleState']): 'success' | 'warning' | 'default' | 'info' {
+function lifecycleChipColor(state: IdentityResource['lifecycleState']): 'success' | 'warning' | 'default' | 'info' | 'error' {
   if (state === 'ACTIVE') return 'success';
   if (state === 'SUSPENDED') return 'warning';
   if (state === 'PENDING') return 'info';
+  if (state === 'DECOMMISSIONED') return 'error';
   return 'default';
 }
 
@@ -126,10 +130,24 @@ function confirmationCopy(confirmation: IdentityConfirmation, identityName: stri
       label: 'Decommission',
     };
   }
+  if (confirmation.action === 'suspend') {
+    return {
+      title: `Suspend ${identityName} and reduce access?`,
+      body: 'Suspension makes this Identity access-ineligible immediately. Semantic EffectiveAccess becomes absent and Access begins durable reduction of non-terminal AccessAssignments. Reactivation does not restore assignments that were already terminated, and provider-side removal remains asynchronous.',
+      label: 'Suspend Identity',
+    };
+  }
+  if (confirmation.action === 'activate') {
+    return {
+      title: `Activate ${identityName}?`,
+      body: 'Activation makes this governed Identity access-eligible. It does not resurrect AccessAssignments that were already terminated, and any downstream lifecycle-access reconciliation remains separately governed and asynchronous.',
+      label: 'Activate Identity',
+    };
+  }
   return {
-    title: `Deactivate ${identityName}?`,
-    body: 'This changes authoritative governed-subject lifecycle state. Downstream access reduction and provider realization remain separate asynchronous concerns.',
-    label: 'Deactivate',
+    title: `Deactivate ${identityName} and reduce access?`,
+    body: 'Deactivation changes the governed Identity to INACTIVE. If the Identity is currently ACTIVE, semantic access eligibility ends immediately and Access reduction proceeds asynchronously; provider realization remains separate.',
+    label: 'Deactivate Identity',
   };
 }
 
@@ -143,6 +161,18 @@ function canonicalValueCopy(attribute: CanonicalAttributeView): string {
   if (attribute.visibility === 'REDACTED') return 'Redacted by classification authority';
   if (!attribute.hasTrustedValue || !attribute.values?.length) return 'No readable trusted value';
   return attribute.values.map(formatCanonicalValue).join(', ');
+}
+
+function formatDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: () => void }) {
@@ -201,11 +231,7 @@ function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: ()
   }
 
   function requestLifecycleAction(action: IdentityLifecycleAction) {
-    if (action === 'deactivate' || action === 'decommission') {
-      setConfirmation({ kind: 'lifecycle', action });
-      return;
-    }
-    void executeLifecycleAction(action);
+    setConfirmation({ kind: 'lifecycle', action });
   }
 
   async function updateName() {
@@ -296,38 +322,50 @@ function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: ()
     || splitValues.principalIds.split(/[\n,]/).some((value) => value.trim());
 
   return (
-    <Page>
-      <Button variant="text" onClick={onBack} sx={{ justifySelf: 'start' }}>← Governed identities</Button>
-      {state.status === 'loading' && <StatePanel title="Loading governed Identity">Reading the latest authoritative Identity revision…</StatePanel>}
+    <Page width="wide">
+      <Button variant="text" onClick={onBack} sx={{ justifySelf: 'start' }}>← Identities</Button>
+      {state.status === 'loading' && <StatePanel state="loading" title="Loading governed Identity">Reading the latest authoritative Identity revision…</StatePanel>}
       {state.status === 'error' && <ErrorPanel error={state.error} onRetry={() => setReloadKey((value) => value + 1)} />}
       {state.status === 'ready' && (
         <>
           <PageHeader
             eyebrow="Identity · governed subject"
             title={state.value.identity.displayName}
-            description={<span className="mono">{state.value.identity.id}</span>}
-            actions={<StatusChip label={state.value.identity.lifecycleState} color={lifecycleChipColor(state.value.identity.lifecycleState)} />}
+            description={<><span className="mono">{state.value.identity.id}</span> · Updated {formatDateTime(state.value.identity.updatedAt)}</>}
+            actions={(
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                <StatusChip label={state.value.identity.type} />
+                <StatusChip label={state.value.identity.lifecycleState} color={lifecycleChipColor(state.value.identity.lifecycleState)} />
+              </Box>
+            )}
           />
 
-          <StatePanel severity="info" title="Governed subject, not a technical account">
-            This Identity is the authoritative subject for governance. Principals are technical representations/accounts owned by Identity and are managed separately; provider observations are not Identity authority.
+          <StatePanel state="informational" title="Governed subject, not a technical account">
+            This Identity is authoritative governed-subject state. Principals are separate technical representations/accounts, and provider observations are not Identity authority.
           </StatePanel>
 
           {mutationError && <ErrorPanel error={mutationError} onRetry={() => setReloadKey((value) => value + 1)} />}
 
-          <Surface title="Authoritative Identity" description="Current governed-subject state. Revision is the concurrency guard used by mutation operations.">
-            <dl className="detail-grid">
-              <div><dt>Identity type</dt><dd>{state.value.identity.type}</dd></div>
-              <div><dt>Lifecycle</dt><dd><StatusChip label={state.value.identity.lifecycleState} color={lifecycleChipColor(state.value.identity.lifecycleState)} /></dd></div>
-              <div><dt>Revision</dt><dd>{state.value.identity.revision}</dd></div>
-              <div><dt>Created</dt><dd>{new Date(state.value.identity.createdAt).toLocaleString()}</dd></div>
-              <div><dt>Updated</dt><dd>{new Date(state.value.identity.updatedAt).toLocaleString()}</dd></div>
-            </dl>
+          <Surface title="Authoritative Identity" description="Current governed-subject state. Revision remains the concurrency guard for mutations.">
+            <Box component="dl" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(5, minmax(0, 1fr))' }, gap: 1.25, m: 0 }}>
+              {[
+                ['Identity type', state.value.identity.type],
+                ['Lifecycle', state.value.identity.lifecycleState],
+                ['Revision', String(state.value.identity.revision)],
+                ['Created', formatDateTime(state.value.identity.createdAt)],
+                ['Updated', formatDateTime(state.value.identity.updatedAt)],
+              ].map(([label, value]) => (
+                <Box key={label} sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
+                  <Typography component="dt" variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 800, letterSpacing: '.05em' }}>{label}</Typography>
+                  <Typography component="dd" variant="body2" sx={{ m: 0, mt: 0.5, fontWeight: 700 }}>{value}</Typography>
+                </Box>
+              ))}
+            </Box>
           </Surface>
 
           <Surface
             title="Display name"
-            description="Metadata maintenance is revision-safe. Saving uses the current ETag/If-Match guard and a causal idempotency key."
+            description="Metadata maintenance uses the current ETag/If-Match revision guard and causal idempotency."
             actions={(
               <Button
                 variant="outlined"
@@ -341,7 +379,7 @@ function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: ()
             <TextInput label="Display name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
           </Surface>
 
-          <Surface title="Lifecycle operations" description="These are explicit semantic Identity commands, never generic status edits. Provider realization and downstream access reduction remain separate concerns.">
+          <Surface title="Lifecycle operations" description="Explicit semantic Identity commands. Provider fulfillment and downstream access convergence remain separate.">
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {lifecycleActions(state.value.identity).map((action) => (
                 <Button
@@ -355,27 +393,27 @@ function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: ()
                 </Button>
               ))}
               {lifecycleActions(state.value.identity).length === 0 && (
-                <StatePanel title="Terminal lifecycle state">DECOMMISSIONED is terminal; no lifecycle commands are available.</StatePanel>
+                <StatePanel state="informational" title="Terminal lifecycle state">DECOMMISSIONED is terminal; no lifecycle commands are available.</StatePanel>
               )}
             </Box>
           </Surface>
 
           <Surface
             title="Canonical effective values"
-            description="Governed canonical resolution state only. Value disclosure is independently authorized by the server for the exact classification; redaction never broadens browser authority."
+            description="Governed canonical resolution state only. Value disclosure remains independently authorized for the exact classification."
           >
-            {canonicalState.status === 'loading' && <StatePanel title="Loading canonical attributes">Reading governed resolution metadata and authorized effective values…</StatePanel>}
+            {canonicalState.status === 'loading' && <StatePanel state="loading" title="Loading canonical attributes">Reading governed resolution metadata and authorized effective values…</StatePanel>}
             {canonicalState.status === 'error' && <ErrorPanel error={canonicalState.error} onRetry={() => setReloadKey((value) => value + 1)} />}
-            {canonicalState.status === 'ready' && canonicalState.value.length === 0 && <StatePanel title="No canonical attributes">No governed canonical attribute state is currently available for this Identity.</StatePanel>}
+            {canonicalState.status === 'ready' && canonicalState.value.length === 0 && <StatePanel state="empty" title="No canonical attributes">No governed canonical attribute state is currently available for this Identity.</StatePanel>}
             {canonicalState.status === 'ready' && canonicalState.value.length > 0 && (
-              <DataTable minWidth={920}>
+              <DataTable minWidth={920} ariaLabel="Canonical effective values">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Attribute</TableCell>
-                    <TableCell>Resolution</TableCell>
-                    <TableCell>Classification</TableCell>
-                    <TableCell>Shape</TableCell>
-                    <TableCell>Effective value</TableCell>
+                    <TableCell component="th" scope="col">Attribute</TableCell>
+                    <TableCell component="th" scope="col">Resolution</TableCell>
+                    <TableCell component="th" scope="col">Classification</TableCell>
+                    <TableCell component="th" scope="col">Shape</TableCell>
+                    <TableCell component="th" scope="col">Effective value</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -400,7 +438,7 @@ function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: ()
             title="Merge administrative correction"
             description="Use only when two governed Identities must be corrected into one survivor. This is not generic account merging."
           >
-            <StatePanel severity="warning" title="Permanent governed-subject correction">
+            <StatePanel state="warning" title="Permanent governed-subject correction">
               The current Identity is the survivor. The absorbed Identity is decommissioned. Only Identity-owned current source links and Principals move; AccessAssignments, Governance authority and other foreign-capability state do not move implicitly.
             </StatePanel>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5, mt: 2 }}>
@@ -423,7 +461,7 @@ function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: ()
             title="Split administrative correction"
             description="Create one same-type PENDING Identity and explicitly re-home selected current Identity-owned relationships."
           >
-            <StatePanel severity="warning" title="Explicit relationship selection required">
+            <StatePanel state="warning" title="Explicit relationship selection required">
               A split never copies access or governance authority. Select at least one current source record or Principal to move, and verify technical Principal IDs separately from the governed Identity itself.
             </StatePanel>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5, mt: 2 }}>
@@ -447,7 +485,7 @@ function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: ()
             open={confirmation !== null}
             title={confirmCopy.title}
             confirmLabel={confirmCopy.label}
-            destructive
+            destructive={confirmation?.kind !== 'lifecycle' || confirmation?.action !== 'activate'}
             busy={pendingAction !== null}
             onCancel={() => setConfirmation(null)}
             onConfirm={() => void confirmAction()}
@@ -467,6 +505,9 @@ export function IdentityWorkspace({ selectedId, onSelect }: { selectedId?: strin
   const [createError, setCreateError] = useState<unknown>(null);
   const [creating, setCreating] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [identityLookup, setIdentityLookup] = useState('');
   const [create, setCreate] = useState({ type: 'PERSON', lifecycleState: 'PENDING', displayName: '' });
   const nextCursor = pages.at(-1)?.nextCursor ?? null;
   const identities = useMemo(() => pages.flatMap((page) => page.items), [pages]);
@@ -519,6 +560,7 @@ export function IdentityWorkspace({ selectedId, onSelect }: { selectedId?: strin
         },
       });
       setCreate({ type: 'PERSON', lifecycleState: 'PENDING', displayName: '' });
+      setCreateOpen(false);
       setReloadKey((value) => value + 1);
     } catch (cause) {
       setCreateError(cause);
@@ -527,76 +569,202 @@ export function IdentityWorkspace({ selectedId, onSelect }: { selectedId?: strin
     }
   }
 
+  function openExactIdentity() {
+    const identityId = identityLookup.trim();
+    if (!identityId) return;
+    setLookupOpen(false);
+    onSelect(identityId);
+  }
+
   if (selectedId) return <IdentityDetail identityId={selectedId} onBack={() => onSelect()} />;
 
   return (
-    <Page>
+    <Page width="wide">
       <PageHeader
         eyebrow="Identity · governed subjects"
         title="Identities"
-        description="Authoritative governed subjects for IAM decisions. Principals are separate technical representations/accounts, and provider observations are not Identity authority."
+        description="Find and investigate canonical governed subjects. Technical accounts are Principals and remain separate from Identity authority."
+        actions={(
+          <Button variant="contained" onClick={() => setCreateOpen(true)}>
+            + Create Identity
+          </Button>
+        )}
       />
 
-      <StatePanel severity="info" title="Identity and Principal are deliberately different">
-        Manage the governed subject here. Technical accounts live in the Principal workspace and may be correlated to an Identity; do not treat a Principal or provider account as the governed subject itself.
-      </StatePanel>
+      <Surface sx={{ p: { xs: 1.5, md: 2 } }}>
+        <PageToolbar
+          leading={(
+            <TextInput
+              label="Search display name"
+              placeholder="Server-backed search coming in the bounded query contract"
+              disabled
+              size="small"
+              sx={{ width: { xs: '100%', sm: 320 } }}
+            />
+          )}
+          sx={{ alignItems: { sm: 'flex-start' } }}
+        >
+          <SelectInput
+            label="Type"
+            value=""
+            emptyLabel="All types"
+            options={['PERSON', 'SERVICE', 'WORKLOAD']}
+            disabled
+            size="small"
+            sx={{ minWidth: { xs: '100%', sm: 150 } }}
+          />
+          <SelectInput
+            label="Lifecycle"
+            value=""
+            emptyLabel="All lifecycles"
+            options={['PENDING', 'ACTIVE', 'SUSPENDED', 'INACTIVE', 'DECOMMISSIONED']}
+            disabled
+            size="small"
+            sx={{ minWidth: { xs: '100%', sm: 180 } }}
+          />
+          <Button variant="outlined" onClick={() => setLookupOpen((value) => !value)}>
+            Open by Identity ID
+          </Button>
+          <Button variant="text" disabled>Clear filters</Button>
+        </PageToolbar>
 
-      <Surface title="Create governed Identity" description="Create a typed governed subject. Tenant, actor and administrative authority remain server-derived.">
-        {createError ? <ErrorPanel error={createError} /> : null}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mt: createError ? 2 : 0 }}>
-          <label>
-            <Typography component="span" variant="body2" sx={{ display: 'block', mb: 0.5, fontWeight: 700 }}>Identity type</Typography>
-            <select value={create.type} onChange={(event) => setCreate((value) => ({ ...value, type: event.target.value }))}>
-              <option>PERSON</option><option>SERVICE</option><option>WORKLOAD</option>
-            </select>
-          </label>
-          <label>
-            <Typography component="span" variant="body2" sx={{ display: 'block', mb: 0.5, fontWeight: 700 }}>Initial lifecycle</Typography>
-            <select value={create.lifecycleState} onChange={(event) => setCreate((value) => ({ ...value, lifecycleState: event.target.value }))}>
-              <option>PENDING</option><option>ACTIVE</option><option>SUSPENDED</option><option>INACTIVE</option>
-            </select>
-          </label>
-          <TextInput label="Display name" value={create.displayName} onChange={(event) => setCreate((value) => ({ ...value, displayName: event.target.value }))} />
-        </Box>
-        <Button variant="contained" sx={{ mt: 2 }} disabled={creating || !create.displayName.trim()} onClick={() => void createIdentity()}>
-          {creating ? 'Creating…' : 'Create Identity'}
-        </Button>
+        {lookupOpen ? (
+          <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider', display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: { sm: 'center' } }}>
+            <TextInput
+              autoFocus
+              label="Exact Identity ID"
+              value={identityLookup}
+              size="small"
+              onChange={(event) => setIdentityLookup(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') openExactIdentity();
+              }}
+              sx={{ flex: '1 1 28rem', maxWidth: 520 }}
+            />
+            <Button variant="contained" disabled={!identityLookup.trim()} onClick={openExactIdentity}>Open Identity</Button>
+            <Typography variant="caption" color="text.secondary">
+              Direct resource lookup remains server-authorized and does not enumerate the collection.
+            </Typography>
+          </Box>
+        ) : null}
       </Surface>
 
-      {state === 'loading' && identities.length === 0 && <StatePanel title="Loading governed identities">Reading authoritative Identity resources…</StatePanel>}
-      {state === 'error' && <ErrorPanel error={error} onRetry={() => setReloadKey((value) => value + 1)} />}
-      {state === 'ready' && identities.length === 0 && <StatePanel title="No governed identities">No Identity resources are currently visible to your server-authorized administrative context.</StatePanel>}
+      <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5 }}>
+        Display-name search and collection filters are shown in their final layout but stay disabled until the accepted server-side filter contract is implemented.
+      </Typography>
 
-      {identities.length > 0 && (
-        <Surface title="Governed identities" description="Authoritative Identity resources. Lifecycle is business/governance state; technical Principal accounts remain separate.">
-          <DataTable minWidth={820}>
+      {state === 'loading' && identities.length === 0 ? (
+        <StatePanel state="loading" title="Loading governed identities">Reading authoritative Identity resources…</StatePanel>
+      ) : null}
+      {state === 'error' ? <ErrorPanel error={error} onRetry={() => setReloadKey((value) => value + 1)} /> : null}
+      {state === 'ready' && identities.length === 0 ? (
+        <StatePanel state="empty" title="No governed identities">No Identity resources are currently visible to your server-authorized administrative context.</StatePanel>
+      ) : null}
+
+      {identities.length > 0 ? (
+        <Surface
+          title="Governed identities"
+          description="Authoritative Identity resources. Lifecycle is governed-subject state; technical Principal accounts remain separate."
+          actions={<Typography variant="caption" color="text.secondary">Showing {identities.length} identities</Typography>}
+          sx={{ p: 0, '& > div:first-of-type': { px: { xs: 2, md: 2.5 }, pt: { xs: 2, md: 2.5 }, mb: 0 } }}
+        >
+          <DataTable minWidth={780} ariaLabel="Governed identities">
             <TableHead>
-              <TableRow><TableCell>Governed subject</TableCell><TableCell>Type</TableCell><TableCell>Lifecycle</TableCell><TableCell>Revision</TableCell><TableCell align="right">Action</TableCell></TableRow>
+              <TableRow>
+                <TableCell component="th" scope="col">Governed subject</TableCell>
+                <TableCell component="th" scope="col">Type</TableCell>
+                <TableCell component="th" scope="col">Lifecycle</TableCell>
+                <TableCell component="th" scope="col">Updated</TableCell>
+                <TableCell component="th" scope="col" align="right">Open</TableCell>
+              </TableRow>
             </TableHead>
             <TableBody>
               {identities.map((identity) => (
                 <TableRow key={identity.id} hover>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>{identity.displayName}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary' }}>{identity.displayName}</Typography>
                     <Typography variant="caption" color="text.secondary" className="mono">{identity.id}</Typography>
                   </TableCell>
-                  <TableCell>{identity.type}</TableCell>
-                  <TableCell><StatusChip label={identity.lifecycleState} color={lifecycleChipColor(identity.lifecycleState)} /></TableCell>
-                  <TableCell>{identity.revision}</TableCell>
-                  <TableCell align="right"><Button size="small" variant="text" onClick={() => onSelect(identity.id)}>Open Identity</Button></TableCell>
+                  <TableCell>
+                    <StatusChip label={identity.type} />
+                  </TableCell>
+                  <TableCell>
+                    <StatusChip label={identity.lifecycleState} color={lifecycleChipColor(identity.lifecycleState)} />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">{formatDateTime(identity.updatedAt)}</Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Button size="small" variant="outlined" onClick={() => onSelect(identity.id)} aria-label={`Open Identity ${identity.displayName}`}>
+                      View
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </DataTable>
-          {state === 'loading' && <StatePanel title="Loading next page">Existing governed identities remain visible while the next cursor page loads.</StatePanel>}
-        </Surface>
-      )}
 
-      {nextCursor && (
-        <Button variant="outlined" disabled={state === 'loading'} onClick={() => void loadMore()} sx={{ justifySelf: 'start' }}>
-          {state === 'loading' ? 'Loading…' : 'Load more identities'}
-        </Button>
-      )}
+          <Box sx={{ px: { xs: 2, md: 2.5 }, py: 1.75, borderTop: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Typography variant="caption" color="text.secondary">Showing {identities.length} identities</Typography>
+            {nextCursor ? (
+              <Button variant="outlined" disabled={state === 'loading'} onClick={() => void loadMore()}>
+                {state === 'loading' ? 'Loading…' : 'Load more identities'}
+              </Button>
+            ) : (
+              <Typography variant="caption" color="text.secondary">End of visible collection</Typography>
+            )}
+          </Box>
+        </Surface>
+      ) : null}
+
+      {state === 'loading' && identities.length > 0 ? (
+        <StatePanel state="loading" title="Loading next page">Existing governed identities remain visible while the next signed cursor page loads.</StatePanel>
+      ) : null}
+
+      <Modal
+        open={createOpen}
+        title="Create governed Identity"
+        description="Create one typed governed subject. Tenant, actor and administrative authority remain server-derived."
+        busy={creating}
+        onClose={() => {
+          if (!creating) {
+            setCreateOpen(false);
+            setCreateError(null);
+          }
+        }}
+      >
+        <Box sx={{ display: 'grid', gap: 1.5, pt: 0.5 }}>
+          {createError ? <ErrorPanel error={createError} /> : null}
+          <SelectInput
+            label="Identity type"
+            value={create.type}
+            options={['PERSON', 'SERVICE', 'WORKLOAD']}
+            onValueChange={(value) => setCreate((current) => ({ ...current, type: String(value || 'PERSON') }))}
+          />
+          <SelectInput
+            label="Initial lifecycle"
+            value={create.lifecycleState}
+            options={['PENDING', 'ACTIVE', 'SUSPENDED', 'INACTIVE']}
+            onValueChange={(value) => setCreate((current) => ({ ...current, lifecycleState: String(value || 'PENDING') }))}
+          />
+          <TextInput
+            label="Display name"
+            required
+            autoFocus
+            value={create.displayName}
+            onChange={(event) => setCreate((current) => ({ ...current, displayName: event.target.value }))}
+          />
+          <StatePanel state="informational" title="Identity is the governed subject">
+            Creating an Identity does not register a Principal, create provider state, grant access or establish a Credential.
+          </StatePanel>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap', pt: 1 }}>
+            <Button variant="text" disabled={creating} onClick={() => { setCreateOpen(false); setCreateError(null); }}>Cancel</Button>
+            <Button variant="contained" disabled={creating || !create.displayName.trim()} onClick={() => void createIdentity()}>
+              {creating ? 'Creating…' : 'Create Identity'}
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
     </Page>
   );
 }

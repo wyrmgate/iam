@@ -9,7 +9,7 @@ test('Identity workspace keeps governed subjects distinct from technical Princip
   assertSourceContains(
     identity,
     /Identity · governed subjects/,
-    /Identity and Principal are deliberately different/,
+    /Identity is the governed subject/,
     /Principals are separate technical representations\/accounts/,
     /provider observations are not Identity authority/,
     /Principal IDs \(technical accounts\)/,
@@ -28,7 +28,8 @@ test('Identity mutations preserve semantic operations, revision guards, and caus
     /absorbedRevision: Number\(mergeValues\.absorbedRevision\)/,
     /:split/,
     /splitSelectionPresent/,
-    /explicit semantic Identity commands, never generic status edits/,
+    /Explicit semantic Identity commands/,
+    /setConfirmation\(\{ kind: 'lifecycle', action \}\)/,
   );
 });
 
@@ -40,7 +41,7 @@ test('canonical attribute disclosure follows the accepted visibility and typed-v
     /attribute\.visibility === 'REDACTED'/,
     /Redacted by classification authority/,
     /canonicalValueCopy\(attribute\)/,
-    /Value disclosure is independently authorized by the server/,
+    /Value disclosure remains independently authorized/,
   );
   assertSourceExcludes(identity, /valueRedacted|\[authorized value\]/);
 });
@@ -61,6 +62,27 @@ test('Identity workspace presents explicit loading, empty, conflict, stale, and 
   );
 });
 
+test('Identity collection uses the golden-page table without inventing unsupported browser search', () => {
+  assertSourceContains(
+    identity,
+    /Search display name/,
+    /All types/,
+    /All lifecycles/,
+    /Open by Identity ID/,
+    /Server-backed search coming in the bounded query contract/,
+    /Governed subject/,
+    /Updated/,
+    /Load more identities/,
+    /Create governed Identity/,
+  );
+  assertSourceExcludes(
+    identity,
+    /identities\.filter\(/,
+    /identities\.find\([^)]*displayName/,
+    /localStorage|sessionStorage/,
+  );
+});
+
 test('Identity workspace stays inside its existing public and shared UI boundaries', () => {
   assertSourceContains(
     identity,
@@ -71,7 +93,6 @@ test('Identity workspace stays inside its existing public and shared UI boundari
   );
   assertSourceExcludes(
     identity,
-    /localStorage|sessionStorage/,
     /Authorization:\s*['"`]/,
     /tenantId\s*:/,
     /actorIdentityId\s*:/,
