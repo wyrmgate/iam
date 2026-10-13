@@ -5,54 +5,21 @@ import {
   type CurrentAdministrativeAuthority,
   type SystemInfo,
 } from './api';
-
-type RouteSpec = {
-  path: string;
-  label: string;
-  group: ShellGroupId;
-  resourceTypes?: string[];
-  visibleWithoutAdministrativeEligibility?: boolean;
-};
-
-type ShellGroupId = 'overview' | 'identity' | 'access' | 'governance' | 'catalog' | 'integration' | 'security' | 'audit';
-
-type ShellGroup = {
-  id: ShellGroupId;
-  code: string;
-  label: string;
-};
+import {
+  activeRouteFor,
+  consoleRoutes,
+  shellGroupFor,
+  shellGroups,
+  visibleConsoleRoutes,
+  type ShellGroup,
+  type ShellGroupId,
+} from './consoleNavigation';
 
 type ShellChromeProps = {
   children: ReactNode;
   onSignOut?: () => Promise<void> | void;
   signOutBusy?: boolean;
 };
-
-const groups: ShellGroup[] = [
-  { id: 'overview', code: 'OV', label: 'Overview' },
-  { id: 'identity', code: 'ID', label: 'Identity' },
-  { id: 'access', code: 'AC', label: 'Access' },
-  { id: 'governance', code: 'GV', label: 'Governance' },
-  { id: 'catalog', code: 'CT', label: 'Catalog' },
-  { id: 'integration', code: 'IN', label: 'Integration' },
-  { id: 'security', code: 'SE', label: 'Security' },
-  { id: 'audit', code: 'AU', label: 'Audit' },
-];
-
-const routes: RouteSpec[] = [
-  { path: '/', label: 'Overview', group: 'overview', visibleWithoutAdministrativeEligibility: true },
-  { path: '/identities', label: 'Identities', group: 'identity', resourceTypes: ['identity', 'canonical-attribute-value'] },
-  { path: '/principals', label: 'Principals', group: 'identity', resourceTypes: ['principal', 'source-correlation-policy', 'source-lifecycle-policy', 'source-absence-policy'] },
-  { path: '/access', label: 'Access assignments', group: 'access', resourceTypes: ['access-assignment', 'effective-access', 'lifecycle-access-policy'] },
-  { path: '/requests', label: 'Requests & approvals', group: 'governance', visibleWithoutAdministrativeEligibility: true },
-  { path: '/reviews', label: 'Reviews', group: 'governance', resourceTypes: ['review-campaign'] },
-  { path: '/policies', label: 'Policies & exceptions', group: 'governance', resourceTypes: ['governance-policy', 'governance-exception', 'source-correlation-policy', 'source-lifecycle-policy', 'source-absence-policy'] },
-  { path: '/catalog', label: 'Catalog', group: 'catalog', resourceTypes: ['application', 'sso-client', 'application-target', 'entitlement', 'role', 'role-version'] },
-  { path: '/integrations', label: 'Integrations', group: 'integration', resourceTypes: ['connector', 'connector-binding', 'connector-worker', 'entitlement-observation-mapping', 'provisioning-job', 'provisioning-task', 'provisioning-attempt', 'reconciliation-run'] },
-  { path: '/credentials', label: 'Credentials', group: 'security', resourceTypes: ['credential', 'credential-rotation'] },
-  { path: '/administration', label: 'Administration', group: 'security', visibleWithoutAdministrativeEligibility: true },
-  { path: '/audit', label: 'Audit', group: 'audit', resourceTypes: ['audit', 'evidence-snapshot'] },
-];
 
 function usePathname() {
   const [pathname, setPathname] = useState(window.location.pathname);
@@ -72,28 +39,10 @@ function navigate(path: string) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function activeRouteFor(pathname: string): RouteSpec {
-  if (/^\/identities\/[^/]+$/.test(pathname)) return routes.find((route) => route.path === '/identities')!;
-  return routes.find((route) => route.path === pathname) ?? routes[0];
-}
-
-function visibleRoutes(authority: CurrentAdministrativeAuthority | null): RouteSpec[] {
-  if (!authority) return routes;
-  if (!authority.administrativelyEligible) {
-    return routes.filter((route) => route.visibleWithoutAdministrativeEligibility === true);
-  }
-  const available = new Set(authority.authorities.map((item) => item.permission.resourceType));
-  return routes.filter((route) => !route.resourceTypes || route.resourceTypes.some((resourceType) => available.has(resourceType)));
-}
-
 function shortId(value: string | undefined | null): string {
   if (!value) return 'Unavailable';
   if (value.length <= 18) return value;
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
-}
-
-function groupFor(id: ShellGroupId): ShellGroup {
-  return groups.find((group) => group.id === id)!;
 }
 
 export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellChromeProps) {
@@ -102,6 +51,8 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   const [authorityUnavailable, setAuthorityUnavailable] = useState(false);
   const [system, setSystem] = useState<SystemInfo | null>(null);
   const [systemUnavailable, setSystemUnavailable] = useState(false);
+  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<ShellGroupId | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -110,12 +61,15 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   const [actorOpen, setActorOpen] = useState(false);
 
   const currentRoute = activeRouteFor(pathname);
-  const allowedRoutes = useMemo(() => visibleRoutes(authority), [authority]);
-  const allowedGroups = useMemo(() => groups.filter((group) => allowedRoutes.some((route) => route.group === group.id)), [allowedRoutes]);
+  const allowedRoutes = useMemo(() => visibleConsoleRoutes(authority), [authority]);
+  const allowedGroups = useMemo(
+    () => shellGroups.filter((group) => allowedRoutes.some((route) => route.group === group.id)),
+    [allowedRoutes],
+  );
   const paletteRoutes = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return allowedRoutes;
-    return allowedRoutes.filter((route) => `${groupFor(route.group).label} ${route.label}`.toLowerCase().includes(needle));
+    return allowedRoutes.filter((route) => `${shellGroupFor(route.group).label} ${route.label}`.toLowerCase().includes(needle));
   }, [allowedRoutes, query]);
 
   useEffect(() => {
@@ -154,6 +108,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
         setOpenGroup(null);
         setActorOpen(false);
         setContextOpen(false);
+        setMobileNavigationOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -163,6 +118,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   useEffect(() => {
     setOpenGroup(null);
     setActorOpen(false);
+    setMobileNavigationOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -174,9 +130,10 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
     setCommandOpen(false);
     setQuery('');
     setOpenGroup(null);
+    setMobileNavigationOpen(false);
   }
 
-  function activateGroup(group: ShellGroup) {
+  function activateCollapsedGroup(group: ShellGroup) {
     const destinations = allowedRoutes.filter((route) => route.group === group.id);
     if (destinations.length === 1) {
       openRoute(destinations[0].path);
@@ -202,47 +159,84 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   }
 
   const flyoutRoutes = openGroup ? allowedRoutes.filter((route) => route.group === openGroup) : [];
-  const currentGroup = groupFor(currentRoute.group);
+  const currentGroup = shellGroupFor(currentRoute.group);
   const runtimeOnline = Boolean(system && system.status.toLowerCase() !== 'unavailable');
 
   return (
-    <div className="product-shell">
-      <aside className="navigation-dock" aria-label="Product navigation">
+    <div className={`product-shell ${navigationCollapsed ? 'nav-collapsed' : ''}`}>
+      <aside className={`navigation-dock ${mobileNavigationOpen ? 'mobile-open' : ''}`} aria-label="Product navigation">
         <button className="dock-brand" aria-label="Wyrmgate overview" onClick={() => openRoute('/')}>
           <span className="dock-brand-glyph" aria-hidden="true">W</span>
+          <span className="dock-brand-copy"><strong>Wyrmgate</strong><small>IAM Console</small></span>
         </button>
-        <div className="dock-primary">
+
+        <nav className="dock-primary" aria-label="Primary navigation">
           {allowedGroups.map((group) => {
+            const destinations = allowedRoutes.filter((route) => route.group === group.id);
             const active = currentRoute.group === group.id;
+            const singleDestination = destinations.length === 1 ? destinations[0] : null;
             return (
-              <button
-                key={group.id}
-                className={`dock-item ${active ? 'active' : ''}`}
-                aria-label={group.label}
-                aria-expanded={openGroup === group.id}
-                onClick={() => activateGroup(group)}
-              >
-                <span className="dock-code" aria-hidden="true">{group.code}</span>
-                <span className="dock-hover-label">{group.label}</span>
-              </button>
+              <div className={`dock-group ${active ? 'active' : ''}`} key={group.id}>
+                <button
+                  className={`dock-item dock-group-trigger ${active ? 'active' : ''}`}
+                  aria-label={group.label}
+                  aria-expanded={destinations.length > 1 ? openGroup === group.id : undefined}
+                  onClick={() => singleDestination ? openRoute(singleDestination.path) : activateCollapsedGroup(group)}
+                >
+                  <span className="dock-code" aria-hidden="true">{group.code}</span>
+                  <span className="dock-label">{group.label}</span>
+                  {destinations.length > 1 ? <span className="dock-chevron" aria-hidden="true">›</span> : null}
+                  <span className="dock-hover-label">{group.label}</span>
+                </button>
+                {destinations.length > 1 ? (
+                  <div className="dock-subroutes">
+                    {destinations.map((route) => (
+                      <button
+                        key={route.path}
+                        className={currentRoute.path === route.path ? 'active' : ''}
+                        onClick={() => openRoute(route.path)}
+                      >
+                        {route.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             );
           })}
-        </div>
+        </nav>
+
         <div className="dock-utility">
-          <button className="dock-item" aria-label="Open command palette" onClick={() => setCommandOpen(true)}>
+          <button className="dock-item dock-utility-item" aria-label="Open command palette" onClick={() => setCommandOpen(true)}>
             <span className="dock-code" aria-hidden="true">⌘</span>
+            <span className="dock-label">Navigate</span>
+            <span className="dock-shortcut">{navigator.platform.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl K'}</span>
             <span className="dock-hover-label">Command palette</span>
           </button>
-          <button className="dock-item runtime-dock" aria-label="Open runtime context" onClick={() => setContextOpen(true)}>
+          <button className="dock-item dock-utility-item runtime-dock" aria-label="Open runtime context" onClick={() => setContextOpen(true)}>
             <span className={`runtime-dot ${runtimeOnline ? 'online' : ''}`} aria-hidden="true" />
-            <span className="dock-hover-label">{systemUnavailable ? 'Runtime unavailable' : system ? system.status : 'Checking runtime'}</span>
+            <span className="dock-label">{systemUnavailable ? 'Runtime unavailable' : system ? system.status : 'Checking runtime'}</span>
+            <span className="dock-hover-label">Runtime context</span>
+          </button>
+          <button
+            className="dock-item dock-collapse"
+            aria-label={navigationCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            onClick={() => {
+              setNavigationCollapsed((value) => !value);
+              setOpenGroup(null);
+            }}
+          >
+            <span className="dock-code" aria-hidden="true">{navigationCollapsed ? '»' : '«'}</span>
+            <span className="dock-label">Collapse navigation</span>
+            <span className="dock-hover-label">{navigationCollapsed ? 'Expand navigation' : 'Collapse navigation'}</span>
           </button>
         </div>
-        {openGroup && (
-          <div className="dock-flyout" role="menu" aria-label={`${groupFor(openGroup).label} navigation`}>
+
+        {navigationCollapsed && openGroup && (
+          <div className="dock-flyout" role="menu" aria-label={`${shellGroupFor(openGroup).label} navigation`}>
             <div className="flyout-heading">
-              <span>{groupFor(openGroup).code}</span>
-              <strong>{groupFor(openGroup).label}</strong>
+              <span>{shellGroupFor(openGroup).code}</span>
+              <strong>{shellGroupFor(openGroup).label}</strong>
             </div>
             <div className="flyout-routes">
               {flyoutRoutes.map((route) => (
@@ -261,11 +255,13 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
         )}
       </aside>
 
-      {openGroup && <button className="shell-scrim" aria-label="Close navigation" onClick={() => setOpenGroup(null)} />}
+      {mobileNavigationOpen ? <button className="mobile-nav-scrim" aria-label="Close navigation" onClick={() => setMobileNavigationOpen(false)} /> : null}
+      {navigationCollapsed && openGroup ? <button className="shell-scrim" aria-label="Close navigation flyout" onClick={() => setOpenGroup(null)} /> : null}
 
       <section className="shell-stage">
         <header className="shell-topbar">
           <div className="shell-location">
+            <button className="mobile-menu-trigger" aria-label="Open navigation" onClick={() => setMobileNavigationOpen(true)}>☰</button>
             <span className="shell-scope">{authority ? `Tenant ${shortId(authority.tenantId)}` : authorityUnavailable ? 'Tenant unavailable' : 'Resolving tenant'}</span>
             <span className="shell-separator" aria-hidden="true">/</span>
             <span className="shell-breadcrumb"><strong>{currentGroup.label}</strong><span>›</span>{currentRoute.label}</span>
@@ -341,7 +337,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
                   onMouseEnter={() => setSelectedCommand(index)}
                   onClick={() => openRoute(route.path)}
                 >
-                  <span><small>{groupFor(route.group).label}</small><strong>{route.label}</strong></span>
+                  <span><small>{shellGroupFor(route.group).label}</small><strong>{route.label}</strong></span>
                   <span aria-hidden="true">↵</span>
                 </button>
               ))}

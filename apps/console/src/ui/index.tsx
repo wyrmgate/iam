@@ -111,17 +111,25 @@ export function SidePanel({ children, ...props }: DrawerProps & { children: Reac
   );
 }
 
-type PageProps = Omit<BoxProps, 'children'> & { children: ReactNode };
+type PageWidth = 'narrow' | 'standard' | 'wide';
+type PageProps = Omit<BoxProps, 'children'> & { children: ReactNode; width?: PageWidth };
 
-export function Page({ children, sx, ...props }: PageProps) {
+const pageWidths: Record<PageWidth, string> = {
+  narrow: '52rem',
+  standard: '76rem',
+  wide: '96rem',
+};
+
+export function Page({ children, width = 'standard', sx, ...props }: PageProps) {
   return (
     <Box
       component="section"
+      data-page-width={width}
       sx={{
-        width: 'min(82rem, 100%)',
+        width: `min(${pageWidths[width]}, 100%)`,
         mx: 'auto',
         display: 'grid',
-        gap: 2.5,
+        gap: { xs: 2, md: 2.5 },
         ...sx,
       }}
       {...props}
@@ -150,7 +158,7 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
         gap: 2,
       }}
     >
-      <Box sx={{ maxWidth: 960 }}>
+      <Box sx={{ maxWidth: '64rem', minWidth: 0 }}>
         {eyebrow ? (
           <Typography
             component="p"
@@ -170,10 +178,36 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
         ) : null}
       </Box>
       {actions ? (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, flex: '0 0 auto' }}>
           {actions}
         </Box>
       ) : null}
+    </Box>
+  );
+}
+
+type PageToolbarProps = Omit<BoxProps, 'children'> & {
+  children: ReactNode;
+  leading?: ReactNode;
+};
+
+export function PageToolbar({ children, leading, sx, ...props }: PageToolbarProps) {
+  return (
+    <Box
+      component="section"
+      sx={{
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        alignItems: { xs: 'stretch', sm: 'center' },
+        justifyContent: 'space-between',
+        gap: 1.25,
+        ...sx,
+      }}
+      {...props}
+    >
+      {leading ? <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>{leading}</Box> : <span />}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: { sm: 'flex-end' } }}>{children}</Box>
     </Box>
   );
 }
@@ -187,7 +221,7 @@ type SurfaceProps = PaperProps & {
 
 export function Surface({ children, title, description, actions, sx, ...props }: SurfaceProps) {
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderColor: 'divider', ...sx }} {...props}>
+    <Paper variant="outlined" sx={{ minWidth: 0, p: { xs: 2, md: 2.5 }, borderColor: 'divider', ...sx }} {...props}>
       {(title || description || actions) ? (
         <Box
           sx={{
@@ -199,7 +233,7 @@ export function Surface({ children, title, description, actions, sx, ...props }:
             mb: 2,
           }}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             {title ? <Typography component="h2" variant="h6">{title}</Typography> : null}
             {description ? <Typography color="text.secondary" variant="body2" sx={{ mt: title ? 0.5 : 0, lineHeight: 1.55 }}>{description}</Typography> : null}
           </Box>

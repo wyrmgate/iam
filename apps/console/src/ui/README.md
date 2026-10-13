@@ -17,6 +17,7 @@ Wyrmgate Console owns its product semantics and visual contract. Material UI (MU
 Page migrations should build from the local Wyrmgate-facing primitives rather than styling MUI ad hoc in each capability workspace:
 
 - `Page` and `PageHeader` for workspace structure;
+- `PageToolbar` for collection filters, search and page-level secondary controls;
 - `Surface` for bounded enterprise content regions;
 - `StatePanel` for loading, empty, warning and error states;
 - `DataTable` plus table primitives for dense administrative collections;
@@ -25,14 +26,28 @@ Page migrations should build from the local Wyrmgate-facing primitives rather th
 - `ConfirmDialog` for deliberate confirmation of materially harmful operations;
 - `Button`, `TextInput`, `SelectInput`, `CheckboxInput`, `Modal` and `SidePanel` for common interaction controls.
 
+`Page` has deliberate `narrow`, `standard` and `wide` content-width modes. Shell chrome owns viewport/navigation spacing; capability pages own only their bounded content width and internal composition. Page implementations must not compensate for navigation width with page-specific offsets.
+
 These primitives are a project-owned compatibility layer. Their public shape should stay driven by Wyrmgate Console needs rather than mirroring every MUI option.
 
 `SemanticWorkspace.tsx` is the project-owned renderer for the repetitive semantic resource pattern used by the control-plane pages. It consumes explicit Wyrmgate resource/action specifications and delegates only presentation controls to `src/ui`; it does not turn those specifications into a generic CRUD domain model or weaken owning-capability semantics.
+
+## Application shell and navigation
+
+`consoleNavigation.ts` is the shared Console route/navigation registry for shell presentation. Its groups are information architecture only; they do not redefine canonical capability ownership.
+
+The shell uses a labeled, collapsible desktop navigation rail. Expanded navigation is the default for discoverability; collapsed navigation remains an operator preference for dense workspaces and uses flyouts where a group has multiple destinations. Tablet/mobile navigation uses a drawer-style rail and must keep every available destination reachable rather than hiding later groups.
+
+Navigation visibility is a convenience optimization over server-derived context, never authorization. Assigned Governance work is deliberately distinct from administrative configuration: Requests/Approvals and Reviews remain discoverable without generic administrative eligibility because approval/reviewer authority may come from immutable Governance assignment. Governance policy/exception administration remains permission-optimized. Operation-time server authorization is always final.
+
+Tenant display remains server-derived. The shell does not invent browser-controlled tenant switching or derive IAM permission from OAuth/OIDC claims. The command palette is an accelerator over the same navigation registry, not a separate source of routes or authority.
 
 ## Migration status
 
 - First-party sign-in uses the project-owned UI boundary and now presents the enterprise Wyrmgate gate visual: a responsive split authentication surface with an animated control-plane topology showing Identity, Tenant, Credential, Access, Governance, Integration and Audit relationships. The animation is presentation-only and honors reduced-motion preferences.
 - The sign-in page continues to use only the accepted server-routed first-party login contract. Tenant remains server-resolved from the registered Console route, password visibility is local presentation state only, and no unsupported password-recovery, remember-me or upstream-SSO action is fabricated by the browser.
+- The application shell now has a labeled collapsible desktop navigation rail, complete mobile navigation, command palette, server-derived context and actor controls. The shared route registry separates assigned work from administrative configuration without changing domain ownership.
+- Base page primitives now expose narrow/standard/wide content widths plus a reusable toolbar so page-specific redesigns can land on a stable shell foundation.
 - **Overview** uses shared page and enterprise surface primitives.
 - **Identities** list/create/detail, canonical-value disclosure and lifecycle/correction actions use shared page, surface, state, table, status and confirmation primitives.
 - Identity deactivation/decommission, merge and split confirmations use the project-owned `ConfirmDialog` rather than browser-native confirmation UI; the underlying semantic commands, ETag and idempotency contracts are unchanged.
@@ -46,4 +61,4 @@ These primitives are a project-owned compatibility layer. Their public shape sho
 - **Audit** records, exports, evidence, legal-hold and purge workspaces use shared Wyrmgate UI primitives; destructive evidence operations remain explicit and confirmed.
 - Browser-native confirmation has been removed from the shared semantic resource renderer; destructive actions use `ConfirmDialog`.
 
-Remaining UI work is primarily shell/common-control consolidation, page-specific refinement, richer validation/accessibility, and replacement of residual legacy CSS where it no longer contributes semantic layout.
+Remaining UI work is page-specific refinement, URL-addressable workspace views, richer validation/accessibility, and removal of residual legacy frame/routing code once the page entry point is migrated onto the shared route registry.
