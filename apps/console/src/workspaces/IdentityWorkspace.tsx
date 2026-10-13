@@ -542,7 +542,7 @@ export function IdentityWorkspace({ selectedId, onSelect }: { selectedId?: strin
       </StatePanel>
 
       <Surface title="Create governed Identity" description="Create a typed governed subject. Tenant, actor and administrative authority remain server-derived.">
-        {createError && <ErrorPanel error={createError} />}
+        {createError ? <ErrorPanel error={createError} /> : null}
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, mt: createError ? 2 : 0 }}>
           <label>
             <Typography component="span" variant="body2" sx={{ display: 'block', mb: 0.5, fontWeight: 700 }}>Identity type</Typography>
