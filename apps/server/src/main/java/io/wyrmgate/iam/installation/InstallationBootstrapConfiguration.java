@@ -89,19 +89,38 @@ public class InstallationBootstrapConfiguration {
                     properties.username(),
                     properties.consoleRedirectUri());
 
+            // A sealed deployment never needs bootstrap secret input again. Check the durable
+            // seal before resolving either source so stale/missing operator configuration cannot
+            // reopen or break a completed installation.
             if (service.isSealed()) {
                 service.run(input, null, Instant.now());
                 return;
             }
 
-            Path passwordPath = Path.of(requireText(properties.passwordFile(), "password-file"));
-            char[] password = readPassword(passwordPath);
+            char[] password = resolvePassword(properties);
             try {
                 service.run(input, password, Instant.now());
             } finally {
                 Arrays.fill(password, '\0');
             }
         };
+    }
+
+    static char[] resolvePassword(InstallationBootstrapProperties properties) throws IOException {
+        boolean hasSecret = properties.password() != null && !properties.password().isEmpty();
+        boolean hasFile = properties.passwordFile() != null && !properties.passwordFile().isBlank();
+        if (hasSecret == hasFile) {
+            throw new IllegalStateException(
+                    "configure exactly one of iam.bootstrap.installation.password or "
+                            + "iam.bootstrap.installation.password-file before installation is sealed");
+        }
+        if (hasSecret) {
+            if (properties.password().length() > MAX_PASSWORD_CHARS) {
+                throw new IllegalStateException("bootstrap password exceeds maximum length");
+            }
+            return properties.password().toCharArray();
+        }
+        return readPassword(Path.of(requireText(properties.passwordFile(), "password-file")));
     }
 
     private static char[] readPassword(Path path) throws IOException {
