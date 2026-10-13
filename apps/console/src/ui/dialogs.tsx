@@ -57,20 +57,9 @@ export function Modal({
       {...props}
       open={open}
       onClose={handleClose}
-      disableEscapeKeyDown={busy || !dismissOnEscape}
       aria-labelledby={title ? titleId : props['aria-labelledby']}
       aria-describedby={description ? descriptionId : props['aria-describedby']}
       aria-busy={busy || undefined}
-      slotProps={{
-        ...props.slotProps,
-        paper: {
-          ...props.slotProps?.paper,
-          sx: [
-            { m: { xs: 2, sm: 4 }, width: { xs: 'calc(100% - 32px)', sm: '100%' }, maxHeight: { xs: 'calc(100% - 32px)', sm: 'calc(100% - 64px)' } },
-            ...(Array.isArray(props.slotProps?.paper?.sx) ? props.slotProps.paper.sx : [props.slotProps?.paper?.sx].filter(Boolean)),
-          ],
-        },
-      }}
     >
       {title ? <DialogTitle id={titleId}>{title}</DialogTitle> : null}
       <DialogContent ref={initialFocusRef} tabIndex={-1} sx={{ p: title ? undefined : 0, outline: 'none' }}>
@@ -122,7 +111,6 @@ export function SidePanel({
       aria-labelledby={title ? titleId : props['aria-labelledby']}
       aria-describedby={description ? descriptionId : props['aria-describedby']}
       aria-busy={busy || undefined}
-      ModalProps={{ ...props.ModalProps, disableEscapeKeyDown: busy || !dismissOnEscape }}
     >
       <Box
         ref={initialFocusRef}
@@ -183,7 +171,6 @@ export function ConfirmDialog({
     <Dialog
       open={open}
       onClose={handleClose}
-      disableEscapeKeyDown={busy || !dismissOnEscape}
       fullWidth
       maxWidth="sm"
       aria-labelledby={titleId}
