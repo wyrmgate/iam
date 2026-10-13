@@ -4,6 +4,9 @@ import test from 'node:test';
 
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const shell = await readFile(new URL('../src/ShellChrome.tsx', import.meta.url), 'utf8');
+const navigation = await readFile(new URL('../src/consoleNavigation.ts', import.meta.url), 'utf8');
+const shellFoundation = await readFile(new URL('../src/shell-foundation.css', import.meta.url), 'utf8');
+const ui = await readFile(new URL('../src/ui/index.tsx', import.meta.url), 'utf8');
 const pages = await readFile(new URL('../src/ControlPlanePages.tsx', import.meta.url), 'utf8');
 const semanticWorkspace = await readFile(new URL('../src/SemanticWorkspace.tsx', import.meta.url), 'utf8');
 const integrationOperations = await readFile(new URL('../src/IntegrationOperationsPage.tsx', import.meta.url), 'utf8');
@@ -24,23 +27,45 @@ const requiredRoutes = [
   '/audit',
 ];
 
-test('job-oriented navigation exposes every operator page', () => {
-  const source = `${app}\n${shell}`;
+test('shared navigation registry exposes every operator page', () => {
   for (const route of requiredRoutes) {
-    assert.match(source, new RegExp(route.replace('/', '\\/')));
+    assert.match(navigation, new RegExp(route.replace('/', '\\/')));
   }
+  assert.match(shell, /consoleNavigation/);
 });
 
-test('application shell uses a dock, command palette, and server-derived context', () => {
+test('application shell uses labeled collapsible navigation, command palette, and server-derived context', () => {
   assert.match(shell, /navigation-dock/);
+  assert.match(shell, /dock-label/);
+  assert.match(shell, /navigationCollapsed/);
+  assert.match(shell, /mobileNavigationOpen/);
   assert.match(shell, /command-palette/);
   assert.match(shell, /context-rail/);
   assert.match(shell, /getCurrentAdministrativeAuthority/);
   assert.match(shell, /getSystemInfo/);
   assert.match(shell, /Server authorization remains final/);
-  assert.match(shell, /provisioning-job/);
-  assert.match(shell, /reconciliation-run/);
+  assert.match(navigation, /provisioning-job/);
+  assert.match(navigation, /reconciliation-run/);
   assert.doesNotMatch(shell, /localStorage|sessionStorage/);
+});
+
+test('assigned governance work remains discoverable without generic administrative eligibility', () => {
+  assert.match(navigation, /path: '\/requests'[\s\S]*visibleWithoutAdministrativeEligibility: true/);
+  assert.match(navigation, /path: '\/reviews'[\s\S]*visibleWithoutAdministrativeEligibility: true/);
+  assert.match(navigation, /path: '\/policies'[\s\S]*resourceTypes:/);
+});
+
+test('mobile navigation exposes all destinations instead of hiding later groups', () => {
+  assert.match(shellFoundation, /navigation-dock\.mobile-open/);
+  assert.match(shellFoundation, /mobile-nav-scrim/);
+  assert.match(shellFoundation, /\.dock-primary \.dock-item:nth-of-type\(n\+6\)[\s\S]*display:\s*grid/);
+});
+
+test('page foundation exposes deliberate width modes and a reusable toolbar', () => {
+  assert.match(ui, /type PageWidth = 'narrow' \| 'standard' \| 'wide'/);
+  assert.match(ui, /data-page-width=\{width\}/);
+  assert.match(ui, /export function PageToolbar/);
+  assert.match(ui, /minWidth:\s*0/);
 });
 
 test('browser client enforces same-origin API routing', () => {
@@ -50,7 +75,7 @@ test('browser client enforces same-origin API routing', () => {
 });
 
 test('console never uses browser storage for tokens, secrets, or authority', () => {
-  const source = `${app}\n${shell}\n${pages}\n${semanticWorkspace}\n${integrationOperations}\n${authorityPage}\n${api}`;
+  const source = `${app}\n${shell}\n${navigation}\n${pages}\n${semanticWorkspace}\n${integrationOperations}\n${authorityPage}\n${api}`;
   assert.doesNotMatch(source, /localStorage|sessionStorage/);
   assert.doesNotMatch(source, /Authorization:\s*['"`]/);
   assert.doesNotMatch(source, /connector-worker\/v1|provisioning-tasks\/.+:claim|lease\/renew/);
@@ -63,7 +88,7 @@ test('server authorization and accepted public surfaces stay explicit', () => {
   assert.match(pages, /CurrentAdministrativeAuthorityPage/);
   assert.match(pages, /IntegrationOperationsPage/);
   assert.match(api, /current-administrative-authority/);
-  assert.match(app, /visibleNavigation\(authority\)/);
+  assert.match(navigation, /visibleConsoleRoutes/);
   assert.match(authorityPage, /operation is re-authorized by the server/);
 });
 
