@@ -5,6 +5,9 @@
 
 .product-shell {
   grid-template-columns: var(--shell-navigation-width) minmax(0, 1fr);
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   transition: grid-template-columns 160ms ease;
@@ -220,18 +223,42 @@
 
 .shell-stage {
   grid-column: 2;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
 }
 
+.shell-topbar,
+.shell-location,
+.shell-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shell-location {
+  flex: 1 1 auto;
+}
+
+.shell-actions {
+  flex: 0 1 auto;
+}
+
 .shell-workspace {
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   min-height: calc(100vh - 68px);
   min-height: calc(100dvh - 68px);
   padding: clamp(24px, 3vw, 48px);
+  overflow-wrap: anywhere;
 }
 
 .product-shell .app-shell {
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
   display: block;
 }
@@ -241,6 +268,9 @@
 }
 
 .product-shell .app-shell > .content {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0;
 }
 
@@ -280,6 +310,7 @@
     inset: 0 auto 0 0;
     z-index: 90;
     width: min(280px, calc(100vw - 44px));
+    max-width: calc(100vw - 44px);
     height: auto;
     flex-direction: column;
     transform: translateX(-102%);
@@ -372,6 +403,7 @@
 
   .shell-topbar {
     min-height: 58px;
+    gap: 10px;
     padding-inline: 12px;
   }
 
@@ -382,10 +414,21 @@
   }
 
   .shell-location {
+    min-width: 0;
+    max-width: 100%;
     gap: 8px;
+    overflow: hidden;
+  }
+
+  .shell-scope {
+    min-width: 0;
+    max-width: 34vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .shell-breadcrumb {
+    min-width: 0;
     max-width: min(46vw, 250px);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -397,6 +440,11 @@
     display: none;
   }
 
+  .shell-actions {
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+
   .shell-workspace {
     min-height: calc(100vh - 58px);
     min-height: calc(100dvh - 58px);
@@ -406,13 +454,23 @@
   .context-rail {
     top: 58px;
     bottom: 0;
+    max-width: calc(100vw - 24px);
+    box-sizing: border-box;
   }
 }
 
 @media (max-width: 480px) {
   .command-trigger { display: none; }
-  .shell-breadcrumb { max-width: 48vw; }
-  .shell-workspace { padding-inline: 12px; }
+  .shell-scope { max-width: 32vw; }
+  .shell-breadcrumb { max-width: 36vw; }
+  .shell-workspace { padding: 18px 12px 32px; }
+}
+
+@media (max-width: 360px) {
+  .shell-topbar { padding-inline: 8px; }
+  .shell-scope { max-width: 28vw; }
+  .shell-breadcrumb { max-width: 28vw; }
+  .shell-workspace { padding-inline: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

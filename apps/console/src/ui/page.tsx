@@ -10,6 +10,22 @@ const pageWidths: Record<PageWidth, string> = {
   wide: '96rem',
 };
 
+const responsiveActionGroup = {
+  minWidth: 0,
+  maxWidth: '100%',
+  width: { xs: '100%', sm: 'auto' },
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 1,
+  '& > *': { minWidth: 0, maxWidth: '100%' },
+  '& .MuiButton-root': {
+    maxWidth: '100%',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
+    textAlign: 'center',
+  },
+} as const;
+
 export function Page({ children, width = 'standard', sx, ...props }: PageProps) {
   return (
     <Box
@@ -17,9 +33,14 @@ export function Page({ children, width = 'standard', sx, ...props }: PageProps) 
       data-page-width={width}
       sx={{
         width: `min(${pageWidths[width]}, 100%)`,
+        maxWidth: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
         mx: 'auto',
         display: 'grid',
         gap: { xs: 2, md: 2.5 },
+        overflowWrap: 'anywhere',
+        '& > *': { minWidth: 0, maxWidth: '100%' },
         ...sx,
       }}
       {...props}
@@ -41,6 +62,8 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
     <Box
       component="header"
       sx={{
+        minWidth: 0,
+        maxWidth: '100%',
         display: 'flex',
         flexDirection: { xs: 'column', md: actions ? 'row' : 'column' },
         justifyContent: 'space-between',
@@ -48,7 +71,7 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
         gap: 2,
       }}
     >
-      <Box sx={{ maxWidth: '64rem', minWidth: 0 }}>
+      <Box sx={{ maxWidth: '64rem', minWidth: 0, overflowWrap: 'anywhere' }}>
         {eyebrow ? (
           <Typography
             component="p"
@@ -58,17 +81,21 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
             {eyebrow}
           </Typography>
         ) : null}
-        <Typography component="h1" variant="h4" sx={{ mt: eyebrow ? 0.25 : 0, mb: description ? 0.75 : 0 }}>
+        <Typography
+          component="h1"
+          variant="h4"
+          sx={{ mt: eyebrow ? 0.25 : 0, mb: description ? 0.75 : 0, overflowWrap: 'anywhere' }}
+        >
           {title}
         </Typography>
         {description ? (
-          <Typography component="p" color="text.secondary" sx={{ lineHeight: 1.65, m: 0 }}>
+          <Typography component="p" color="text.secondary" sx={{ lineHeight: 1.65, m: 0, overflowWrap: 'anywhere' }}>
             {description}
           </Typography>
         ) : null}
       </Box>
       {actions ? (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, flex: '0 0 auto' }}>
+        <Box sx={{ ...responsiveActionGroup, flex: { md: '0 1 auto' } }}>
           {actions}
         </Box>
       ) : null}
@@ -87,6 +114,7 @@ export function PageToolbar({ children, leading, sx, ...props }: PageToolbarProp
       component="section"
       sx={{
         minWidth: 0,
+        maxWidth: '100%',
         display: 'flex',
         flexDirection: { xs: 'column', sm: 'row' },
         alignItems: { xs: 'stretch', sm: 'center' },
@@ -96,8 +124,16 @@ export function PageToolbar({ children, leading, sx, ...props }: PageToolbarProp
       }}
       {...props}
     >
-      {leading ? <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>{leading}</Box> : <span />}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: { sm: 'flex-end' } }}>{children}</Box>
+      {leading ? <Box sx={{ minWidth: 0, maxWidth: '100%', flex: '1 1 auto', overflowWrap: 'anywhere' }}>{leading}</Box> : null}
+      <Box
+        sx={{
+          ...responsiveActionGroup,
+          justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+          flex: { sm: '0 1 auto' },
+        }}
+      >
+        {children}
+      </Box>
     </Box>
   );
 }
@@ -111,10 +147,26 @@ type SurfaceProps = PaperProps & {
 
 export function Surface({ children, title, description, actions, sx, ...props }: SurfaceProps) {
   return (
-    <Paper variant="outlined" sx={{ minWidth: 0, p: { xs: 2, md: 2.5 }, borderColor: 'divider', ...sx }} {...props}>
+    <Paper
+      variant="outlined"
+      sx={{
+        width: '100%',
+        maxWidth: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
+        p: { xs: 2, md: 2.5 },
+        borderColor: 'divider',
+        overflowWrap: 'anywhere',
+        '& > *': { minWidth: 0, maxWidth: '100%' },
+        ...sx,
+      }}
+      {...props}
+    >
       {(title || description || actions) ? (
         <Box
           sx={{
+            minWidth: 0,
+            maxWidth: '100%',
             display: 'flex',
             flexDirection: { xs: 'column', sm: actions ? 'row' : 'column' },
             justifyContent: 'space-between',
@@ -123,15 +175,15 @@ export function Surface({ children, title, description, actions, sx, ...props }:
             mb: 2,
           }}
         >
-          <Box sx={{ minWidth: 0 }}>
-            {title ? <Typography component="h2" variant="h6">{title}</Typography> : null}
-            {description ? <Typography color="text.secondary" variant="body2" sx={{ mt: title ? 0.5 : 0, lineHeight: 1.55 }}>{description}</Typography> : null}
+          <Box sx={{ minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' }}>
+            {title ? <Typography component="h2" variant="h6" sx={{ overflowWrap: 'anywhere' }}>{title}</Typography> : null}
+            {description ? (
+              <Typography color="text.secondary" variant="body2" sx={{ mt: title ? 0.5 : 0, lineHeight: 1.55, overflowWrap: 'anywhere' }}>
+                {description}
+              </Typography>
+            ) : null}
           </Box>
-          {actions ? (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {actions}
-            </Box>
-          ) : null}
+          {actions ? <Box sx={{ ...responsiveActionGroup, flex: { sm: '0 1 auto' } }}>{actions}</Box> : null}
         </Box>
       ) : null}
       {children}
