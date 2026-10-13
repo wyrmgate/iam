@@ -111,15 +111,11 @@ export function SignInGate() {
         </section>
 
         <section className="auth-form-panel auth-form-panel-enterprise">
-          <div className="auth-form-topbar" aria-hidden="true">
-            <span className="auth-language-control"><AuthIcon name="globe" /> English <AuthIcon name="chevron" /></span>
-          </div>
-
           <div className="auth-form-wrap auth-form-wrap-enterprise">
             <header className="auth-form-header-enterprise">
               <p className="auth-form-eyebrow">Sign in</p>
               <h2>Continue to Wyrmgate</h2>
-              <p>Sign in with your organisation credentials.</p>
+              <p>Use your organisation credentials to continue.</p>
             </header>
 
             {error && <Alert severity="error" role="alert" className="auth-error">{error}</Alert>}
@@ -128,7 +124,7 @@ export function SignInGate() {
               <div className="auth-route-field" aria-label="Tenant routing">
                 <span className="auth-route-field-label">Tenant</span>
                 <span className="auth-route-field-value"><AuthIcon name="building" /> Server resolved</span>
-                <span className="auth-route-field-note">Selected from the registered Console client route.</span>
+                <span className="auth-route-field-note">Resolved from this Console route.</span>
               </div>
 
               <TextInput
@@ -173,7 +169,7 @@ export function SignInGate() {
 
               <div className="auth-session-context">
                 <span><AuthIcon name="shield" /> Secure server-managed session</span>
-                <span>Tenant routing is not browser-controlled</span>
+                <span>Tenant routing is resolved by Wyrmgate</span>
               </div>
 
               <Button type="submit" variant="contained" className="auth-submit" disabled={busy || !loginRoute}>
@@ -181,11 +177,6 @@ export function SignInGate() {
                 {!busy && <AuthIcon name="right" />}
               </Button>
             </form>
-
-            <div className="auth-security-card">
-              <AuthIcon name="info" />
-              <p>Tenant routing and administrative authority are resolved by the server. Authentication secrets are not written to browser storage.</p>
-            </div>
           </div>
         </section>
       </main>
