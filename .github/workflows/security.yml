@@ -15,6 +15,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: component-changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      server_dependencies: ${{ steps.classify.outputs.security_server_deps }}
+      console_dependencies: ${{ steps.classify.outputs.security_console_deps }}
+    steps:
+      - name: Checkout history for change classification
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed components
+        id: classify
+        run: bash scripts/ci/component-changes.sh
+
   secrets:
     name: secrets
     runs-on: ubuntu-latest
@@ -52,8 +69,10 @@ jobs:
           exit-code: '1'
           format: table
 
-  dependency-manifests:
-    name: dependency-manifests
+  server-dependencies:
+    name: server-dependencies
+    needs: changes
+    if: needs.changes.outputs.server_dependencies == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -70,6 +89,16 @@ jobs:
 
       - name: Resolve Maven dependency tree
         run: sh ./apps/server/mvnw -f apps/server/pom.xml dependency:tree -DoutputType=text
+
+  console-dependencies:
+    name: console-dependencies
+    needs: changes
+    if: needs.changes.outputs.console_dependencies == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
