@@ -4,7 +4,7 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 @Repository
-public final class JdbcCatalogOperationsOverviewQuery implements CatalogOperationsOverviewQuery {
+public class JdbcCatalogOperationsOverviewQuery implements CatalogOperationsOverviewQuery {
     private final JdbcTemplate jdbc;
     public JdbcCatalogOperationsOverviewQuery(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     @Override public long activeApplications(TenantContext tenant) {

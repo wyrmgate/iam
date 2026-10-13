@@ -11,7 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public final class JdbcAuditOperationsOverviewQuery implements AuditOperationsOverviewQuery {
+public class JdbcAuditOperationsOverviewQuery implements AuditOperationsOverviewQuery {
     private final JdbcTemplate jdbc;
     public JdbcAuditOperationsOverviewQuery(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     @Override

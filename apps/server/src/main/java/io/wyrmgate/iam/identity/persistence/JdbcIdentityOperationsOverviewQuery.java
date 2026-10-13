@@ -4,7 +4,7 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 @Repository
-public final class JdbcIdentityOperationsOverviewQuery implements IdentityOperationsOverviewQuery {
+public class JdbcIdentityOperationsOverviewQuery implements IdentityOperationsOverviewQuery {
     private final JdbcTemplate jdbc;
     public JdbcIdentityOperationsOverviewQuery(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     @Override public long activeIdentities(TenantContext tenant) {

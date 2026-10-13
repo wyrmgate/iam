@@ -14,7 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public final class JdbcIntegrationOperationsOverviewQuery implements IntegrationOperationsOverviewQuery {
+public class JdbcIntegrationOperationsOverviewQuery implements IntegrationOperationsOverviewQuery {
     private final JdbcTemplate jdbc;
 
     public JdbcIntegrationOperationsOverviewQuery(JdbcTemplate jdbc) {

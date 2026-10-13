@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public final class JdbcGovernanceOperationsOverviewQuery implements GovernanceOperationsOverviewQuery {
+public class JdbcGovernanceOperationsOverviewQuery implements GovernanceOperationsOverviewQuery {
     private final JdbcTemplate jdbc;
 
     public JdbcGovernanceOperationsOverviewQuery(JdbcTemplate jdbc) { this.jdbc = jdbc; }
