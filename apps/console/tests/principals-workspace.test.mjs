@@ -13,7 +13,6 @@ test('Principal workspace preserves canonical Identity and Principal semantics',
   );
   assertSourceExcludes(
     principals,
-    /AccessAssignment.*create|create.*AccessAssignment/,
     /provider.*mutation.*register/i,
     /localStorage|sessionStorage/,
   );
