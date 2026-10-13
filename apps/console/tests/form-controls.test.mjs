@@ -32,7 +32,7 @@ test('text and select fields expose read-only and stable label/help relationship
     /wyrmgate-field-/,
     /wyrmgate-select-/,
     /readOnly\?: boolean/,
-    /InputProps=\{\{ \.\.\.InputProps, readOnly \}\}/,
+    /slotProps=\{\{ \.\.\.slotProps, input: \{ readOnly \} \}\}/,
   );
 });
 
