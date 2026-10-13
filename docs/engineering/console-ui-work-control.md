@@ -40,7 +40,7 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 | UI-016 | #344 | DONE | issue #344 agent | `feat/ui-responsive-foundation` | Wave-2 baseline `a9018533` | UI-011 / UI-021 | Responsive foundation lock RELEASED | UI-012 through UI-015, UI-017 | Route/navigation meaning, capability layouts, token redesign | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
 | UI-017 | #345 | DONE | issue #345 agent | `feat/ui-tabs-foundation` | Wave-2 baseline `a9018533` | UI-011 / Wave 1 | Tabs primitive lock RELEASED | UI-012 through UI-016 | URL routing/view semantics, capability tab content | Wave-2 task PR | Integrated in Wave 2; promotion #354 verified at `3606b858c732594708ea65120567c70c409a3ecd` |
 | UI-018 | #346 | DONE | issue #346 agent | `test/ui-accessibility-baseline` | exact reviewed `main` at `3606b858c732594708ea65120567c70c409a3ecd` | UI-012 through UI-017 DONE | Accessibility lock RELEASED after merge | Capability fan-out may proceed subject to its own ownership/locks | IAM/domain/API/auth/routing semantics, new workflows, unrelated visual redesign | #355 | PR gates Core/Security/Container/DEV all green on tree `9b392e84`; squash-merged to `main` as `fa7882354086e38d3a1ad899c93304c48963b58a` with the identical tree; issue #346 closed completed |
-| UI-019 | #357 | IN_REVIEW | issue #357 agent | `refactor/ui-capability-page-decomposition` | exact `main` at `c996a4ffc6573d52ecf9dd850f67ae8b25345685` | UI-018 DONE / Wave 4 structural preparation | `App.tsx` composition and capability-workspace decomposition lock ACTIVE until PR merge/close | Documentation and unrelated server work; later capability tasks after rebase on merged structure | IAM/domain/API/auth/routing semantics, shared primitive contracts, visual redesign, capability feature behavior | #358 | PR #358 open directly to `main`; local workspace-boundary source-contract test 4/4 and TypeScript syntax validation passed; full PR gates remain authoritative |
+| UI-019 | #357 | DONE | issue #357 agent | `refactor/ui-capability-page-decomposition` | exact `main` at `c996a4ffc6573d52ecf9dd850f67ae8b25345685` | UI-018 DONE / Wave 4 structural preparation | `App.tsx` composition and capability-workspace decomposition lock RELEASED | Capability fan-out may proceed from merged `main` ownership surfaces | IAM/domain/API/auth/routing semantics, shared primitive contracts, visual redesign, capability feature behavior | #358 | Core/Security/Container/DEV gates all green on tree `909eaa8f`; squash-merged to `main` as `2bdb72ff33fcf2f15e8236192d3204a8f5db7b2a` with the identical tree; issue #357 closed completed |
 
 ## Current phase
 
@@ -48,7 +48,7 @@ Wave 0 and Wave 1 are complete. Wave 2 is **DONE / VERIFIED**: UI-012 through UI
 
 UI-018 / #346 is **DONE / VERIFIED**. PR #355 established the serialized Wave-3 accessibility baseline and was squash-merged to `main` as `fa7882354086e38d3a1ad899c93304c48963b58a`. The merged commit has the same Git tree (`9b392e843d37de512236795642c2feab8bcdfc25`) as the PR head that passed Core CI, Security CI, Container CI and DEV Deployment Contract. The serialized accessibility lock is released.
 
-UI-019 / #357 is **IN REVIEW** through PR #358 as the serialized Wave-4 structural preparation. It is limited to moving the existing capability workspace implementations out of `App.tsx` / `ControlPlanePages.tsx`, retaining existing route, API/auth/domain, accessibility and shared-primitive behavior. Capability feature fan-out should rebase onto the merged UI-019 ownership layout rather than independently re-splitting the same files.
+UI-019 / #357 is **DONE / VERIFIED**. PR #358 passed Core CI, Security CI, Container CI and DEV Deployment Contract on reviewed tree `909eaa8f0c360259b40e5a91709e02206b6bc687`, then squash-merged to `main` as `2bdb72ff33fcf2f15e8236192d3204a8f5db7b2a` with that identical tree. The structural decomposition lock is released; Wave-4 capability feature branches should start from or rebase onto this merged `main` baseline rather than re-splitting the same ownership surfaces.
 
 ## Shared-foundation acceptance history
 
@@ -84,7 +84,7 @@ DONE / VERIFIED: UI-018 / #346 was implemented on `test/ui-accessibility-baselin
 
 ### Wave 4 — capability workspace fan-out
 
-UI-019 / #357 is the serialized structural handoff that establishes stable implementation ownership surfaces before capability feature tasks fan out. The decomposition is an implementation coordination boundary only; canonical capability and Principal ownership do not change.
+UI-019 / #357 is DONE / VERIFIED and establishes the stable implementation ownership surfaces for capability feature fan-out. The decomposition is an implementation coordination boundary only; canonical capability and Principal ownership do not change. New Wave-4 capability branches should use merged `main` at or after `2bdb72ff33fcf2f15e8236192d3204a8f5db7b2a` as their baseline.
 
 | Wave-4 ownership surface | Console route(s) | Implementation file after UI-019 | Semantic ownership note |
 | --- | --- | --- | --- |
@@ -113,7 +113,7 @@ Use this section for temporary locks. Add the task/issue, exact surface, reason 
 | `src/ui/WyrmgateUiProvider.tsx` global theme/token behavior | UI-011 / #328 | RELEASED | Token baseline merged; UI-018 accessibility-only focus repair completed through #355 |
 | Wave-2 primitive modules (`table.tsx`, `forms.tsx`, `state.tsx`, `dialogs.tsx`, responsive foundation, `tabs.tsx`) | UI-012 through UI-017 | RELEASED | Wave 2 promoted and verified through #354 at `3606b858...` |
 | Cross-cutting accessibility surfaces: converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | UI-018 / #346 | RELEASED | PR #355 merged to `main` as `fa788235...`; exact merged tree passed the release-quality PR gates |
-| `App.tsx` structural composition, legacy `ControlPlanePages.tsx`, and new `src/workspaces/*` ownership layout | UI-019 / #357 | ACTIVE | Structural-only decomposition; release when PR #358 merges/closes after parity checks and required gates |
+| `App.tsx` structural composition, legacy `ControlPlanePages.tsx`, and new `src/workspaces/*` ownership layout | UI-019 / #357 | RELEASED | PR #358 passed all four release-quality gates and squash-merged to `main` as `2bdb72ff...` with the identical reviewed tree |
 
 ## PR and integration checklist
 
