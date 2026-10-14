@@ -3,11 +3,10 @@ import {
   ApiError,
   apiRequest,
   getIdentity,
-  listIdentities,
   transitionIdentity,
   V1_ROOT,
+  type CurrentAdministrativeAuthority,
   type IdentityLifecycleAction,
-  type IdentityPage,
   type IdentityResource,
 } from '../api';
 import { navigateConsole } from '../consoleNavigation';
@@ -16,33 +15,19 @@ import {
   Button,
   ConfirmDialog,
   Modal,
-  Page,
-  SelectInput,
   StatePanel,
   StatusChip,
   Tab,
   TabPanel,
   Tabs,
   TextInput,
-  Typography,
   getTabA11yProps,
 } from '../ui';
-import '../identity-workspace.css';
+import '../identity-detail-golden.css';
 
-type LoadState<T> =
-  | { status: 'loading' }
-  | { status: 'ready'; value: T }
-  | { status: 'error'; error: unknown };
-
-type IdentityConfirmation =
-  | { kind: 'lifecycle'; action: IdentityLifecycleAction }
-  | { kind: 'merge' }
-  | { kind: 'split' }
-  | null;
-
-type IdentityDetailView = 'overview' | 'profile' | 'principals' | 'access' | 'governance' | 'evidence';
-type CorrectionMode = 'merge' | 'split';
-
+type DetailView = 'overview' | 'profile' | 'principals' | 'access' | 'governance' | 'evidence';
+type LoadState<T> = { status: 'idle' | 'loading' } | { status: 'ready'; value: T } | { status: 'error'; error: unknown };
+type Page<T> = { items: T[]; nextCursor?: string | null };
 type CanonicalValue =
   | { type: 'STRING'; value: string }
   | { type: 'BOOLEAN'; value: boolean }
@@ -51,45 +36,76 @@ type CanonicalValue =
   | { type: 'DATE'; value: string }
   | { type: 'DATETIME'; value: string }
   | { type: 'ENUM'; key: string };
-
-type CanonicalAttributeView = {
-  definitionId: string;
-  key: string;
-  classification: string;
-  type: string;
-  cardinality: string;
-  resolutionStatus: string;
-  valueRevision: number;
-  visibility: 'VALUE' | 'REDACTED';
-  hasTrustedValue: boolean;
-  values?: CanonicalValue[];
+type CanonicalAttribute = {
+  definitionId: string; key: string; classification: string; type: string; cardinality: string;
+  resolutionStatus: string; valueRevision: number; visibility: 'VALUE' | 'REDACTED';
+  hasTrustedValue: boolean; values?: CanonicalValue[];
 };
+type PrincipalResource = {
+  id: string; identityId?: string | null; applicationTargetId: string; kind: string;
+  nativePrincipalKey: string; lifecycleState: string; revision: number; createdAt: string; updatedAt: string;
+};
+type AssignmentResource = {
+  id: string; identityId: string; targetKind: 'ROLE' | 'ENTITLEMENT'; roleId?: string | null; entitlementId?: string | null;
+  principalConstraintKind: string; specificPrincipalId?: string | null; provenanceKind: string; provenanceRefId?: string | null;
+  lifecycleState: string; validFrom?: string | null; validUntil?: string | null; revision: number; createdAt: string; updatedAt: string;
+};
+type EffectiveAccess = {
+  id: string; identityId: string; entitlementId: string; principalConstraintKey: string;
+  supportCount: number; computedAt: string; projectionGeneration: number;
+};
+type ReviewCampaign = {
+  id: string; kind: string; subjectIdentityId: string; reviewerIdentityId: string; snapshotAt: string;
+  state: string; generatedItemCount: number; decidedItemCount: number; revision: number; createdAt: string;
+  updatedAt: string; activatedAt?: string | null; completedAt?: string | null; failureCode?: string | null;
+};
+type GovernanceException = {
+  id: string; scopeKind: string; subjectIdentityId: string; sodRuleId: string; requesterIdentityId: string;
+  businessReason: string; validFrom: string; validUntil: string; lifecycleState: string; approvalCaseId: string;
+  revision: number; createdAt: string; updatedAt: string;
+};
+type AuditRecord = {
+  id: string; occurredAt: string; recordedAt: string; actorId?: string | null; actionType: string;
+  resourceType: string; resourceId?: string | null; outcome: string; correlationId?: string | null; causationId?: string | null;
+};
+type Confirmation = { kind: 'lifecycle'; action: IdentityLifecycleAction } | { kind: 'merge' } | { kind: 'split' } | null;
 
-function formatError(error: unknown): { title: string; detail: string } {
+function formatDateTime(value?: string | null): string {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function shortId(value?: string | null): string {
+  if (!value) return '—';
+  return value.length <= 20 ? value : `${value.slice(0, 10)}…${value.slice(-6)}`;
+}
+function canonicalValue(attribute: CanonicalAttribute): string {
+  if (attribute.visibility === 'REDACTED') return 'Redacted by classification authority';
+  if (!attribute.hasTrustedValue || !attribute.values?.length) return 'No readable trusted value';
+  return attribute.values.map((value) => value.type === 'ENUM' ? value.key : value.type === 'BOOLEAN' ? (value.value ? 'true' : 'false') : String(value.value)).join(', ');
+}
+function tone(value: string): 'success' | 'warning' | 'default' | 'info' | 'error' {
+  if (['ACTIVE', 'APPROVED', 'COMPLETED', 'RESOLVED', 'SUCCESS'].includes(value)) return 'success';
+  if (['PENDING', 'DRAFT', 'GENERATING', 'IN_PROGRESS', 'OVERRIDDEN', 'INFO'].includes(value)) return 'info';
+  if (['SUSPENDED', 'UNRESOLVED', 'PENDING_APPROVAL'].includes(value)) return 'warning';
+  if (['DECOMMISSIONED', 'CONFLICT', 'FAILURE', 'DENIED', 'REJECTED'].includes(value)) return 'error';
+  return 'default';
+}
+function errorCopy(error: unknown): { title: string; detail: string } {
   if (error instanceof ApiError) {
     if (error.status === 401) return { title: 'Authentication required', detail: 'Your authenticated control-plane session is required.' };
-    if (error.status === 403) return { title: 'Not authorized', detail: 'The server denied this operation for your current administrative authority.' };
-    if (error.status === 404) return { title: 'Identity not found', detail: 'The requested governed Identity is no longer available at this location.' };
-    if (error.status === 409) return { title: 'Conflict', detail: 'The requested change conflicts with current authoritative state. Refresh and review before retrying.' };
-    if (error.status === 412) return { title: 'Resource changed', detail: 'This resource has a newer revision. Refresh it before making another change.' };
+    if (error.status === 403) return { title: 'Not authorized', detail: 'Your current administrative authority does not permit this read or operation.' };
+    if (error.status === 404) return { title: 'Not found', detail: 'The requested governed resource is not available.' };
+    if (error.status === 412) return { title: 'Resource changed', detail: 'A newer authoritative revision exists. Refresh before retrying.' };
     return { title: `Request failed (${error.status})`, detail: error.message };
   }
-  return { title: 'Unable to reach Wyrmgate', detail: 'The request could not be completed. Retry after checking connectivity.' };
+  return { title: 'Unable to reach Wyrmgate', detail: 'The request could not be completed.' };
 }
-
-function ErrorPanel({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
-  const copy = formatError(error);
-  return (
-    <StatePanel
-      state="error"
-      title={copy.title}
-      action={onRetry ? <Button variant="outlined" size="small" onClick={onRetry}>Refresh</Button> : undefined}
-    >
-      {copy.detail}
-    </StatePanel>
-  );
+function ErrorPanel({ error, retry }: { error: unknown; retry?: () => void }) {
+  const copy = errorCopy(error);
+  return <StatePanel state="error" title={copy.title} action={retry ? <Button variant="outlined" size="small" onClick={retry}>Retry</Button> : undefined}>{copy.detail}</StatePanel>;
 }
-
 function lifecycleActions(identity: IdentityResource): IdentityLifecycleAction[] {
   switch (identity.lifecycleState) {
     case 'PENDING': return ['activate', 'deactivate', 'decommission'];
@@ -99,793 +115,328 @@ function lifecycleActions(identity: IdentityResource): IdentityLifecycleAction[]
     case 'DECOMMISSIONED': return [];
   }
 }
-
-function lifecycleChipColor(state: IdentityResource['lifecycleState']): 'success' | 'warning' | 'default' | 'info' | 'error' {
-  if (state === 'ACTIVE') return 'success';
-  if (state === 'SUSPENDED') return 'warning';
-  if (state === 'PENDING') return 'info';
-  if (state === 'DECOMMISSIONED') return 'error';
-  return 'default';
-}
-
-function resolutionChipColor(state: string): 'success' | 'warning' | 'default' | 'info' | 'error' {
-  if (state === 'RESOLVED') return 'success';
-  if (state === 'OVERRIDDEN') return 'info';
-  if (state === 'CONFLICT') return 'error';
-  if (state === 'UNRESOLVED') return 'warning';
-  return 'default';
-}
-
-function confirmationCopy(confirmation: IdentityConfirmation, identityName: string) {
+function confirmationCopy(confirmation: Confirmation, name: string) {
   if (!confirmation) return { title: '', body: '', label: 'Confirm' };
-  if (confirmation.kind === 'merge') {
-    return {
-      title: 'Merge governed Identities?',
-      body: 'The current Identity remains the survivor. The absorbed Identity is permanently decommissioned, and only current Identity-owned source links and Principals move. AccessAssignments, Governance authority and other foreign-capability state do not move implicitly.',
-      label: 'Merge Identity',
-    };
-  }
-  if (confirmation.kind === 'split') {
-    return {
-      title: 'Split governed Identity?',
-      body: 'A new same-type PENDING Identity is created. Only explicitly selected current source records and Principals move. A split never copies access or governance authority.',
-      label: 'Split Identity',
-    };
-  }
-  if (confirmation.action === 'decommission') {
-    return {
-      title: 'Decommission Identity?',
-      body: `Decommissioning ${identityName} is terminal. It ends governed-subject eligibility but does not synchronously delete Principals, Credentials, provider accounts or historical evidence.`,
-      label: 'Decommission',
-    };
-  }
-  if (confirmation.action === 'suspend') {
-    return {
-      title: `Suspend ${identityName} and reduce access?`,
-      body: 'Suspension makes this Identity access-ineligible immediately. Semantic EffectiveAccess becomes absent and Access begins durable reduction of non-terminal AccessAssignments. Reactivation does not restore assignments already terminated, and provider removal remains asynchronous.',
-      label: 'Suspend and reduce access',
-    };
-  }
-  if (confirmation.action === 'activate') {
-    return {
-      title: `Activate ${identityName}?`,
-      body: 'Activation makes this governed Identity access-eligible. It does not resurrect terminated AccessAssignments; any new lifecycle-driven access still requires current governed evaluation.',
-      label: 'Activate Identity',
-    };
-  }
-  return {
-    title: `Deactivate ${identityName} and reduce access?`,
-    body: 'Deactivation changes the governed Identity to INACTIVE. If currently ACTIVE, semantic access eligibility ends immediately and Access reduction proceeds asynchronously. Provider realization remains separate.',
-    label: 'Deactivate Identity',
+  if (confirmation.kind === 'merge') return {
+    title: 'Merge governed Identities?',
+    body: 'The current Identity remains the survivor. Only current Identity-owned source links and Principals move. AccessAssignments, Governance authority and other foreign-capability state do not move implicitly.',
+    label: 'Merge Identity',
   };
+  if (confirmation.kind === 'split') return {
+    title: 'Split governed Identity?',
+    body: 'A new same-type PENDING Identity is created. Only explicitly selected current source links and Principals move; access and governance authority are never copied.',
+    label: 'Split Identity',
+  };
+  if (confirmation.action === 'activate') return { title: `Activate ${name}?`, body: 'Activation makes this Identity access-eligible. It does not resurrect terminated AccessAssignments.', label: 'Activate Identity' };
+  if (confirmation.action === 'suspend') return { title: `Suspend ${name} and reduce access?`, body: 'Suspension makes this Identity access-ineligible immediately. EffectiveAccess contributes no authority and Access begins durable assignment reduction; provider realization remains asynchronous.', label: 'Suspend and reduce access' };
+  if (confirmation.action === 'decommission') return { title: `Decommission ${name}?`, body: 'DECOMMISSIONED is terminal. Historical evidence and stable technical references remain; this does not synchronously delete provider accounts or credentials.', label: 'Decommission' };
+  return { title: `Deactivate ${name} and reduce access?`, body: 'INACTIVE is access-ineligible. Access reduction proceeds asynchronously and provider observation remains separate.', label: 'Deactivate Identity' };
 }
 
-function formatCanonicalValue(value: CanonicalValue): string {
-  if (value.type === 'ENUM') return value.key;
-  if (value.type === 'BOOLEAN') return value.value ? 'true' : 'false';
-  return String(value.value);
-}
-
-function canonicalValueCopy(attribute: CanonicalAttributeView): string {
-  if (attribute.visibility === 'REDACTED') return 'Redacted by classification authority';
-  if (!attribute.hasTrustedValue || !attribute.values?.length) return 'No readable trusted value';
-  return attribute.values.map(formatCanonicalValue).join(', ');
-}
-
-function formatDateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString([], {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function shortId(value: string): string {
-  if (value.length <= 16) return value;
-  return `${value.slice(0, 8)}…${value.slice(-6)}`;
-}
-
-function UnsupportedSubjectView({
-  title,
-  detail,
-  actionLabel,
-  path,
-}: {
-  title: string;
-  detail: string;
-  actionLabel: string;
-  path: string;
-}) {
-  return (
-    <div className="identity-section-state">
-      <strong>{title}</strong>
-      <span>{detail}</span>
-      <div className="identity-section-state-actions">
-        <Button variant="outlined" onClick={() => navigateConsole(path)}>{actionLabel}</Button>
-      </div>
-    </div>
-  );
-}
-
-function IdentityDetail({ identityId, onBack }: { identityId: string; onBack: () => void }) {
-  const [reloadKey, setReloadKey] = useState(0);
-  const [view, setView] = useState<IdentityDetailView>('overview');
-  const [state, setState] = useState<LoadState<{ identity: IdentityResource; etag: string }>>({ status: 'loading' });
-  const [canonicalState, setCanonicalState] = useState<LoadState<CanonicalAttributeView[]>>({ status: 'loading' });
-  const [mutationError, setMutationError] = useState<unknown>(null);
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<IdentityConfirmation>(null);
-  const [editOpen, setEditOpen] = useState(false);
-  const [correctionOpen, setCorrectionOpen] = useState(false);
-  const [correctionMode, setCorrectionMode] = useState<CorrectionMode>('merge');
-  const [displayName, setDisplayName] = useState('');
-  const [mergeValues, setMergeValues] = useState({ absorbedIdentityId: '', reason: '' });
-  const [mergeTarget, setMergeTarget] = useState<LoadState<IdentityResource> | null>(null);
-  const [splitValues, setSplitValues] = useState({ newDisplayName: '', sourceRecordIds: '', principalIds: '', reason: '' });
-
+function usePagedResource<T>(path: string | null, trigger: number) {
+  const [state, setState] = useState<LoadState<Page<T>>>({ status: 'idle' });
   useEffect(() => {
+    if (!path) return;
     const controller = new AbortController();
     setState({ status: 'loading' });
-    getIdentity(identityId, controller.signal)
-      .then(({ data, etag }) => {
-        if (!etag) throw new Error('Identity response did not include the required ETag');
-        setDisplayName(data.displayName);
-        setState({ status: 'ready', value: { identity: data, etag } });
-      })
+    apiRequest<Page<T>>(path, { signal: controller.signal })
+      .then(({ data }) => setState({ status: 'ready', value: data }))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return;
         setState({ status: 'error', error });
       });
     return () => controller.abort();
-  }, [identityId, reloadKey]);
+  }, [path, trigger]);
+  async function loadMore(basePath: string) {
+    if (state.status !== 'ready' || !state.value.nextCursor) return;
+    const separator = basePath.includes('?') ? '&' : '?';
+    const { data } = await apiRequest<Page<T>>(`${basePath}${separator}cursor=${encodeURIComponent(state.value.nextCursor)}`);
+    setState({ status: 'ready', value: { items: [...state.value.items, ...data.items], nextCursor: data.nextCursor } });
+  }
+  return { state, setState, loadMore };
+}
+
+function PagedTableState({ state, empty, retry }: { state: LoadState<Page<unknown>>; empty: string; retry: () => void }) {
+  if (state.status === 'loading' || state.status === 'idle') return <StatePanel state="loading" title="Loading">Reading the latest server-authorized view…</StatePanel>;
+  if (state.status === 'error') return <ErrorPanel error={state.error} retry={retry} />;
+  if (state.value.items.length === 0) return <StatePanel state="empty" title={empty}>No records are visible for this governed Identity.</StatePanel>;
+  return null;
+}
+
+export function IdentityWorkspace({
+  selectedId,
+  onSelect,
+  authority = null,
+}: {
+  selectedId?: string;
+  onSelect: (id?: string) => void;
+  authority?: CurrentAdministrativeAuthority | null;
+}) {
+  const identityId = selectedId ?? '';
+  const initialView = (() => {
+    const value = new URLSearchParams(window.location.search).get('view');
+    return (['overview', 'profile', 'principals', 'access', 'governance', 'evidence'] as DetailView[]).includes(value as DetailView)
+      ? value as DetailView : 'overview';
+  })();
+  const [view, setView] = useState<DetailView>(initialView);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [identityState, setIdentityState] = useState<LoadState<{ identity: IdentityResource; etag: string }>>({ status: 'loading' });
+  const [mutationError, setMutationError] = useState<unknown>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [correctionMode, setCorrectionMode] = useState<'merge' | 'split'>('merge');
+  const [mergeValues, setMergeValues] = useState({ absorbedIdentityId: '', reason: '' });
+  const [mergeTarget, setMergeTarget] = useState<LoadState<IdentityResource> | null>(null);
+  const [splitValues, setSplitValues] = useState({ newDisplayName: '', sourceRecordIds: '', principalIds: '', reason: '' });
+
+  const profile = usePagedResource<CanonicalAttribute>(view === 'profile' ? `${V1_ROOT}/identities/${encodeURIComponent(identityId)}/canonical-attributes?limit=50` : null, reloadKey);
+  const principals = usePagedResource<PrincipalResource>(view === 'principals' ? `${V1_ROOT}/principals?identityId=${encodeURIComponent(identityId)}&limit=50` : null, reloadKey);
+  const assignments = usePagedResource<AssignmentResource>(view === 'access' ? `${V1_ROOT}/identities/${encodeURIComponent(identityId)}/access-assignments?limit=50` : null, reloadKey);
+  const effective = usePagedResource<EffectiveAccess>(view === 'access' ? `${V1_ROOT}/effective-access?identityId=${encodeURIComponent(identityId)}&limit=50` : null, reloadKey);
+  const campaigns = usePagedResource<ReviewCampaign>(view === 'governance' ? `${V1_ROOT}/governance/subjects/${encodeURIComponent(identityId)}/review-campaigns?limit=50` : null, reloadKey);
+  const exceptions = usePagedResource<GovernanceException>(view === 'governance' ? `${V1_ROOT}/governance/subjects/${encodeURIComponent(identityId)}/exceptions?limit=50` : null, reloadKey);
+  const evidence = usePagedResource<AuditRecord>(view === 'evidence' ? `${V1_ROOT}/audit-records?resourceType=identity&resourceId=${encodeURIComponent(identityId)}&limit=50` : null, reloadKey);
 
   useEffect(() => {
     const controller = new AbortController();
-    setCanonicalState({ status: 'loading' });
-    apiRequest<{ items: CanonicalAttributeView[] }>(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}/canonical-attributes?limit=50`, { signal: controller.signal })
-      .then(({ data }) => setCanonicalState({ status: 'ready', value: data.items }))
+    setIdentityState({ status: 'loading' });
+    getIdentity(identityId, controller.signal)
+      .then(({ data, etag }) => {
+        if (!etag) throw new Error('Identity response did not include the required ETag');
+        setDisplayName(data.displayName);
+        setIdentityState({ status: 'ready', value: { identity: data, etag } });
+      })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return;
-        setCanonicalState({ status: 'error', error });
+        setIdentityState({ status: 'error', error });
       });
     return () => controller.abort();
   }, [identityId, reloadKey]);
 
-  async function executeLifecycleAction(action: IdentityLifecycleAction) {
-    if (state.status !== 'ready') return;
-    setPendingAction(action);
-    setMutationError(null);
-    try {
-      const result = await transitionIdentity(identityId, action, state.value.etag);
-      if (!result.etag) throw new Error('Mutation response did not include the required ETag');
-      setState({ status: 'ready', value: { identity: result.data, etag: result.etag } });
-    } catch (error) {
-      setMutationError(error);
-    } finally {
-      setPendingAction(null);
-      setConfirmation(null);
-    }
+  function changeView(next: DetailView) {
+    setView(next);
+    const url = new URL(window.location.href);
+    if (next === 'overview') url.searchParams.delete('view'); else url.searchParams.set('view', next);
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`);
   }
 
-  function requestLifecycleAction(action: IdentityLifecycleAction) {
-    setConfirmation({ kind: 'lifecycle', action });
+  async function executeLifecycle(action: IdentityLifecycleAction) {
+    if (identityState.status !== 'ready') return;
+    setPendingAction(action); setMutationError(null);
+    try {
+      const result = await transitionIdentity(identityId, action, identityState.value.etag);
+      if (!result.etag) throw new Error('Identity mutation did not return ETag');
+      setIdentityState({ status: 'ready', value: { identity: result.data, etag: result.etag } });
+    } catch (error) { setMutationError(error); }
+    finally { setPendingAction(null); setConfirmation(null); }
   }
 
   async function updateName() {
-    if (state.status !== 'ready') return;
-    setPendingAction('rename');
-    setMutationError(null);
+    if (identityState.status !== 'ready') return;
+    setPendingAction('rename'); setMutationError(null);
     try {
       const result = await apiRequest<IdentityResource>(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}`, {
-        method: 'PATCH',
-        etag: state.value.etag,
-        idempotent: true,
-        body: { displayName },
+        method: 'PATCH', etag: identityState.value.etag, idempotent: true, body: { displayName: displayName.trim() },
       });
       if (!result.etag) throw new Error('Identity update did not return ETag');
-      setState({ status: 'ready', value: { identity: result.data, etag: result.etag } });
+      setIdentityState({ status: 'ready', value: { identity: result.data, etag: result.etag } });
       setEditOpen(false);
-    } catch (error) {
-      setMutationError(error);
-    } finally {
-      setPendingAction(null);
-    }
+    } catch (error) { setMutationError(error); }
+    finally { setPendingAction(null); }
   }
 
   async function loadMergeTarget() {
     const targetId = mergeValues.absorbedIdentityId.trim();
     if (!targetId) return;
     setMergeTarget({ status: 'loading' });
-    try {
-      const result = await getIdentity(targetId);
-      setMergeTarget({ status: 'ready', value: result.data });
-    } catch (error) {
-      setMergeTarget({ status: 'error', error });
-    }
+    try { setMergeTarget({ status: 'ready', value: (await getIdentity(targetId)).data }); }
+    catch (error) { setMergeTarget({ status: 'error', error }); }
   }
 
   async function executeMerge() {
-    if (state.status !== 'ready' || mergeTarget?.status !== 'ready') return;
-    setPendingAction('merge');
-    setMutationError(null);
+    if (identityState.status !== 'ready' || mergeTarget?.status !== 'ready') return;
+    setPendingAction('merge'); setMutationError(null);
     try {
       await apiRequest(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}:merge`, {
-        method: 'POST',
-        etag: state.value.etag,
-        idempotent: true,
-        body: {
-          absorbedIdentityId: mergeTarget.value.id,
-          absorbedRevision: mergeTarget.value.revision,
-          reason: mergeValues.reason,
-        },
+        method: 'POST', etag: identityState.value.etag, idempotent: true,
+        body: { absorbedIdentityId: mergeTarget.value.id, absorbedRevision: mergeTarget.value.revision, reason: mergeValues.reason.trim() },
       });
-      setCorrectionOpen(false);
-      setMergeTarget(null);
-      setMergeValues({ absorbedIdentityId: '', reason: '' });
-      setReloadKey((value) => value + 1);
-    } catch (error) {
-      setMutationError(error);
-    } finally {
-      setPendingAction(null);
-      setConfirmation(null);
-    }
+      setMoreOpen(false); setMergeTarget(null); setMergeValues({ absorbedIdentityId: '', reason: '' }); setReloadKey((value) => value + 1);
+    } catch (error) { setMutationError(error); }
+    finally { setPendingAction(null); setConfirmation(null); }
   }
 
   async function executeSplit() {
-    if (state.status !== 'ready') return;
-    setPendingAction('split');
-    setMutationError(null);
+    if (identityState.status !== 'ready') return;
+    setPendingAction('split'); setMutationError(null);
     try {
       await apiRequest(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}:split`, {
-        method: 'POST',
-        etag: state.value.etag,
-        idempotent: true,
+        method: 'POST', etag: identityState.value.etag, idempotent: true,
         body: {
-          newDisplayName: splitValues.newDisplayName,
-          sourceRecordIds: splitValues.sourceRecordIds.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
-          principalIds: splitValues.principalIds.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
-          reason: splitValues.reason,
+          newDisplayName: splitValues.newDisplayName.trim(),
+          sourceRecordIds: splitValues.sourceRecordIds.split(/[\n,]/).map((v) => v.trim()).filter(Boolean),
+          principalIds: splitValues.principalIds.split(/[\n,]/).map((v) => v.trim()).filter(Boolean),
+          reason: splitValues.reason.trim(),
         },
       });
-      setCorrectionOpen(false);
-      setSplitValues({ newDisplayName: '', sourceRecordIds: '', principalIds: '', reason: '' });
-      setReloadKey((value) => value + 1);
-    } catch (error) {
-      setMutationError(error);
-    } finally {
-      setPendingAction(null);
-      setConfirmation(null);
-    }
+      setMoreOpen(false); setSplitValues({ newDisplayName: '', sourceRecordIds: '', principalIds: '', reason: '' }); setReloadKey((value) => value + 1);
+    } catch (error) { setMutationError(error); }
+    finally { setPendingAction(null); setConfirmation(null); }
   }
 
-  async function confirmAction() {
-    if (!confirmation) return;
-    if (confirmation.kind === 'lifecycle') {
-      await executeLifecycleAction(confirmation.action);
-      return;
-    }
-    if (confirmation.kind === 'merge') {
-      await executeMerge();
-      return;
-    }
-    await executeSplit();
+  if (identityState.status === 'loading' || identityState.status === 'idle') {
+    return <div className="identity360-page"><StatePanel state="loading" title="Loading governed Identity">Reading the latest authoritative revision…</StatePanel></div>;
+  }
+  if (identityState.status === 'error') {
+    return <div className="identity360-page"><button className="identity360-back" onClick={() => onSelect()}>← Identities</button><ErrorPanel error={identityState.error} retry={() => setReloadKey((v) => v + 1)} /></div>;
   }
 
-  const currentIdentity = state.status === 'ready' ? state.value.identity : null;
-  const confirmCopy = confirmationCopy(confirmation, currentIdentity?.displayName ?? 'this Identity');
-  const splitSelectionPresent = splitValues.sourceRecordIds.split(/[\n,]/).some((value) => value.trim())
-    || splitValues.principalIds.split(/[\n,]/).some((value) => value.trim());
-  const mergeTargetMatches = mergeTarget?.status === 'ready' && mergeTarget.value.id === mergeValues.absorbedIdentityId.trim();
-
-  if (state.status === 'loading') {
-    return <Page width="wide"><div className="identity-workbench"><StatePanel state="loading" title="Loading governed Identity">Reading the latest authoritative Identity revision…</StatePanel></div></Page>;
-  }
-  if (state.status === 'error') {
-    return <Page width="wide"><div className="identity-workbench"><button className="identity-detail-back" type="button" onClick={onBack}>← Identities</button><ErrorPanel error={state.error} onRetry={() => setReloadKey((value) => value + 1)} /></div></Page>;
-  }
-
-  const identity = state.value.identity;
+  const identity = identityState.value.identity;
   const eligible = identity.lifecycleState === 'ACTIVE';
   const actions = lifecycleActions(identity);
+  const confirm = confirmationCopy(confirmation, identity.displayName);
+  const splitHasSelection = splitValues.sourceRecordIds.split(/[\n,]/).some((v) => v.trim()) || splitValues.principalIds.split(/[\n,]/).some((v) => v.trim());
+  const principalSummary = principals.state.status === 'ready' ? principals.state.value.items : [];
+  const principalActive = principalSummary.filter((p) => p.lifecycleState === 'ACTIVE').length;
+  const principalDisabled = principalSummary.filter((p) => p.lifecycleState === 'DISABLED').length;
 
   return (
-    <Page width="wide">
-      <div className="identity-workbench">
-        <button className="identity-detail-back" type="button" onClick={onBack}>← Identities</button>
+    <main className="identity360-page" aria-labelledby="identity360-title">
+      <button className="identity360-back" type="button" onClick={() => onSelect()}>← Identities</button>
 
-        <section className="identity-detail-header" aria-labelledby="identity-detail-title">
-          <div className="identity-detail-primary">
-            <div className="identity-detail-title">
-              <span className="identity-detail-eyebrow">Identity · governed subject</span>
-              <h1 id="identity-detail-title">{identity.displayName}</h1>
-              <div className="identity-detail-id"><span className="mono">{identity.id}</span> · Updated {formatDateTime(identity.updatedAt)}</div>
-            </div>
-            <div className="identity-detail-actions">
-              <Button variant="outlined" onClick={() => setEditOpen(true)}>Edit metadata</Button>
-              {actions.map((action) => (
-                <Button
-                  key={action}
-                  variant={action === 'activate' ? 'contained' : 'outlined'}
-                  color={action === 'decommission' ? 'error' : 'primary'}
-                  disabled={pendingAction !== null}
-                  onClick={() => requestLifecycleAction(action)}
-                >
-                  {pendingAction === action ? 'Working…' : action[0].toUpperCase() + action.slice(1)}
-                </Button>
-              ))}
-              <Button variant="text" color="error" disabled={pendingAction !== null} onClick={() => setCorrectionOpen(true)}>Advanced correction</Button>
-            </div>
+      <header className="identity360-header">
+        <div className="identity360-heading">
+          <span className="identity360-eyebrow">Identity · governed subject</span>
+          <div className="identity360-title-row">
+            <h1 id="identity360-title">{identity.displayName}</h1>
+            <span className="identity360-type">{identity.type}</span>
+            <StatusChip label={identity.lifecycleState} color={tone(identity.lifecycleState)} />
           </div>
-
-          <div className="identity-detail-badges">
-            <StatusChip label={identity.type} />
-            <StatusChip label={identity.lifecycleState} color={lifecycleChipColor(identity.lifecycleState)} />
-            <Typography variant="caption" color="text.secondary">Revision {identity.revision}</Typography>
-          </div>
-
-          <div className={`identity-eligibility${eligible ? '' : ' is-ineligible'}`}>
-            <span className="identity-eligibility-icon" aria-hidden="true">{eligible ? '✓' : '!'}</span>
-            <div>
-              <strong>{eligible ? 'Currently access-eligible' : 'Currently access-ineligible'}</strong>
-              <span>{eligible
-                ? 'ACTIVE is the only access-eligible Identity lifecycle state. This does not by itself prove an AccessAssignment, EffectiveAccess, Principal, Credential or provider grant.'
-                : 'Only ACTIVE is access-eligible. Semantic EffectiveAccess contributes no authority while this Identity is ineligible; Access reduction and provider-side removal may continue asynchronously.'}</span>
+          <div className="identity360-meta"><span>Identity ID: <span className="mono">{identity.id}</span></span><i /> <span>Updated {formatDateTime(identity.updatedAt)}</span></div>
+        </div>
+        <div className="identity360-context-actions">
+          {authority ? <div className="identity360-context"><strong>Tenant: {shortId(authority.tenantId)}</strong><span>Authority evaluated {formatDateTime(authority.evaluatedAt)}</span></div> : null}
+          <div className="identity360-actions">
+            <Button variant="outlined" onClick={() => setReloadKey((v) => v + 1)}>Refresh</Button>
+            <Button variant="outlined" onClick={() => setEditOpen(true)}>✎ Edit metadata</Button>
+            <div className="identity360-menu">
+              <details><summary>⚙ Lifecycle actions⌄</summary><div className="identity360-menu-popover">{actions.length ? actions.map((action) => <button key={action} type="button" className={action === 'decommission' ? 'danger' : ''} onClick={() => setConfirmation({ kind: 'lifecycle', action })}>{action[0].toUpperCase() + action.slice(1)}</button>) : <span>No lifecycle actions</span>}</div></details>
             </div>
+            <Button variant="outlined" onClick={() => setMoreOpen(true)}>⋮ More</Button>
           </div>
-        </section>
+        </div>
+      </header>
 
-        {mutationError ? <ErrorPanel error={mutationError} onRetry={() => setReloadKey((value) => value + 1)} /> : null}
+      <section className={`identity360-eligibility ${eligible ? 'eligible' : 'ineligible'}`}>
+        <span className="identity360-eligibility-icon" aria-hidden="true">{eligible ? '✓' : '!'}</span>
+        <div><strong>{eligible ? 'Currently access-eligible' : 'Currently access-ineligible'}</strong><p>{eligible
+          ? 'ACTIVE is the only access-eligible Identity lifecycle state. This does not itself confirm assignments, Principals, Credentials, EffectiveAccess, or provider grants.'
+          : 'Only ACTIVE is access-eligible. EffectiveAccess contributes no semantic authority while this Identity is ineligible; assignment reduction and provider convergence may continue asynchronously.'}</p></div>
+      </section>
 
-        <section className="identity-tabs-panel" aria-label="Identity 360 workspace">
-          <div className="identity-tabs-bar">
-            <Tabs
-              value={view}
-              onChange={(_event, next) => setView(next as IdentityDetailView)}
-              aria-label="Identity 360 views"
-              sx={{ borderBottom: 0 }}
-            >
-              <Tab value="overview" label="Overview" {...getTabA11yProps('identity-360', 'overview')} />
-              <Tab value="profile" label="Governed profile" {...getTabA11yProps('identity-360', 'profile')} />
-              <Tab value="principals" label="Principals" {...getTabA11yProps('identity-360', 'principals')} />
-              <Tab value="access" label="Access" {...getTabA11yProps('identity-360', 'access')} />
-              <Tab value="governance" label="Governance" {...getTabA11yProps('identity-360', 'governance')} />
-              <Tab value="evidence" label="Evidence" {...getTabA11yProps('identity-360', 'evidence')} />
-            </Tabs>
-          </div>
+      {mutationError ? <ErrorPanel error={mutationError} retry={() => setReloadKey((v) => v + 1)} /> : null}
 
-          <div className="identity-tab-content">
-            <TabPanel groupId="identity-360" tabId="overview" active={view === 'overview'}>
-              <div className="identity-overview-grid">
-                <div className="identity-overview-card">
-                  <div className="identity-overview-card-header">
-                    <h3>Identity summary</h3>
-                    <p>Current authoritative governed-subject state.</p>
-                  </div>
-                  <dl className="identity-summary-list">
-                    <div className="identity-summary-row"><dt>Identity type</dt><dd>{identity.type}</dd></div>
-                    <div className="identity-summary-row"><dt>Lifecycle</dt><dd>{identity.lifecycleState}</dd></div>
-                    <div className="identity-summary-row"><dt>Access eligibility</dt><dd>{eligible ? 'Eligible' : 'Ineligible'}</dd></div>
-                    <div className="identity-summary-row"><dt>Created</dt><dd>{formatDateTime(identity.createdAt)}</dd></div>
-                    <div className="identity-summary-row"><dt>Updated</dt><dd>{formatDateTime(identity.updatedAt)}</dd></div>
-                    <div className="identity-summary-row"><dt>Identity ID</dt><dd className="mono">{identity.id}</dd></div>
-                    <div className="identity-summary-row"><dt>Revision</dt><dd>{identity.revision}</dd></div>
-                  </dl>
-                </div>
+      <section className="identity360-workspace" aria-label="Identity 360 workspace">
+        <Tabs value={view} onChange={(_e, next) => changeView(next as DetailView)} aria-label="Identity 360 views">
+          <Tab value="overview" label="Overview" {...getTabA11yProps('identity360', 'overview')} />
+          <Tab value="profile" label="Governed profile" {...getTabA11yProps('identity360', 'profile')} />
+          <Tab value="principals" label="Principals" {...getTabA11yProps('identity360', 'principals')} />
+          <Tab value="access" label="Access" {...getTabA11yProps('identity360', 'access')} />
+          <Tab value="governance" label="Governance" {...getTabA11yProps('identity360', 'governance')} />
+          <Tab value="evidence" label="Evidence" {...getTabA11yProps('identity360', 'evidence')} />
+        </Tabs>
 
-                <div className="identity-overview-card">
-                  <div className="identity-overview-card-header">
-                    <h3>Investigation</h3>
-                    <p>Move from the governed subject into the evidence or projection you need.</p>
-                  </div>
-                  <div className="identity-investigation-list">
-                    {([
-                      ['profile', 'Governed profile', 'Canonical resolution, classifications and authorized effective values'],
-                      ['principals', 'Principals', 'Technical account representations owned by Identity'],
-                      ['access', 'Access', 'Authoritative access intent and derived effective access'],
-                      ['governance', 'Governance', 'Review and exception context where current contracts allow it'],
-                      ['evidence', 'Evidence', 'Identity-scoped audit and decision evidence'],
-                    ] as const).map(([target, label, detail]) => (
-                      <button className="identity-investigation-button" type="button" key={target} onClick={() => setView(target)}>
-                        <span><strong>{label}</strong><small>{detail}</small></span><em aria-hidden="true">›</em>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </TabPanel>
-
-            <TabPanel groupId="identity-360" tabId="profile" active={view === 'profile'}>
-              <div className="identity-profile-header">
-                <div>
-                  <h3>Governed profile</h3>
-                  <p>Canonical effective values and resolution state only. Provider/source payloads are not authoritative profile data.</p>
-                </div>
-                <span className="identity-profile-note">Value disclosure remains independently authorized for the exact canonical classification.</span>
-              </div>
-              {canonicalState.status === 'loading' ? <StatePanel state="loading" title="Loading canonical attributes">Reading governed resolution metadata and authorized effective values…</StatePanel> : null}
-              {canonicalState.status === 'error' ? <ErrorPanel error={canonicalState.error} onRetry={() => setReloadKey((value) => value + 1)} /> : null}
-              {canonicalState.status === 'ready' && canonicalState.value.length === 0 ? <StatePanel state="empty" title="No canonical attributes">No governed canonical attribute state is currently available for this Identity.</StatePanel> : null}
-              {canonicalState.status === 'ready' && canonicalState.value.length > 0 ? (
-                <div className="identity-table-wrap">
-                  <table className="identity-table">
-                    <caption className="sr-only">Governed canonical effective values</caption>
-                    <thead><tr><th>Attribute</th><th>Effective value</th><th>Resolution</th><th>Classification</th><th>Shape</th><th>Value revision</th></tr></thead>
-                    <tbody>
-                      {canonicalState.value.map((attribute) => {
-                        const retained = (attribute.resolutionStatus === 'CONFLICT' || attribute.resolutionStatus === 'UNRESOLVED')
-                          && attribute.visibility === 'VALUE' && attribute.hasTrustedValue && Boolean(attribute.values?.length);
-                        return (
-                          <tr key={attribute.definitionId}>
-                            <td><strong>{attribute.key}</strong></td>
-                            <td className="identity-effective-value">
-                              {canonicalValueCopy(attribute)}
-                              {retained ? <span className="identity-retained-value">Retained trusted value · current resolution is {attribute.resolutionStatus}</span> : null}
-                            </td>
-                            <td><StatusChip label={attribute.visibility === 'REDACTED' ? 'REDACTED' : attribute.resolutionStatus} color={attribute.visibility === 'REDACTED' ? 'default' : resolutionChipColor(attribute.resolutionStatus)} /></td>
-                            <td>{attribute.classification}</td>
-                            <td>{attribute.type} · {attribute.cardinality}</td>
-                            <td>{attribute.valueRevision}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </TabPanel>
-
-            <TabPanel groupId="identity-360" tabId="principals" active={view === 'principals'}>
-              <UnsupportedSubjectView
-                title="Subject-scoped Principal query not yet exposed"
-                detail="Principal remains Identity-owned technical account state, but the current public collection contract does not provide a safe exact identityId filter. Wyrmgate does not scan or filter an incomplete client-side collection to fake this view."
-                actionLabel="Open Principals workspace"
-                path="/principals"
-              />
-            </TabPanel>
-
-            <TabPanel groupId="identity-360" tabId="access" active={view === 'access'}>
-              <UnsupportedSubjectView
-                title="Full Identity access workbench needs the bounded subject read contract"
-                detail="EffectiveAccess already supports subject filtering, but authoritative AccessAssignment discovery does not yet expose the matching bounded identityId collection query. This view stays explicit rather than showing a misleading partial access picture."
-                actionLabel="Open Access workspace"
-                path="/access"
-              />
-            </TabPanel>
-
-            <TabPanel groupId="identity-360" tabId="governance" active={view === 'governance'}>
-              <UnsupportedSubjectView
-                title="Identity-scoped Governance discovery is intentionally incomplete"
-                detail="Current Governance request visibility is participant-scoped and the public review/exception contracts do not yet expose every bounded subject query required for an operator-safe Identity 360 view."
-                actionLabel="Open Governance workspace"
-                path="/policies"
-              />
-            </TabPanel>
-
-            <TabPanel groupId="identity-360" tabId="evidence" active={view === 'evidence'}>
-              <UnsupportedSubjectView
-                title="Use Audit for current direct evidence"
-                detail="Audit can query direct Identity resource evidence, but that is not an exhaustive cross-capability history. Until the Identity 360 evidence read model is implemented, use the dedicated Audit workbench and keep that distinction visible."
-                actionLabel="Open Audit workspace"
-                path="/audit"
-              />
-            </TabPanel>
-          </div>
-        </section>
-
-        <Modal
-          open={editOpen}
-          title="Edit Identity metadata"
-          description="Display name is the only mutable non-lifecycle Identity metadata field in the current public contract."
-          busy={pendingAction === 'rename'}
-          onClose={() => {
-            if (pendingAction !== 'rename') {
-              setDisplayName(identity.displayName);
-              setEditOpen(false);
-            }
-          }}
-        >
-          <Box sx={{ display: 'grid', gap: 1.5 }}>
-            <TextInput label="Display name" required autoFocus value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
-            <div className="identity-dialog-actions">
-              <Button variant="text" disabled={pendingAction === 'rename'} onClick={() => { setDisplayName(identity.displayName); setEditOpen(false); }}>Cancel</Button>
-              <Button variant="contained" disabled={pendingAction === 'rename' || !displayName.trim() || displayName === identity.displayName} onClick={() => void updateName()}>
-                {pendingAction === 'rename' ? 'Saving…' : 'Save metadata'}
-              </Button>
+        <div className="identity360-tab-body">
+          <TabPanel groupId="identity360" tabId="overview" active={view === 'overview'}>
+            <div className="identity360-overview-grid">
+              <article className="identity360-card"><header><h2>Identity summary</h2><p>Current authoritative governed-subject state.</p></header><dl className="identity360-summary">
+                <div><dt>Identity type</dt><dd>{identity.type}</dd></div><div><dt>Lifecycle</dt><dd><StatusChip label={identity.lifecycleState} color={tone(identity.lifecycleState)} /></dd></div>
+                <div><dt>Access eligibility</dt><dd>{eligible ? 'Eligible' : 'Ineligible'}</dd></div><div><dt>Created</dt><dd>{formatDateTime(identity.createdAt)}</dd></div>
+                <div><dt>Updated</dt><dd>{formatDateTime(identity.updatedAt)}</dd></div><div><dt>Identity ID</dt><dd className="mono">{identity.id}</dd></div><div><dt>Revision</dt><dd>{identity.revision}</dd></div>
+              </dl></article>
+              <article className="identity360-card"><header><h2>Investigation</h2><p>Explore this Identity without collapsing authority, projections, evidence, or technical representations.</p></header><div className="identity360-investigation">
+                {([
+                  ['profile', 'Governed profile', 'Canonical values, resolution, classification and visibility'],
+                  ['principals', 'Principals', 'Identity-owned technical account representations'],
+                  ['access', 'Access', 'Authoritative assignments and derived EffectiveAccess'],
+                  ['governance', 'Governance', 'Subject reviews and GovernanceExceptions'],
+                  ['evidence', 'Evidence', 'Direct immutable Identity AuditRecord evidence'],
+                ] as const).map(([target, label, detail]) => <button key={target} type="button" onClick={() => changeView(target)}><span><strong>{label}</strong><small>{detail}</small></span><em>›</em></button>)}
+              </div></article>
             </div>
-          </Box>
-        </Modal>
+            <div className="identity360-info"><strong>Identity is the governed subject.</strong><span>Principals are separate technical representations/accounts. Provider observations are not Identity authority.</span></div>
+          </TabPanel>
 
-        <Modal
-          open={correctionOpen}
-          title="Advanced identity correction"
-          description="Merge and split are high-impact governed-subject corrections, not normal account maintenance."
-          busy={pendingAction === 'merge' || pendingAction === 'split'}
-          onClose={() => {
-            if (pendingAction === null) setCorrectionOpen(false);
-          }}
-        >
-          <Box sx={{ display: 'grid', gap: 1.5 }}>
-            <div className="identity-dialog-mode" aria-label="Correction type">
-              <button type="button" className={correctionMode === 'merge' ? 'active' : ''} onClick={() => setCorrectionMode('merge')}>Merge</button>
-              <button type="button" className={correctionMode === 'split' ? 'active' : ''} onClick={() => setCorrectionMode('split')}>Split</button>
-            </div>
+          <TabPanel groupId="identity360" tabId="profile" active={view === 'profile'}>
+            <section className="identity360-section"><header className="identity360-section-header"><div><h2>Governed profile</h2><p>Canonical effective values, resolution state, classification, and authorized visibility.</p></div><span className="identity360-note-chip">ⓘ Authorized values only</span></header>
+              <PagedTableState state={profile.state as LoadState<Page<unknown>>} empty="No canonical attributes" retry={() => setReloadKey((v) => v + 1)} />
+              {profile.state.status === 'ready' && profile.state.value.items.length ? <><div className="identity360-table-wrap"><table className="identity360-table"><thead><tr><th>Attribute</th><th>Effective value</th><th>Resolution</th><th>Classification</th><th>Shape</th><th>Value revision</th></tr></thead><tbody>{profile.state.value.items.map((attribute) => {
+                const retained = ['CONFLICT', 'UNRESOLVED'].includes(attribute.resolutionStatus) && attribute.visibility === 'VALUE' && attribute.hasTrustedValue && Boolean(attribute.values?.length);
+                return <tr key={attribute.definitionId}><td><strong>{attribute.key}</strong></td><td className="identity360-value">{canonicalValue(attribute)}{retained ? <small>⚠ Retained trusted value · current resolution is {attribute.resolutionStatus}</small> : null}</td><td><StatusChip label={attribute.visibility === 'REDACTED' ? 'REDACTED' : attribute.resolutionStatus} color={attribute.visibility === 'REDACTED' ? 'default' : tone(attribute.resolutionStatus)} /></td><td><span className="identity360-classification">{attribute.classification}</span></td><td>{attribute.type} · {attribute.cardinality}</td><td>{attribute.valueRevision}</td></tr>;
+              })}</tbody></table></div>{profile.state.value.nextCursor ? <div className="identity360-load-more"><Button variant="outlined" onClick={() => void profile.loadMore(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}/canonical-attributes?limit=50`)}>Load more attributes</Button></div> : null}</> : null}
+              <div className="identity360-info"><span>Provider/source payloads are not shown here. Canonical resolution and value disclosure remain separately governed.</span></div>
+            </section>
+          </TabPanel>
 
-            {correctionMode === 'merge' ? (
-              <>
-                <div className="identity-dialog-warning"><strong>Permanent governed-subject correction.</strong> The current Identity remains the survivor. The absorbed Identity becomes DECOMMISSIONED. AccessAssignments and Governance authority do not transfer.</div>
-                <div className="identity-form-grid">
-                  <TextInput
-                    label="Absorbed Identity ID"
-                    value={mergeValues.absorbedIdentityId}
-                    onChange={(event) => {
-                      setMergeValues((value) => ({ ...value, absorbedIdentityId: event.target.value }));
-                      setMergeTarget(null);
-                    }}
-                  />
-                  <Box sx={{ alignSelf: 'end' }}><Button variant="outlined" disabled={!mergeValues.absorbedIdentityId.trim() || mergeTarget?.status === 'loading'} onClick={() => void loadMergeTarget()}>{mergeTarget?.status === 'loading' ? 'Checking…' : 'Review target'}</Button></Box>
-                  {mergeTarget?.status === 'error' ? <Box className="identity-form-span"><ErrorPanel error={mergeTarget.error} /></Box> : null}
-                  {mergeTarget?.status === 'ready' ? (
-                    <div className="identity-merge-target identity-form-span">
-                      <span><strong>{mergeTarget.value.displayName}</strong><small>{mergeTarget.value.type} · {mergeTarget.value.lifecycleState} · revision {mergeTarget.value.revision}</small></span>
-                      <StatusChip label="Absorbed target" color="warning" />
-                    </div>
-                  ) : null}
-                  <TextInput className="identity-form-span" label="Correction reason" multiline minRows={3} value={mergeValues.reason} onChange={(event) => setMergeValues((value) => ({ ...value, reason: event.target.value }))} />
-                </div>
-                <div className="identity-dialog-actions">
-                  <Button variant="text" onClick={() => setCorrectionOpen(false)}>Cancel</Button>
-                  <Button color="error" variant="contained" disabled={!mergeTargetMatches || !mergeValues.reason.trim()} onClick={() => setConfirmation({ kind: 'merge' })}>Review merge consequence</Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="identity-dialog-warning"><strong>Explicit relationship selection required.</strong> A split creates a same-type PENDING Identity. A split never copies access or governance authority. The current API still requires explicit SourceRecord/Principal IDs until the bounded split-candidates query is added.</div>
-                <div className="identity-form-grid">
-                  <TextInput label="New Identity display name" value={splitValues.newDisplayName} onChange={(event) => setSplitValues((value) => ({ ...value, newDisplayName: event.target.value }))} />
-                  <TextInput label="Correction reason" value={splitValues.reason} onChange={(event) => setSplitValues((value) => ({ ...value, reason: event.target.value }))} />
-                  <TextInput label="Source record IDs" multiline minRows={3} placeholder="one UUID per line" value={splitValues.sourceRecordIds} onChange={(event) => setSplitValues((value) => ({ ...value, sourceRecordIds: event.target.value }))} />
-                  <TextInput label="Principal IDs (technical accounts)" multiline minRows={3} placeholder="one UUID per line" value={splitValues.principalIds} onChange={(event) => setSplitValues((value) => ({ ...value, principalIds: event.target.value }))} />
-                </div>
-                <div className="identity-dialog-actions">
-                  <Button variant="text" onClick={() => setCorrectionOpen(false)}>Cancel</Button>
-                  <Button color="error" variant="contained" disabled={!splitValues.newDisplayName.trim() || !splitValues.reason.trim() || !splitSelectionPresent} onClick={() => setConfirmation({ kind: 'split' })}>Review split consequence</Button>
-                </div>
-              </>
-            )}
-          </Box>
-        </Modal>
+          <TabPanel groupId="identity360" tabId="principals" active={view === 'principals'}>
+            <section className="identity360-section"><header className="identity360-section-header"><div><h2>Principals</h2><p>Technical representations/accounts currently owned by this governed Identity.</p></div><Button variant="outlined" size="small" onClick={() => navigateConsole('/principals')}>Open Principals workspace</Button></header>
+              {principals.state.status === 'ready' ? <div className="identity360-metrics"><div><strong>{principalSummary.length}</strong><span>Loaded Principals</span></div><div><strong>{principalActive}</strong><span>Active</span></div><div><strong>{principalDisabled}</strong><span>Disabled</span></div></div> : null}
+              <PagedTableState state={principals.state as LoadState<Page<unknown>>} empty="No Principals" retry={() => setReloadKey((v) => v + 1)} />
+              {principals.state.status === 'ready' && principalSummary.length ? <><div className="identity360-table-wrap"><table className="identity360-table"><thead><tr><th>Native principal key</th><th>Application target</th><th>Principal lifecycle</th><th>Principal ID</th><th>Updated</th></tr></thead><tbody>{principalSummary.map((principal) => <tr key={principal.id}><td><strong>{principal.nativePrincipalKey}</strong></td><td className="mono">{shortId(principal.applicationTargetId)}</td><td><StatusChip label={principal.lifecycleState} color={tone(principal.lifecycleState)} /></td><td className="mono">{shortId(principal.id)}</td><td>{formatDateTime(principal.updatedAt)}</td></tr>)}</tbody></table></div>{principals.state.value.nextCursor ? <div className="identity360-load-more"><Button variant="outlined" onClick={() => void principals.loadMore(`${V1_ROOT}/principals?identityId=${encodeURIComponent(identityId)}&limit=50`)}>Load more Principals</Button></div> : null}</> : null}
+              <div className="identity360-info"><strong>Identity, Principal, Credential.</strong><span>Identity is the governed subject. Principal is the technical representation/account. Credentials belong to Principals.</span></div>
+            </section>
+          </TabPanel>
 
-        <ConfirmDialog
-          open={confirmation !== null}
-          title={confirmCopy.title}
-          confirmLabel={confirmCopy.label}
-          destructive={confirmation?.kind !== 'lifecycle' || confirmation?.action !== 'activate'}
-          busy={pendingAction !== null}
-          onCancel={() => setConfirmation(null)}
-          onConfirm={() => void confirmAction()}
-        >
-          {confirmCopy.body}
-        </ConfirmDialog>
-      </div>
-    </Page>
-  );
-}
+          <TabPanel groupId="identity360" tabId="access" active={view === 'access'}>
+            <section className="identity360-section"><div className="identity360-info prominent"><strong>Assignments are authoritative business intent. Effective access is a derived projection.</strong><span>Technical fulfillment and provider observation remain separate from both.</span></div>
+              <article className="identity360-subpanel"><header className="identity360-section-header"><div><h2>Access assignments <span className="identity360-badge authoritative">Authoritative</span></h2><p>Direct and indirect assignment intent for this governed Identity.</p></div><Button variant="outlined" size="small" onClick={() => navigateConsole('/access')}>Open Access workspace</Button></header>
+                <PagedTableState state={assignments.state as LoadState<Page<unknown>>} empty="No AccessAssignments" retry={() => setReloadKey((v) => v + 1)} />
+                {assignments.state.status === 'ready' && assignments.state.value.items.length ? <><div className="identity360-table-wrap"><table className="identity360-table"><thead><tr><th>Target</th><th>Kind</th><th>Assignment lifecycle</th><th>Valid from</th><th>Valid until</th><th>Principal constraint</th><th>Assignment ID</th></tr></thead><tbody>{assignments.state.value.items.map((assignment) => <tr key={assignment.id}><td className="mono">{shortId(assignment.roleId ?? assignment.entitlementId)}</td><td>{assignment.targetKind}</td><td><StatusChip label={assignment.lifecycleState} color={tone(assignment.lifecycleState)} /></td><td>{formatDateTime(assignment.validFrom)}</td><td>{formatDateTime(assignment.validUntil)}</td><td>{assignment.principalConstraintKind}{assignment.specificPrincipalId ? <small className="identity360-cell-note mono">{shortId(assignment.specificPrincipalId)}</small> : null}</td><td className="mono">{shortId(assignment.id)}</td></tr>)}</tbody></table></div>{assignments.state.value.nextCursor ? <div className="identity360-load-more"><Button variant="outlined" onClick={() => void assignments.loadMore(`${V1_ROOT}/identities/${encodeURIComponent(identityId)}/access-assignments?limit=50`)}>Load more assignments</Button></div> : null}</> : null}
+              </article>
+              <article className="identity360-subpanel"><header className="identity360-section-header"><div><h2>Effective access <span className="identity360-badge projection">Projection</span></h2><p>Entitlement-level access currently derived for this Identity. An ineligible Identity contributes no semantic EffectiveAccess authority.</p></div></header>
+                <PagedTableState state={effective.state as LoadState<Page<unknown>>} empty="No EffectiveAccess" retry={() => setReloadKey((v) => v + 1)} />
+                {effective.state.status === 'ready' && effective.state.value.items.length ? <><div className="identity360-table-wrap"><table className="identity360-table"><thead><tr><th>Entitlement</th><th>Principal constraint</th><th>Support count</th><th>Computed</th><th>Projection generation</th><th>EffectiveAccess ID</th></tr></thead><tbody>{effective.state.value.items.map((item) => <tr key={item.id}><td className="mono">{shortId(item.entitlementId)}</td><td>{item.principalConstraintKey}</td><td>{item.supportCount}</td><td>{formatDateTime(item.computedAt)}</td><td>{item.projectionGeneration}</td><td className="mono">{shortId(item.id)}</td></tr>)}</tbody></table></div>{effective.state.value.nextCursor ? <div className="identity360-load-more"><Button variant="outlined" onClick={() => void effective.loadMore(`${V1_ROOT}/effective-access?identityId=${encodeURIComponent(identityId)}&limit=50`)}>Load more effective access</Button></div> : null}</> : null}
+              </article>
+            </section>
+          </TabPanel>
 
-export function IdentityWorkspace({ selectedId, onSelect }: { selectedId?: string; onSelect: (id?: string) => void }) {
-  const [pages, setPages] = useState<IdentityPage[]>([]);
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState<unknown>(null);
-  const [createError, setCreateError] = useState<unknown>(null);
-  const [creating, setCreating] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [lookupOpen, setLookupOpen] = useState(false);
-  const [identityLookup, setIdentityLookup] = useState('');
-  const [create, setCreate] = useState({ type: 'PERSON', lifecycleState: 'PENDING', displayName: '' });
-  const nextCursor = pages.at(-1)?.nextCursor ?? null;
-  const identities = useMemo(() => pages.flatMap((page) => page.items), [pages]);
+          <TabPanel groupId="identity360" tabId="governance" active={view === 'governance'}>
+            <section className="identity360-section"><article className="identity360-subpanel"><header className="identity360-section-header"><div><h2>Access reviews</h2><p>Governance-owned review campaigns for this governed subject.</p></div><Button variant="outlined" size="small" onClick={() => navigateConsole('/reviews')}>View all</Button></header>
+              <PagedTableState state={campaigns.state as LoadState<Page<unknown>>} empty="No subject review campaigns" retry={() => setReloadKey((v) => v + 1)} />
+              {campaigns.state.status === 'ready' && campaigns.state.value.items.length ? <><div className="identity360-table-wrap"><table className="identity360-table"><thead><tr><th>Campaign ID</th><th>State</th><th>Reviewer Identity</th><th>Snapshot time</th><th>Progress</th><th>Updated</th></tr></thead><tbody>{campaigns.state.value.items.map((campaign) => <tr key={campaign.id}><td className="mono">{shortId(campaign.id)}</td><td><StatusChip label={campaign.state} color={tone(campaign.state)} /></td><td className="mono">{shortId(campaign.reviewerIdentityId)}</td><td>{formatDateTime(campaign.snapshotAt)}</td><td>{campaign.decidedItemCount} / {campaign.generatedItemCount}</td><td>{formatDateTime(campaign.updatedAt)}</td></tr>)}</tbody></table></div>{campaigns.state.value.nextCursor ? <div className="identity360-load-more"><Button variant="outlined" onClick={() => void campaigns.loadMore(`${V1_ROOT}/governance/subjects/${encodeURIComponent(identityId)}/review-campaigns?limit=50`)}>Load more reviews</Button></div> : null}</> : null}
+              </article>
+              <article className="identity360-subpanel"><header className="identity360-section-header"><div><h2>Governance exceptions</h2><p>Current and historical subject-scoped SoD exceptions. Approval evidence does not itself create Access authority.</p></div><Button variant="outlined" size="small" onClick={() => navigateConsole('/policies')}>Open Governance</Button></header>
+              <PagedTableState state={exceptions.state as LoadState<Page<unknown>>} empty="No subject GovernanceExceptions" retry={() => setReloadKey((v) => v + 1)} />
+              {exceptions.state.status === 'ready' && exceptions.state.value.items.length ? <><div className="identity360-table-wrap"><table className="identity360-table"><thead><tr><th>Exception ID</th><th>SoD rule</th><th>State</th><th>Valid from</th><th>Valid until</th><th>Revision</th></tr></thead><tbody>{exceptions.state.value.items.map((exception) => <tr key={exception.id}><td className="mono">{shortId(exception.id)}</td><td className="mono">{shortId(exception.sodRuleId)}</td><td><StatusChip label={exception.lifecycleState} color={tone(exception.lifecycleState)} /></td><td>{formatDateTime(exception.validFrom)}</td><td>{formatDateTime(exception.validUntil)}</td><td>{exception.revision}</td></tr>)}</tbody></table></div>{exceptions.state.value.nextCursor ? <div className="identity360-load-more"><Button variant="outlined" onClick={() => void exceptions.loadMore(`${V1_ROOT}/governance/subjects/${encodeURIComponent(identityId)}/exceptions?limit=50`)}>Load more exceptions</Button></div> : null}</> : null}
+              </article>
+              <div className="identity360-info"><strong>Access request history is intentionally not shown here.</strong><span>Request visibility remains participant-scoped unless a separately accepted administrative subject-read contract exists.</span></div>
+            </section>
+          </TabPanel>
 
-  useEffect(() => {
-    if (selectedId) return;
-    const controller = new AbortController();
-    setState('loading');
-    setError(null);
-    setPages([]);
-    listIdentities(undefined, controller.signal)
-      .then((page) => {
-        setPages([page]);
-        setState('ready');
-      })
-      .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setError(cause);
-        setState('error');
-      });
-    return () => controller.abort();
-  }, [reloadKey, selectedId]);
+          <TabPanel groupId="identity360" tabId="evidence" active={view === 'evidence'}>
+            <section className="identity360-section"><header className="identity360-section-header"><div><h2>Recent Identity evidence</h2><p>Direct immutable AuditRecord evidence whose resource is this Identity. This is not an exhaustive cross-capability activity history.</p></div><Button variant="outlined" size="small" onClick={() => navigateConsole('/audit')}>Open Audit workspace</Button></header>
+              <PagedTableState state={evidence.state as LoadState<Page<unknown>>} empty="No direct Identity AuditRecords" retry={() => setReloadKey((v) => v + 1)} />
+              {evidence.state.status === 'ready' && evidence.state.value.items.length ? <><div className="identity360-table-wrap"><table className="identity360-table"><thead><tr><th>Time</th><th>Outcome</th><th>Action</th><th>Actor Identity</th><th>Correlation ID</th><th>AuditRecord ID</th></tr></thead><tbody>{evidence.state.value.items.map((record) => <tr key={record.id}><td>{formatDateTime(record.occurredAt)}</td><td><StatusChip label={record.outcome} color={tone(record.outcome)} /></td><td><strong>{record.actionType}</strong></td><td className="mono">{shortId(record.actorId)}</td><td className="mono">{shortId(record.correlationId)}</td><td className="mono">{shortId(record.id)}</td></tr>)}</tbody></table></div><div className="identity360-metrics evidence"><div><strong>{evidence.state.value.items.length}</strong><span>Loaded direct records</span></div><div><strong>{formatDateTime(evidence.state.value.items[0]?.occurredAt)}</strong><span>Newest loaded evidence</span></div><div><strong>Identity</strong><span>Audited resource type</span></div></div>{evidence.state.value.nextCursor ? <div className="identity360-load-more"><Button variant="outlined" onClick={() => void evidence.loadMore(`${V1_ROOT}/audit-records?resourceType=identity&resourceId=${encodeURIComponent(identityId)}&limit=50`)}>Load more evidence</Button></div> : null}</> : null}
+              <div className="identity360-info"><strong>Broader investigations continue in Audit.</strong><span>Related Access, Governance, Integration, or system evidence is not silently joined into this direct Identity view.</span></div>
+            </section>
+          </TabPanel>
+        </div>
+      </section>
 
-  async function loadMore() {
-    if (!nextCursor) return;
-    setState('loading');
-    setError(null);
-    try {
-      const page = await listIdentities(nextCursor);
-      setPages((current) => [...current, page]);
-      setState('ready');
-    } catch (cause) {
-      setError(cause);
-      setState('error');
-    }
-  }
+      <Modal open={editOpen} title="Edit Identity metadata" description="Display name is the mutable non-lifecycle Identity metadata field in the current contract." busy={pendingAction === 'rename'} onClose={() => { if (pendingAction !== 'rename') { setDisplayName(identity.displayName); setEditOpen(false); } }}>
+        <Box sx={{ display: 'grid', gap: 1.5 }}><TextInput autoFocus label="Display name" required value={displayName} onChange={(e) => setDisplayName(e.target.value)} /><Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}><Button variant="text" onClick={() => setEditOpen(false)}>Cancel</Button><Button variant="contained" disabled={!displayName.trim() || displayName.trim() === identity.displayName || pendingAction === 'rename'} onClick={() => void updateName()}>{pendingAction === 'rename' ? 'Saving…' : 'Save metadata'}</Button></Box></Box>
+      </Modal>
 
-  async function createIdentity() {
-    setCreating(true);
-    setCreateError(null);
-    try {
-      await apiRequest(`${V1_ROOT}/identities`, {
-        method: 'POST',
-        idempotent: true,
-        body: {
-          type: create.type,
-          profile: { kind: create.type },
-          lifecycleState: create.lifecycleState,
-          displayName: create.displayName,
-        },
-      });
-      setCreate({ type: 'PERSON', lifecycleState: 'PENDING', displayName: '' });
-      setCreateOpen(false);
-      setReloadKey((value) => value + 1);
-    } catch (cause) {
-      setCreateError(cause);
-    } finally {
-      setCreating(false);
-    }
-  }
+      <Modal open={moreOpen} title="Advanced Identity correction" description="Merge and split are governed-subject corrections, not ordinary account maintenance." busy={pendingAction === 'merge' || pendingAction === 'split'} onClose={() => { if (!pendingAction) setMoreOpen(false); }}>
+        <Box sx={{ display: 'grid', gap: 1.5 }}><div className="identity360-correction-tabs"><button className={correctionMode === 'merge' ? 'active' : ''} onClick={() => setCorrectionMode('merge')}>Merge</button><button className={correctionMode === 'split' ? 'active' : ''} onClick={() => setCorrectionMode('split')}>Split</button></div>
+          {correctionMode === 'merge' ? <><div className="identity360-warning"><strong>Permanent correction.</strong> The current Identity survives. The absorbed Identity becomes DECOMMISSIONED. Foreign-capability authority never transfers implicitly.</div><TextInput label="Absorbed Identity ID" value={mergeValues.absorbedIdentityId} onChange={(e) => { setMergeValues((v) => ({ ...v, absorbedIdentityId: e.target.value })); setMergeTarget(null); }} /><Button variant="outlined" disabled={!mergeValues.absorbedIdentityId.trim() || mergeTarget?.status === 'loading'} onClick={() => void loadMergeTarget()}>{mergeTarget?.status === 'loading' ? 'Checking…' : 'Review target'}</Button>{mergeTarget?.status === 'error' ? <ErrorPanel error={mergeTarget.error} /> : null}{mergeTarget?.status === 'ready' ? <div className="identity360-target"><strong>{mergeTarget.value.displayName}</strong><span>{mergeTarget.value.type} · {mergeTarget.value.lifecycleState} · revision {mergeTarget.value.revision}</span></div> : null}<TextInput label="Correction reason" multiline minRows={3} value={mergeValues.reason} onChange={(e) => setMergeValues((v) => ({ ...v, reason: e.target.value }))} /><Button color="error" variant="contained" disabled={mergeTarget?.status !== 'ready' || !mergeValues.reason.trim()} onClick={() => setConfirmation({ kind: 'merge' })}>Review merge consequence</Button></> : <><div className="identity360-warning"><strong>Explicit relationship selection required.</strong> The new same-type Identity starts PENDING. No AccessAssignment or Governance authority is copied.</div><TextInput label="New Identity display name" value={splitValues.newDisplayName} onChange={(e) => setSplitValues((v) => ({ ...v, newDisplayName: e.target.value }))} /><TextInput label="Source record IDs" multiline minRows={3} value={splitValues.sourceRecordIds} onChange={(e) => setSplitValues((v) => ({ ...v, sourceRecordIds: e.target.value }))} /><TextInput label="Principal IDs" multiline minRows={3} value={splitValues.principalIds} onChange={(e) => setSplitValues((v) => ({ ...v, principalIds: e.target.value }))} /><TextInput label="Correction reason" multiline minRows={2} value={splitValues.reason} onChange={(e) => setSplitValues((v) => ({ ...v, reason: e.target.value }))} /><Button color="error" variant="contained" disabled={!splitValues.newDisplayName.trim() || !splitValues.reason.trim() || !splitHasSelection} onClick={() => setConfirmation({ kind: 'split' })}>Review split consequence</Button></>}
+        </Box>
+      </Modal>
 
-  function openExactIdentity() {
-    const identityId = identityLookup.trim();
-    if (!identityId) return;
-    setLookupOpen(false);
-    onSelect(identityId);
-  }
-
-  if (selectedId) return <IdentityDetail identityId={selectedId} onBack={() => onSelect()} />;
-
-  return (
-    <Page width="wide">
-      <div className="identity-workbench">
-        <header className="identity-header">
-          <div className="identity-header-copy">
-            <h1>Identities</h1>
-            <p>Find and investigate canonical governed subjects. Identity is authoritative governed-subject state; Principals are separate technical representations/accounts and provider observations are not Identity authority.</p>
-          </div>
-          <div className="identity-header-actions">
-            <Button variant="outlined" disabled={state === 'loading'} onClick={() => setReloadKey((value) => value + 1)}>{state === 'loading' ? 'Refreshing…' : 'Refresh'}</Button>
-            <Button variant="contained" onClick={() => setCreateOpen(true)}>+ Create Identity</Button>
-          </div>
-        </header>
-
-        <section className="identity-panel" aria-labelledby="identity-collection-title">
-          <div className="identity-panel-header">
-            <div>
-              <h2 id="identity-collection-title">Governed identities</h2>
-              <p>Authoritative Identity collection. Search and type/lifecycle filtering remain server-contract work; this page does not fake incomplete client filtering.</p>
-            </div>
-            <span className="identity-panel-meta">{identities.length ? `${identities.length} loaded` : 'Authoritative collection'}</span>
-          </div>
-
-          <div className="identity-toolbar">
-            <div className="identity-toolbar-copy"><strong>Discovery</strong> · Browse the server-ordered collection or open one exact Identity ID as a support path.</div>
-            <div className="identity-toolbar-actions">
-              <Button variant="outlined" onClick={() => setLookupOpen((value) => !value)}>Open by Identity ID</Button>
-            </div>
-          </div>
-
-          {lookupOpen ? (
-            <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider', display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: { sm: 'center' } }}>
-              <TextInput
-                autoFocus
-                label="Exact Identity ID"
-                value={identityLookup}
-                size="small"
-                onChange={(event) => setIdentityLookup(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') openExactIdentity(); }}
-                sx={{ flex: '1 1 28rem', maxWidth: 520 }}
-              />
-              <Button variant="contained" disabled={!identityLookup.trim()} onClick={openExactIdentity}>Open Identity</Button>
-              <Typography variant="caption" color="text.secondary">Direct lookup remains server-authorized and does not enumerate the collection.</Typography>
-            </Box>
-          ) : null}
-
-          {state === 'loading' && identities.length === 0 ? <Box sx={{ p: 2 }}><StatePanel state="loading" title="Loading governed identities">Reading authoritative Identity resources…</StatePanel></Box> : null}
-          {state === 'error' ? <Box sx={{ p: 2 }}><ErrorPanel error={error} onRetry={() => setReloadKey((value) => value + 1)} /></Box> : null}
-          {state === 'ready' && identities.length === 0 ? <Box sx={{ p: 2 }}><StatePanel state="empty" title="No governed identities">No Identity resources are currently visible to your server-authorized administrative context.</StatePanel></Box> : null}
-
-          {identities.length > 0 ? (
-            <>
-              <div className="identity-table-wrap">
-                <table className="identity-table">
-                  <caption className="sr-only">Governed identities</caption>
-                  <thead><tr><th>Governed subject</th><th>Type</th><th>Lifecycle</th><th>Updated</th><th className="identity-row-action"><span className="sr-only">Open</span></th></tr></thead>
-                  <tbody>
-                    {identities.map((identity) => (
-                      <tr key={identity.id}>
-                        <td className="identity-subject">
-                          <button className="identity-name-button" type="button" onClick={() => onSelect(identity.id)}>
-                            <strong>{identity.displayName}</strong><small className="mono">{shortId(identity.id)}</small>
-                          </button>
-                        </td>
-                        <td><StatusChip label={identity.type} /></td>
-                        <td><StatusChip label={identity.lifecycleState} color={lifecycleChipColor(identity.lifecycleState)} /></td>
-                        <td>{formatDateTime(identity.updatedAt)}</td>
-                        <td className="identity-row-action"><Button size="small" variant="text" onClick={() => onSelect(identity.id)} aria-label={`Open Identity ${identity.displayName}`}>Open ›</Button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="identity-mobile-list" aria-label="Governed identities mobile list">
-                {identities.map((identity) => (
-                  <div className="identity-mobile-item" key={identity.id}>
-                    <div>
-                      <strong>{identity.displayName}</strong><small className="mono">{shortId(identity.id)}</small>
-                      <div className="identity-mobile-badges"><StatusChip label={identity.type} /><StatusChip label={identity.lifecycleState} color={lifecycleChipColor(identity.lifecycleState)} /></div>
-                    </div>
-                    <Button size="small" variant="text" onClick={() => onSelect(identity.id)} aria-label={`Open Identity ${identity.displayName}`}>Open ›</Button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="identity-collection-footer">
-                <span>Showing {identities.length} governed identities</span>
-                {nextCursor ? <Button variant="outlined" disabled={state === 'loading'} onClick={() => void loadMore()}>{state === 'loading' ? 'Loading…' : 'Load more'}</Button> : <span>End of visible collection</span>}
-              </div>
-            </>
-          ) : null}
-        </section>
-
-        <Modal
-          open={createOpen}
-          title="Create governed Identity"
-          description="Create one typed governed subject. Tenant, actor and administrative authority remain server-derived."
-          busy={creating}
-          onClose={() => {
-            if (!creating) {
-              setCreateOpen(false);
-              setCreateError(null);
-            }
-          }}
-        >
-          <Box sx={{ display: 'grid', gap: 1.5, pt: 0.5 }}>
-            {createError ? <ErrorPanel error={createError} /> : null}
-            <div className="identity-form-grid">
-              <SelectInput
-                label="Identity type"
-                value={create.type}
-                options={['PERSON', 'SERVICE', 'WORKLOAD']}
-                onValueChange={(value) => setCreate((current) => ({ ...current, type: String(value || 'PERSON') }))}
-              />
-              <SelectInput
-                label="Initial lifecycle"
-                value={create.lifecycleState}
-                options={['PENDING', 'ACTIVE', 'SUSPENDED', 'INACTIVE']}
-                onValueChange={(value) => setCreate((current) => ({ ...current, lifecycleState: String(value || 'PENDING') }))}
-              />
-              <TextInput className="identity-form-span" label="Display name" required autoFocus value={create.displayName} onChange={(event) => setCreate((current) => ({ ...current, displayName: event.target.value }))} />
-            </div>
-            <div className="identity-dialog-warning">Identity is the governed subject. Creating an Identity does not register a Principal, grant access, create a Credential or establish provider state.</div>
-            <div className="identity-dialog-actions">
-              <Button variant="text" disabled={creating} onClick={() => { setCreateOpen(false); setCreateError(null); }}>Cancel</Button>
-              <Button variant="contained" disabled={creating || !create.displayName.trim()} onClick={() => void createIdentity()}>{creating ? 'Creating…' : 'Create Identity'}</Button>
-            </div>
-          </Box>
-        </Modal>
-      </div>
-    </Page>
+      <ConfirmDialog open={confirmation !== null} title={confirm.title} confirmLabel={confirm.label} destructive={confirmation?.kind !== 'lifecycle' || confirmation?.action !== 'activate'} busy={pendingAction !== null} onCancel={() => setConfirmation(null)} onConfirm={() => void (confirmation?.kind === 'lifecycle' ? executeLifecycle(confirmation.action) : confirmation?.kind === 'merge' ? executeMerge() : executeSplit())}>{confirm.body}</ConfirmDialog>
+    </main>
   );
 }
