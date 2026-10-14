@@ -1,10 +1,10 @@
 package io.wyrmgate.iam.identity.application;
 
+import io.wyrmgate.iam.identity.application.PrincipalQueryModels.PrincipalPage;
+import io.wyrmgate.iam.identity.application.PrincipalQueryModels.PrincipalPosition;
 import io.wyrmgate.iam.identity.domain.Principal;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.util.Objects;
-import io.wyrmgate.iam.identity.application.PrincipalQueryModels.PrincipalPage;
-import io.wyrmgate.iam.identity.application.PrincipalQueryModels.PrincipalPosition;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,12 +24,22 @@ public final class PrincipalQueryService implements PrincipalResolutionQuery {
             TenantContext tenant,
             PrincipalPosition position,
             int limit) {
+        return list(tenant, null, position, limit);
+    }
+
+    public PrincipalPage list(
+            TenantContext tenant,
+            UUID identityId,
+            PrincipalPosition position,
+            int limit) {
         Objects.requireNonNull(tenant, "tenant");
         if (limit < 1 || limit > 200) {
             throw new IllegalArgumentException("limit must be between 1 and 200");
         }
         UUID afterId = position == null ? null : position.id();
-        var rows = repository.listAfterId(tenant, afterId, limit + 1);
+        var rows = identityId == null
+                ? repository.listAfterId(tenant, afterId, limit + 1)
+                : repository.listByIdentityAfterId(tenant, identityId, afterId, limit + 1);
         boolean hasMore = rows.size() > limit;
         var items = hasMore ? rows.subList(0, limit) : rows;
         PrincipalPosition next = hasMore
