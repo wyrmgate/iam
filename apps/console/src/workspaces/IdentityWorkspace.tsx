@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ApiError,
   apiRequest,
@@ -26,7 +26,7 @@ import {
 import '../identity-detail-golden.css';
 
 type DetailView = 'overview' | 'profile' | 'principals' | 'access' | 'governance' | 'evidence';
-type LoadState<T> = { status: 'idle' | 'loading' } | { status: 'ready'; value: T } | { status: 'error'; error: unknown };
+type LoadState<T> = { status: 'idle' } | { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; error: unknown };
 type Page<T> = { items: T[]; nextCursor?: string | null };
 type CanonicalValue =
   | { type: 'STRING'; value: string }
