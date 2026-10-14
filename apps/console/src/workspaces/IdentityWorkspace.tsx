@@ -149,9 +149,10 @@ function usePagedResource<T>(path: string | null, trigger: number) {
   }, [path, trigger]);
   async function loadMore(basePath: string) {
     if (state.status !== 'ready' || !state.value.nextCursor) return;
+    const current = state.value;
     const separator = basePath.includes('?') ? '&' : '?';
-    const { data } = await apiRequest<Page<T>>(`${basePath}${separator}cursor=${encodeURIComponent(state.value.nextCursor)}`);
-    setState({ status: 'ready', value: { items: [...state.value.items, ...data.items], nextCursor: data.nextCursor } });
+    const { data } = await apiRequest<Page<T>>(`${basePath}${separator}cursor=${encodeURIComponent(current.nextCursor!)}`);
+    setState({ status: 'ready', value: { items: [...current.items, ...data.items], nextCursor: data.nextCursor } });
   }
   return { state, setState, loadMore };
 }
@@ -287,11 +288,11 @@ export function IdentityWorkspace({
     finally { setPendingAction(null); setConfirmation(null); }
   }
 
-  if (identityState.status === 'loading' || identityState.status === 'idle') {
+  if (identityState.status !== 'ready') {
+    if (identityState.status === 'error') {
+      return <div className="identity360-page"><button className="identity360-back" onClick={() => onSelect()}>← Identities</button><ErrorPanel error={identityState.error} retry={() => setReloadKey((v) => v + 1)} /></div>;
+    }
     return <div className="identity360-page"><StatePanel state="loading" title="Loading governed Identity">Reading the latest authoritative revision…</StatePanel></div>;
-  }
-  if (identityState.status === 'error') {
-    return <div className="identity360-page"><button className="identity360-back" onClick={() => onSelect()}>← Identities</button><ErrorPanel error={identityState.error} retry={() => setReloadKey((v) => v + 1)} /></div>;
   }
 
   const identity = identityState.value.identity;
