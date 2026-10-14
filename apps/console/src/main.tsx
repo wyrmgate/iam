@@ -8,6 +8,8 @@ import './shell.css';
 import './shell-theme.css';
 import './shell-foundation.css';
 import './auth-login-viewport.css';
+import './identity-golden.css';
+import './shell-session-golden.css';
 
 const root = document.getElementById('root');
 

@@ -21,6 +21,7 @@ final class IdentityCursorCodec {
     private static final String ENVELOPE_VERSION = "v2";
     private static final String PAYLOAD_VERSION = "p1";
     private static final String IDENTITY_KIND = "identity";
+    private static final String FILTERED_IDENTITY_KIND = "identity-filtered";
     private static final String CANONICAL_KIND = "canonical-attribute";
     private static final String PRINCIPAL_KIND = "principal";
     private static final int MAX_CURSOR_LENGTH = 4096;
@@ -62,6 +63,43 @@ final class IdentityCursorCodec {
             return new IdentityPagePosition(
                     Instant.ofEpochSecond(Long.parseLong(parts[4]), Integer.parseInt(parts[5])),
                     UUID.fromString(parts[6]));
+        } catch (RuntimeException invalid) {
+            throw invalid(invalid);
+        }
+    }
+
+    String encodeFilteredIdentity(
+            TenantContext tenant,
+            String filterBinding,
+            IdentityPagePosition position) {
+        if (position == null) return null;
+        return sign(payload(
+                FILTERED_IDENTITY_KIND,
+                tenant.tenantId().toString(),
+                filterBinding,
+                clock.instant().toString(),
+                Long.toString(position.createdAt().getEpochSecond()),
+                Integer.toString(position.createdAt().getNano()),
+                position.id().toString()));
+    }
+
+    IdentityPagePosition decodeFilteredIdentity(
+            String cursor,
+            TenantContext tenant,
+            String filterBinding) {
+        String[] parts = verifiedPayload(cursor);
+        if (parts.length != 8
+                || !PAYLOAD_VERSION.equals(parts[0])
+                || !FILTERED_IDENTITY_KIND.equals(parts[1])
+                || !tenant.tenantId().toString().equals(parts[2])
+                || !filterBinding.equals(parts[3])) {
+            throw invalid();
+        }
+        validateIssuedAt(parts[4]);
+        try {
+            return new IdentityPagePosition(
+                    Instant.ofEpochSecond(Long.parseLong(parts[5]), Integer.parseInt(parts[6])),
+                    UUID.fromString(parts[7]));
         } catch (RuntimeException invalid) {
             throw invalid(invalid);
         }

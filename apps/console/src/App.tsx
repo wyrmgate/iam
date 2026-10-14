@@ -21,6 +21,7 @@ import { AuditWorkspace } from './workspaces/AuditWorkspace';
 import { CatalogWorkspace } from './workspaces/CatalogWorkspace';
 import { CredentialsWorkspace } from './workspaces/CredentialsWorkspace';
 import { PoliciesWorkspace, ReviewsWorkspace } from './workspaces/GovernanceWorkspace';
+import { IdentityCollectionPage } from './workspaces/IdentityCollectionPage';
 import { IdentityWorkspace } from './workspaces/IdentityWorkspace';
 import { IntegrationsWorkspace } from './workspaces/IntegrationsWorkspace';
 import { PrincipalsWorkspace } from './workspaces/PrincipalsWorkspace';
@@ -67,7 +68,13 @@ export function App() {
   return (
     <>
       {route === 'overview' && <OverviewPage system={system} authority={authority} />}
-      {route === 'identities' && <IdentityWorkspace selectedId={identityId} onSelect={(id) => go(id ? identityDetailPath(id) : '/identities')} />}
+      {route === 'identities' && !identityId && (
+        <IdentityCollectionPage
+          authority={authority.status === 'ready' ? authority.value : null}
+          onSelect={(id) => go(identityDetailPath(id))}
+        />
+      )}
+      {route === 'identities' && identityId && <IdentityWorkspace selectedId={identityId} onSelect={(id) => go(id ? identityDetailPath(id) : '/identities')} />}
       {route === 'principals' && <PrincipalsWorkspace />}
       {route === 'catalog' && <CatalogWorkspace />}
       {route === 'access' && <AccessWorkspace />}

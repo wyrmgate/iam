@@ -5,6 +5,7 @@ import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttribu
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributePage;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributePagePosition;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributeReadView;
+import io.wyrmgate.iam.identity.application.IdentityQueryModels.IdentityListFilter;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.IdentityPage;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.IdentityPagePosition;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeOverride;
@@ -45,8 +46,18 @@ public final class IdentityQueryService {
     }
 
     public IdentityPage listIdentities(TenantContext tenant, IdentityPagePosition after, int limit) {
+        return listIdentities(tenant, IdentityListFilter.none(), after, limit);
+    }
+
+    public IdentityPage listIdentities(
+            TenantContext tenant,
+            IdentityListFilter filter,
+            IdentityPagePosition after,
+            int limit) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(filter, "filter");
         requireLimit(limit);
-        List<Identity> fetched = queries.findIdentityPage(tenant, after, limit + 1);
+        List<Identity> fetched = queries.findIdentityPage(tenant, filter, after, limit + 1);
         boolean hasMore = fetched.size() > limit;
         List<Identity> items = List.copyOf(fetched.subList(0, Math.min(limit, fetched.size())));
         IdentityPagePosition next = hasMore
