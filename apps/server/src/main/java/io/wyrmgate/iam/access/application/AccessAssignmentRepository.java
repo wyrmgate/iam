@@ -16,55 +16,29 @@ public interface AccessAssignmentRepository {
     default Optional<AccessAssignment> findByProvenance(
             TenantContext tenant,
             AccessAssignment.ProvenanceKind provenanceKind,
-            UUID provenanceRefId) {
-        return Optional.empty();
-    }
+            UUID provenanceRefId) { return Optional.empty(); }
 
-    default List<AccessAssignment> findByRoleId(
-            TenantContext tenant, UUID roleId) {
-        return List.of();
-    }
+    default List<AccessAssignment> findByRoleId(TenantContext tenant, UUID roleId) { return List.of(); }
 
     default Optional<AccessAssignment> findCurrentLifecyclePolicyAssignment(
-            TenantContext tenant,
-            UUID identityId,
-            UUID ruleId) {
-        return Optional.empty();
-    }
+            TenantContext tenant, UUID identityId, UUID ruleId) { return Optional.empty(); }
 
     default List<AccessAssignment> findCurrentLifecyclePolicyAssignments(
-            TenantContext tenant,
-            UUID identityId) {
-        return List.of();
-    }
+            TenantContext tenant, UUID identityId) { return List.of(); }
 
     default List<AccessAssignment> findPage(
-            TenantContext tenant,
-            Instant afterCreatedAt,
-            UUID afterId,
-            int limit) {
-        return List.of();
-    }
+            TenantContext tenant, Instant afterCreatedAt, UUID afterId, int limit) { return List.of(); }
+
+    default List<AccessAssignment> findPageByIdentity(
+            TenantContext tenant, UUID identityId, Instant afterCreatedAt, UUID afterId, int limit) { return List.of(); }
 
     default List<AccessAssignment> findReviewPage(
-            TenantContext tenant,
-            UUID identityId,
-            Instant snapshotAt,
-            Instant afterCreatedAt,
-            UUID afterId,
-            int limit) {
-        return List.of();
-    }
+            TenantContext tenant, UUID identityId, Instant snapshotAt,
+            Instant afterCreatedAt, UUID afterId, int limit) { return List.of(); }
 
     default List<AccessAssignment> findIdentityReductionPage(
-            TenantContext tenant,
-            UUID identityId,
-            Instant snapshotAt,
-            Instant afterCreatedAt,
-            UUID afterId,
-            int limit) {
-        return List.of();
-    }
+            TenantContext tenant, UUID identityId, Instant snapshotAt,
+            Instant afterCreatedAt, UUID afterId, int limit) { return List.of(); }
 
     AccessAssignment updateLifecycle(
             TenantContext tenant,
