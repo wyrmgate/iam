@@ -13,44 +13,48 @@ public final class AccessAssignmentQueryService {
 
     private final AccessAssignmentRepository assignments;
 
-    public AccessAssignmentQueryService(
-            AccessAssignmentRepository assignments) {
-        this.assignments = Objects.requireNonNull(
-                assignments, "assignments");
+    public AccessAssignmentQueryService(AccessAssignmentRepository assignments) {
+        this.assignments = Objects.requireNonNull(assignments, "assignments");
     }
 
-    public Optional<AccessAssignment> find(
-            TenantContext tenant, UUID assignmentId) {
+    public Optional<AccessAssignment> find(TenantContext tenant, UUID assignmentId) {
         return assignments.findById(tenant, assignmentId);
+    }
+
+    public AssignmentPage list(TenantContext tenant, AssignmentPosition after, int limit) {
+        return list(tenant, null, after, limit);
     }
 
     public AssignmentPage list(
             TenantContext tenant,
+            UUID identityId,
             AssignmentPosition after,
             int limit) {
         requireLimit(limit);
-        List<AccessAssignment> fetched = assignments.findPage(
-                tenant,
-                after == null ? null : after.createdAt(),
-                after == null ? null : after.id(),
-                limit + 1);
+        List<AccessAssignment> fetched = identityId == null
+                ? assignments.findPage(
+                        tenant,
+                        after == null ? null : after.createdAt(),
+                        after == null ? null : after.id(),
+                        limit + 1)
+                : assignments.findPageByIdentity(
+                        tenant,
+                        identityId,
+                        after == null ? null : after.createdAt(),
+                        after == null ? null : after.id(),
+                        limit + 1);
         boolean more = fetched.size() > limit;
         List<AccessAssignment> items = List.copyOf(
-                fetched.subList(
-                        0,
-                        Math.min(limit, fetched.size())));
+                fetched.subList(0, Math.min(limit, fetched.size())));
         AssignmentPosition next = more
-                ? new AssignmentPosition(
-                        items.getLast().createdAt(),
-                        items.getLast().id())
+                ? new AssignmentPosition(items.getLast().createdAt(), items.getLast().id())
                 : null;
         return new AssignmentPage(items, next);
     }
 
     private static void requireLimit(int limit) {
         if (limit < 1 || limit > 200) {
-            throw new IllegalArgumentException(
-                    "limit must be between 1 and 200");
+            throw new IllegalArgumentException("limit must be between 1 and 200");
         }
     }
 }
