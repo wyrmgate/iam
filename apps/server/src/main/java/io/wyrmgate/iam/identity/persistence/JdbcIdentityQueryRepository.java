@@ -2,6 +2,7 @@ package io.wyrmgate.iam.identity.persistence;
 
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributeDefinitionEntry;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.CanonicalAttributePagePosition;
+import io.wyrmgate.iam.identity.application.IdentityQueryModels.IdentityListFilter;
 import io.wyrmgate.iam.identity.application.IdentityQueryModels.IdentityPagePosition;
 import io.wyrmgate.iam.identity.application.IdentityQueryRepository;
 import io.wyrmgate.iam.identity.domain.AttributeDefinition;
@@ -16,6 +17,7 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -32,9 +34,20 @@ public final class JdbcIdentityQueryRepository implements IdentityQueryRepositor
 
     @Override
     public List<Identity> findIdentityPage(TenantContext tenant, IdentityPagePosition after, int limit) {
+        return findIdentityPage(tenant, IdentityListFilter.none(), after, limit);
+    }
+
+    @Override
+    public List<Identity> findIdentityPage(
+            TenantContext tenant,
+            IdentityListFilter filter,
+            IdentityPagePosition after,
+            int limit) {
         Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(filter, "filter");
         if (limit < 1) throw new IllegalArgumentException("limit must be positive");
-        String select = """
+
+        StringBuilder sql = new StringBuilder("""
                 SELECT i.id, i.identity_type, i.lifecycle_state, i.display_name,
                        i.revision, i.created_at, i.updated_at,
                        (p.identity_id IS NOT NULL) AS has_person_profile,
@@ -48,17 +61,31 @@ public final class JdbcIdentityQueryRepository implements IdentityQueryRepositor
                 LEFT JOIN identity.workload_profile w
                   ON w.tenant_id = i.tenant_id AND w.identity_id = i.id
                 WHERE i.tenant_id = ?
-                """;
-        if (after == null) {
-            return jdbc.query(select + " ORDER BY i.created_at, i.id LIMIT ?",
-                    (rs, rowNum) -> identity(rs), tenant.tenantId(), limit);
+                """);
+        List<Object> args = new ArrayList<>();
+        args.add(tenant.tenantId());
+
+        if (!filter.displayNamePrefix().isEmpty()) {
+            sql.append(" AND starts_with(LOWER(i.display_name), ?)");
+            args.add(filter.displayNamePrefix());
         }
-        return jdbc.query(select + """
-                  AND (i.created_at > ? OR (i.created_at = ? AND i.id > ?))
-                ORDER BY i.created_at, i.id
-                LIMIT ?
-                """, (rs, rowNum) -> identity(rs), tenant.tenantId(),
-                Timestamp.from(after.createdAt()), Timestamp.from(after.createdAt()), after.id(), limit);
+        if (filter.type() != null) {
+            sql.append(" AND i.identity_type = ?");
+            args.add(filter.type().name());
+        }
+        if (filter.lifecycleState() != null) {
+            sql.append(" AND i.lifecycle_state = ?");
+            args.add(filter.lifecycleState().name());
+        }
+        if (after != null) {
+            sql.append(" AND (i.created_at > ? OR (i.created_at = ? AND i.id > ?))");
+            args.add(Timestamp.from(after.createdAt()));
+            args.add(Timestamp.from(after.createdAt()));
+            args.add(after.id());
+        }
+        sql.append(" ORDER BY i.created_at, i.id LIMIT ?");
+        args.add(limit);
+        return jdbc.query(sql.toString(), (rs, rowNum) -> identity(rs), args.toArray());
     }
 
     @Override
