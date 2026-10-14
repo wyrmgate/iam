@@ -3,7 +3,7 @@ import { assertSourceContains, readConsoleSources } from './helpers/source-contr
 
 const { page, css, app } = await readConsoleSources({
   page: 'workspaces/IdentityCollectionPage.tsx',
-  css: 'identity-golden-page.css',
+  css: 'identity-golden.css',
   app: 'App.tsx',
 });
 
