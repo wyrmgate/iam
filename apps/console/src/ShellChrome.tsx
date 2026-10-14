@@ -26,6 +26,11 @@ function shortId(value: string | undefined | null): string {
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
 }
 
+function actorInitials(value: string | undefined | null): string {
+  if (!value) return '—';
+  return value.slice(0, 2).toUpperCase();
+}
+
 export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellChromeProps) {
   const pathname = useConsolePathname();
   const [authority, setAuthority] = useState<CurrentAdministrativeAuthority | null>(null);
@@ -126,6 +131,16 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
   const currentRouteLabel = currentRoute?.label ?? 'Page not found';
   const runtimeOnline = Boolean(system && system.status.toLowerCase() !== 'unavailable');
 
+  const actorMenu = actorOpen ? (
+    <div className="actor-menu">
+      <p className="menu-kicker">Server-derived session context</p>
+      <strong>{shortId(authority?.actorIdentityId)}</strong>
+      <span>{authority ? `${authority.authorities.length} effective administrative authority source${authority.authorities.length === 1 ? '' : 's'}` : 'Authority projection unavailable'}</span>
+      <button onClick={() => openRoute('/administration')}>View my administrative authority</button>
+      {onSignOut ? <button disabled={signOutBusy} onClick={() => void onSignOut()}>{signOutBusy ? 'Signing out…' : 'Sign out'}</button> : <span className="external-session-note">Session managed externally</span>}
+    </div>
+  ) : null;
+
   return (
     <div className="product-shell">
       <aside className={`navigation-dock ${mobileNavigationOpen ? 'mobile-open' : ''}`} aria-label="Product navigation">
@@ -170,6 +185,17 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
             <span className={`runtime-dot ${runtimeOnline ? 'online' : ''}`} aria-hidden="true" />
             <span>{systemUnavailable ? 'Runtime unavailable' : system ? system.status : 'Checking runtime'}</span>
           </div>
+          <div className="dock-session-wrap">
+            <button className="dock-session" aria-expanded={actorOpen} onClick={() => setActorOpen((value) => !value)}>
+              <span className="dock-session-mark" aria-hidden="true">{actorInitials(authority?.actorIdentityId)}</span>
+              <span className="dock-session-copy">
+                <strong>{authorityUnavailable ? 'Actor unavailable' : shortId(authority?.actorIdentityId)}</strong>
+                <small>{authority ? `Tenant ${shortId(authority.tenantId)}` : 'Resolving tenant…'}</small>
+              </span>
+              <span aria-hidden="true">⌄</span>
+            </button>
+            {actorMenu}
+          </div>
         </div>
       </aside>
 
@@ -195,19 +221,11 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
             </button>
             <div className="actor-control">
               <button className="actor-trigger" aria-expanded={actorOpen} onClick={() => setActorOpen((value) => !value)}>
-                <span className="actor-mark" aria-hidden="true">{authority?.actorIdentityId.slice(0, 2).toUpperCase() ?? '—'}</span>
+                <span className="actor-mark" aria-hidden="true">{actorInitials(authority?.actorIdentityId)}</span>
                 <span className="actor-copy"><strong>Current actor</strong><small>{shortId(authority?.actorIdentityId)}</small></span>
                 <span aria-hidden="true">⌄</span>
               </button>
-              {actorOpen ? (
-                <div className="actor-menu">
-                  <p className="menu-kicker">Server-derived session context</p>
-                  <strong>{shortId(authority?.actorIdentityId)}</strong>
-                  <span>{authority ? `${authority.authorities.length} effective administrative authority source${authority.authorities.length === 1 ? '' : 's'}` : 'Authority projection unavailable'}</span>
-                  <button onClick={() => openRoute('/administration')}>View my administrative authority</button>
-                  {onSignOut ? <button disabled={signOutBusy} onClick={() => void onSignOut()}>{signOutBusy ? 'Signing out…' : 'Sign out'}</button> : <span className="external-session-note">Session managed externally</span>}
-                </div>
-              ) : null}
+              {actorMenu}
             </div>
           </div>
         </header>
