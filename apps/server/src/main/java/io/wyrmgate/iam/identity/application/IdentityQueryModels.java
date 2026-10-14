@@ -7,8 +7,11 @@ import io.wyrmgate.iam.identity.domain.CanonicalAttributeState;
 import io.wyrmgate.iam.identity.domain.CanonicalAttributeType;
 import io.wyrmgate.iam.identity.domain.CanonicalValue;
 import io.wyrmgate.iam.identity.domain.Identity;
+import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
+import io.wyrmgate.iam.identity.domain.IdentityType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -22,6 +25,36 @@ public final class IdentityQueryModels {
         public IdentityPagePosition {
             Objects.requireNonNull(createdAt, "createdAt");
             Objects.requireNonNull(id, "id");
+        }
+    }
+
+    /**
+     * Exact typed filters plus a normalized case-insensitive display-name prefix.
+     * The filter is query context only; it never becomes Identity authoritative state.
+     */
+    public record IdentityListFilter(
+            String displayNamePrefix,
+            IdentityType type,
+            IdentityLifecycleState lifecycleState) {
+        public IdentityListFilter {
+            displayNamePrefix = displayNamePrefix == null ? "" : displayNamePrefix.trim().toLowerCase(Locale.ROOT);
+            if (displayNamePrefix.length() > 300 || displayNamePrefix.indexOf('\u0000') >= 0) {
+                throw new IllegalArgumentException("displayNamePrefix must contain no NUL and be at most 300 characters");
+            }
+        }
+
+        public static IdentityListFilter none() {
+            return new IdentityListFilter("", null, null);
+        }
+
+        public boolean isEmpty() {
+            return displayNamePrefix.isEmpty() && type == null && lifecycleState == null;
+        }
+
+        /** Stable normalized query binding included inside signed collection cursors. */
+        public String cursorBinding() {
+            return displayNamePrefix + "|" + (type == null ? "" : type.name()) + "|"
+                    + (lifecycleState == null ? "" : lifecycleState.name());
         }
     }
 
