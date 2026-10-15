@@ -10,15 +10,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   equivalence:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout
+      - name: Checkout feature branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Java
         uses: actions/setup-java@v6
@@ -75,6 +77,60 @@ jobs:
           sh ./apps/server/mvnw -f apps/server/pom.xml \
             -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:/tmp/wyrmgate-historical-migrations --wyrmgate.migrate-only=true" \
             spring-boot:run
+
+      - name: Regenerate baseline from historical schema when stale
+        run: |
+          target=apps/server/src/main/resources/db/migration/B69__current_schema.sql
+          mkdir -p /tmp/wyrmgate-baseline
+          docker exec wyrmgate-baseline-postgres \
+            pg_dump -U wyrmgate -d historical \
+              --schema-only --no-owner --no-privileges \
+              --exclude-table=public.flyway_schema_history \
+            > /tmp/wyrmgate-baseline/raw.sql
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('/tmp/wyrmgate-baseline/raw.sql').read_text().splitlines()
+          output = []
+          in_dollar_quote = False
+          previous_blank = False
+          for line in source:
+              if line.startswith('\\restrict') or line.startswith('\\unrestrict'):
+                  continue
+              if not in_dollar_quote and line.startswith('--'):
+                  continue
+              if not in_dollar_quote and line.startswith('SET ') and line != 'SET check_function_bodies = false;':
+                  continue
+              if not in_dollar_quote and line.startswith("SELECT pg_catalog.set_config('search_path'"):
+                  continue
+              blank = not line.strip()
+              if blank and previous_blank:
+                  continue
+              output.append(line.rstrip())
+              previous_blank = blank
+              if line.count('$$') % 2 == 1:
+                  in_dollar_quote = not in_dollar_quote
+          text = '\n'.join(output).strip() + '\n'
+          target = Path('/tmp/wyrmgate-baseline/B69__current_schema.sql')
+          target.write_text(text)
+          if 'SET check_function_bodies = false;' not in text:
+              raise SystemExit('required pg_dump restore prerequisite is absent')
+          if '\\restrict' in text or '\\unrestrict' in text:
+              raise SystemExit('psql-only meta commands remain in baseline')
+          PY
+          if cmp -s /tmp/wyrmgate-baseline/B69__current_schema.sql "$target"; then
+            exit 0
+          fi
+          git fetch origin ${{ github.head_ref }}
+          git reset --hard origin/${{ github.head_ref }}
+          cp /tmp/wyrmgate-baseline/B69__current_schema.sql "$target"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$target"
+          git commit -m "fix(db): preserve baseline restore prerequisites"
+          git push origin HEAD:${{ github.head_ref }}
+          echo 'Baseline was regenerated; a fresh verification run is required.' >&2
+          exit 1
 
       - name: Apply greenfield baseline path
         env:
