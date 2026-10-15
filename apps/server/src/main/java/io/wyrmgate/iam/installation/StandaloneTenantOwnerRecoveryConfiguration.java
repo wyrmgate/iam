@@ -9,6 +9,8 @@ import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
+import java.util.List;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -21,6 +23,7 @@ public class StandaloneTenantOwnerRecoveryConfiguration {
 
     static final String ACTION = "recover-standalone-tenant-owner";
     static final String RESOURCE = "installation-bootstrap";
+    static final String ENABLE_OPTION = "iam.recovery.standalone-tenant-owner.enabled";
 
     @Bean
     @ConditionalOnProperty(
@@ -34,6 +37,7 @@ public class StandaloneTenantOwnerRecoveryConfiguration {
             SecurityAuditPort securityAudit,
             IdGenerator ids) {
         return args -> {
+            requireExplicitCommandArgument(args);
             requireNonWeb(environment);
             InstallationBootstrapPlan plan = installationRepository.find()
                     .orElseThrow(() -> new StandaloneTenantOwnerRecoveryNotEligibleException(
@@ -67,6 +71,17 @@ public class StandaloneTenantOwnerRecoveryConfiguration {
                 throw exception;
             }
         };
+    }
+
+    private static void requireExplicitCommandArgument(ApplicationArguments args) {
+        List<String> values = args.getOptionValues(ENABLE_OPTION);
+        if (!args.containsOption(ENABLE_OPTION)
+                || values == null
+                || values.size() != 1
+                || !"true".equalsIgnoreCase(values.getFirst())) {
+            throw new StandaloneTenantOwnerRecoveryNotEligibleException(
+                    "recovery_requires_explicit_command_argument");
+        }
     }
 
     private static void requireNonWeb(Environment environment) {
