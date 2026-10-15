@@ -1,0 +1,49 @@
+.identity-access-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  max-width: 1540px;
+  margin: 18px auto -4px;
+  padding: 10px 14px;
+  border: 1px solid #dfe5ed;
+  background: #f7faff;
+}
+
+.identity-access-links > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.identity-access-links strong {
+  color: #233149;
+  font-size: 12px;
+}
+
+.identity-access-links span {
+  color: #6f7b8f;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.identity-access-links > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  .identity-access-links {
+    display: grid;
+    margin: 10px 12px -4px;
+  }
+
+  .identity-access-links > div:last-child {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .identity-access-links > div:last-child > button {
+    width: 100%;
+  }
+}
