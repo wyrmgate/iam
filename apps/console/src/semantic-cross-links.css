@@ -1,0 +1,50 @@
+.semantic-cross-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  max-width: 1540px;
+  margin: 18px auto -4px;
+  padding: 10px 14px;
+  border: 1px solid #dfe5ed;
+  background: #f7faff;
+}
+
+.semantic-cross-links > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.semantic-cross-links strong {
+  color: #233149;
+  font-size: 12px;
+}
+
+.semantic-cross-links span {
+  color: #6f7b8f;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.semantic-cross-links > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  .semantic-cross-links {
+    display: grid;
+    margin: 10px 12px -4px;
+  }
+
+  .semantic-cross-links > div:last-child {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .semantic-cross-links > div:last-child > button {
+    width: 100%;
+  }
+}
