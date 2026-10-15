@@ -9,7 +9,6 @@ import './shell-theme.css';
 import './shell-foundation.css';
 import './auth-login-viewport.css';
 import './shell-session-golden.css';
-import './identity-page-standard.css';
 
 const root = document.getElementById('root');
 
