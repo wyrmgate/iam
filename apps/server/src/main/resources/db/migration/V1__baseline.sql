@@ -1,3 +1,0 @@
--- Wyrmgate IAM baseline migration.
--- Domain tables are intentionally introduced by capability-focused migrations
--- rather than pre-creating speculative schema in the platform bootstrap.
