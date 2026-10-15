@@ -21,6 +21,23 @@ The Railway service is connected to `wyrmgate/iam` `main`, uses repository root 
 
 The legacy Railway Config-as-Code file is not restored. Railway's former checked-in `apps/server/railway.json` path was retired, and the current service is configured through the selected Railway environment/settings. If Railway's supported infrastructure-as-code mechanism is adopted later, it requires a separate reviewed change.
 
+## First-run bootstrap posture
+
+A fresh shared DEV installation must use the ADR-0045 first-run web setup wizard. The ADR-0044 startup/headless bootstrap remains a supported product adapter for non-interactive deployments, but it is **not** the shared DEV activation path.
+
+Railway supplies the installation-only setup proof as the secret variable `IAM_BOOTSTRAP_WEB_SETUP_SECRET`. The container entrypoint materializes that value into a mode-`0600` runtime file before Java starts, exports only `IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE` to the application process, and removes the plaintext environment variable from the Java child process. The Java setup adapter therefore preserves ADR-0045's file-only trusted boundary.
+
+For shared DEV:
+
+- `IAM_BOOTSTRAP_WEB_ENABLED=true`;
+- `IAM_BOOTSTRAP_INSTALLATION_ENABLED=false`;
+- `IAM_BOOTSTRAP_WEB_SETUP_SECRET` is a Railway secret containing at least 32 random characters;
+- `IAM_BOOTSTRAP_INSTALLATION_CONSOLE_REDIRECT_URI` is the exact trusted Console callback URI;
+- the Console is opened normally and the operator completes the first-run wizard;
+- after `SEALED`, remove the setup secret and disable web setup.
+
+The server container fails closed when `IAM_DEPLOYMENT_ENVIRONMENT=dev` and `IAM_BOOTSTRAP_INSTALLATION_ENABLED=true` are configured together. This prevents shared DEV from silently bypassing the user-visible first-run flow.
+
 ## Console / Cloudflare Pages contract
 
 The console build and Pages Function routing contract remains:
@@ -48,7 +65,8 @@ The selected Railway DEV service must:
 8. keep `IAM_OTEL_ENABLED=false` unless remote telemetry is intentionally being tested;
 9. use Neon PostgreSQL as the shared DEV database target;
 10. keep Serverless enabled while the environment is operated under the low-cost DEV posture;
-11. preserve external-call-outside-authoritative-transaction and retry/idempotency semantics.
+11. use the first-run web setup wizard for fresh DEV installation and reject the startup/headless bootstrap adapter;
+12. preserve external-call-outside-authoritative-transaction and retry/idempotency semantics.
 
 The current free/low-cost Railway resource envelope is an operational constraint, not architecture. Resource limits may be tuned without changing canonical domain semantics, but the service must remain large enough to start Spring, run Flyway safely and pass the health check.
 
@@ -68,6 +86,7 @@ The DEV Deployment Contract validates:
 
 - the Cloudflare Pages build/proxy contract;
 - the Railway-compatible server Docker/runtime configuration;
+- the DEV wizard-bootstrap guardrail and runtime setup-secret materialization contract;
 - the current managed DEV topology documentation.
 
 Railway `Wait for CI` is the deployment gate after GitHub Actions. Railway then builds the checked-in Dockerfile, deploys the reviewed revision and applies its own `/actuator/health` gate.
@@ -79,13 +98,14 @@ push/merge to main
   -> GitHub Core/Security/Container and DEV contract checks
   -> Railway Wait for CI releases the deployment
   -> Railway builds apps/server/Dockerfile
+  -> container materializes the setup proof file when configured
   -> Flyway/application startup
   -> /actuator/health passes
-  -> deployment becomes eligible for shared DEV use
+  -> Console presents first-run wizard for an unsealed fresh database
 ```
 
 ## Activation status
 
-Selecting Railway again does not by itself prove the shared DEV environment is operational. The current service must complete the checks in [`../operations/dev-managed-activation.md`](../operations/dev-managed-activation.md), including health, Flyway, tenant isolation, Cloudflare routing and recovery verification, before the managed DEV topology is described as fully activated.
+Selecting Railway again does not by itself prove the shared DEV environment is operational. The current service must complete the checks in [`../operations/dev-managed-activation.md`](../operations/dev-managed-activation.md), including first-run wizard sealing, health, Flyway, tenant isolation, Cloudflare routing and recovery verification, before the managed DEV topology is described as fully activated.
 
 Historical Railway configuration and deployment evidence remain historical implementation evidence only; they do not substitute for verification of the current service.

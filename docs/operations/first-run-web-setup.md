@@ -18,11 +18,13 @@ The browser does not configure the public/base URL or Console redirect. Those re
 
 ## Create the setup access secret
 
-Generate an installation-only random secret containing at least 32 characters and place it in a file readable only by the Wyrmgate process/operator boundary. The file should contain only the secret; a single trailing newline is ignored.
+Generate an installation-only random secret containing at least 32 characters.
 
 Do not use the initial administrator password as this secret. Do not place the setup secret in source control, tickets, screenshots, ordinary logs or browser bookmarks.
 
-Example deployment configuration:
+### File / secret-mount deployment
+
+For a deployment that can mount a secret file directly, place the secret in a file readable only by the Wyrmgate process/operator boundary. The file should contain only the secret; a single trailing newline is ignored.
 
 ```text
 IAM_BOOTSTRAP_WEB_ENABLED=true
@@ -32,6 +34,27 @@ IAM_BOOTSTRAP_WEB_SESSION_TTL=PT15M
 IAM_BOOTSTRAP_INSTALLATION_ENABLED=false
 IAM_BOOTSTRAP_INSTALLATION_CONSOLE_REDIRECT_URI=https://wyrmgate.example/callback
 ```
+
+### Managed runtime environment-secret transport
+
+The checked-in Wyrmgate server container also supports managed runtimes such as Railway that deliver secrets as environment variables rather than secret files.
+
+Set:
+
+```text
+IAM_BOOTSTRAP_WEB_ENABLED=true
+IAM_BOOTSTRAP_WEB_SETUP_SECRET=<managed deployment secret, at least 32 characters>
+IAM_BOOTSTRAP_WEB_SESSION_TTL=PT15M
+
+IAM_BOOTSTRAP_INSTALLATION_ENABLED=false
+IAM_BOOTSTRAP_INSTALLATION_CONSOLE_REDIRECT_URI=https://wyrmgate.example/callback
+```
+
+`IAM_BOOTSTRAP_WEB_SETUP_SECRET` is **container transport**, not a Java application property. Before Java starts, `apps/server/docker-entrypoint.sh` writes the value into a private runtime file using a restrictive umask, exports that path as `IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE`, unsets the plaintext environment variable, then execs the Java process.
+
+The application therefore continues to consume the same ADR-0045 file-only setup-proof boundary. Do not configure both `IAM_BOOTSTRAP_WEB_SETUP_SECRET` and `IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE`.
+
+When `IAM_DEPLOYMENT_ENVIRONMENT=dev`, the official server container also rejects `IAM_BOOTSTRAP_INSTALLATION_ENABLED=true`; shared DEV is intentionally required to exercise this wizard path.
 
 `IAM_BOOTSTRAP_WEB_SESSION_TTL` is optional. The default is 15 minutes and the maximum accepted value is one hour.
 
@@ -55,7 +78,7 @@ Secure setup access
 
 ### Secure setup access
 
-Enter the setup access secret from the operator-controlled file. A successful proof establishes a short-lived setup session using a `Secure`, `HttpOnly`, `SameSite=Strict` cookie. Setup mutations also require a separate same-origin CSRF cookie/header pair.
+Enter the setup access secret from the operator-controlled deployment secret source. A successful proof establishes a short-lived setup session using a `Secure`, `HttpOnly`, `SameSite=Strict` cookie. Setup mutations also require a separate same-origin CSRF cookie/header pair.
 
 The setup session is not an IAM Principal, Credential or Administration authority and cannot authorize ordinary `/api/v1/**` operations.
 
@@ -110,12 +133,12 @@ When semantic verification succeeds, the server advances `VERIFIED -> SEALED`, c
 Then:
 
 1. disable `IAM_BOOTSTRAP_WEB_ENABLED` in deployment configuration;
-2. remove/unmount `/run/secrets/wyrmgate_setup_access` or the configured setup-secret file;
+2. remove/unmount the configured setup-secret file **or** remove `IAM_BOOTSTRAP_WEB_SETUP_SECRET` from the managed runtime;
 3. keep the trusted Console redirect configuration used by normal Console/SSO operation;
 4. sign in using the administrator username and password created in the wizard;
 5. establish the deployment's normal delegated/recovery administrator posture.
 
-A sealed deployment never reopens setup, even if the setup-secret file remains present or all administrators are later lost.
+A sealed deployment never reopens setup, even if setup-secret material remains configured or all administrators are later lost.
 
 ## HTTP surface
 
@@ -138,6 +161,7 @@ The adapter does not enable cross-origin setup access.
 ## Security notes
 
 - setup proof and administrator password are separate secrets with separate semantics;
+- managed-runtime environment transport is reduced to a private file before Java starts and the plaintext setup variable is removed from the Java child environment;
 - setup proof plaintext is discarded after startup configuration is derived and after each browser proof request is handled;
 - no installation object IDs, correlation IDs, verifier material or secret values are returned by setup status;
 - trusted Console routing is injected server-side, never accepted from setup request bodies;

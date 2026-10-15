@@ -13,6 +13,8 @@ The setup secret is installation-scoped proof only. It never represents a Tenant
 
 The first administrator password is a separate Credential secret and must never be reused as the setup proof.
 
+Managed container runtimes may transport the setup proof to the Wyrmgate container through a provider-managed secret environment variable. The official server entrypoint may materialize that value into a private runtime file before Java starts, unset the plaintext variable, and pass only the file path into the application. This does not change the Java application's file-only trusted boundary.
+
 ## Browser session
 
 A valid setup proof is exchanged for a short-lived signed setup-session cookie. The source setup secret is reduced to derived proof/signing material at server startup and is not retained in plaintext.
@@ -57,12 +59,14 @@ Before the durable plan exists, browser input is limited to the first Tenant dis
 
 The setup-secret file may contain a single trailing newline. At least 32 characters are required. The server derives separate SHA-256 context-separated values for proof comparison and setup-session signing, then wipes the plaintext character buffer.
 
+When the official container receives `IAM_BOOTSTRAP_WEB_SETUP_SECRET`, the entrypoint writes it under an ephemeral runtime directory with a restrictive `077` umask, exports the resulting path as `IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE`, and removes `IAM_BOOTSTRAP_WEB_SETUP_SECRET` from the environment inherited by Java. Configuring both transport forms fails closed.
+
 Browser proof and administrator password request records use mutable character arrays server-side and are wiped after handling. The installation service separately copies/wipes password material while passing it only to Credential-owned enrollment/verification.
 
 No setup proof or administrator password may be logged, audited, included in events or persisted in `platform.installation_bootstrap`.
 
 ## Seal and recovery
 
-The deployment bootstrap seal remains irreversible. A successful `VERIFIED -> SEALED` transition clears setup cookies. Keeping or recreating the setup-secret file cannot reopen setup.
+The deployment bootstrap seal remains irreversible. A successful `VERIFIED -> SEALED` transition clears setup cookies. Keeping or recreating setup-secret transport material cannot reopen setup.
 
 Loss of all administrators after sealing is a recovery concern and must use a separately governed recovery mechanism. Deleting or modifying the installation seal is not a supported recovery procedure.

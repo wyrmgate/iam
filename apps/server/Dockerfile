@@ -16,7 +16,8 @@ RUN apk upgrade --no-cache \
     && addgroup -S -g 10001 wyrmgate \
     && adduser -S -D -H -u 10001 -G wyrmgate wyrmgate
 COPY --from=build --chown=10001:10001 /workspace/apps/server/target/wyrmgate-iam-server-0.1.0-SNAPSHOT.jar /app/wyrmgate-iam-server.jar
+COPY --chown=10001:10001 apps/server/docker-entrypoint.sh /app/docker-entrypoint.sh
 
 USER 10001:10001
 EXPOSE 8080
-ENTRYPOINT ["java","-XX:MaxRAMPercentage=75.0","-jar","/app/wyrmgate-iam-server.jar"]
+ENTRYPOINT ["/bin/sh","/app/docker-entrypoint.sh","java","-XX:MaxRAMPercentage=75.0","-jar","/app/wyrmgate-iam-server.jar"]
