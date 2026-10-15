@@ -10,6 +10,7 @@ const sources = await readConsoleSources({
   principals: 'workspaces/PrincipalsWorkspace.tsx',
   catalog: 'workspaces/CatalogWorkspace.tsx',
   access: 'workspaces/AccessWorkspace.tsx',
+  accessApi: 'access/accessApi.ts',
   governance: 'workspaces/GovernanceWorkspace.tsx',
   credential: 'workspaces/CredentialsWorkspace.tsx',
   integration: 'workspaces/IntegrationsWorkspace.tsx',
@@ -55,7 +56,8 @@ test('each capability ownership surface has a focused implementation file', () =
   assertSourceContains(sources.identity, /export function IdentityWorkspace/, /\/identities/);
   assertSourceContains(sources.principals, /export function PrincipalsWorkspace/, /\/principals/, /Technical account authority owned by Identity/);
   assertSourceContains(sources.catalog, /export function CatalogWorkspace/, /\/applications/, /\/roles/);
-  assertSourceContains(sources.access, /export function AccessWorkspace/, /\/access-assignments/, /\/effective-access/);
+  assertSourceContains(sources.access, /export function AccessWorkspace/, /Assignments · Authoritative/, /Effective access · Read only/);
+  assertSourceContains(sources.accessApi, /\/access-assignments/, /\/console\/access/, /\/lifecycle-access-policy/);
   assertSourceContains(sources.governance, /export function ReviewsWorkspace/, /export function PoliciesWorkspace/, /\/governance\//);
   assertSourceExcludes(sources.governance, /export function RequestsWorkspace/);
   assertSourceContains(sources.credential, /export function CredentialsWorkspace/, /\/credentials/);
