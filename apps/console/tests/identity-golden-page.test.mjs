@@ -4,7 +4,7 @@ import { assertSourceContains, readConsoleSources } from './helpers/source-contr
 const { page, css, geometry, app, main } = await readConsoleSources({
   page: 'workspaces/IdentityCollectionPage.tsx',
   css: 'identity-golden.css',
-  geometry: 'identity360-full-width.css',
+  geometry: 'identity-page-standard.css',
   app: 'App.tsx',
   main: 'main.tsx',
 });
@@ -39,19 +39,20 @@ test('Identity collection has dedicated desktop table and mobile card presentati
   );
 });
 
-test('Identity collection and detail share the full shell workspace geometry', () => {
+test('Identity collection and detail use the shared wide Page geometry', () => {
   assertSourceContains(
     geometry,
     /\.shell-workspace \.identity-golden-page/,
     /\.shell-workspace \.identity360-page/,
-    /width: 100% !important/,
-    /max-width: none !important/,
-    /margin: 0 !important/,
+    /width: min\(96rem, 100%\) !important/,
+    /max-width: 100% !important/,
+    /margin: 0 auto !important/,
     /\.shell-workspace \.identity-golden-header/,
-    /padding-left: 0 !important/,
-    /padding-right: 0 !important/,
+    /\.shell-workspace \.identity360-header/,
+    /padding-left: 2px !important/,
+    /padding-right: 2px !important/,
   );
-  assertSourceContains(main, /identity360-full-width\.css/);
+  assertSourceContains(main, /identity-page-standard\.css/);
 });
 
 test('App uses the golden collection only for the collection route and preserves Identity detail', () => {
