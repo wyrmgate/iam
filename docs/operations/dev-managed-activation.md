@@ -55,7 +55,7 @@ Do not commit or paste real secrets into issues, PRs, documentation or ordinary 
 
 ## ADR-0048 shared DEV database rebaseline
 
-After ADR-0048 is accepted and merged, a shared DEV database carrying the pre-rebaseline V1-V69 Flyway history must **not** be pointed directly at the reset active V1/V2 migration namespace. The shared DEV environment is disposable and should be recreated using [`dev-database-reset.md`](dev-database-reset.md), preferably by provisioning a new empty isolated Neon database/branch, validating it, switching Railway to it, and retiring the old DEV database only after verification.
+After ADR-0048 is accepted and merged, a shared DEV database carrying the pre-rebaseline V1-V69 Flyway history must **not** be pointed directly at the reset active V1-V10 migration namespace. The shared DEV environment is disposable and should be recreated using [`dev-database-reset.md`](dev-database-reset.md), preferably by provisioning a new empty isolated Neon database/branch, validating it, switching Railway to it, and retiring the old DEV database only after verification.
 
 Do not copy or manufacture old `flyway_schema_history` rows into the recreated database. Do not run ADR-0047 recovery on the recreated database: it is a fresh installation and receives ADR-0046 `STANDALONE_TENANT_OWNER` authority directly.
 
@@ -140,7 +140,7 @@ A retained historical database that recorded the withdrawn pre-release V70 carri
 6. Configure the first-run wizard inputs above and verify `IAM_BOOTSTRAP_INSTALLATION_ENABLED=false`.
 7. Deploy and wait for Railway's `/actuator/health` gate to return 2xx.
 8. Verify the deployed server reports healthy over the public Railway HTTPS origin.
-9. Verify `public.flyway_schema_history` begins with the active rebaseline `V1__prepare_current_schema_baseline.sql` and `V2__current_schema_baseline.sql`, plus any later accepted active migrations. It must not contain copied pre-rebaseline V1-V69 history or withdrawn V70.
+9. Verify `public.flyway_schema_history` begins with the active V1-V10 capability baseline (`V1__create_capability_schemas.sql` through `V10__audit_baseline.sql`), plus only legitimate later semantic migrations. It must not contain copied pre-rebaseline V1-V69 history or withdrawn V70.
 10. Verify the server is using non-production DEV data and that tenant isolation checks pass.
 11. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin.
 12. Exercise the console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
@@ -168,9 +168,9 @@ Do not expose the Railway origin as a browser-side `VITE_*` variable merely to b
 For a new or reset DEV database, verify both:
 
 1. the deployed Railway server reports healthy;
-2. `public.flyway_schema_history` reflects the current active rebaseline sequence beginning with V1/V2 and any later accepted deltas.
+2. `public.flyway_schema_history` reflects the current active capability baseline V1-V10 plus only legitimate later semantic deltas.
 
-The application-startup regression test remains repository-level proof that Spring Boot and Flyway wiring works against an empty PostgreSQL database. Persistence Baseline CI separately proves that the active V1/V2 rebaseline checkpoint is schema-equivalent to archived historical V1-V69. Neither replaces checking the actual managed DEV database.
+The application-startup regression test remains repository-level proof that Spring Boot and Flyway wiring works against an empty PostgreSQL database. Persistence Baseline CI separately proves the active capability baseline can create the current schema from an empty PostgreSQL database and that tenant-isolation structural checks pass. The exact equivalence between the former checkpoint and V1-V10 was proven before the former V1-V69 SQL was removed; that evidence remains in PR/CI history rather than as duplicate SQL fixtures. None of these replaces checking the actual managed DEV database.
 
 Historical pre-rebaseline databases are a separate compatibility case and must not be made to look current by rewriting or copying Flyway history.
 
@@ -200,7 +200,7 @@ Managed DEV activation is complete only when all of the following are true:
 
 - the current Railway service deploys a reviewed green `main` SHA;
 - Railway `/actuator/health` is healthy;
-- Flyway is confirmed on the current active rebaseline history;
+- Flyway is confirmed on the current active capability baseline;
 - when moving from pre-rebaseline DEV, the old database was not upgraded in place by fabricated Flyway history;
 - the fresh installation used the first-run web setup wizard and reached `SEALED`;
 - the fresh administrator received current finite `STANDALONE_TENANT_OWNER` authority directly rather than through ADR-0047;
