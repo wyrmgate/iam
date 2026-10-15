@@ -43,6 +43,7 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 | UI-019 | #357 | DONE | issue #357 agent | `refactor/ui-capability-page-decomposition` | exact `main` at `c996a4ffc6573d52ecf9dd850f67ae8b25345685` | UI-018 DONE / Wave 4 structural preparation | `App.tsx` composition and capability-workspace decomposition lock RELEASED | Capability fan-out may proceed from merged `main` ownership surfaces | IAM/domain/API/auth/routing semantics, shared primitive contracts, visual redesign, capability feature behavior | #358 | Core/Security/Container/DEV gates all green on tree `909eaa8f`; squash-merged to `main` as `2bdb72ff33fcf2f15e8236192d3204a8f5db7b2a` with the identical tree; issue #357 closed completed |
 | UI-022 | #414 | DONE | issue #414 agent | `feat/ui-enterprise-standard-v1` | `main` at `564fa474abbf9f8456b82ceb80ac13fea468c039` | Existing shared foundation and Identity collection route | Shared design tokens/theme, page primitives, `StateIndicator`, Identity collection presentation lock RELEASED | Capability-local work may now consume the standard; Access PRs #411/#413 remained independent | Access workspace/API semantics, route/auth semantics, IAM/domain behavior, Identity 360 semantic/API behavior | #415 | Exact head `b4801408c3d3b1b278148dbcaaa9a9e8fe5829c8` passed Console tests/typecheck/build plus Core/Security/Container/DEV; squash-merged to `main` as `505e57e6b45ae16733ad3e8125bb9a8eda7d7a1b` |
 | UI-023 | #419 | DONE | issue #419 agent | `refactor/identity360-enterprise-detail` | `main` at `cfe57ff8f2c76f6aa8596bb5b07a034edd4620e6` | UI-022 Enterprise UI Standard v1; #407/#408 accepted Identity 360 semantics | No shared public-contract lock required; existing primitives consumed unchanged | Capability-local work outside Identity detail could proceed | Shared primitive redesign, route/auth/API semantics, Access/Governance/Audit authority, Identity domain behavior | #420 | Exact head `3ad30c07bf007e30a17589eafeba6621e97a4c25` passed all 148 Console source-contract tests, TypeScript build, Core/Security/Container/DEV; squash-merged to `main` as `dfae896f80a97b2eb0e3b3c3f309541fafa14895`; issue #419 closed completed |
+| UI-024 | #422 | IN_REVIEW | issue #422 agent | `refactor/console-enterprise-convergence` | exact `main` at `9248ea6164a1f2273b6fdf8f128b175318a3d6a2` | UI-022/UI-023 complete; #381 remains parent | Shared authenticated-Console presentation lock HELD over `src/ui/*`, `SemanticWorkspace.tsx`, shared/global CSS/theme, shell presentation, and retired capability-local visual layers | Capability semantic/API work only where it does not touch locked presentation surfaces | Route/auth/API/IAM semantics, capability authority/state-machine changes, provider behavior | #423 | Draft PR; exact-head Console/Core/Security/Container/DEV verification pending |
 
 ## Current phase
 
@@ -55,6 +56,8 @@ UI-019 / #357 is **DONE / VERIFIED**. PR #358 passed Core CI, Security CI, Conta
 UI-022 / #414 is **DONE / VERIFIED**. PR #415 established Enterprise UI Standard v1 tokens/responsive composition and migrated the Identity collection onto shared primitives without changing IAM/domain/API/persistence/authorization semantics. Exact head `b4801408c3d3b1b278148dbcaaa9a9e8fe5829c8` passed Console tests/typecheck/build plus Core CI, Security CI, Container CI and DEV Deployment Contract, then squash-merged to `main` as `505e57e6b45ae16733ad3e8125bb9a8eda7d7a1b`. The shared visual/theme lock is released.
 
 UI-023 / #419 is **DONE / VERIFIED**. PR #420 migrated Identity 360/detail onto the shared Enterprise UI Standard v1 Object 360 composition, retired `identity-detail-golden.css` and the temporary `identity-page-standard.css` bridge, and preserved the accepted #407/#408 Identity/API semantics. Exact head `3ad30c07bf007e30a17589eafeba6621e97a4c25` passed all 148 Console source-contract tests, TypeScript typecheck/build, Core CI, Security CI, Container CI and DEV Deployment Contract, then squash-merged to `main` as `dfae896f80a97b2eb0e3b3c3f309541fafa14895`. No shared public UI contract changed and no shared lock was required.
+
+UI-024 / #422 is **IN_REVIEW** through draft PR #423. It is the residual Console-wide Enterprise UI convergence tranche before #394: Access, Overview/IAM Operations and Requests & Approvals retain purpose-built workflow geometry but no longer own private visual palettes; the temporary Access alignment layer is retired; shell theme/session styling resolves through Enterprise UI tokens. The shared presentation lock remains HELD until #423 merges/closes and exact-head verification completes.
 
 ## Shared-foundation acceptance history
 
@@ -69,6 +72,7 @@ The post-Wave-0 audit deliberately separated shared presentation contracts from 
 - UI-018 / #346 — cross-cutting focus visibility, checkbox validation semantics, semantic table headers/naming, tab/panel relationships, reduced-motion and shared-token contrast regression coverage without changing IAM/API/auth/routing semantics.
 - UI-022 / #414 — shared enterprise visual/responsive contract, restrained theme/token refinement, caller-typed `StateIndicator`, and Identity collection reference migration without moving domain meaning into shared UI.
 - UI-023 / #419 — Identity 360 Object 360 reference migration onto existing shared primitives; retired page-local visual layers while preserving Identity, Principal, Access, Governance and Audit ownership boundaries.
+- UI-024 / #422 — residual authenticated-Console convergence: purpose-built workbench CSS is constrained to workflow geometry and shared Enterprise UI token consumption; private Access/Overview/Requests visual systems and the Access alignment shim are retired without changing capability semantics.
 
 `SemanticWorkspace` consumes shared accessibility hooks but remains a presentation consumer; it is not a generic IAM domain model and does not redefine API behavior.
 
@@ -108,6 +112,10 @@ UI-019 / #357 is DONE / VERIFIED and establishes the stable implementation owner
 
 `apps/console/src/workspaces/workspaceSpecHelpers.ts` is shared only for existing cursor/value normalization helpers (`list`, `nullable`, `iso`, `csv`). It is not a domain model, route registry, authorization layer or replacement for typed capability semantics. `App.tsx` remains the route/runtime composition owner, while `SemanticWorkspace` and `src/ui` retain their existing shared presentation contracts.
 
+### Wave 5 — residual enterprise convergence
+
+UI-024 / #422 is serialized cross-cutting presentation work on `refactor/console-enterprise-convergence` from exact `main` `9248ea6164a1f2273b6fdf8f128b175318a3d6a2`. It targets `main` directly under the shared presentation lock. Managed-DEV browser acceptance #394 follows only after UI-024 is merged/verified and the lock is released.
+
 ## Shared-surface lock register
 
 Use this section for temporary locks. Add the task/issue, exact surface, reason and release condition. Mark released once the owning PR merges/closes or the task explicitly relinquishes the surface.
@@ -123,6 +131,7 @@ Use this section for temporary locks. Add the task/issue, exact surface, reason 
 | Cross-cutting accessibility surfaces: converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | UI-018 / #346 | RELEASED | PR #355 merged to `main` as `fa788235...`; exact merged tree passed the release-quality PR gates |
 | `App.tsx` structural composition, legacy `ControlPlanePages.tsx`, and new `src/workspaces/*` ownership layout | UI-019 / #357 | RELEASED | PR #358 passed all four release-quality gates and squash-merged to `main` as `2bdb72ff...` with the identical reviewed tree |
 | Enterprise UI Standard v1 shared tokens/theme/page/state presentation plus Identity collection reference migration | UI-022 / #414 | RELEASED | PR #415 exact head passed Console/Core/Security/Container/DEV gates and squash-merged to `main` as `505e57e6b45ae16733ad3e8125bb9a8eda7d7a1b`. |
+| Residual authenticated-Console presentation (`enterprise-console.css`, shared/global CSS/theme, shell presentation, Access/Overview/Requests local visual layers, and any touched `src/ui`/`SemanticWorkspace` presentation contract) | UI-024 / #422 | HELD | PR #423 owns residual Enterprise UI convergence. Release only after exact-head Console/Core/Security/Container/DEV verification and merge/closure. Route/auth/API/IAM semantic changes remain forbidden. |
 
 ## PR and integration checklist
 
