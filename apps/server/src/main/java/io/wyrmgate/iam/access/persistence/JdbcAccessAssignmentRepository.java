@@ -2,6 +2,7 @@ package io.wyrmgate.iam.access.persistence;
 
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandException;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
+import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentFilter;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -9,6 +10,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -126,6 +128,70 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
                  WHERE tenant_id = ? AND identity_id = ? AND (created_at, id) > (?, ?)
                  ORDER BY created_at, id LIMIT ?
                 """, (rs,row) -> assignment(rs), tenant.tenantId(), identityId, Timestamp.from(afterCreatedAt), afterId, limit);
+    }
+
+    @Override
+    public List<AccessAssignment> findPageFiltered(
+            TenantContext tenant,
+            AssignmentFilter filter,
+            Instant evaluatedAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        requirePageLimit(limit);
+        StringBuilder sql = new StringBuilder(baseSelect()).append(" WHERE tenant_id = ?");
+        List<Object> args = new ArrayList<>();
+        args.add(tenant.tenantId());
+
+        if (filter.identityId() != null) {
+            sql.append(" AND identity_id = ?");
+            args.add(filter.identityId());
+        }
+        if (filter.lifecycleState() != null) {
+            sql.append(" AND lifecycle_state = ?");
+            args.add(filter.lifecycleState().name());
+        }
+        if (filter.targetKind() != null) {
+            sql.append(" AND target_kind = ?");
+            args.add(filter.targetKind().name());
+            if (filter.targetId() != null) {
+                sql.append(filter.targetKind() == AccessAssignment.TargetKind.ROLE
+                        ? " AND role_id = ?"
+                        : " AND entitlement_id = ?");
+                args.add(filter.targetId());
+            }
+        }
+        if (filter.provenanceKind() != null) {
+            sql.append(" AND provenance_kind = ?");
+            args.add(filter.provenanceKind().name());
+        }
+        if (filter.validity() != null) {
+            Timestamp at = Timestamp.from(evaluatedAt);
+            switch (filter.validity()) {
+                case CURRENT -> {
+                    sql.append(" AND (valid_from IS NULL OR valid_from <= ?)")
+                            .append(" AND (valid_until IS NULL OR valid_until > ?)");
+                    args.add(at);
+                    args.add(at);
+                }
+                case FUTURE -> {
+                    sql.append(" AND valid_from IS NOT NULL AND valid_from > ?");
+                    args.add(at);
+                }
+                case ENDED -> {
+                    sql.append(" AND valid_until IS NOT NULL AND valid_until <= ?");
+                    args.add(at);
+                }
+            }
+        }
+        if (afterCreatedAt != null && afterId != null) {
+            sql.append(" AND (created_at, id) > (?, ?)");
+            args.add(Timestamp.from(afterCreatedAt));
+            args.add(afterId);
+        }
+        sql.append(" ORDER BY created_at, id LIMIT ?");
+        args.add(limit);
+        return jdbc.query(sql.toString(), (rs,row) -> assignment(rs), args.toArray());
     }
 
     @Override
