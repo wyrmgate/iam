@@ -53,6 +53,14 @@ Optional integration-event, SIEM, connector-worker, break-glass notification, si
 
 Do not commit or paste real secrets into issues, PRs, documentation or ordinary logs.
 
+## ADR-0048 shared DEV database rebaseline
+
+After ADR-0048 is accepted and merged, a shared DEV database carrying the pre-rebaseline V1-V69 Flyway history must **not** be pointed directly at the reset active V1/V2 migration namespace. The shared DEV environment is disposable and should be recreated using [`dev-database-reset.md`](dev-database-reset.md), preferably by provisioning a new empty isolated Neon database/branch, validating it, switching Railway to it, and retiring the old DEV database only after verification.
+
+Do not copy or manufacture old `flyway_schema_history` rows into the recreated database. Do not run ADR-0047 recovery on the recreated database: it is a fresh installation and receives ADR-0046 `STANDALONE_TENANT_OWNER` authority directly.
+
+ADR-0047 remains supported for **retained pre-rebaseline historical installations** that are not being recreated. Those installations require an explicit compatibility plan for both their historical Flyway namespace and their exact Administration state before they can run a post-rebaseline build.
+
 ## Fresh DEV installation uses the first-run wizard
 
 A new empty shared DEV database must use the ADR-0045 first-run web setup wizard. The ADR-0044 startup/headless bootstrap remains available for other non-interactive deployment modes, but **startup/headless bootstrap is not the shared DEV activation path**.
@@ -114,15 +122,13 @@ The durable `SEALED` state is irreversible; removing or recreating deployment se
 
 See [`first-run-web-setup.md`](first-run-web-setup.md) for the full security and resume contract.
 
-## Existing SEALED DEV installation with legacy bootstrap authority
+## Retained pre-rebaseline SEALED installation
 
-Do not reset Neon, delete the installation seal, rerun the first-run wizard, or edit Administration rows merely because a pre-ADR-0046 DEV installation sealed its first administrator with ADR-0011's narrow four-permission role.
+This section does not apply to the shared disposable DEV database after ADR-0048 rebaseline; that database should be recreated as described above.
 
-Use ADR-0047's operator-only recovery procedure in [`sealed-standalone-owner-recovery.md`](sealed-standalone-owner-recovery.md). It derives the only candidate tenant/Identity/Principal/role/grant from durable installation/bootstrap state, accepts no object IDs or permission inputs, upgrades only the exact untouched legacy first-party state, and fails closed on customization or ambiguity.
+For a retained historical installation, do not delete its installation seal, rerun the first-run wizard, or manually edit Administration rows merely because a pre-ADR-0046 installation sealed its first administrator with ADR-0011's narrow four-permission role. ADR-0047 remains the authority-recovery design for an exact eligible historical state, but the historical database also needs an explicit migration-namespace compatibility plan before it can run a post-rebaseline build.
 
-A DEV database that already ran the subsequently withdrawn pre-release V70 may first fail normal Flyway validation because that migration is no longer present in current migration resources. Follow the runbook's explicit `flyway info` / operator-approved `flyway repair` metadata procedure only after confirming V70 is the expected missing applied migration and no unrelated migration discrepancy exists. Do not restore V70's automatic authority SQL and do not install a permanent missing-migration ignore rule.
-
-After schema-history reconciliation when needed, run the ADR-0047 command outside the normal Railway web process with `spring.main.web-application-type=none`. An exact V70-expanded owner state returns `ALREADY_COMPLETE`; an exact unrecovered legacy state returns `RECOVERED`; any denial requires investigation rather than database normalization.
+A retained historical database that recorded the withdrawn pre-release V70 carries additional Flyway-history compatibility state. Do not restore V70's automatic authority SQL, do not reuse V70 in the new active namespace, and do not install a permanent missing-migration ignore rule.
 
 ## Activation procedure
 
@@ -130,18 +136,19 @@ After schema-history reconciliation when needed, run the ADR-0047 command outsid
 2. Confirm Railway `Wait for CI` is enabled and the deployment is associated with that exact reviewed SHA.
 3. Confirm Railway is building the checked-in `apps/server/Dockerfile` from repository root and is not overriding its `ENTRYPOINT`.
 4. Confirm required Neon database variables are present in Railway secret/configuration storage.
-5. For a fresh empty database, configure the first-run wizard inputs above; verify `IAM_BOOTSTRAP_INSTALLATION_ENABLED=false`.
-6. Deploy and wait for Railway's `/actuator/health` gate to return 2xx.
-7. Verify the deployed server reports healthy over the public Railway HTTPS origin.
-8. Verify `public.flyway_schema_history` records the repository current migration version successfully; current repository migration resources extend through Flyway V69. If this is a historical DEV database that recorded the withdrawn V70, use the ADR-0047 runbook's explicit schema-history reconciliation before treating migration validation as healthy.
-9. Verify the server is using non-production DEV data and that tenant isolation checks pass.
-10. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin.
-11. Exercise the console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
-12. If fresh, complete the first-run wizard and confirm the durable installation state reaches `SEALED`.
-13. Verify normal Console username/password login and a protected Administration operation after bootstrap is sealed. For an eligible legacy sealed DEV installation, complete ADR-0047 recovery first instead of rerunning setup.
-14. Remove the temporary setup secret and disable web setup as described above.
-15. Verify the selected Neon recovery window and perform or record an isolation-safe recovery check before destructive migration/data tests.
-16. Record non-secret activation evidence: deployed SHA, Railway environment/service identifier, health result, Flyway version/history status, database branch/project identifier, wizard/seal or ADR-0047 recovery result as applicable, console routing/login result and recovery-check result.
+5. If moving from the pre-rebaseline shared DEV database, complete the explicit ADR-0048 disposable database recreation/cutover first; otherwise use a verified empty database.
+6. Configure the first-run wizard inputs above and verify `IAM_BOOTSTRAP_INSTALLATION_ENABLED=false`.
+7. Deploy and wait for Railway's `/actuator/health` gate to return 2xx.
+8. Verify the deployed server reports healthy over the public Railway HTTPS origin.
+9. Verify `public.flyway_schema_history` begins with the active rebaseline `V1__prepare_current_schema_baseline.sql` and `V2__current_schema_baseline.sql`, plus any later accepted active migrations. It must not contain copied pre-rebaseline V1-V69 history or withdrawn V70.
+10. Verify the server is using non-production DEV data and that tenant isolation checks pass.
+11. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin.
+12. Exercise the console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
+13. Complete the first-run wizard and confirm the durable installation state reaches `SEALED`.
+14. Verify normal Console username/password login and representative protected tenant-owner operations after bootstrap is sealed.
+15. Remove the temporary setup secret and disable web setup as described above.
+16. Verify the selected Neon recovery window and perform or record an isolation-safe recovery check before destructive migration/data tests.
+17. Record non-secret activation evidence: deployed SHA, Railway environment/service identifier, health result, Flyway history status, database branch/project identifier, wizard/seal result, console routing/login result and recovery-check result.
 
 ## Cloudflare Pages contract
 
@@ -161,11 +168,11 @@ Do not expose the Railway origin as a browser-side `VITE_*` variable merely to b
 For a new or reset DEV database, verify both:
 
 1. the deployed Railway server reports healthy;
-2. `public.flyway_schema_history` records the repository latest migration successfully.
+2. `public.flyway_schema_history` reflects the current active rebaseline sequence beginning with V1/V2 and any later accepted deltas.
 
-The application-startup regression test remains repository-level proof that Spring Boot and Flyway wiring works against an empty PostgreSQL database. It does not replace checking the actual managed DEV database.
+The application-startup regression test remains repository-level proof that Spring Boot and Flyway wiring works against an empty PostgreSQL database. Persistence Baseline CI separately proves that the active V1/V2 rebaseline checkpoint is schema-equivalent to archived historical V1-V69. Neither replaces checking the actual managed DEV database.
 
-For a historical database that recorded withdrawn V70, migration-history reconciliation is an explicit exceptional operator action documented by ADR-0047; it is not evidence that current migration resources include V70 and it must not mutate IAM authority state.
+Historical pre-rebaseline databases are a separate compatibility case and must not be made to look current by rewriting or copying Flyway history.
 
 ## Serverless and background work
 
@@ -185,7 +192,7 @@ Neon provider-native recovery/history is the first DEV recovery path. Before des
 
 Provider-native recovery is not an independently retained backup. Production recovery requirements remain governed by [`production-readiness.md`](production-readiness.md) and [`production-recovery-drill.md`](production-recovery-drill.md).
 
-ADR-0047 authority compatibility recovery is separate from database backup/restore: it is permitted only for the exact sealed first-party legacy bootstrap state and must not be used to repair arbitrary damaged/customized Administration state.
+ADR-0047 authority compatibility recovery is separate from database backup/restore and remains applicable only to retained historical installations whose exact state satisfies its predicate. It is not part of a freshly recreated ADR-0048 DEV installation.
 
 ## Completion criteria
 
@@ -193,15 +200,16 @@ Managed DEV activation is complete only when all of the following are true:
 
 - the current Railway service deploys a reviewed green `main` SHA;
 - Railway `/actuator/health` is healthy;
-- Flyway is confirmed at the repository current migration version/history state;
-- a fresh installation, when applicable, used the first-run web setup wizard and reached `SEALED`;
-- an affected legacy sealed installation, when applicable, completed ADR-0047 with `RECOVERED` or exact `ALREADY_COMPLETE` rather than a database reset/manual authority edit;
+- Flyway is confirmed on the current active rebaseline history;
+- when moving from pre-rebaseline DEV, the old database was not upgraded in place by fabricated Flyway history;
+- the fresh installation used the first-run web setup wizard and reached `SEALED`;
+- the fresh administrator received current finite `STANDALONE_TENANT_OWNER` authority directly rather than through ADR-0047;
 - the temporary setup-access secret has been removed and web setup has been disabled after sealing;
 - the startup/headless installation bootstrap was not enabled for shared DEV;
 - the service uses the intended Neon DEV database and non-production data;
 - tenant isolation verification passes;
 - Cloudflare Pages `/api/*` routes to the intended Railway DEV origin;
-- normal Console authentication and a protected Administration operation succeed;
+- normal Console authentication and protected tenant-owner operations succeed;
 - the Neon recovery path has been verified for the current environment;
 - no real secret exists in Git or ordinary logs;
 - repository DEV topology documentation matches the deployed environment.
