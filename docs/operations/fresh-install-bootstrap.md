@@ -6,7 +6,7 @@ This runbook covers ADR-0044 standalone installation only. It establishes the fi
 
 ADR-0046 makes that first-party Administration authority an explicit standalone tenant-owner permission set so the first administrator can configure the implemented tenant surface after normal sign-in. It is not wildcard/root authority and does not bypass independent governance, assurance, secret or destructive-operation controls.
 
-It is **not** an administrator recovery procedure. A deployment that has reached `SEALED` never reopens installation bootstrap if all administrators are later lost.
+It is **not** an administrator recovery procedure. A deployment that has reached `SEALED` never reopens installation bootstrap if all administrators are later lost. ADR-0047 provides a separate, explicit compatibility command only for the exact legacy first-party bootstrap state described below.
 
 ## Preconditions
 
@@ -116,13 +116,15 @@ The Console UI/runtime supplies its configured `client_id` and ApplicationTarget
 
 ## Existing sealed installations created before ADR-0046
 
-ADR-0046 changes fresh first-party bootstrap semantics prospectively. The repository does not carry a general-purpose schema migration that rewrites already-sealed Administration authority.
+ADR-0047 now defines the supported compatibility path for a pre-ADR-0046 standalone installation that was already sealed with ADR-0011's exact narrow first-party authority. Do not rerun this fresh-install procedure, reopen setup, delete the seal, recreate the first administrator, or edit IAM domain rows directly.
 
-A pre-ADR-0046 sealed installation may therefore still have the original narrow ADR-0011 permission membership. Do not reopen setup and do not treat direct table edits as a supported recovery path. For disposable pre-release environments, recreate the installation from a clean database using the corrected bootstrap. A durable production-grade authority recovery/upgrade path requires its own accepted recovery mechanism rather than a hidden historical backfill.
+Use [Sealed standalone tenant-owner recovery](sealed-standalone-owner-recovery.md). The recovery command derives the only candidate from the durable sealed installation plan and requires the Administration bootstrap marker, first-party Principal anchor, role/grant shape, four-permission membership, scope, revisions, timestamps and exclusivity checks to match the exact legacy bootstrap state. Exact owner state is an idempotent no-op; customized or ambiguous state fails closed.
+
+A historical pre-release database that already applied the subsequently withdrawn V70 authority-expansion migration may need an explicit Flyway schema-history `repair` before normal application validation can start. That history repair is separate from authority recovery and must never be implemented by restoring the automatic V70 authority mutation or by permanently ignoring missing migrations.
 
 ## Security notes
 
-- There is no `/api/bootstrap` endpoint.
+- There is no `/api/bootstrap` endpoint and no ADR-0047 HTTP recovery endpoint.
 - There is no permanent `admin/admin`, root user, wildcard grant or reusable bootstrap password.
 - `STANDALONE_TENANT_OWNER` is a reviewed explicit permission set. New product permissions are not inherited automatically.
 - Possession of tenant-owner permissions does not bypass typed scopes, grantability ceilings, governance approval, strong-assurance requirements, maker-checker controls, secret boundaries, break-glass semantics or destructive-operation controls.
@@ -134,4 +136,4 @@ A pre-ADR-0046 sealed installation may therefore still have the original narrow 
 
 ## Failure after sealing
 
-Do not attempt to delete or alter the installation seal to recover administration access. Loss of all active administrators, Credentials or Console registrations after sealing is a governed recovery problem and requires the separately accepted recovery mechanism for that deployment.
+Do not attempt to delete or alter the installation seal to recover administration access. ADR-0047 is deliberately limited to the exact legacy bootstrap-authority compatibility case; general loss of all active administrators, Credentials or Console registrations remains a separate governed recovery problem.
