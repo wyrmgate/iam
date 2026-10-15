@@ -116,6 +116,8 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           target=apps/server/src/main/resources/db/migration/B69__current_schema.sql
+          git fetch origin ${{ github.head_ref }}
+          git reset --hard origin/${{ github.head_ref }}
           if [ -f "$target" ]; then
             exit 0
           fi
