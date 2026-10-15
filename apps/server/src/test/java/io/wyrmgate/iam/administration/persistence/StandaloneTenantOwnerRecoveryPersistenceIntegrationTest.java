@@ -36,7 +36,7 @@ class StandaloneTenantOwnerRecoveryPersistenceIntegrationTest {
         tenants = new JdbcTenantRepository(jdbc, ids);
         bootstrapRepository = new JdbcInitialAdminBootstrapRepository(jdbc);
         recoveryRepository = new JdbcStandaloneTenantOwnerRecoveryRepository(jdbc, ids);
-        authorityRepository = new JdbcAdministrativeAuthorityRepository(jdbc);
+        authorityRepository = new JdbcAdministrativeAuthorityRepository(jdbc, ids);
     }
 
     @BeforeEach
