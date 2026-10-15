@@ -1,8 +1,9 @@
 import test from 'node:test';
 import { assertSourceContains, assertSourceExcludes, readConsoleSources } from './helpers/source-contract.mjs';
 
-const { app, page, api, styles, governance } = await readConsoleSources({
+const { app, wrapper, page, api, styles, governance } = await readConsoleSources({
   app: 'App.tsx',
+  wrapper: 'RequestsApprovalsWithAccessLinks.tsx',
   page: 'RequestsApprovalsPage.tsx',
   api: 'requestsApprovalsApi.ts',
   styles: 'requests-approvals.css',
@@ -12,8 +13,13 @@ const { app, page, api, styles, governance } = await readConsoleSources({
 test('requests route uses the dedicated Requests & Approvals golden page', () => {
   assertSourceContains(
     app,
+    /RequestsApprovalsWithAccessLinks/,
+    /route === 'requests'.*<RequestsApprovalsWithAccessLinks/s,
+  );
+  assertSourceContains(
+    wrapper,
     /RequestsApprovalsPage/,
-    /route === 'requests'.*<RequestsApprovalsPage/s,
+    /<RequestsApprovalsPage \/>/,
   );
   assertSourceExcludes(app, /RequestsWorkspace/);
   assertSourceExcludes(governance, /export function RequestsWorkspace|Approval Inbox|Request Item Status/);
