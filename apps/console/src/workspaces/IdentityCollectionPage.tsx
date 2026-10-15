@@ -227,15 +227,15 @@ export function IdentityCollectionPage({ authority, onSelect }: Props) {
           <SelectInput
             label="Type"
             value={filters.type}
-            options={['', 'PERSON', 'SERVICE', 'WORKLOAD']}
-            getOptionLabel={(value) => value || 'All types'}
+            emptyLabel="All types"
+            options={['PERSON', 'SERVICE', 'WORKLOAD']}
             onValueChange={(value) => setFilters((current) => ({ ...current, type: value as Filters['type'] }))}
           />
           <SelectInput
             label="Lifecycle"
             value={filters.lifecycle}
-            options={['', 'PENDING', 'ACTIVE', 'SUSPENDED', 'INACTIVE', 'DECOMMISSIONED']}
-            getOptionLabel={(value) => value || 'All lifecycles'}
+            emptyLabel="All lifecycles"
+            options={['PENDING', 'ACTIVE', 'SUSPENDED', 'INACTIVE', 'DECOMMISSIONED']}
             onValueChange={(value) => setFilters((current) => ({ ...current, lifecycle: value as Filters['lifecycle'] }))}
           />
           <Button
