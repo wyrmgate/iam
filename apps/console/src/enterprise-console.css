@@ -1,42 +1,9 @@
-:root {
-  --wg-canvas: #f5f7fa;
-  --wg-surface: #ffffff;
-  --wg-surface-subtle: #f8fafc;
-  --wg-surface-selected: #eaf2fb;
-  --wg-border: #d8e0e8;
-  --wg-border-strong: #bbc7d4;
-  --wg-text: #172033;
-  --wg-text-secondary: #5f6f82;
-  --wg-text-muted: #8290a3;
-  --wg-accent: #235ea7;
-  --wg-accent-hover: #174b84;
-  --wg-accent-subtle: #eaf2fb;
-  --wg-focus: #8bb7e8;
-  --wg-success: #257149;
-  --wg-success-subtle: #e9f5ee;
-  --wg-warning: #875f12;
-  --wg-warning-subtle: #fff6dd;
-  --wg-danger: #a12b35;
-  --wg-danger-subtle: #fcecef;
-  --wg-info: #356b9b;
-  --wg-info-subtle: #edf5fc;
-  --wg-radius-badge: 4px;
-  --wg-radius-control: 6px;
-  --wg-radius-surface: 8px;
-  --wg-radius-dialog: 10px;
-  --wg-control-height: 36px;
-  --wg-mobile-target: 44px;
-  --wg-page-title: 24px;
-  --wg-section-title: 16px;
-  --wg-table-text: 13px;
-  --wg-table-header: 12px;
-}
-
 /*
  * Shared enterprise presentation contract for purpose-built operator workbenches.
  * Capability CSS may own geometry, chart mechanics, split panes and narrow-screen
  * rearrangement. Product color, surface, type hierarchy, table density, control
- * shape, focus and semantic feedback belong here.
+ * shape, focus and semantic feedback belong here. Variable values are installed
+ * from src/ui/designTokens.ts by src/ui/cssVariables.ts.
  */
 
 .access-golden-page,
@@ -432,7 +399,12 @@ button.iam-attention-card:hover,
 .iam-skeleton,
 .ra-skeleton {
   border-radius: var(--wg-radius-surface);
-  background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 50%, #eef2f7 75%);
+  background: linear-gradient(
+    90deg,
+    var(--wg-surface-subtle) 25%,
+    var(--wg-surface) 50%,
+    var(--wg-surface-subtle) 75%
+  );
 }
 
 @media (max-width: 760px) {
