@@ -1,0 +1,233 @@
+.access-page {
+  min-width: 0;
+}
+
+.access-tabs .MuiTab-root {
+  font-size: .84rem;
+}
+
+.access-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(22rem, .82fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.access-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(9rem, 1fr));
+  gap: .75rem;
+  align-items: end;
+}
+
+.access-detail {
+  position: sticky;
+  top: 1rem;
+}
+
+.access-detail-dl,
+.access-effective-dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+}
+
+.access-detail-field {
+  padding: .8rem 1rem .8rem 0;
+  border-bottom: 1px solid rgba(23, 32, 51, .10);
+  min-width: 0;
+}
+
+.access-detail-field dt {
+  font-size: .72rem;
+  color: #687386;
+  font-weight: 700;
+  letter-spacing: .02em;
+  margin-bottom: .2rem;
+}
+
+.access-detail-field dd {
+  margin: 0;
+  font-size: .875rem;
+  font-weight: 560;
+  overflow-wrap: anywhere;
+}
+
+.access-mobile-list {
+  display: none;
+}
+
+.access-mobile-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(23, 32, 51, .13);
+  border-radius: 8px;
+  background: #fff;
+  padding: .9rem;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.access-mobile-card:hover,
+.access-mobile-card:focus-visible,
+.access-mobile-card[data-selected='true'] {
+  border-color: #2474d6;
+  box-shadow: 0 0 0 1px rgba(36, 116, 214, .18);
+  outline: none;
+}
+
+.access-mobile-card__title {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  align-items: flex-start;
+  margin-bottom: .55rem;
+}
+
+.access-mobile-card__meta {
+  display: grid;
+  grid-template-columns: 6.2rem minmax(0, 1fr);
+  gap: .28rem .65rem;
+  font-size: .78rem;
+}
+
+.access-mobile-card__meta span:nth-child(odd) {
+  color: #687386;
+  font-weight: 650;
+}
+
+.access-support {
+  border: 1px solid rgba(23, 32, 51, .12);
+  border-radius: 8px;
+  padding: .9rem;
+  display: grid;
+  gap: .55rem;
+}
+
+.access-support + .access-support {
+  margin-top: .75rem;
+}
+
+.access-path {
+  font-size: .78rem;
+  line-height: 1.6;
+  color: #4f5c70;
+  overflow-wrap: anywhere;
+}
+
+.access-option-list {
+  display: grid;
+  gap: .45rem;
+  margin-top: .5rem;
+  max-height: 13rem;
+  overflow: auto;
+}
+
+.access-option {
+  width: 100%;
+  border: 1px solid rgba(23, 32, 51, .13);
+  border-radius: 7px;
+  background: #fff;
+  padding: .65rem .75rem;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.access-option:hover,
+.access-option:focus-visible,
+.access-option[data-selected='true'] {
+  border-color: #2474d6;
+  background: rgba(36, 116, 214, .045);
+  outline: none;
+}
+
+.access-option small {
+  color: #687386;
+  display: block;
+  margin-top: .18rem;
+}
+
+.access-rule-card {
+  border: 1px solid rgba(23, 32, 51, .12);
+  border-radius: 8px;
+  padding: 1rem;
+  display: grid;
+  gap: .8rem;
+}
+
+.access-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+}
+
+.access-section-label {
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  color: #6b7484;
+  text-transform: uppercase;
+}
+
+.access-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: .75rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1199px) {
+  .access-workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .access-detail {
+    position: static;
+  }
+
+  .access-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .access-filter-grid,
+  .access-rule-grid,
+  .access-detail-dl,
+  .access-effective-dl {
+    grid-template-columns: 1fr;
+  }
+
+  .access-desktop-table {
+    display: none;
+  }
+
+  .access-mobile-list {
+    display: grid;
+    gap: .65rem;
+  }
+
+  .access-detail-field {
+    padding-right: 0;
+  }
+
+  .access-actions > * {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .access-mobile-card,
+  .access-option {
+    transition: none !important;
+  }
+}
