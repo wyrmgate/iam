@@ -65,12 +65,14 @@ export type LoginInput = LoginRoute & {
 export class ApiError extends Error {
   readonly status: number;
   readonly correlationId: string | null;
+  readonly code: string | null;
 
-  constructor(status: number, message: string, correlationId: string | null) {
+  constructor(status: number, message: string, correlationId: string | null, code: string | null = null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.correlationId = correlationId;
+    this.code = code;
   }
 }
 
@@ -85,6 +87,7 @@ export type RequestOptions = {
   body?: unknown;
   etag?: string;
   idempotent?: boolean;
+  idempotencyKey?: string;
   signal?: AbortSignal;
   accept?: string;
 };
@@ -107,22 +110,29 @@ function cookieValue(name: string): string | null {
   return null;
 }
 
-export function mutationHeaders(options: Pick<RequestOptions, 'etag' | 'idempotent' | 'accept'>): Headers {
+export function mutationHeaders(options: Pick<RequestOptions, 'etag' | 'idempotent' | 'idempotencyKey' | 'accept'>): Headers {
   const headers = new Headers({ Accept: options.accept ?? 'application/json' });
   if (options.etag) headers.set('If-Match', options.etag);
-  if (options.idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
+  if (options.idempotencyKey) headers.set('Idempotency-Key', options.idempotencyKey);
+  else if (options.idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
   const csrf = cookieValue(CSRF_COOKIE);
   if (csrf) headers.set(CSRF_HEADER, csrf);
   return headers;
 }
 
-function safeErrorMessage(payload: unknown, status: number): string {
-  if (!payload || typeof payload !== 'object') return `Request failed with status ${status}`;
+function safeError(payload: unknown, status: number): { message: string; code: string | null } {
+  if (!payload || typeof payload !== 'object') {
+    return { message: `Request failed with status ${status}`, code: null };
+  }
   const source = payload as Record<string, unknown>;
   const candidate = source.message ?? source.detail ?? source.error;
-  return typeof candidate === 'string' && candidate.trim()
-    ? candidate
-    : `Request failed with status ${status}`;
+  const code = typeof source.code === 'string' && source.code.trim() ? source.code : null;
+  return {
+    message: typeof candidate === 'string' && candidate.trim()
+      ? candidate
+      : `Request failed with status ${status}`,
+    code,
+  };
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
@@ -140,13 +150,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const correlationId = response.headers.get('X-Correlation-Id');
 
   if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
+    let error = { message: `Request failed with status ${response.status}`, code: null as string | null };
     try {
-      message = safeErrorMessage(await response.json(), response.status);
+      error = safeError(await response.json(), response.status);
     } catch {
       // Never surface arbitrary HTML, stack traces, secret material, or proxy bodies.
     }
-    throw new ApiError(response.status, message, correlationId);
+    throw new ApiError(response.status, error.message, correlationId, error.code);
   }
 
   const contentType = response.headers.get('content-type') ?? '';
