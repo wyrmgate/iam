@@ -10,17 +10,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   equivalence:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout feature branch
+      - name: Checkout
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Java
         uses: actions/setup-java@v6
@@ -98,9 +96,8 @@ jobs:
             -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:/tmp/wyrmgate-historical-migrations --wyrmgate.migrate-only=true" \
             spring-boot:run
 
-      - name: Regenerate baseline from historical schema when stale
+      - name: Verify checked-in baseline matches generated current schema
         run: |
-          target=apps/server/src/main/resources/db/migration/B69__current_schema.sql
           mkdir -p /tmp/wyrmgate-baseline
           docker exec wyrmgate-baseline-postgres \
             pg_dump -U wyrmgate -d historical \
@@ -138,19 +135,8 @@ jobs:
           if '\\restrict' in text or '\\unrestrict' in text:
               raise SystemExit('psql-only meta commands remain in baseline')
           PY
-          if cmp -s /tmp/wyrmgate-baseline/B69__current_schema.sql "$target"; then
-            exit 0
-          fi
-          git fetch origin ${{ github.head_ref }}
-          git reset --hard origin/${{ github.head_ref }}
-          cp /tmp/wyrmgate-baseline/B69__current_schema.sql "$target"
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add "$target"
-          git commit -m "fix(db): preserve baseline restore prerequisites"
-          git push origin HEAD:${{ github.head_ref }}
-          echo 'Baseline was regenerated; a fresh verification run is required.' >&2
-          exit 1
+          diff -u apps/server/src/main/resources/db/migration/B69__current_schema.sql \
+            /tmp/wyrmgate-baseline/B69__current_schema.sql
 
       - name: Apply greenfield baseline path
         env:
