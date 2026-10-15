@@ -115,6 +115,14 @@ class StandaloneTenantOwnerRecoveryServiceTest {
     }
 
     @Test
+    void bootstrapCorrelationMismatchIsRejected() {
+        assertThrows(
+                StandaloneTenantOwnerRecoveryNotEligibleException.class,
+                () -> service.recover(tenant, identityId, principalId, UUID.randomUUID(), RECOVERED));
+        verify(recoveryRepository, never()).upgradeLegacyRolePermissions(any(), any(), eq(1L), any(), any(), any());
+    }
+
+    @Test
     void differentRoleCodeIsRejected() {
         when(authorityRepository.findRole(tenant, roleId)).thenReturn(Optional.of(new AdministrativeRole(
                 roleId,
@@ -163,7 +171,7 @@ class StandaloneTenantOwnerRecoveryServiceTest {
     }
 
     @Test
-    void alteredGrantabilityOrDelegabilityIsRejected() {
+    void alteredGrantabilityIsRejected() {
         when(authorityRepository.findGrant(tenant, grantId)).thenReturn(Optional.of(new AdministrativeGrant(
                 grantId,
                 identityId,
@@ -179,6 +187,25 @@ class StandaloneTenantOwnerRecoveryServiceTest {
                 COMPLETED,
                 COMPLETED)));
         assertRejected("bootstrap_grant_not_grantable");
+    }
+
+    @Test
+    void alteredDelegabilityIsRejected() {
+        when(authorityRepository.findGrant(tenant, grantId)).thenReturn(Optional.of(new AdministrativeGrant(
+                grantId,
+                identityId,
+                roleId,
+                AdministrativeScope.global(),
+                AdministrativeGrantState.ACTIVE,
+                COMPLETED,
+                null,
+                true,
+                false,
+                null,
+                1,
+                COMPLETED,
+                COMPLETED)));
+        assertRejected("bootstrap_grant_not_delegable");
     }
 
     @Test
