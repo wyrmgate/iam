@@ -51,8 +51,7 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
     }
 
     @Override
-    public Optional<Principal> findById(
-            TenantContext tenant, UUID principalId) {
+    public Optional<Principal> findById(TenantContext tenant, UUID principalId) {
         return jdbc.query("""
                 SELECT id, identity_id, application_target_id, principal_kind,
                        native_principal_key, lifecycle_state, revision,
@@ -81,14 +80,8 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
     }
 
     @Override
-    public List<Principal> listAfterId(
-            TenantContext tenant,
-            UUID afterId,
-            int limit) {
-        if (limit < 1 || limit > 201) {
-            throw new IllegalArgumentException(
-                    "limit must be between 1 and 201");
-        }
+    public List<Principal> listAfterId(TenantContext tenant, UUID afterId, int limit) {
+        requirePageLimit(limit);
         if (afterId == null) {
             return jdbc.query("""
                     SELECT id, identity_id, application_target_id, principal_kind,
@@ -99,9 +92,7 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
                     ORDER BY id
                     LIMIT ?
                     """,
-                    (rs,row) -> principal(rs),
-                    tenant.tenantId(),
-                    limit);
+                    (rs,row) -> principal(rs), tenant.tenantId(), limit);
         }
         return jdbc.query("""
                 SELECT id, identity_id, application_target_id, principal_kind,
@@ -112,17 +103,43 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
                 ORDER BY id
                 LIMIT ?
                 """,
-                (rs,row) -> principal(rs),
-                tenant.tenantId(),
-                afterId,
-                limit);
+                (rs,row) -> principal(rs), tenant.tenantId(), afterId, limit);
+    }
+
+    @Override
+    public List<Principal> listByIdentityAfterId(
+            TenantContext tenant,
+            UUID identityId,
+            UUID afterId,
+            int limit) {
+        requirePageLimit(limit);
+        if (afterId == null) {
+            return jdbc.query("""
+                    SELECT id, identity_id, application_target_id, principal_kind,
+                           native_principal_key, lifecycle_state, revision,
+                           created_at, updated_at
+                    FROM identity.principal
+                    WHERE tenant_id = ? AND identity_id = ?
+                    ORDER BY id
+                    LIMIT ?
+                    """,
+                    (rs,row) -> principal(rs), tenant.tenantId(), identityId, limit);
+        }
+        return jdbc.query("""
+                SELECT id, identity_id, application_target_id, principal_kind,
+                       native_principal_key, lifecycle_state, revision,
+                       created_at, updated_at
+                FROM identity.principal
+                WHERE tenant_id = ? AND identity_id = ? AND id > ?
+                ORDER BY id
+                LIMIT ?
+                """,
+                (rs,row) -> principal(rs), tenant.tenantId(), identityId, afterId, limit);
     }
 
     @Override
     public List<Principal> findActiveByIdentityAndTarget(
-            TenantContext tenant,
-            UUID identityId,
-            UUID applicationTargetId) {
+            TenantContext tenant, UUID identityId, UUID applicationTargetId) {
         return jdbc.query("""
                 SELECT id, identity_id, application_target_id, principal_kind,
                        native_principal_key, lifecycle_state, revision,
@@ -134,15 +151,12 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
                   AND lifecycle_state = 'ACTIVE'
                 ORDER BY id
                 """,
-                (rs,row) -> principal(rs),
-                tenant.tenantId(), identityId, applicationTargetId);
+                (rs,row) -> principal(rs), tenant.tenantId(), identityId, applicationTargetId);
     }
 
     @Override
     public List<Principal> findByIdentityAndTarget(
-            TenantContext tenant,
-            UUID identityId,
-            UUID applicationTargetId) {
+            TenantContext tenant, UUID identityId, UUID applicationTargetId) {
         return jdbc.query("""
                 SELECT id, identity_id, application_target_id, principal_kind,
                        native_principal_key, lifecycle_state, revision,
@@ -153,8 +167,7 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
                   AND application_target_id = ?
                 ORDER BY id
                 """,
-                (rs,row) -> principal(rs),
-                tenant.tenantId(), identityId, applicationTargetId);
+                (rs,row) -> principal(rs), tenant.tenantId(), identityId, applicationTargetId);
     }
 
     @Override
@@ -174,11 +187,9 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
         if (affected != 1) {
             Principal existing = findById(tenant, principalId)
                     .orElseThrow(() -> new PrincipalCommandException(
-                            "principal_not_found",
-                            "The requested Principal was not found."));
+                            "principal_not_found", "The requested Principal was not found."));
             if (existing.revision() != expectedRevision) {
-                throw new StaleWriteException(
-                        "principal", principalId, expectedRevision);
+                throw new StaleWriteException("principal", principalId, expectedRevision);
             }
             throw new IllegalStateException("principal lifecycle did not update");
         }
@@ -198,16 +209,13 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
                 WHERE tenant_id = ? AND id = ?
                   AND revision = ? AND identity_id IS NULL
                 """,
-                identityId, Timestamp.from(now),
-                tenant.tenantId(), principalId, expectedRevision);
+                identityId, Timestamp.from(now), tenant.tenantId(), principalId, expectedRevision);
         if (affected != 1) {
             Principal existing = findById(tenant, principalId)
                     .orElseThrow(() -> new PrincipalCommandException(
-                            "principal_not_found",
-                            "The requested Principal was not found."));
+                            "principal_not_found", "The requested Principal was not found."));
             if (existing.revision() != expectedRevision) {
-                throw new StaleWriteException(
-                        "principal", principalId, expectedRevision);
+                throw new StaleWriteException("principal", principalId, expectedRevision);
             }
             if (existing.identityId() != null) {
                 throw new PrincipalCommandException(
@@ -219,8 +227,13 @@ public final class JdbcPrincipalRepository implements PrincipalRepository {
         return findById(tenant, principalId).orElseThrow();
     }
 
-    private static Principal principal(java.sql.ResultSet rs)
-            throws java.sql.SQLException {
+    private static void requirePageLimit(int limit) {
+        if (limit < 1 || limit > 201) {
+            throw new IllegalArgumentException("limit must be between 1 and 201");
+        }
+    }
+
+    private static Principal principal(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new Principal(
                 rs.getObject("id", UUID.class),
                 rs.getObject("identity_id", UUID.class),

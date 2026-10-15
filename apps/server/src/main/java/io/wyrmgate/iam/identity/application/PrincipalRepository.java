@@ -20,6 +20,9 @@ public interface PrincipalRepository {
     List<Principal> listAfterId(
             TenantContext tenant, UUID afterId, int limit);
 
+    List<Principal> listByIdentityAfterId(
+            TenantContext tenant, UUID identityId, UUID afterId, int limit);
+
     List<Principal> findActiveByIdentityAndTarget(
             TenantContext tenant, UUID identityId, UUID applicationTargetId);
 

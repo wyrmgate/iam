@@ -105,6 +105,23 @@ Direct resource-ID lookup is an advanced/support path, not the primary operator 
 
 Creation should normally be a deliberate secondary action or panel rather than a permanent form occupying the top of every list page.
 
+### Identity 360 governed-subject workbench
+
+`/identities/{identityId}` is the golden governed-subject detail workbench. It is a presentation composition only; it does not create a writable cross-capability aggregate or transfer authority away from the owning capabilities.
+
+The persistent header presents the authoritative Identity type, lifecycle, stable identifier, update time, and access-eligibility interpretation. Metadata editing remains limited to the accepted mutable Identity metadata. Lifecycle transitions remain explicit semantic operations with optimistic revision and causal idempotency behavior. Merge and split remain advanced Identity-owned correction operations rather than ordinary account maintenance.
+
+The detail workspace uses six semantic views:
+
+- **Overview** — authoritative Identity summary and investigation entry points;
+- **Governed profile** — canonical resolution state, classification, redaction, and bounded pagination;
+- **Principals** — Identity-owned technical representations/accounts, read through an exact subject-scoped Principal query;
+- **Access** — authoritative AccessAssignments shown separately from derived EffectiveAccess;
+- **Governance** — administratively authorized subject-scoped review campaigns and GovernanceExceptions; AccessRequest history is intentionally excluded while request visibility remains participant-scoped;
+- **Evidence** — direct immutable AuditRecords whose resource is the Identity, explicitly not an exhaustive cross-capability history.
+
+Subject-scoped collection reads remain server-authorized collection reads. Filtering by Identity does not grant visibility merely because the actor can see the Identity, and it does not allow the Console to bypass the owning capability. Cursor continuation is bounded to the same tenant and filter context. Provider observation, technical fulfillment, governance decision state, authoritative business state, and derived projection remain visibly distinct.
+
 ### Scoped hierarchy workbench
 
 For parent-scoped concepts such as ApplicationTarget, Entitlement, or RoleVersion, the parent scope must be explicit and persistent while operating on children. Selection never becomes authority; the server decides authorization.

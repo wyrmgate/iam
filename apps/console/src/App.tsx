@@ -74,7 +74,13 @@ export function App() {
           onSelect={(id) => go(identityDetailPath(id))}
         />
       )}
-      {route === 'identities' && identityId && <IdentityWorkspace selectedId={identityId} onSelect={(id) => go(id ? identityDetailPath(id) : '/identities')} />}
+      {route === 'identities' && identityId && (
+        <IdentityWorkspace
+          selectedId={identityId}
+          authority={authority.status === 'ready' ? authority.value : null}
+          onSelect={(id) => go(id ? identityDetailPath(id) : '/identities')}
+        />
+      )}
       {route === 'principals' && <PrincipalsWorkspace />}
       {route === 'catalog' && <CatalogWorkspace />}
       {route === 'access' && <AccessWorkspace />}

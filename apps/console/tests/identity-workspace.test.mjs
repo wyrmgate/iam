@@ -5,48 +5,49 @@ const { identity } = await readConsoleSources({
   identity: 'workspaces/IdentityWorkspace.tsx',
 });
 
-test('Identity workspace keeps governed subjects distinct from technical Principals', () => {
+test('Identity 360 keeps governed subject authority distinct from Principals, access projection, and provider state', () => {
   assertSourceContains(
     identity,
-    /Identity is authoritative governed-subject state/,
-    /Principals are separate technical representations\/accounts/,
-    /provider observations are not Identity authority/,
     /Identity is the governed subject/,
-    /Principal IDs \(technical accounts\)/,
+    /Principals are separate technical representations\/accounts/,
+    /Provider observations are not Identity authority/,
+    /Principal is the technical representation\/account/,
+    /Assignments are authoritative business intent\. Effective access is a derived projection/,
+    /Technical fulfillment and provider observation remain separate/,
   );
 });
 
 test('Identity mutations preserve semantic operations, revision guards, and causal idempotency', () => {
   assertSourceContains(
     identity,
-    /transitionIdentity\(identityId, action, state\.value\.etag\)/,
+    /transitionIdentity\(identityId, action, identityState\.value\.etag\)/,
     /method: 'PATCH'/,
-    /etag: state\.value\.etag/,
+    /etag: identityState\.value\.etag/,
     /idempotent: true/,
-    /body: \{ displayName \}/,
+    /body: \{ displayName: displayName\.trim\(\) \}/,
     /:merge/,
     /absorbedRevision: mergeTarget\.value\.revision/,
     /:split/,
-    /splitSelectionPresent/,
+    /splitHasSelection/,
     /setConfirmation\(\{ kind: 'lifecycle', action \}\)/,
   );
 });
 
-test('canonical attribute disclosure follows the accepted visibility and typed-values contract', () => {
+test('canonical attribute disclosure follows classification authorization and resolution semantics', () => {
   assertSourceContains(
     identity,
     /visibility: 'VALUE' \| 'REDACTED'/,
     /values\?: CanonicalValue\[\]/,
     /attribute\.visibility === 'REDACTED'/,
     /Redacted by classification authority/,
-    /canonicalValueCopy\(attribute\)/,
-    /Value disclosure remains independently authorized/,
+    /Authorized values only/,
     /Retained trusted value · current resolution is/,
+    /Provider\/source payloads are not shown here/,
   );
   assertSourceExcludes(identity, /valueRedacted|\[authorized value\]/);
 });
 
-test('Identity detail is a persistent-header tabbed workbench instead of stacked admin cards', () => {
+test('Identity detail is the approved persistent-header six-tab workbench', () => {
   assertSourceContains(
     identity,
     /Identity · governed subject/,
@@ -62,55 +63,87 @@ test('Identity detail is a persistent-header tabbed workbench instead of stacked
     /Identity summary/,
     /Investigation/,
     /Edit metadata/,
-    /Advanced correction/,
+    /Advanced Identity correction/,
   );
-  assertSourceExcludes(
-    identity,
-    /<Surface/,
-    /title="Lifecycle operations"/,
-    /title="Display name"/,
-    /title="Merge administrative correction"/,
-    /title="Split administrative correction"/,
-  );
+  assertSourceExcludes(identity, /<Surface|title="Lifecycle operations"|title="Display name"/);
 });
 
-test('Identity collection uses the dense golden-page workbench without inventing browser search', () => {
+test('Identity 360 tabs use bounded server-owned subject reads rather than client aggregation', () => {
   assertSourceContains(
     identity,
-    /identity-workbench/,
-    /Governed identities/,
-    /Open by Identity ID/,
-    /Browse the server-ordered collection/,
-    /Search and type\/lifecycle filtering remain server-contract work/,
-    /identity-mobile-list/,
-    /Load more/,
-    /Create governed Identity/,
-    /Refresh/,
+    /\/principals\?identityId=/,
+    /\/access-assignments\?limit=50/,
+    /\/effective-access\?identityId=/,
+    /\/governance\/subjects\//,
+    /\/review-campaigns\?limit=50/,
+    /\/exceptions\?limit=50/,
+    /\/audit-records\?resourceType=identity&resourceId=/,
+    /Load more Principals/,
+    /Load more assignments/,
+    /Load more effective access/,
+    /Load more reviews/,
+    /Load more exceptions/,
+    /Load more evidence/,
   );
   assertSourceExcludes(
     identity,
-    /identities\.filter\(/,
-    /identities\.find\([^)]*displayName/,
+    /\.filter\([^)]*identityId/,
     /localStorage|sessionStorage/,
+    /Promise\.all\([^)]*\/principals[^)]*\/access/,
   );
 });
 
-test('advanced correction is progressive and does not ask the operator to type absorbed revision', () => {
+test('Access and Audit tabs keep semantic dimensions explicit', () => {
+  assertSourceContains(
+    identity,
+    /Authoritative/,
+    /Projection/,
+    /An ineligible Identity contributes no semantic EffectiveAccess authority/,
+    /Direct immutable AuditRecord evidence whose resource is this Identity/,
+    /This is not an exhaustive cross-capability activity history/,
+    /Related Access, Governance, Integration, or system evidence is not silently joined/,
+  );
+});
+
+test('Governance tab does not broaden participant-scoped AccessRequest visibility', () => {
+  assertSourceContains(
+    identity,
+    /Access request history is intentionally not shown here/,
+    /Request visibility remains participant-scoped/,
+    /subject-scoped SoD exceptions/,
+  );
+  assertSourceExcludes(identity, /\/access-requests\?beneficiaryIdentityId=/);
+});
+
+test('advanced correction remains explicit, typed, and ownership preserving', () => {
   assertSourceContains(
     identity,
     /loadMergeTarget/,
     /Review target/,
     /mergeTarget\.value\.revision/,
-    /Permanent governed-subject correction/,
-    /AccessAssignments and Governance authority do not transfer/,
+    /Permanent correction/,
+    /Foreign-capability authority never transfers implicitly/,
     /Explicit relationship selection required/,
-    /A split never copies access or governance authority/,
-    /bounded split-candidates query/,
+    /No AccessAssignment or Governance authority is copied/,
+    /\/split-candidates/,
+    /Current SourceRecord links/,
+    /Current Principals/,
+    /toggleSplitSelection/,
+    /sourceRecordIds: splitSelection\.sourceRecordIds/,
+    /principalIds: splitSelection\.principalIds/,
+    /first 200 current candidates/,
   );
-  assertSourceExcludes(identity, /Absorbed authoritative revision/);
+  assertSourceExcludes(
+    identity,
+    /Absorbed authoritative revision/,
+    /label="Source record IDs"/,
+    /label="Principal IDs"/,
+    /splitValues\.sourceRecordIds\.split/,
+    /splitValues\.principalIds\.split/,
+  );
 });
 
-test('Identity workspace stays inside its existing public and shared UI boundaries', () => {
+test('Identity workspace stays inside shared UI and authenticated API boundaries', () => {
   assertSourceContains(
     identity,
     /from '\.\.\/api'/,
@@ -121,9 +154,7 @@ test('Identity workspace stays inside its existing public and shared UI boundari
   assertSourceExcludes(
     identity,
     /Authorization:\s*['"`]/,
-    /tenantId\s*:/,
     /actorIdentityId\s*:/,
-    /SourceSystem administration/,
     /@mui\//,
   );
 });
