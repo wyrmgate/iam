@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** Spring composition for the explicit ADR-0047 compatibility operation. */
-@Configuration
+@Configuration("administrationStandaloneTenantOwnerRecoveryConfiguration")
 public class StandaloneTenantOwnerRecoveryConfiguration {
 
     @Bean
