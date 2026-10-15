@@ -3,6 +3,7 @@ import { assertSourceContains, assertSourceExcludes, readConsoleSource } from '.
 
 const accessWorkspace = await readConsoleSource('workspaces/AccessWorkspace.tsx');
 const accessApi = await readConsoleSource('accessApi.ts');
+const api = await readConsoleSource('api.ts');
 
 test('Access golden page is Assignments-first and keeps authority, projection, and expert policy distinct', () => {
   assertSourceContains(
@@ -48,10 +49,10 @@ test('Access lifecycle operations remain explicit, consequence-aware, revision g
   );
   assertSourceContains(
     accessApi,
-    /If-Match/,
     /idempotencyKey/,
     /\/access-assignments\/\$\{encodeURIComponent\(id\)\}\/\$\{action\}/,
   );
+  assertSourceContains(api, /If-Match/, /Idempotency-Key/);
   assertSourceExcludes(accessWorkspace, /Change status/);
 });
 
@@ -59,8 +60,7 @@ test('manual grant uses bounded selectors and does not expose lifecycle or prove
   assertSourceContains(
     accessWorkspace,
     /Search governed identities/,
-    /Search roles/,
-    /Search entitlements/,
+    /kind === 'ROLE' \? 'roles' : 'entitlements'/,
     /Specific Principal/,
     /Origin/,
     /Manual grant/,
