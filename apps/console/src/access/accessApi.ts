@@ -4,8 +4,9 @@ import type {
   AssignmentPage,
   AssignmentResource,
   AuditRecordPage,
-  EffectiveDetail,
   EffectivePage,
+  EffectiveResource,
+  EffectiveSupportPage,
   LifecyclePolicyResource,
   LifecyclePolicyRule,
   OptionPage,
@@ -82,8 +83,19 @@ export function listEffective(identityId?: string, cursor?: string | null, signa
   return apiRequest<EffectivePage>(queryPath(`${WORKBENCH}/effective`, { identityId, cursor, limit: 50 }), { signal });
 }
 
-export function getEffective(effectiveAccessId: string, signal?: AbortSignal) {
-  return apiRequest<EffectiveDetail>(`${WORKBENCH}/effective/${encodeURIComponent(effectiveAccessId)}`, { signal });
+export function getEffectiveSummary(effectiveAccessId: string, signal?: AbortSignal) {
+  return apiRequest<EffectiveResource>(`${WORKBENCH}/effective/${encodeURIComponent(effectiveAccessId)}/summary`, { signal });
+}
+
+export function listEffectiveSupports(
+  effectiveAccessId: string,
+  cursor?: string | null,
+  signal?: AbortSignal,
+) {
+  return apiRequest<EffectiveSupportPage>(queryPath(`${WORKBENCH}/effective/${encodeURIComponent(effectiveAccessId)}/supports`, {
+    cursor,
+    limit: 25,
+  }), { signal });
 }
 
 export function identityOptions(query: string, signal?: AbortSignal) {
