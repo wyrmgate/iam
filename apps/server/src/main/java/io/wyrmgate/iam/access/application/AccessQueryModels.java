@@ -83,6 +83,25 @@ public final class AccessQueryModels {
         }
     }
 
+    public record EffectiveSupportPosition(UUID accessAssignmentId, String pathHash) {
+        public EffectiveSupportPosition {
+            if (accessAssignmentId == null) {
+                throw new IllegalArgumentException("accessAssignmentId is required");
+            }
+            if (pathHash == null || pathHash.isBlank()) {
+                throw new IllegalArgumentException("pathHash is required");
+            }
+        }
+    }
+
+    public record EffectiveSupportPage(
+            List<EffectiveSupport> items,
+            EffectiveSupportPosition nextPosition) {
+        public EffectiveSupportPage {
+            items = List.copyOf(items);
+        }
+    }
+
     public record EffectiveDetail(
             EffectiveAccess effectiveAccess,
             List<EffectiveSupport> supports) {
