@@ -2,62 +2,63 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const viewportCss = await readFile(new URL('../src/auth-login-viewport.css', import.meta.url), 'utf8');
-const graphic = await readFile(new URL('../src/AuthControlPlaneGraphic.tsx', import.meta.url), 'utf8');
+const authCss = await readFile(new URL('../src/auth-login.css', import.meta.url), 'utf8');
+const globalCss = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
 const signInGate = await readFile(new URL('../src/SignInGate.tsx', import.meta.url), 'utf8');
 const main = await readFile(new URL('../src/main.tsx', import.meta.url), 'utf8');
 
-test('enterprise login owns dynamic viewport containment', () => {
-  assert.match(main, /auth-login-viewport\.css/);
-  assert.match(viewportCss, /min-height:\s*100dvh/);
-  assert.match(viewportCss, /grid-template-columns:\s*minmax\(0,/);
-  assert.match(viewportCss, /overflow-x:\s*clip/);
-  assert.match(viewportCss, /\.auth-shell-enterprise\s*>\s*\*/);
-  assert.match(viewportCss, /min-width:\s*0/);
-  assert.match(viewportCss, /\.auth-network[\s\S]*overflow:\s*hidden/);
+test('first-party sign-in uses the canonical enterprise token vocabulary', () => {
+  assert.match(authCss, /var\(--wg-canvas\)/);
+  assert.match(authCss, /var\(--wg-surface\)/);
+  assert.match(authCss, /var\(--wg-border\)/);
+  assert.match(authCss, /var\(--wg-text\)/);
+  assert.match(authCss, /var\(--wg-accent\)/);
+  assert.match(authCss, /var\(--wg-radius-dialog\)/);
+  assert.doesNotMatch(authCss, /--auth-/);
+  assert.doesNotMatch(authCss, /#[0-9a-f]{3,8}\b/i);
+  assert.doesNotMatch(authCss, /linear-gradient|radial-gradient|backdrop-filter/i);
 });
 
-test('desktop login gives the brand surface more weight than the sign-in surface', () => {
-  assert.match(viewportCss, /grid-template-columns:\s*minmax\(0,\s*1\.45fr\)\s*minmax\(27rem,\s*\.85fr\)/);
-  assert.match(viewportCss, /\.auth-form-wrap-enterprise[\s\S]*max-width:\s*24rem/);
-  assert.match(viewportCss, /@media \(max-width: 1250px\) and \(min-width: 981px\)[\s\S]*1\.18fr[\s\S]*\.82fr/);
-  assert.match(viewportCss, /\.auth-core-face[\s\S]*transform:\s*none/);
+test('retired branded authentication theme stays out of global styles', () => {
+  assert.doesNotMatch(globalCss, /\.auth-brand-panel|\.auth-brand-copy|\.auth-trust-row|\.auth-wordmark|\.auth-spinner/);
+  assert.doesNotMatch(globalCss, /@keyframes\s+auth-spin/);
 });
 
-test('required sign-in fields are compact without exposing raw mandatory asterisks', () => {
-  assert.match(signInGate, /label="Username"[\s\S]*required/);
-  assert.match(signInGate, /label="Password"[\s\S]*required/);
-  assert.match(viewportCss, /\.auth-input \.MuiFormLabel-asterisk[\s\S]*display:\s*none/);
-  assert.match(viewportCss, /\.auth-input \.MuiOutlinedInput-root[\s\S]*min-height:\s*3\.05rem/);
-  assert.match(viewportCss, /\.auth-input \.MuiInputLabel-root[\s\S]*font-size:\s*\.8rem/);
-  assert.match(viewportCss, /\.auth-input-icon svg[\s\S]*width:\s*1\.05rem/);
+test('sign-in composition is restrained rather than a marketing hero', () => {
+  assert.match(signInGate, /className="auth-login-surface"/);
+  assert.match(signInGate, /Enterprise identity control plane/);
+  assert.match(signInGate, /Secure administration/);
+  assert.match(authCss, /font-size:\s*var\(--wg-page-title\)/);
+  assert.doesNotMatch(signInGate, /AuthControlPlaneGraphic|People\. Access\. Governance|Connected\./);
+  assert.doesNotMatch(main, /auth-login-viewport\.css/);
 });
 
-test('control-plane core keeps the Wyrmgate mark and label readable', () => {
-  assert.match(graphic, /className="auth-core-logo">W/);
-  assert.match(graphic, /<strong>Wyrmgate IAM<\/strong>/);
-  assert.match(graphic, /<small>Identity control plane<\/small>/);
-  assert.match(viewportCss, /\.auth-core-face[\s\S]*display:\s*flex/);
-  assert.match(viewportCss, /\.auth-core-logo[\s\S]*width:\s*2\.55rem/);
-  assert.match(viewportCss, /\.auth-core-copy[\s\S]*text-align:\s*left/);
+test('sign-in preserves server-resolved tenant and session context', () => {
+  assert.match(signInGate, /Tenant/);
+  assert.match(signInGate, /Resolved by the server from this Console route/);
+  assert.match(signInGate, /Secure, server-managed browser session/);
+  assert.match(signInGate, /Tenant routing and session authority remain server-resolved/);
+  assert.doesNotMatch(signInGate, /tenantId|tenantKey|Tenant selector|Choose tenant/i);
 });
 
-test('short desktop viewports compact instead of forcing the login taller', () => {
-  assert.match(viewportCss, /@media \(min-width: 981px\) and \(max-height: 800px\)/);
-  assert.match(viewportCss, /\.auth-form-panel-enterprise[\s\S]*padding:/);
-  assert.match(viewportCss, /\.auth-network[\s\S]*34dvh/);
+test('required sign-in controls remain explicit and accessible', () => {
+  assert.match(signInGate, /label="Username"[\s\S]*autoComplete="username"[\s\S]*required/);
+  assert.match(signInGate, /label="Password"[\s\S]*autoComplete="current-password"[\s\S]*required/);
+  assert.match(signInGate, /aria-label=\{showPassword \? 'Hide password' : 'Show password'\}/);
+  assert.match(authCss, /\.auth-password-toggle:focus-visible[\s\S]*var\(--wg-focus\)/);
+  assert.match(authCss, /\.auth-input \.MuiOutlinedInput-root[\s\S]*min-height:\s*44px/);
 });
 
-test('stacked tablet and mobile layouts do not inherit desktop dynamic viewport minimums', () => {
-  assert.match(viewportCss, /@media \(max-width: 980px\)[\s\S]*\.auth-brand-panel-enterprise[\s\S]*min-height:\s*40rem/);
-  assert.match(viewportCss, /@media \(max-width: 680px\)[\s\S]*\.auth-form-panel-enterprise[\s\S]*min-height:\s*auto/);
+test('mobile sign-in preserves the enterprise interaction target and viewport containment', () => {
+  assert.match(authCss, /min-height:\s*100dvh/);
+  assert.match(authCss, /overflow-x:\s*clip/);
+  assert.match(authCss, /@media \(max-width: 720px\)/);
+  assert.match(authCss, /\.auth-password-toggle[\s\S]*width:\s*var\(--wg-mobile-target\)[\s\S]*height:\s*var\(--wg-mobile-target\)/);
+  assert.match(authCss, /grid-template-columns:\s*minmax\(0,\s*1fr\)/);
 });
 
-test('sign-in surface exposes only supported authentication controls', () => {
-  assert.doesNotMatch(signInGate, /auth-language-control|auth-form-topbar/);
-  assert.doesNotMatch(signInGate, /auth-security-card/);
-  assert.match(signInGate, /Server resolved/);
-  assert.match(signInGate, /Secure server-managed session/);
-  assert.match(signInGate, /Tenant routing is resolved by Wyrmgate/);
-  assert.doesNotMatch(signInGate, /Forgot password|Remember me|Sign in with/);
+test('sign-in honors reduced motion and exposes only supported authentication controls', () => {
+  assert.match(authCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.doesNotMatch(signInGate, /Forgot password|Remember me|Sign in with|auth-language-control|auth-form-topbar/);
+  assert.doesNotMatch(signInGate, /localStorage|sessionStorage/);
 });

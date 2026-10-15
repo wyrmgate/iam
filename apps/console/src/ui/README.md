@@ -12,7 +12,7 @@ Wyrmgate Console owns its product semantics and visual contract. Material UI (MU
 - No credential/private material may be persisted in browser storage or exposed through library telemetry.
 - A future first-party Wyrmgate component library should replace the implementation behind this boundary incrementally rather than requiring a whole-application rewrite.
 
-The enterprise composition and responsive rules are defined in `docs/engineering/console-enterprise-ui-standard.md`. Capability workspaces should consume that shared contract instead of creating page-local color, typography, density, shell, or responsive systems. `docs/engineering/console-enterprise-ui-convergence.md` records the UI-024 migration boundary and is not a second standard.
+The enterprise composition and responsive rules are defined in `docs/engineering/console-enterprise-ui-standard.md`. Capability workspaces and authentication surfaces should consume that shared contract instead of creating page-local color, typography, density, shell, or responsive systems. `docs/engineering/console-enterprise-ui-convergence.md` records the convergence boundary and is not a second standard.
 
 ## Reusable primitives
 
@@ -55,9 +55,10 @@ Shell files have distinct implementation responsibilities rather than independen
 
 ## Migration status
 
-- First-party sign-in uses the project-owned UI boundary and presents a balanced enterprise split authentication surface with a bounded control-plane topology and compact credential form. The branded illustration/background is an isolated authentication composition and is not a precedent for authenticated operator-workspace visual systems.
+- **First-party sign-in** now consumes the same Enterprise UI Standard v1 visual vocabulary as the rest of Console: neutral canvas/surfaces, canonical `--wg-*` token roles, restrained typography/radii, shared form/button primitives, visible focus, reduced-motion handling and the enterprise mobile target. The previous navy/cyan palette, gradients, oversized marketing hero, animated control-plane graphic and standalone viewport override are retired.
 - The sign-in page exposes only implemented authentication interactions. Tenant remains server-resolved from the registered Console route, password visibility is local presentation state only, and no inactive language selector, password-recovery, remember-me or upstream-SSO action is fabricated by the browser.
 - The sign-in page continues to use only the accepted server-routed first-party login contract. The server owns Tenant routing, session state and operation-time authority; authentication secrets are not persisted in browser storage.
+- **Fresh-install setup** remains routed by `SignInGate` before normal authentication when the deployment is not `SEALED`. Its ADR-0045 installation-scoped setup proof, server-owned routing, ephemeral password handling, resumable ADR-0044 state machine and irreversible seal are unchanged by presentation convergence.
 - The application shell has a labeled collapsible desktop navigation rail, complete mobile navigation, command palette, server-derived context and actor controls. Shared shell visual roles now resolve through Enterprise UI tokens while navigation/responsive/session mechanics remain shell-owned.
 - Base page primitives expose narrow/standard/wide content widths plus a reusable toolbar so page-specific redesigns land on a stable shell foundation.
 - **Overview / IAM Operations** remains a purpose-built task-first operator home, but its local stylesheet now owns only operational layout/chart/responsive mechanics; palette, surfaces, controls, tables, states and typography resolve through the Enterprise UI presentation contract.
@@ -75,4 +76,4 @@ Shell files have distinct implementation responsibilities rather than independen
 - **Audit** records, exports, evidence, legal-hold and purge workspaces use shared Wyrmgate UI primitives; destructive evidence operations remain explicit and confirmed.
 - Browser-native confirmation has been removed from the shared semantic resource renderer; destructive actions use `ConfirmDialog`.
 
-After UI-024 merge/verification, the remaining release gate is managed-DEV browser acceptance across the converged Console: desktop/mobile reachability, focus/dialog behavior, responsive overflow, and confirmation that no legacy competing UI is reachable. Capability-specific usability refinements may continue afterward, but they must consume the same Enterprise UI presentation contract rather than creating another visual system.
+After authentication convergence merges, the remaining release gate is managed-DEV browser acceptance across the converged Console: setup/sign-in transition, authenticated desktop/mobile reachability, focus/dialog behavior, responsive overflow, and confirmation that no legacy competing UI is reachable. Capability-specific usability refinements may continue afterward, but they must consume the same Enterprise UI presentation contract rather than creating another visual system.
