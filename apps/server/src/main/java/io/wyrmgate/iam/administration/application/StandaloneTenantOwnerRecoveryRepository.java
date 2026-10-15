@@ -15,6 +15,10 @@ public interface StandaloneTenantOwnerRecoveryRepository {
 
     long countDelegationsForRole(TenantContext tenant, UUID roleId);
 
+    long countElevationsForRole(TenantContext tenant, UUID roleId);
+
+    long countBreakGlassOperationsForRole(TenantContext tenant, UUID roleId);
+
     void upgradeLegacyRolePermissions(
             TenantContext tenant,
             UUID roleId,
