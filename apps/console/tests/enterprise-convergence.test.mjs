@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const main = await readFile(new URL('../src/main.tsx', import.meta.url), 'utf8');
+const cssVariables = await readFile(new URL('../src/ui/cssVariables.ts', import.meta.url), 'utf8');
 const enterprise = await readFile(new URL('../src/enterprise-console.css', import.meta.url), 'utf8');
 const accessWrapper = await readFile(new URL('../src/workspaces/AccessWorkspace.tsx', import.meta.url), 'utf8');
 const access = await readFile(new URL('../src/access-golden.css', import.meta.url), 'utf8');
@@ -12,14 +13,28 @@ const requests = await readFile(new URL('../src/requests-approvals.css', import.
 const shellTheme = await readFile(new URL('../src/shell-theme.css', import.meta.url), 'utf8');
 
 test('authenticated Console activates one final enterprise presentation contract', () => {
+  assert.match(main, /installEnterpriseCssVariables/);
   assert.match(main, /import '\.\/enterprise-console\.css';/);
   assert.ok(main.lastIndexOf("import './enterprise-console.css';") > main.lastIndexOf("import './shell-session-golden.css';"));
   for (const selector of ['.access-golden-page', '.iam-operations', '.requests-approvals']) {
     assert.match(enterprise, new RegExp(selector.replace('.', '\\.') + '[,\\s\\{]'));
   }
-  for (const token of ['--wg-canvas', '--wg-surface', '--wg-border', '--wg-text', '--wg-accent', '--wg-success', '--wg-warning', '--wg-danger']) {
-    assert.match(enterprise, new RegExp(token));
+  for (const token of ['--wg-surface', '--wg-border', '--wg-text', '--wg-accent', '--wg-success', '--wg-warning', '--wg-danger']) {
+    assert.match(enterprise, new RegExp(`var\\(${token}\\)`));
   }
+});
+
+test('enterprise CSS variables are derived from canonical design tokens rather than duplicated literals', () => {
+  assert.match(cssVariables, /wyrmgateDesignTokens as tokens/);
+  assert.match(cssVariables, /'--wg-canvas': tokens\.color\.neutral\.canvas/);
+  assert.match(cssVariables, /'--wg-accent': tokens\.color\.product\.accent/);
+  assert.match(cssVariables, /'--wg-success': tokens\.color\.semantic\.success/);
+  assert.match(cssVariables, /'--wg-mobile-target': px\(tokens\.density\.mobileTargetHeight\)/);
+  assert.match(cssVariables, /root\.style\.setProperty\(name, value\)/);
+  assert.doesNotMatch(cssVariables, /#[0-9a-fA-F]{3,8}\b/);
+  assert.doesNotMatch(enterprise, /:root\s*\{/);
+  assert.doesNotMatch(enterprise, /--wg-[a-z-]+\s*:/);
+  assert.doesNotMatch(enterprise, /#[0-9a-fA-F]{3,8}\b/);
 });
 
 test('purpose-built workbench CSS owns geometry, not a competing product palette', () => {
