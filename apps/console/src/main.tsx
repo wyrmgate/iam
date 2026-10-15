@@ -10,6 +10,7 @@ import './shell-foundation.css';
 import './auth-login-viewport.css';
 import './identity-golden.css';
 import './shell-session-golden.css';
+import './identity360-full-width.css';
 
 const root = document.getElementById('root');
 
