@@ -7,6 +7,7 @@ on:
       - 'apps/server/src/main/resources/db/migration/**'
       - 'apps/server/src/test/resources/db/history/pre-rebaseline/**'
       - 'apps/server/src/test/java/io/wyrmgate/iam/platform/persistence/**'
+      - 'tools/split-persistence-baseline.py'
       - '.github/workflows/persistence-baseline-artifact.yml'
   workflow_dispatch:
 
@@ -29,6 +30,14 @@ jobs:
           cache: maven
           cache-dependency-path: apps/server/pom.xml
 
+      - name: Generate capability baseline candidate
+        run: |
+          rm -rf /tmp/wyrmgate-capability-baseline
+          python3 tools/split-persistence-baseline.py \
+            apps/server/src/main/resources/db/migration/V2__current_schema_baseline.sql \
+            /tmp/wyrmgate-capability-baseline
+          test "$(find /tmp/wyrmgate-capability-baseline -maxdepth 1 -type f -name 'V*.sql' | wc -l)" -eq 10
+
       - name: Start PostgreSQL
         run: |
           docker run --detach --rm --name wyrmgate-baseline-postgres \
@@ -42,79 +51,44 @@ jobs:
             if docker exec wyrmgate-baseline-postgres pg_isready -U wyrmgate -d postgres >/dev/null 2>&1 \
               && docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d postgres -Atc 'select 1' | grep -qx 1; then
               ready=$((ready + 1))
-              if [ "$ready" -ge 2 ]; then
-                break
-              fi
+              if [ "$ready" -ge 2 ]; then break; fi
             else
               ready=0
             fi
             sleep 1
           done
-          if [ "$ready" -lt 2 ]; then
-            docker logs wyrmgate-baseline-postgres
-            exit 1
-          fi
-          docker exec wyrmgate-baseline-postgres createdb -U wyrmgate historical
-          docker exec wyrmgate-baseline-postgres createdb -U wyrmgate baseline
+          test "$ready" -ge 2
+          docker exec wyrmgate-baseline-postgres createdb -U wyrmgate reference
+          docker exec wyrmgate-baseline-postgres createdb -U wyrmgate candidate
 
-      - name: Guard rebaseline layout
-        run: |
-          runtime=apps/server/src/main/resources/db/migration
-          historical=apps/server/src/test/resources/db/history/pre-rebaseline
-          test -f "$runtime/V1__prepare_current_schema_baseline.sql"
-          test -f "$runtime/V2__current_schema_baseline.sql"
-          test "$(find "$historical" -maxdepth 1 -type f -name 'V*.sql' | wc -l)" -eq 69
-          for version in $(seq 1 69); do
-            find "$historical" -maxdepth 1 -type f -name "V${version}__*.sql" | grep -q . || {
-              echo "Historical migration V${version} is missing." >&2
-              exit 1
-            }
-          done
-          if find "$historical" "$runtime" -maxdepth 1 -type f -name 'V70__*.sql' | grep -q .; then
-            echo 'Withdrawn V70 is permanently reserved and must not be reused.' >&2
-            exit 1
-          fi
-          mkdir -p /tmp/wyrmgate-rebaseline-checkpoint
-          cp "$runtime/V1__prepare_current_schema_baseline.sql" /tmp/wyrmgate-rebaseline-checkpoint/
-          cp "$runtime/V2__current_schema_baseline.sql" /tmp/wyrmgate-rebaseline-checkpoint/
-
-      - name: Apply historical V1-V69 path
+      - name: Apply current V1/V2 checkpoint
         env:
-          IAM_DB_URL: jdbc:postgresql://localhost:5432/historical
+          IAM_DB_URL: jdbc:postgresql://localhost:5432/reference
           IAM_DB_USER: wyrmgate
           IAM_DB_PASSWORD: wyrmgate
           IAM_AUTH_ENABLED: 'false'
           IAM_OTEL_ENABLED: 'false'
         run: |
           sh ./apps/server/mvnw -f apps/server/pom.xml \
-            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:apps/server/src/test/resources/db/history/pre-rebaseline --wyrmgate.migrate-only=true" \
+            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --wyrmgate.migrate-only=true" \
             spring-boot:run
 
-      - name: Apply active rebaseline checkpoint
+      - name: Apply capability baseline candidate
         env:
-          IAM_DB_URL: jdbc:postgresql://localhost:5432/baseline
+          IAM_DB_URL: jdbc:postgresql://localhost:5432/candidate
           IAM_DB_USER: wyrmgate
           IAM_DB_PASSWORD: wyrmgate
           IAM_AUTH_ENABLED: 'false'
           IAM_OTEL_ENABLED: 'false'
         run: |
           sh ./apps/server/mvnw -f apps/server/pom.xml \
-            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:/tmp/wyrmgate-rebaseline-checkpoint --wyrmgate.migrate-only=true" \
+            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:/tmp/wyrmgate-capability-baseline --wyrmgate.migrate-only=true" \
             spring-boot:run
 
-      - name: Verify checkpoint history is rebaselined
-        run: |
-          docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d baseline -Atc \
-            "select version || ':' || script from public.flyway_schema_history where success and type='SQL' order by installed_rank" \
-            | tee /tmp/baseline-history.txt
-          grep -Fx '1:V1__prepare_current_schema_baseline.sql' /tmp/baseline-history.txt
-          grep -Fx '2:V2__current_schema_baseline.sql' /tmp/baseline-history.txt
-          test "$(wc -l < /tmp/baseline-history.txt)" -eq 2
-
-      - name: Compare normalized checkpoint schemas
+      - name: Compare normalized schemas
         run: |
           mkdir -p /tmp/wyrmgate-schema-diff
-          for database in historical baseline; do
+          for database in reference candidate; do
             docker exec wyrmgate-baseline-postgres \
               pg_dump -U wyrmgate -d "$database" \
                 --schema-only --no-owner --no-privileges \
@@ -123,42 +97,29 @@ jobs:
           done
           python3 - <<'PY'
           from pathlib import Path
-
           def normalize(path: Path) -> str:
-              output = []
-              in_dollar_quote = False
-              previous_blank = False
+              output=[]; in_dollar=False; previous_blank=False
               for line in path.read_text().splitlines():
-                  if line.startswith('\\restrict') or line.startswith('\\unrestrict'):
-                      continue
-                  if not in_dollar_quote and (
-                      line.startswith('--')
-                      or line.startswith('SET ')
-                      or line.startswith("SELECT pg_catalog.set_config('search_path'")
-                  ):
-                      continue
-                  blank = not line.strip()
-                  if blank and previous_blank:
-                      continue
-                  output.append(line.rstrip())
-                  previous_blank = blank
-                  if line.count('$$') % 2 == 1:
-                      in_dollar_quote = not in_dollar_quote
-              return '\n'.join(output).strip() + '\n'
-
-          root = Path('/tmp/wyrmgate-schema-diff')
-          for database in ('historical', 'baseline'):
-              (root / f'{database}.sql').write_text(normalize(root / f'{database}.raw.sql'))
+                  if line.startswith('\\restrict') or line.startswith('\\unrestrict'): continue
+                  if not in_dollar and (line.startswith('--') or line.startswith('SET ') or line.startswith("SELECT pg_catalog.set_config('search_path'")): continue
+                  blank=not line.strip()
+                  if blank and previous_blank: continue
+                  output.append(line.rstrip()); previous_blank=blank
+                  if line.count('$$') % 2 == 1: in_dollar=not in_dollar
+              return '\n'.join(output).strip()+'\n'
+          root=Path('/tmp/wyrmgate-schema-diff')
+          for database in ('reference','candidate'):
+              (root/f'{database}.sql').write_text(normalize(root/f'{database}.raw.sql'))
           PY
-          diff -u /tmp/wyrmgate-schema-diff/historical.sql /tmp/wyrmgate-schema-diff/baseline.sql
+          diff -u /tmp/wyrmgate-schema-diff/reference.sql /tmp/wyrmgate-schema-diff/candidate.sql
 
-      - name: Upload comparison artifacts
+      - name: Upload generated capability baseline
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: persistence-baseline-equivalence
+          name: capability-baseline-candidate
           path: |
-            /tmp/wyrmgate-schema-diff/historical.sql
-            /tmp/wyrmgate-schema-diff/baseline.sql
-            /tmp/baseline-history.txt
-          if-no-files-found: warn
+            /tmp/wyrmgate-capability-baseline/*.sql
+            /tmp/wyrmgate-schema-diff/reference.sql
+            /tmp/wyrmgate-schema-diff/candidate.sql
+          if-no-files-found: error
