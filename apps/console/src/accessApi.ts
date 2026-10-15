@@ -52,7 +52,9 @@ export type AssignmentFilters = {
 export type EffectiveAccessSummary = {
   id: string;
   identityId: string;
+  identityLabel?: string | null;
   entitlementId: string;
+  entitlementLabel?: string | null;
   principalConstraintKey: string;
   supportCount: number;
   computedAt: string;
@@ -234,11 +236,11 @@ export async function listEffectiveAccess(
   const query = new URLSearchParams({ limit: '50' });
   if (identityId) query.set('identityId', identityId);
   if (cursor) query.set('cursor', cursor);
-  return (await apiRequest<EffectiveAccessPage>(`${V1_ROOT}/effective-access?${query.toString()}`, { signal })).data;
+  return (await apiRequest<EffectiveAccessPage>(`${V1_ROOT}/effective-access-views?${query.toString()}`, { signal })).data;
 }
 
 export function getEffectiveAccess(id: string, signal?: AbortSignal): Promise<ApiResult<EffectiveAccessResource>> {
-  return apiRequest<EffectiveAccessResource>(`${V1_ROOT}/effective-access/${encodeURIComponent(id)}`, { signal });
+  return apiRequest<EffectiveAccessResource>(`${V1_ROOT}/effective-access-views/${encodeURIComponent(id)}`, { signal });
 }
 
 export async function getLifecycleAccessPolicy(signal?: AbortSignal): Promise<LifecycleAccessPolicy> {
