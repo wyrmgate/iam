@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /** Burn-once per-tenant provisioning of the first governed Administrative Authorization grant. */
@@ -97,7 +98,7 @@ public final class InitialAdminBootstrapService {
                 tenant, actorIdentityId, externalSubject, now, correlationId));
     }
 
-    /** ADR-0044 first-party bootstrap path with current Principal/Identity eligibility validation. */
+    /** ADR-0044/ADR-0046 first-party bootstrap path with tenant-owner authority. */
     public InitialAdminBootstrapResult bootstrapFirstParty(
             TenantContext tenant,
             UUID actorIdentityId,
@@ -165,6 +166,7 @@ public final class InitialAdminBootstrapService {
                 InitialAdminAuthenticationAnchorType.EXTERNAL_SUBJECT,
                 bindingId,
                 null,
+                AdministrativePermissions.INITIAL_TENANT_ADMIN,
                 now,
                 correlationId);
     }
@@ -195,6 +197,7 @@ public final class InitialAdminBootstrapService {
                 InitialAdminAuthenticationAnchorType.FIRST_PARTY_PRINCIPAL,
                 null,
                 actorPrincipalId,
+                AdministrativePermissions.STANDALONE_TENANT_OWNER,
                 now,
                 correlationId);
     }
@@ -205,6 +208,7 @@ public final class InitialAdminBootstrapService {
             InitialAdminAuthenticationAnchorType authenticationAnchorType,
             UUID actorBindingId,
             UUID actorPrincipalId,
+            Set<AdministrativePermission> permissions,
             Instant now,
             UUID correlationId) {
         UUID bootstrapId = idGenerator.nextId();
@@ -234,7 +238,7 @@ public final class InitialAdminBootstrapService {
         }
 
         Map<AdministrativePermission, UUID> permissionIds = new LinkedHashMap<>();
-        for (AdministrativePermission permission : AdministrativePermissions.INITIAL_TENANT_ADMIN) {
+        for (AdministrativePermission permission : permissions) {
             permissionIds.put(
                     permission,
                     bootstrapRepository.ensurePermission(
@@ -245,7 +249,7 @@ public final class InitialAdminBootstrapService {
                 roleId,
                 INITIAL_ROLE_CODE,
                 INITIAL_ROLE_NAME,
-                AdministrativePermissions.INITIAL_TENANT_ADMIN,
+                permissions,
                 1,
                 now,
                 now);
