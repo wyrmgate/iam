@@ -8,7 +8,6 @@ import './auth-login.css';
 import './shell.css';
 import './shell-theme.css';
 import './shell-foundation.css';
-import './auth-login-viewport.css';
 import './shell-session-golden.css';
 import './enterprise-console.css';
 
