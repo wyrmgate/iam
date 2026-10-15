@@ -47,3 +47,7 @@ test('Access tabs satisfy keyboard navigation and destructive actions keep restr
   assertSourceContains(accessAlignment, /Lifecycle \/ validity \/ outcome state uses compact dot-and-label presentation/, /Destructive intent remains deliberate but not permanently saturated/);
   assertSourceContains(accessAlignment, /\.access-state::before/, /\.MuiButton-containedError/);
 });
+
+test('Access mobile controls retain the enterprise 44px touch-target baseline', () => {
+  assertSourceContains(accessAlignment, /@media \(max-width: 760px\)/, /min-height: 44px/, /\.access-detail-close/, /width: 44px/, /height: 44px/);
+});
