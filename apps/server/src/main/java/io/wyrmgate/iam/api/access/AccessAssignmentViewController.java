@@ -11,14 +11,14 @@ import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeAct
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
-import io.wyrmgate.iam.catalog.application.CatalogQueryService;
-import io.wyrmgate.iam.catalog.application.RoleQueryService;
-import io.wyrmgate.iam.identity.application.IdentityQueryService;
-import io.wyrmgate.iam.identity.application.PrincipalQueryService;
+import io.wyrmgate.iam.catalog.application.CatalogAccessPresentationQuery;
+import io.wyrmgate.iam.identity.application.IdentityAccessPresentationQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -41,28 +41,22 @@ public final class AccessAssignmentViewController {
     private static final int DEFAULT_LIMIT = 50;
 
     private final AccessAssignmentQueryService assignments;
-    private final IdentityQueryService identities;
-    private final PrincipalQueryService principals;
-    private final RoleQueryService roles;
-    private final CatalogQueryService catalog;
+    private final IdentityAccessPresentationQuery identityPresentation;
+    private final CatalogAccessPresentationQuery catalogPresentation;
     private final AdministrativeAuthorizationService authorization;
     private final IdGenerator ids;
     private final AccessCursorCodec cursors;
 
     public AccessAssignmentViewController(
             AccessAssignmentQueryService assignments,
-            IdentityQueryService identities,
-            PrincipalQueryService principals,
-            RoleQueryService roles,
-            CatalogQueryService catalog,
+            IdentityAccessPresentationQuery identityPresentation,
+            CatalogAccessPresentationQuery catalogPresentation,
             AdministrativeAuthorizationService authorization,
             IdGenerator ids,
             AccessCursorCodec cursors) {
         this.assignments = assignments;
-        this.identities = identities;
-        this.principals = principals;
-        this.roles = roles;
-        this.catalog = catalog;
+        this.identityPresentation = identityPresentation;
+        this.catalogPresentation = catalogPresentation;
         this.authorization = authorization;
         this.ids = ids;
         this.cursors = cursors;
@@ -95,11 +89,12 @@ public final class AccessAssignmentViewController {
         AssignmentPosition position = decode(cursor, actor, filter, correlationId);
         Instant evaluatedAt = Instant.now();
         var page = assignments.list(actor.tenant(), filter, position, effectiveLimit, evaluatedAt);
+        ViewLabels labels = labels(actor, page.items());
         return ResponseEntity.ok()
                 .header("X-Correlation-Id", correlationId.toString())
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .body(new AssignmentViewPage(
-                        page.items().stream().map(value -> view(actor, value, evaluatedAt)).toList(),
+                        page.items().stream().map(value -> view(value, evaluatedAt, labels)).toList(),
                         cursors.encodeAssignmentsForContext(actor.tenant(), filter.cursorBinding(), page.nextPosition()),
                         evaluatedAt));
     }
@@ -115,48 +110,64 @@ public final class AccessAssignmentViewController {
         AccessAssignment value = assignments.find(actor.tenant(), assignmentId)
                 .orElseThrow(() -> AccessApiException.notFound(correlationId));
         Instant evaluatedAt = Instant.now();
+        ViewLabels labels = labels(actor, List.of(value));
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, "\"rev-" + value.revision() + "\"")
                 .header("X-Correlation-Id", correlationId.toString())
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(view(actor, value, evaluatedAt));
+                .body(view(value, evaluatedAt, labels));
     }
 
     private AssignmentView view(
-            AuthenticatedAdministrativeActor actor,
             AccessAssignment value,
-            Instant evaluatedAt) {
-        String identityLabel = null;
-        if (canRead(actor, AdministrativePermissions.IDENTITY_READ, "identity", value.identityId())) {
-            identityLabel = identities.findIdentity(actor.tenant(), value.identityId())
-                    .map(identity -> identity.displayName()).orElse(null);
-        }
-
+            Instant evaluatedAt,
+            ViewLabels labels) {
         UUID targetId = value.targetKind() == AccessAssignment.TargetKind.ROLE
                 ? value.roleId() : value.entitlementId();
-        String targetLabel = null;
-        if (value.targetKind() == AccessAssignment.TargetKind.ROLE
-                && canRead(actor, AdministrativePermissions.ROLE_READ, "role", targetId)) {
-            targetLabel = roles.findRole(actor.tenant(), targetId).map(role -> role.name()).orElse(null);
-        } else if (value.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT
-                && canRead(actor, AdministrativePermissions.ENTITLEMENT_READ, "entitlement", targetId)) {
-            targetLabel = catalog.findEntitlement(actor.tenant(), targetId).map(entitlement -> entitlement.code()).orElse(null);
-        }
-
-        String principalLabel = null;
-        if (value.specificPrincipalId() != null
-                && canRead(actor, AdministrativePermissions.PRINCIPAL_READ, "principal", value.specificPrincipalId())) {
-            principalLabel = principals.findById(actor.tenant(), value.specificPrincipalId())
-                    .map(principal -> principal.nativePrincipalKey()).orElse(null);
-        }
+        String targetLabel = value.targetKind() == AccessAssignment.TargetKind.ROLE
+                ? labels.catalog().roles().get(targetId)
+                : labels.catalog().entitlements().get(targetId);
 
         return new AssignmentView(
-                value.id(), value.identityId(), identityLabel,
+                value.id(), value.identityId(), labels.identity().identities().get(value.identityId()),
                 value.targetKind().name(), targetId, targetLabel,
-                value.principalConstraintKind().name(), value.specificPrincipalId(), principalLabel,
+                value.principalConstraintKind().name(), value.specificPrincipalId(),
+                labels.identity().principals().get(value.specificPrincipalId()),
                 value.provenanceKind().name(), value.provenanceRefId(),
                 value.lifecycleState().name(), validity(value, evaluatedAt).name(), evaluatedAt,
                 value.validFrom(), value.validUntil(), value.revision(), value.createdAt(), value.updatedAt());
+    }
+
+    private ViewLabels labels(
+            AuthenticatedAdministrativeActor actor,
+            List<AccessAssignment> values) {
+        Set<UUID> identityIds = new LinkedHashSet<>();
+        Set<UUID> principalIds = new LinkedHashSet<>();
+        Set<UUID> roleIds = new LinkedHashSet<>();
+        Set<UUID> entitlementIds = new LinkedHashSet<>();
+
+        for (AccessAssignment value : values) {
+            if (canRead(actor, AdministrativePermissions.IDENTITY_READ, "identity", value.identityId())) {
+                identityIds.add(value.identityId());
+            }
+            if (value.specificPrincipalId() != null
+                    && canRead(actor, AdministrativePermissions.PRINCIPAL_READ, "principal", value.specificPrincipalId())) {
+                principalIds.add(value.specificPrincipalId());
+            }
+            UUID targetId = value.targetKind() == AccessAssignment.TargetKind.ROLE
+                    ? value.roleId() : value.entitlementId();
+            if (value.targetKind() == AccessAssignment.TargetKind.ROLE
+                    && canRead(actor, AdministrativePermissions.ROLE_READ, "role", targetId)) {
+                roleIds.add(targetId);
+            } else if (value.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT
+                    && canRead(actor, AdministrativePermissions.ENTITLEMENT_READ, "entitlement", targetId)) {
+                entitlementIds.add(targetId);
+            }
+        }
+
+        return new ViewLabels(
+                identityPresentation.labels(actor.tenant(), identityIds, principalIds),
+                catalogPresentation.labels(actor.tenant(), roleIds, entitlementIds));
     }
 
     private boolean canRead(
@@ -221,6 +232,10 @@ public final class AccessAssignmentViewController {
         }
         return value;
     }
+
+    private record ViewLabels(
+            IdentityAccessPresentationQuery.Labels identity,
+            CatalogAccessPresentationQuery.Labels catalog) {}
 
     public record AssignmentView(
             UUID id,
