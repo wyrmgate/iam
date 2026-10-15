@@ -3,6 +3,7 @@ package io.wyrmgate.iam.api.access;
 import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentFilter;
 import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentPosition;
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectivePosition;
+import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveSupportPosition;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -82,6 +83,39 @@ final class AccessCursorCodec {
         validateIssuedAt(parts[4]);
         try { return new EffectivePosition(UUID.fromString(parts[7])); }
         catch (RuntimeException invalid) { throw invalid(invalid); }
+    }
+
+    String encodeEffectiveSupports(
+            TenantContext tenant,
+            UUID effectiveAccessId,
+            EffectiveSupportPosition position) {
+        return position == null ? null : sign(payload(
+                "effective-access-support",
+                tenant.tenantId().toString(),
+                effectiveAccessId.toString(),
+                clock.instant().toString(),
+                position.accessAssignmentId().toString(),
+                position.pathHash(),
+                effectiveAccessId.toString()));
+    }
+
+    EffectiveSupportPosition decodeEffectiveSupports(
+            String cursor,
+            TenantContext tenant,
+            UUID effectiveAccessId) {
+        String[] parts = verifiedPayload(cursor);
+        if (parts.length != 8
+                || !PAYLOAD_VERSION.equals(parts[0])
+                || !"effective-access-support".equals(parts[1])
+                || !tenant.tenantId().toString().equals(parts[2])
+                || !effectiveAccessId.toString().equals(parts[3])
+                || !effectiveAccessId.toString().equals(parts[7])) throw invalid();
+        validateIssuedAt(parts[4]);
+        try {
+            return new EffectiveSupportPosition(UUID.fromString(parts[5]), parts[6]);
+        } catch (RuntimeException invalid) {
+            throw invalid(invalid);
+        }
     }
 
     private static AssignmentFilter identityFilter(UUID identityId) {
