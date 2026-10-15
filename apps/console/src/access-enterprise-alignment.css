@@ -69,7 +69,21 @@
     font-size: 24px;
   }
 
-  .access-enterprise-boundary .access-golden-tab {
+  .access-enterprise-boundary .access-golden-tab,
+  .access-enterprise-boundary .access-clear-filters,
+  .access-enterprise-boundary .access-filter-toolbar select,
+  .access-enterprise-boundary .access-field select,
+  .access-enterprise-boundary .access-field input,
+  .access-enterprise-boundary .access-picker input {
+    min-height: 44px;
+  }
+
+  .access-enterprise-boundary .access-detail-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .access-enterprise-boundary .access-picker-results button {
     min-height: 44px;
   }
 }
