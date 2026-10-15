@@ -1,23 +1,17 @@
-/* Identity collection and detail use the same wide Page geometry as Overview and Requests.
- * The shell owns viewport gutters; the page owns only the shared 96rem content bound. */
-.shell-workspace .identity-golden-page,
+/* Temporary Identity 360 geometry bridge.
+ * The collection route now consumes shared Page geometry directly; the detail route
+ * remains on this bridge until its dedicated enterprise-detail migration. */
 .shell-workspace .identity360-page {
   width: min(96rem, 100%) !important;
   max-width: 100% !important;
   margin: 0 auto !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }
 
-/* Match the shared wide-page header inset used by Overview and Requests. */
-.shell-workspace .identity-golden-header,
 .shell-workspace .identity360-header {
   padding-left: 2px !important;
   padding-right: 2px !important;
-}
-
-/* Identity 360 used to carry its own outer page padding; shell-workspace already supplies it. */
-.shell-workspace .identity360-page {
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
 }

@@ -12,6 +12,8 @@ Wyrmgate Console owns its product semantics and visual contract. Material UI (MU
 - No credential/private material may be persisted in browser storage or exposed through library telemetry.
 - A future first-party Wyrmgate component library should replace the implementation behind this boundary incrementally rather than requiring a whole-application rewrite.
 
+The enterprise composition and responsive rules are defined in `docs/engineering/console-enterprise-ui-standard.md`. Capability workspaces should consume that shared contract instead of creating page-local color, typography, density, shell, or responsive systems.
+
 ## Reusable primitives
 
 Page migrations should build from the local Wyrmgate-facing primitives rather than styling MUI ad hoc in each capability workspace:
@@ -20,11 +22,14 @@ Page migrations should build from the local Wyrmgate-facing primitives rather th
 - `PageToolbar` for collection filters, search and page-level secondary controls;
 - `Surface` for bounded enterprise content regions;
 - `StatePanel` for loading, empty, warning and error states;
+- `StateIndicator` for compact caller-typed dot-and-label lifecycle/operational presentation;
 - `DataTable` plus table primitives for dense administrative collections;
 - `Tabs` and `Tab` for typed workspace switching;
-- `StatusChip` for compact state presentation;
+- `StatusChip` for token-like categorical metadata where a chip treatment is actually appropriate;
 - `ConfirmDialog` for deliberate confirmation of materially harmful operations;
 - `Button`, `TextInput`, `SelectInput`, `CheckboxInput`, `Modal` and `SidePanel` for common interaction controls.
+
+`StateIndicator` is presentation-only. The caller owns the IAM meaning and explicitly selects the tone; the primitive must not infer lifecycle, risk, fulfillment, provenance, observation, or governance semantics from arbitrary strings.
 
 `DataTable` keeps the small-table composition model and the stable `./ui` import boundary while standardizing enterprise-density presentation and horizontal overflow. Callers may provide `ariaLabel` or `ariaLabelledBy`, plus an optional visible or visually hidden caption. `DataTableRow` supplies domain-neutral hover/selected affordances for interactive rows, `DataTableActionCell` keeps row actions consistently aligned, and `DataTableStateRow` provides shared empty/loading placement without deciding what a domain-specific state means. Column meaning, formatting, API pagination/filter behavior and semantic actions remain in feature/workspace code.
 
@@ -49,10 +54,11 @@ Tenant display remains server-derived. The shell does not invent browser-control
 - First-party sign-in uses the project-owned UI boundary and presents a balanced enterprise split authentication surface with a bounded control-plane topology and compact credential form. The topology shows Identity, Tenant, Credential, Access, Governance, Integration and Audit relationships; its animation is presentation-only and honors reduced-motion preferences.
 - The sign-in page exposes only implemented authentication interactions. Tenant remains server-resolved from the registered Console route, password visibility is local presentation state only, and no inactive language selector, password-recovery, remember-me or upstream-SSO action is fabricated by the browser.
 - The sign-in page continues to use only the accepted server-routed first-party login contract. The server owns Tenant routing, session state and operation-time authority; authentication secrets are not persisted in browser storage.
-- The application shell now has a labeled collapsible desktop navigation rail, complete mobile navigation, command palette, server-derived context and actor controls. The shared route registry separates assigned work from administrative configuration without changing domain ownership.
-- Base page primitives now expose narrow/standard/wide content widths plus a reusable toolbar so page-specific redesigns can land on a stable shell foundation.
+- The application shell has a labeled collapsible desktop navigation rail, complete mobile navigation, command palette, server-derived context and actor controls. The shared route registry separates assigned work from administrative configuration without changing domain ownership.
+- Base page primitives expose narrow/standard/wide content widths plus a reusable toolbar so page-specific redesigns can land on a stable shell foundation.
 - **Overview** uses shared page and enterprise surface primitives.
-- **Identities** list/create/detail, canonical-value disclosure and lifecycle/correction actions use shared page, surface, state, table, status and confirmation primitives.
+- **Identities collection** is the first Enterprise UI Standard v1 reference migration: shared page/header/toolbar/surface/form/table/state/modal primitives, dense desktop/tablet scanning, semantic compact mobile records, and no page-specific shell overrides.
+- **Identity 360/detail** retains the accepted six-tab semantic workbench and semantic mutation/API behavior; its remaining page-local visual bridge is explicitly follow-up presentation debt rather than a competing shared standard.
 - Identity deactivation/decommission, merge and split confirmations use the project-owned `ConfirmDialog` rather than browser-native confirmation UI; the underlying semantic commands, ETag and idempotency contracts are unchanged.
 - **Principals** use the semantic workspace for technical-account list/create/read/correlation.
 - **Catalog** Applications, Application Targets, Entitlements, Roles and Role Versions use the semantic workspace while preserving their typed resource/action boundaries.
@@ -64,4 +70,4 @@ Tenant display remains server-derived. The shell does not invent browser-control
 - **Audit** records, exports, evidence, legal-hold and purge workspaces use shared Wyrmgate UI primitives; destructive evidence operations remain explicit and confirmed.
 - Browser-native confirmation has been removed from the shared semantic resource renderer; destructive actions use `ConfirmDialog`.
 
-Remaining UI work is page-specific refinement, URL-addressable workspace views, richer validation/accessibility, and removal of residual legacy frame/routing code once the page entry point is migrated onto the shared route registry.
+Remaining UI work is page-specific refinement, migration of residual page-local visual systems onto the shared enterprise contract, richer validation/accessibility, and removal of residual legacy presentation bridges once their owning workspace is migrated.

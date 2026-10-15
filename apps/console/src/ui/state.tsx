@@ -129,6 +129,31 @@ export function StatePanel({ title, children, state, severity, action }: StatePa
   );
 }
 
+export type StateIndicatorTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
+
+const indicatorColor: Record<StateIndicatorTone, string> = {
+  success: 'success.main',
+  info: 'info.main',
+  warning: 'warning.main',
+  danger: 'error.main',
+  neutral: 'text.secondary',
+};
+
+/**
+ * Compact non-pill state presentation for lifecycle, fulfillment, risk or similar typed state.
+ * The caller owns domain meaning and chooses the tone; this primitive supplies only presentation.
+ */
+export function StateIndicator({ label, tone = 'neutral' }: { label: ReactNode; tone?: StateIndicatorTone }) {
+  return (
+    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0, color: indicatorColor[tone] }}>
+      <Box component="span" aria-hidden="true" sx={{ width: 7, height: 7, flex: '0 0 auto', borderRadius: '50%', bgcolor: 'currentColor' }} />
+      <Typography component="span" variant="caption" sx={{ color: 'text.primary', fontWeight: 600, lineHeight: 1.3 }}>
+        {label}
+      </Typography>
+    </Box>
+  );
+}
+
 export function StatusChip(props: ChipProps) {
   return <MuiChip size="small" variant="outlined" {...props} />;
 }
