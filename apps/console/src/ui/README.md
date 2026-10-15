@@ -57,12 +57,12 @@ Tenant display remains server-derived. The shell does not invent browser-control
 - The application shell has a labeled collapsible desktop navigation rail, complete mobile navigation, command palette, server-derived context and actor controls. The shared route registry separates assigned work from administrative configuration without changing domain ownership.
 - Base page primitives expose narrow/standard/wide content widths plus a reusable toolbar so page-specific redesigns can land on a stable shell foundation.
 - **Overview** uses shared page and enterprise surface primitives.
-- **Identities collection** is the first Enterprise UI Standard v1 reference migration: shared page/header/toolbar/surface/form/table/state/modal primitives, dense desktop/tablet scanning, semantic compact mobile records, and no page-specific shell overrides.
-- **Identity 360/detail** retains the accepted six-tab semantic workbench and semantic mutation/API behavior; its remaining page-local visual bridge is explicitly follow-up presentation debt rather than a competing shared standard.
+- **Identities collection** is the first Enterprise UI Standard v1 collection reference migration: shared page/header/toolbar/surface/form/table/state/modal primitives, dense desktop/tablet scanning, semantic compact mobile records, and no page-specific shell overrides.
+- **Identity 360/detail** is the Enterprise UI Standard v1 Object 360 reference migration. It uses shared page/header/surface/table/state/form/dialog/tab primitives for the accepted Overview, Governed profile, Principals, Access, Governance and Evidence views. Its ETag/idempotency, lifecycle, merge/split, authorization and capability-owned read semantics are unchanged; the obsolete page-local detail stylesheet and geometry bridge are retired.
 - Identity deactivation/decommission, merge and split confirmations use the project-owned `ConfirmDialog` rather than browser-native confirmation UI; the underlying semantic commands, ETag and idempotency contracts are unchanged.
 - **Principals** use the semantic workspace for technical-account list/create/read/correlation.
 - **Catalog** Applications, Application Targets, Entitlements, Roles and Role Versions use the semantic workspace while preserving their typed resource/action boundaries.
-- **Access** assignments, EffectiveAccess projection and lifecycle-policy lookup use the semantic workspace without making the projection editable.
+- **Access** assignments, EffectiveAccess projection and lifecycle-policy lookup use the dedicated Access operator workbench without making the projection editable or moving provider observation into Access authority.
 - **Governance** requests, approvals, reviews, policy versions and exceptions use shared tabs, forms, tables and confirmations while retaining explicit semantic operations.
 - **Credentials** use the semantic workspace with a Principal-scoped entry point and the existing secret-reference-only boundary.
 - **Integration administration** uses the semantic workspace for Connector/Binding/Worker control-plane surfaces; operational status remains separately data-minimized.
@@ -70,4 +70,4 @@ Tenant display remains server-derived. The shell does not invent browser-control
 - **Audit** records, exports, evidence, legal-hold and purge workspaces use shared Wyrmgate UI primitives; destructive evidence operations remain explicit and confirmed.
 - Browser-native confirmation has been removed from the shared semantic resource renderer; destructive actions use `ConfirmDialog`.
 
-Remaining UI work is page-specific refinement, migration of residual page-local visual systems onto the shared enterprise contract, richer validation/accessibility, and removal of residual legacy presentation bridges once their owning workspace is migrated.
+Remaining UI work is page-specific refinement, migration of any residual page-local visual systems onto the shared enterprise contract, richer validation/accessibility, and managed-DEV browser acceptance across the converged Console.

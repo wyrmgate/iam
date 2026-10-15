@@ -41,16 +41,19 @@ test('canonical attribute disclosure follows classification authorization and re
     /attribute\.visibility === 'REDACTED'/,
     /Redacted by classification authority/,
     /Authorized values only/,
-    /Retained trusted value · current resolution is/,
+    /Retained trusted value; current resolution is/,
     /Provider\/source payloads are not shown here/,
   );
   assertSourceExcludes(identity, /valueRedacted|\[authorized value\]/);
 });
 
-test('Identity detail is the approved persistent-header six-tab workbench', () => {
+test('Identity detail is the approved persistent-header six-tab enterprise workbench', () => {
   assertSourceContains(
     identity,
+    /<Page width="wide">/,
+    /<PageHeader/,
     /Identity · governed subject/,
+    /Governed state and actions/,
     /Currently access-eligible/,
     /Currently access-ineligible/,
     /Identity 360 workspace/,
@@ -64,8 +67,11 @@ test('Identity detail is the approved persistent-header six-tab workbench', () =
     /Investigation/,
     /Edit metadata/,
     /Advanced Identity correction/,
+    /<Surface/,
+    /<DataTable/,
+    /<StateIndicator/,
   );
-  assertSourceExcludes(identity, /<Surface|title="Lifecycle operations"|title="Display name"/);
+  assertSourceExcludes(identity, /title="Lifecycle operations"|title="Display name"|identity360-[a-z-]+/);
 });
 
 test('Identity 360 tabs use bounded server-owned subject reads rather than client aggregation', () => {
