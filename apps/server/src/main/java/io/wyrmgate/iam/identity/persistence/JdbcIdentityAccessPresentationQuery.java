@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 
 /** JDBC adapter for bounded Identity/Principal labels used by authorized cross-capability views. */
 @Repository
-public final class JdbcIdentityAccessPresentationQuery implements IdentityAccessPresentationQuery {
+public class JdbcIdentityAccessPresentationQuery implements IdentityAccessPresentationQuery {
     private static final int MAX_REFERENCES = 200;
 
     private final JdbcTemplate jdbc;

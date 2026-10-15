@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
 
 /** JDBC adapter for bounded Role/Entitlement labels used by authorized cross-capability views. */
 @Repository
-public final class JdbcCatalogAccessPresentationQuery implements CatalogAccessPresentationQuery {
+public class JdbcCatalogAccessPresentationQuery implements CatalogAccessPresentationQuery {
     private static final int MAX_REFERENCES = 200;
 
     private final JdbcTemplate jdbc;
