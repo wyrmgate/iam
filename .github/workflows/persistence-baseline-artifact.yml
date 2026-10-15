@@ -53,17 +53,20 @@ jobs:
             docker logs wyrmgate-baseline-postgres
             exit 1
           fi
-          for attempt in $(seq 1 15); do
-            if docker exec wyrmgate-baseline-postgres createdb -U wyrmgate baseline 2>/dev/null; then
-              break
-            fi
-            if docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d baseline -Atc 'select 1' 2>/dev/null | grep -qx 1; then
-              break
-            fi
-            sleep 1
+          for database in baseline historical_canonical; do
+            for attempt in $(seq 1 15); do
+              if docker exec wyrmgate-baseline-postgres createdb -U wyrmgate "$database" 2>/dev/null; then
+                break
+              fi
+              if docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d "$database" -Atc 'select 1' 2>/dev/null | grep -qx 1; then
+                break
+              fi
+              sleep 1
+            done
           done
-          docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d historical -Atc 'select 1' | grep -qx 1
-          docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d baseline -Atc 'select 1' | grep -qx 1
+          for database in historical baseline historical_canonical; do
+            docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d "$database" -Atc 'select 1' | grep -qx 1
+          done
 
       - name: Guard migration numbering
         run: |
@@ -138,6 +141,14 @@ jobs:
           diff -u apps/server/src/main/resources/db/migration/B69__current_schema.sql \
             /tmp/wyrmgate-baseline/B69__current_schema.sql
 
+      - name: Canonicalize generated historical schema
+        run: |
+          docker cp /tmp/wyrmgate-baseline/B69__current_schema.sql \
+            wyrmgate-baseline-postgres:/tmp/B69__current_schema.sql
+          docker exec wyrmgate-baseline-postgres \
+            psql -v ON_ERROR_STOP=1 -U wyrmgate -d historical_canonical \
+              -f /tmp/B69__current_schema.sql
+
       - name: Apply greenfield baseline path
         env:
           IAM_DB_URL: jdbc:postgresql://localhost:5432/baseline
@@ -162,10 +173,10 @@ jobs:
             exit 1
           fi
 
-      - name: Compare normalized application schemas
+      - name: Compare canonicalized application schemas
         run: |
           mkdir -p /tmp/wyrmgate-schema-diff
-          for database in historical baseline; do
+          for database in historical_canonical baseline; do
             docker exec wyrmgate-baseline-postgres \
               pg_dump -U wyrmgate -d "$database" \
                 --schema-only --no-owner --no-privileges \
@@ -198,10 +209,10 @@ jobs:
               return '\n'.join(output).strip() + '\n'
 
           root = Path('/tmp/wyrmgate-schema-diff')
-          for database in ('historical', 'baseline'):
+          for database in ('historical_canonical', 'baseline'):
               (root / f'{database}.sql').write_text(normalize(root / f'{database}.raw.sql'))
           PY
-          diff -u /tmp/wyrmgate-schema-diff/historical.sql /tmp/wyrmgate-schema-diff/baseline.sql
+          diff -u /tmp/wyrmgate-schema-diff/historical_canonical.sql /tmp/wyrmgate-schema-diff/baseline.sql
 
       - name: Upload comparison artifacts
         if: always()
@@ -209,7 +220,7 @@ jobs:
         with:
           name: persistence-baseline-equivalence
           path: |
-            /tmp/wyrmgate-schema-diff/historical.sql
+            /tmp/wyrmgate-schema-diff/historical_canonical.sql
             /tmp/wyrmgate-schema-diff/baseline.sql
             /tmp/baseline-history.txt
           if-no-files-found: warn
