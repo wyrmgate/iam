@@ -74,12 +74,13 @@ test('EffectiveAccess is explanation-only and routes changes through supporting 
   assertSourceContains(
     accessWorkspace,
     /Why is this entitlement effective/,
-    /Read-only projection/,
+    /DERIVED · READ ONLY/,
     /Current supports/,
     /Role-derived access/,
     /Direct entitlement assignment/,
     /Open supporting assignment/,
     /Deterministic path reference/,
+    /Change supporting intent, never this projection/,
   );
   assertSourceExcludes(accessWorkspace, /Revoke EffectiveAccess|Edit EffectiveAccess|Suspend EffectiveAccess/);
 });
