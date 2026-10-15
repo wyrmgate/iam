@@ -1,4 +1,4 @@
-# ADR-0048 Pre-release persistence baseline and migration-history governance
+# ADR-0048 Pre-release persistence rebaseline
 
 - Status: Proposed
 - Date: 2026-10-16
@@ -8,94 +8,123 @@
 
 ## Context
 
-Wyrmgate IAM v2 remains pre-release. Repository persistence history currently contains Flyway versioned migrations V1 through V69. Those migrations are useful historical upgrade evidence, but a large part of the sequence consists of incremental construction, strengthening, indexing and correction performed while the v2 model was still taking shape.
+Wyrmgate IAM v2 remains pre-release. The original Flyway sequence V1 through V69 records the incremental construction of the current persistence model: initial capability schemas, successive aggregate tables, corrections, stronger constraints, indexes and later feature slices. Replaying that development history for every new empty database is no longer useful and makes the active migration surface harder to review.
 
-A disposable DEV database can be dropped and recreated, but database reset must not be used as an excuse to rewrite deployed migration history, erase the historical meaning of a migration version, or redesign domain semantics around persistence convenience.
+The shared DEV database is disposable and may be recreated. This creates a controlled opportunity to establish a clean pre-release migration baseline without changing accepted IAM semantics.
 
-A short-lived pre-release V70 previously performed automatic sealed first-party bootstrap authority expansion. It was deliberately withdrawn because sealed authority must not increase implicitly. ADR-0047 documents compatibility for databases that may have recorded that historical V70. Reusing version 70 for an unrelated migration would make migration history ambiguous and is therefore unsafe.
+A short-lived historical V70 automatically expanded sealed first-party bootstrap authority and was deliberately withdrawn. Its historical meaning remains documented by ADR-0046/0047 and must not be silently reintroduced.
 
-The current physical model already defines the tenancy contract: `platform.tenant` is the isolation root, every tenant-owned row carries a non-null tenant ID, same-capability tenant-owned relationships use tenant-safe references where practical, and Organization remains tenant-local business structure rather than the tenant boundary. A persistence consolidation must preserve those semantics rather than introduce a new generic Tenant business model.
+The persistence rebaseline is not a domain redesign. Tenant remains the Platform-owned isolation/customer boundary. Organization remains tenant-local Identity business structure. Capability ownership, authoritative/observation/evidence/projection classification, tenant-scoped uniqueness, same-capability tenant-safe references, and cross-capability semantic boundaries remain unchanged.
 
 ## Decision
 
-### Preserve versioned migration history
+### Reset the active Flyway history for fresh pre-release databases
 
-V1 through V69 remain immutable versioned upgrade history. They are not renumbered, squashed in place, deleted, or edited merely because a disposable environment can be rebuilt.
+The runtime migration location is re-established as a concise current-state baseline:
 
-V70 is permanently reserved as a withdrawn historical version. No future migration may reuse version 70.
+- `V1__prepare_current_schema_baseline.sql` contains only PostgreSQL restore prerequisites required by the generated current-state schema;
+- `V2__current_schema_baseline.sql` contains the reviewed schema state produced by applying the historical V1-V69 path;
+- future persistence changes continue incrementally from V3.
 
-Future incremental versioned migrations begin at V71.
+A fresh database therefore establishes the current schema directly instead of replaying 69 development migrations.
 
-### Add a Flyway baseline migration for empty databases
+The current-state baseline contains schema objects only. It must not contain application rows, Tenant rows, installation/bootstrap rows, provider observations, secrets, environment-specific owners/ACLs, or Flyway schema-history rows.
 
-The repository adds a Flyway baseline migration representing the reviewed current physical schema at the consolidation checkpoint. A new empty database may start from that baseline and then apply later versioned migrations. A database with existing versioned migration history continues to use its recorded history and does not have its past rewritten by the baseline.
+### Preserve old migrations as historical verification fixtures, not runtime migrations
 
-The baseline is a source-controlled migration, not a runtime schema dump. Its candidate SQL is generated from a PostgreSQL database migrated through the repository's historical path, then normalized and reviewed before commit.
+The original V1-V69 files move to:
 
-The baseline must not contain `flyway_schema_history`, environment-specific ownership/ACL statements, secrets, provider data, application data, or installation/bootstrap records.
+`apps/server/src/test/resources/db/history/pre-rebaseline/`
 
-### Prove baseline equivalence
+They are retained for equivalence verification, archaeology and historical compatibility analysis. They are no longer included in the ordinary runtime Flyway location and are not replayed by a fresh installation.
 
-Repository verification must prove that the baseline path and the historical versioned path establish the same application schema at the checkpoint, excluding Flyway's own history metadata and PostgreSQL metadata that is not semantically part of Wyrmgate persistence.
+Historical V70 remains absent. Its withdrawn meaning is retained in ADR-0046/0047 and must never be copied into the archived V1-V69 fixture set as if it were accepted schema history.
 
-The comparison covers application schemas, tables, columns, nullability/defaults, keys/constraints, indexes and sequences that are part of the physical contract. A baseline is not accepted merely because application startup succeeds.
+This is an explicit pre-release migration-history reset. A database carrying the pre-rebaseline Flyway history must not be pointed blindly at the new runtime migration location and expected to upgrade in place. Disposable development databases are recreated. Any retained historical installation follows an explicit compatibility/migration plan appropriate to that installation rather than manufacturing Flyway history.
 
-### Tenant design remains semantic, not migration-driven
+### Prove current-state equivalence in CI
 
-Persistence consolidation does not create a new Tenant lifecycle, arbitrary tenant metadata bag, tenant CRUD framework, or tenant-as-Organization model.
+Repository verification creates two empty PostgreSQL databases:
 
-The existing canonical semantics remain:
+1. a historical database using only the archived V1-V69 migration fixtures;
+2. a baseline database using only the active runtime baseline migrations.
 
-- Tenant is the hard isolation/customer boundary and is Platform-owned supporting state.
-- Organization is tenant-local business structure owned by Identity semantics.
-- `TenantContext` is an explicit non-null isolation context passed through application and persistence boundaries.
-- tenant-owned rows use non-null `tenant_id`;
-- tenant-scoped business uniqueness includes tenant context;
-- same-capability relationships use tenant-safe composite references where practical;
-- cross-capability relationships remain stable-ID/semantic-boundary relationships and are not coupled merely to gain database convenience;
-- deployment-scoped Platform state, when present, is modeled explicitly rather than represented by nullable tenancy on ordinary business rows.
+CI dumps both resulting application schemas, excludes `flyway_schema_history` and non-semantic PostgreSQL dump metadata, normalizes the dumps, and requires an exact schema diff.
 
-The consolidation checkpoint includes an automated schema audit against those invariants. Any actual schema defect discovered by that audit is corrected by an explicit post-V70 versioned migration and is also reflected directly in the baseline. Existing databases therefore receive the same correction without history rewriting.
+Equivalence includes schemas, functions, tables, columns, defaults/nullability, keys, constraints, indexes, views, triggers and foreign keys represented in the PostgreSQL schema dump. Startup success alone is not sufficient.
 
-### DEV reset is explicit deployment work
+The equivalence workflow is read-only with respect to the repository. Baseline SQL is reviewed source, not self-modifying CI output.
 
-This ADR permits a disposable DEV database to be dropped/recreated only as an explicit operator action after the new baseline is merged and verified. Application startup, Flyway, login, bootstrap status checks and ordinary requests never drop/reset a database.
+### Keep the baseline physically aligned with capability boundaries
 
-A reset database is a fresh installation. It uses the current ADR-0044/0045/0046 bootstrap path and creates the finite `STANDALONE_TENANT_OWNER` authority directly. ADR-0047 remains supported for historical sealed databases that are retained rather than reset.
+The current database continues to use the capability-oriented schemas:
 
-Resetting a database destroys its IAM state and evidence. The operator must confirm the environment is disposable/non-production and preserve any required diagnostic evidence before destruction.
+- `platform`
+- `identity`
+- `catalog`
+- `access`
+- `governance`
+- `credential`
+- `integration`
+- `administration`
+- `audit`
+
+A single current-state SQL file is intentionally used for the schema body because PostgreSQL functions, views, triggers and foreign keys have ordering dependencies across object classes. Capability ownership remains visible through schema-qualified objects; splitting the baseline into artificial migration numbers merely to obtain one file per schema would create ordering coupling without improving domain ownership.
+
+Later migrations should be focused deltas named for the semantic persistence change they implement. The baseline is not regenerated for every ordinary change.
+
+### Tenant-isolation invariants are verified at the checkpoint
+
+The rebaseline preserves the canonical tenancy model:
+
+- `platform.tenant` is the isolation root and does not carry a `tenant_id` pointing to itself;
+- tenant-owned application tables carry non-null `tenant_id`;
+- tenant-scoped uniqueness includes tenant context where required;
+- same-capability tenant-owned foreign keys carry tenant context on both sides where represented relationally;
+- cross-capability domain references remain stable IDs without database FKs unless the reference is solely the Platform Tenant isolation anchor;
+- Organization is not Tenant and remains tenant-local business structure;
+- deployment-local bootstrap state remains explicit and never makes ordinary business rows globally scoped through nullable tenancy.
+
+Automated persistence integration tests enforce these structural isolation rules against the baseline-produced schema.
+
+### DEV reset is explicit
+
+A disposable DEV database may be dropped/recreated only as an operator/deployment action after this rebaseline and its CI checks are merged. Wyrmgate application startup, normal Flyway execution, login, setup status and ordinary APIs never drop databases.
+
+The recreated database is a fresh installation. It runs the current ADR-0044/0045/0046 setup path and creates the finite `STANDALONE_TENANT_OWNER` authority directly. ADR-0047 remains compatibility support for historical sealed installations that are retained rather than recreated.
 
 ### Formal specification treatment
 
-The controlled v0.8 formal package predates this persistence-baseline checkpoint. ADR-0048 and the resulting current persistence checkpoint are folded into the next meaningful controlled formal revision. This consolidation alone does not require an ad-hoc DOCX/XLSX revision because it preserves accepted domain semantics; any separate semantic tenancy change would require the normal requirements/design review path.
+The controlled formal package remains v0.8. ADR-0048 records a pre-release persistence-history checkpoint while preserving current domain semantics. It is folded into the next meaningful controlled formal revision together with the other accepted post-v0.8 ADR amendments; this change does not trigger an ad-hoc DOCX/XLSX revision.
 
 ## Consequences
 
-- New empty databases have a concise reviewed schema-establishment path instead of replaying every pre-release construction step.
-- Existing databases retain truthful immutable migration history.
-- V70 cannot acquire a second meaning.
-- A disposable DEV reset can remove the need for ADR-0047 recovery for that particular database because the recreated installation bootstraps with current authority, while ADR-0047 remains necessary compatibility support elsewhere.
-- Baseline drift becomes a CI-detectable failure rather than documentation debt.
-- Persistence cleanup does not silently broaden Tenant semantics.
+- Fresh databases execute two baseline migrations instead of 69 historical construction migrations.
+- The active migration directory describes the current product rather than the chronology of development.
+- Historical V1-V69 SQL remains available for automated equivalence proof and archaeology without being shipped as normal migration work.
+- Disposable DEV environments must be recreated when switching to the rebaselined runtime history.
+- Retained pre-rebaseline databases require an explicit compatibility plan; Flyway history is never forged automatically.
+- Tenant-isolation defects become CI failures at the persistence checkpoint.
+- Future migrations begin at V3 and remain small semantic deltas from the current-state baseline.
 
 ## Rejected alternatives
 
-### Delete or renumber V1-V69
+### Keep V1-V69 active and add a B69 baseline beside them
 
-Rejected. Existing databases and historical evidence may already know those versions, and changing them would manufacture a new history rather than provide a clean forward-compatible baseline.
+Rejected. That still leaves the development-era chain as the normal migration surface and does not achieve the requested pre-release cleanup.
 
-### Reuse V70
+### Hand-combine V1-V69 sequentially
 
-Rejected. Version 70 already has documented historical meaning as the withdrawn automatic authority-expansion migration.
+Rejected. Concatenating intermediate ALTER/correction steps preserves obsolete construction rather than describing the current schema.
 
-### Concatenate V1-V69 blindly
+### Split the baseline into one artificial Flyway version per capability
 
-Rejected. A baseline is the current schema definition, not a replay script with obsolete intermediate operations. The generated current-state schema must be normalized, reviewed and equivalence-tested.
+Rejected for this checkpoint. Capability ownership is already represented by PostgreSQL schemas, while object-class dependency ordering spans schemas. Artificial version boundaries would imply an ordering/ownership relationship that is not part of the domain architecture.
 
-### Reset every environment automatically
+### Automatically rewrite existing Flyway history
 
-Rejected. Database destruction is an explicit operator/deployment action and is never an application migration behavior.
+Rejected. A runtime migration must not delete, renumber or manufacture historical Flyway rows. Disposable environments are recreated; retained environments use an explicit controlled compatibility plan.
 
-### Redesign Tenant because the database is being rebuilt
+### Redesign Tenant as part of migration cleanup
 
-Rejected. Database convenience is not a source of domain requirements. Tenant semantics change only through separately justified architecture/domain decisions.
+Rejected. Persistence cleanup is not authority to redefine the domain. Any future Tenant lifecycle/product-semantics change requires its own architecture/domain decision.
