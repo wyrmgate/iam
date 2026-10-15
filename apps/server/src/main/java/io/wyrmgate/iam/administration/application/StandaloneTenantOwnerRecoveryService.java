@@ -155,6 +155,10 @@ public final class StandaloneTenantOwnerRecoveryService {
                 "bootstrap_role_has_additional_grants");
         require(recoveryRepository.countDelegationsForRole(tenant, marker.administrativeRoleId()) == 0,
                 "bootstrap_role_has_delegations");
+        require(recoveryRepository.countElevationsForRole(tenant, marker.administrativeRoleId()) == 0,
+                "bootstrap_role_has_elevations");
+        require(recoveryRepository.countBreakGlassOperationsForRole(tenant, marker.administrativeRoleId()) == 0,
+                "bootstrap_role_has_break_glass_operations");
     }
 
     private static void require(boolean condition, String reason) {
