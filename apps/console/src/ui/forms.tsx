@@ -54,14 +54,15 @@ type SelectInputProps<T extends SelectValue = string> = Omit<
   defaultValue?: T | '';
   emptyLabel?: ReactNode;
   readOnly?: boolean;
+  getOptionLabel?: (value: T) => ReactNode;
   onChange?: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onValueChange?: (value: T | '') => void;
 };
 
-function normalizeOption<T extends SelectValue>(option: SelectOptionInput<T>): SelectOption<T> {
+function normalizeOption<T extends SelectValue>(option: SelectOptionInput<T>, getOptionLabel?: (value: T) => ReactNode): SelectOption<T> {
   return typeof option === 'object'
     ? option
-    : { value: option, label: String(option) };
+    : { value: option, label: getOptionLabel ? getOptionLabel(option) : String(option) };
 }
 
 export function SelectInput<T extends SelectValue = string>({
@@ -69,6 +70,7 @@ export function SelectInput<T extends SelectValue = string>({
   options,
   emptyLabel = 'Select…',
   readOnly = false,
+  getOptionLabel,
   onChange,
   onValueChange,
   slotProps,
@@ -93,7 +95,7 @@ export function SelectInput<T extends SelectValue = string>({
     >
       <MenuItem value="">{emptyLabel}</MenuItem>
       {options.map((rawOption) => {
-        const option = normalizeOption(rawOption);
+        const option = normalizeOption(rawOption, getOptionLabel);
         return (
           <MenuItem key={String(option.value)} value={option.value} disabled={option.disabled}>
             {option.label}
