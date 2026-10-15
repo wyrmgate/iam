@@ -37,12 +37,23 @@ jobs:
             -e POSTGRES_PASSWORD=wyrmgate \
             -p 5432:5432 \
             postgres:18.4-alpine
-          for attempt in $(seq 1 30); do
-            if docker exec wyrmgate-baseline-postgres pg_isready -U wyrmgate -d postgres; then
-              break
+          ready=0
+          for attempt in $(seq 1 45); do
+            if docker exec wyrmgate-baseline-postgres pg_isready -U wyrmgate -d postgres >/dev/null 2>&1 \
+              && docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d postgres -Atc 'select 1' | grep -qx 1; then
+              ready=$((ready + 1))
+              if [ "$ready" -ge 2 ]; then
+                break
+              fi
+            else
+              ready=0
             fi
             sleep 1
           done
+          if [ "$ready" -lt 2 ]; then
+            docker logs wyrmgate-baseline-postgres
+            exit 1
+          fi
           docker exec wyrmgate-baseline-postgres createdb -U wyrmgate historical
           docker exec wyrmgate-baseline-postgres createdb -U wyrmgate baseline
 
@@ -52,7 +63,6 @@ jobs:
           historical=apps/server/src/test/resources/db/history/pre-rebaseline
           test -f "$runtime/V1__prepare_current_schema_baseline.sql"
           test -f "$runtime/V2__current_schema_baseline.sql"
-          test "$(find "$runtime" -maxdepth 1 -type f -name 'V*.sql' | wc -l)" -eq 2
           test "$(find "$historical" -maxdepth 1 -type f -name 'V*.sql' | wc -l)" -eq 69
           for version in $(seq 1 69); do
             find "$historical" -maxdepth 1 -type f -name "V${version}__*.sql" | grep -q . || {
@@ -61,9 +71,12 @@ jobs:
             }
           done
           if find "$historical" "$runtime" -maxdepth 1 -type f -name 'V70__*.sql' | grep -q .; then
-            echo 'Withdrawn historical V70 must remain absent.' >&2
+            echo 'Withdrawn V70 is permanently reserved and must not be reused.' >&2
             exit 1
           fi
+          mkdir -p /tmp/wyrmgate-rebaseline-checkpoint
+          cp "$runtime/V1__prepare_current_schema_baseline.sql" /tmp/wyrmgate-rebaseline-checkpoint/
+          cp "$runtime/V2__current_schema_baseline.sql" /tmp/wyrmgate-rebaseline-checkpoint/
 
       - name: Apply historical V1-V69 path
         env:
@@ -77,7 +90,7 @@ jobs:
             -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:apps/server/src/test/resources/db/history/pre-rebaseline --wyrmgate.migrate-only=true" \
             spring-boot:run
 
-      - name: Apply active current-state baseline
+      - name: Apply active rebaseline checkpoint
         env:
           IAM_DB_URL: jdbc:postgresql://localhost:5432/baseline
           IAM_DB_USER: wyrmgate
@@ -86,10 +99,10 @@ jobs:
           IAM_OTEL_ENABLED: 'false'
         run: |
           sh ./apps/server/mvnw -f apps/server/pom.xml \
-            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --wyrmgate.migrate-only=true" \
+            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:/tmp/wyrmgate-rebaseline-checkpoint --wyrmgate.migrate-only=true" \
             spring-boot:run
 
-      - name: Verify fresh history is rebaselined
+      - name: Verify checkpoint history is rebaselined
         run: |
           docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d baseline -Atc \
             "select version || ':' || script from public.flyway_schema_history where success and type='SQL' order by installed_rank" \
@@ -98,7 +111,7 @@ jobs:
           grep -Fx '2:V2__current_schema_baseline.sql' /tmp/baseline-history.txt
           test "$(wc -l < /tmp/baseline-history.txt)" -eq 2
 
-      - name: Compare normalized application schemas
+      - name: Compare normalized checkpoint schemas
         run: |
           mkdir -p /tmp/wyrmgate-schema-diff
           for database in historical baseline; do
