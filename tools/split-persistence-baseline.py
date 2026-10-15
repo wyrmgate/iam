@@ -27,7 +27,8 @@ OBJECT_SCHEMA_PATTERNS = [
     re.compile(r"^ALTER\s+FUNCTION\s+([a-z_][a-z0-9_]*)\.", re.I | re.S),
     re.compile(r"^CREATE\s+(?:UNIQUE\s+)?INDEX\b.*?\s+ON\s+(?:ONLY\s+)?([a-z_][a-z0-9_]*)\.", re.I | re.S),
     re.compile(r"^CREATE\s+TRIGGER\b.*?\s+ON\s+([a-z_][a-z0-9_]*)\.", re.I | re.S),
-    re.compile(r"^COMMENT\s+ON\s+(?:TABLE|COLUMN|FUNCTION|VIEW|MATERIALIZED\s+VIEW|SEQUENCE)\s+([a-z_][a-z0-9_]*)\.", re.I | re.S),
+    re.compile(r"^COMMENT\s+ON\s+(?:TABLE|COLUMN|FUNCTION|VIEW|MATERIALIZED\s+VIEW|SEQUENCE|INDEX)\s+([a-z_][a-z0-9_]*)\.", re.I | re.S),
+    re.compile(r"^COMMENT\s+ON\s+CONSTRAINT\s+\S+\s+ON\s+([a-z_][a-z0-9_]*)\.", re.I | re.S),
 ]
 
 
