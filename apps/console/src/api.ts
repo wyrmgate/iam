@@ -62,15 +62,27 @@ export type LoginInput = LoginRoute & {
   password: string;
 };
 
+export type ApiFieldError = { field?: string; code?: string; message?: string };
+
 export class ApiError extends Error {
   readonly status: number;
   readonly correlationId: string | null;
+  readonly code: string | null;
+  readonly fieldErrors: ApiFieldError[];
 
-  constructor(status: number, message: string, correlationId: string | null) {
+  constructor(
+    status: number,
+    message: string,
+    correlationId: string | null,
+    code: string | null = null,
+    fieldErrors: ApiFieldError[] = [],
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.correlationId = correlationId;
+    this.code = code;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -85,6 +97,7 @@ export type RequestOptions = {
   body?: unknown;
   etag?: string;
   idempotent?: boolean;
+  idempotencyKey?: string;
   signal?: AbortSignal;
   accept?: string;
 };
@@ -107,22 +120,39 @@ function cookieValue(name: string): string | null {
   return null;
 }
 
-export function mutationHeaders(options: Pick<RequestOptions, 'etag' | 'idempotent' | 'accept'>): Headers {
+export function mutationHeaders(
+  options: Pick<RequestOptions, 'etag' | 'idempotent' | 'idempotencyKey' | 'accept'>,
+): Headers {
   const headers = new Headers({ Accept: options.accept ?? 'application/json' });
   if (options.etag) headers.set('If-Match', options.etag);
-  if (options.idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
+  if (options.idempotencyKey) headers.set('Idempotency-Key', options.idempotencyKey);
+  else if (options.idempotent) headers.set('Idempotency-Key', createIdempotencyKey());
   const csrf = cookieValue(CSRF_COOKIE);
   if (csrf) headers.set(CSRF_HEADER, csrf);
   return headers;
 }
 
-function safeErrorMessage(payload: unknown, status: number): string {
-  if (!payload || typeof payload !== 'object') return `Request failed with status ${status}`;
+function errorPayload(payload: unknown, status: number): {
+  message: string;
+  code: string | null;
+  fieldErrors: ApiFieldError[];
+} {
+  if (!payload || typeof payload !== 'object') {
+    return { message: `Request failed with status ${status}`, code: null, fieldErrors: [] };
+  }
   const source = payload as Record<string, unknown>;
   const candidate = source.message ?? source.detail ?? source.error;
-  return typeof candidate === 'string' && candidate.trim()
-    ? candidate
-    : `Request failed with status ${status}`;
+  const code = typeof source.code === 'string' && source.code.trim() ? source.code : null;
+  const fieldErrors = Array.isArray(source.fieldErrors)
+    ? source.fieldErrors.filter((item): item is ApiFieldError => Boolean(item && typeof item === 'object'))
+    : [];
+  return {
+    message: typeof candidate === 'string' && candidate.trim()
+      ? candidate
+      : `Request failed with status ${status}`,
+    code,
+    fieldErrors,
+  };
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
@@ -140,13 +170,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const correlationId = response.headers.get('X-Correlation-Id');
 
   if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
+    let parsed = { message: `Request failed with status ${response.status}`, code: null as string | null, fieldErrors: [] as ApiFieldError[] };
     try {
-      message = safeErrorMessage(await response.json(), response.status);
+      parsed = errorPayload(await response.json(), response.status);
     } catch {
       // Never surface arbitrary HTML, stack traces, secret material, or proxy bodies.
     }
-    throw new ApiError(response.status, message, correlationId);
+    throw new ApiError(response.status, parsed.message, correlationId, parsed.code, parsed.fieldErrors);
   }
 
   const contentType = response.headers.get('content-type') ?? '';
