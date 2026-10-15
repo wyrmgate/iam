@@ -2,6 +2,8 @@ import test from 'node:test';
 import { assertSourceContains, assertSourceExcludes, readConsoleSource } from './helpers/source-contract.mjs';
 
 const accessWorkspace = await readConsoleSource('workspaces/AccessGoldenWorkspace.tsx');
+const accessBoundary = await readConsoleSource('workspaces/AccessWorkspace.tsx');
+const accessAlignment = await readConsoleSource('access-enterprise-alignment.css');
 const accessApi = await readConsoleSource('accessApi.ts');
 const api = await readConsoleSource('api.ts');
 
@@ -37,4 +39,11 @@ test('Lifecycle policy has a closed typed immutable-successor editor', () => {
 test('Access workspace does not invent provider fulfillment state or provider mutation surfaces', () => {
   assertSourceContains(accessWorkspace, /Technical realization is separate/, /Provisioning tasks, provider attempts and provider observations are Integration-owned/);
   assertSourceExcludes(accessWorkspace, /\/provisioning-|\/connector-|ObservedGrant|DesiredGrantState|DesiredPrincipalState/);
+});
+
+test('Access tabs satisfy keyboard navigation and destructive actions keep restrained pre-confirmation presentation', () => {
+  assertSourceContains(accessWorkspace, /role="tablist"/, /role="tab"/);
+  assertSourceContains(accessBoundary, /ArrowRight/, /ArrowLeft/, /Home/, /End/, /preventDefault/, /focus\(\)/, /click\(\)/);
+  assertSourceContains(accessAlignment, /Lifecycle \/ validity \/ outcome state uses compact dot-and-label presentation/, /Destructive intent remains deliberate but not permanently saturated/);
+  assertSourceContains(accessAlignment, /\.access-state::before/, /\.MuiButton-containedError/);
 });
