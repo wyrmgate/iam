@@ -4,13 +4,15 @@
 
 This runbook covers ADR-0044 standalone installation only. It establishes the first Tenant, governed administrator Identity/Principal/PASSWORD Credential, governed Wyrmgate Console SSO client and initial Administration authority, then permanently seals the deployment bootstrap.
 
+ADR-0046 makes that first-party Administration authority an explicit standalone tenant-owner permission set so the first administrator can configure the implemented tenant surface after normal sign-in. It is not wildcard/root authority and does not bypass independent governance, assurance, secret or destructive-operation controls.
+
 It is **not** an administrator recovery procedure. A deployment that has reached `SEALED` never reopens installation bootstrap if all administrators are later lost.
 
 ## Preconditions
 
 Use this path only on a fresh database with no Tenant rows and no prior `platform.installation_bootstrap` row.
 
-The accepted first-party IdP/session configuration required for normal Console login must also be enabled. Database migrations must be current through the installation-bootstrap migration set.
+The accepted first-party IdP/session configuration required for normal Console login must also be enabled. Database migrations must be current through the installation-bootstrap and standalone tenant-owner authority migration set.
 
 Do not enable the legacy external `iam.bootstrap.initial-admin` adapter at the same time as fresh-install bootstrap.
 
@@ -73,6 +75,8 @@ The Console Application/ApplicationTarget precedes Principal creation because th
 
 Each capability owns its authoritative mutation. The installation service does not directly insert into Identity, Catalog, Credential or Administration tables.
 
+For `FIRST_PARTY_PRINCIPAL` bootstrap, Administration creates the marker-linked initial role from the explicit `STANDALONE_TENANT_OWNER` set defined by ADR-0046. The direct grant remains GLOBAL, active, grantable and delegable so the owner can establish narrower long-lived administrative roles through normal ADR-0032 authority-basis checks. The older `EXTERNAL_SUBJECT` bootstrap keeps ADR-0011's narrow four-permission set.
+
 ## Interruption and resume
 
 Restart with the same non-secret installation inputs and the same password through the same selected secret source.
@@ -103,17 +107,27 @@ After `SEALED`:
 2. remove `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` from deployment configuration, or remove/unmount the password file, depending on the selected source;
 3. restart under normal configuration if needed;
 4. open the Wyrmgate Console and authenticate with the configured username and password;
-5. verify a protected Administration operation succeeds through normal session authentication plus Administration authorization;
+5. verify protected Administration and normal tenant-owner operations succeed through normal session authentication plus Administration authorization, including representative Catalog/Integration/Audit reads where enabled;
 6. create the normal administrator/delegation/recovery posture required for the deployment rather than retaining installation material.
 
 A sealed deployment checks the durable seal before resolving bootstrap secret input. Therefore normal restarts after `SEALED` do not require either password source and stale/missing bootstrap secret configuration cannot reopen installation.
 
 The Console UI/runtime supplies its configured `client_id` and ApplicationTarget to the local authentication contract. The human login experience is username + password; those hidden routing selectors do not become user-selected Tenant input.
 
+## Existing sealed first-party installations
+
+Deployments sealed before ADR-0046 may contain the original narrow ADR-0011 permission membership even though their marker is `FIRST_PARTY_PRINCIPAL`. Do **not** reopen setup and do **not** edit Administration tables manually.
+
+Flyway V70 performs the controlled compatibility correction during normal deployment. It selects only first-party initial-bootstrap markers, ensures the reviewed standalone tenant-owner permissions, attaches missing memberships to the marker-linked role and advances that role revision. It does not alter the installation seal, external-subject bootstrap roles, grant identity/scope, or grantable/delegable state.
+
+After the V70 deployment is healthy, sign out and establish a fresh Console session (or otherwise force current authority/navigation projections to reload), then verify the tenant-owner surface. If an operation is still denied, treat that as an authorization defect or an independent high-impact control rather than attempting to reuse bootstrap.
+
 ## Security notes
 
 - There is no `/api/bootstrap` endpoint.
 - There is no permanent `admin/admin`, root user, wildcard grant or reusable bootstrap password.
+- `STANDALONE_TENANT_OWNER` is a reviewed explicit permission set. New product permissions are not inherited automatically.
+- Possession of tenant-owner permissions does not bypass typed scopes, grantability ceilings, governance approval, strong-assurance requirements, maker-checker controls, secret boundaries, break-glass semantics or destructive-operation controls.
 - Managed deployment secret variables may remain recoverable in provider-internal configuration/history according to that provider's controls; remove the temporary bootstrap variable immediately after `SEALED` and use the file/secret-mount option where a tighter secret lifecycle is required.
 - The local verifier provider is `wyrmgate-local-password-v1` and is system-managed by Credential; ordinary Credential creation cannot select it.
 - The private local verifier store contains salted one-way PBKDF2-HMAC-SHA-256 material, not plaintext or reversible password material.
