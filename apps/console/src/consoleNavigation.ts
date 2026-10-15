@@ -108,10 +108,20 @@ export function identityDetailPath(identityId: string): string {
 export const CONSOLE_NAVIGATION_EVENT = 'wyrmgate:console-navigation';
 
 export function navigateConsole(path: string): void {
-  if (window.location.pathname === path) return;
-  window.history.pushState({}, '', path);
+  const target = new URL(path, window.location.origin);
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const next = `${target.pathname}${target.search}${target.hash}`;
+  if (current === next) return;
+  window.history.pushState({}, '', next);
   window.dispatchEvent(new Event(CONSOLE_NAVIGATION_EVENT));
   window.scrollTo({ top: 0 });
+}
+
+export function replaceConsole(path: string): void {
+  const target = new URL(path, window.location.origin);
+  const next = `${target.pathname}${target.search}${target.hash}`;
+  window.history.replaceState({}, '', next);
+  window.dispatchEvent(new Event(CONSOLE_NAVIGATION_EVENT));
 }
 
 export function visibleConsoleRoutes(authority: CurrentAdministrativeAuthority | null): ConsoleRoute[] {
