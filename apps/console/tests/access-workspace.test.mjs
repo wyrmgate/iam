@@ -4,6 +4,7 @@ import { assertSourceContains, assertSourceExcludes, readConsoleSource } from '.
 const accessWorkspace = await readConsoleSource('workspaces/AccessGoldenWorkspace.tsx');
 const accessBoundary = await readConsoleSource('workspaces/AccessWorkspace.tsx');
 const enterprisePresentation = await readConsoleSource('enterprise-console.css');
+const cssVariables = await readConsoleSource('ui/cssVariables.ts');
 const accessApi = await readConsoleSource('accessApi.ts');
 const api = await readConsoleSource('api.ts');
 
@@ -49,5 +50,6 @@ test('Access tabs satisfy keyboard navigation and destructive actions use shared
 });
 
 test('Access mobile controls retain the enterprise 44px touch-target baseline', () => {
-  assertSourceContains(enterprisePresentation, /@media \(max-width: 760px\)/, /--wg-mobile-target: 44px/, /\.access-detail-close/, /width: var\(--wg-mobile-target\)/, /height: var\(--wg-mobile-target\)/);
+  assertSourceContains(cssVariables, /'--wg-mobile-target': px\(tokens\.density\.mobileTargetHeight\)/);
+  assertSourceContains(enterprisePresentation, /@media \(max-width: 760px\)/, /\.access-detail-close/, /width: var\(--wg-mobile-target\)/, /height: var\(--wg-mobile-target\)/);
 });
