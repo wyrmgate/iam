@@ -68,7 +68,7 @@ class StandaloneTenantOwnerRecoveryConfigurationTest {
                         plan.identityId(),
                         plan.principalId(),
                         plan.correlationId(),
-                        fixture.now))
+                        any(Instant.class)))
                 .thenReturn(new StandaloneTenantOwnerRecoveryResult(
                         StandaloneTenantOwnerRecoveryResult.Status.ALREADY_COMPLETE,
                         roleId));
@@ -80,7 +80,7 @@ class StandaloneTenantOwnerRecoveryConfigurationTest {
                 plan.identityId(),
                 plan.principalId(),
                 plan.correlationId(),
-                fixture.now);
+                any(Instant.class));
         verify(fixture.audit).append(any(), any());
     }
 
@@ -93,13 +93,9 @@ class StandaloneTenantOwnerRecoveryConfigurationTest {
         when(ids.nextId()).thenReturn(UUID.randomUUID());
         MockEnvironment environment = new MockEnvironment();
         environment.setProperty("spring.main.web-application-type", "none");
-        Instant now = Instant.parse("2026-10-16T00:00:00Z");
-
-        // The runner owns its clock at invocation time; make a fixture whose expected instant is
-        // captured by matching the actual service call rather than exposing a clock property.
         ApplicationRunner runner = new StandaloneTenantOwnerRecoveryConfiguration()
                 .standaloneTenantOwnerRecoveryRunner(environment, repository, recovery, audit, ids);
-        return new Fixture(repository, recovery, audit, runner, now);
+        return new Fixture(repository, recovery, audit, runner);
     }
 
     private static InstallationBootstrapPlan plan(InstallationBootstrapState state) {
@@ -130,6 +126,5 @@ class StandaloneTenantOwnerRecoveryConfigurationTest {
             InstallationBootstrapRepository repository,
             StandaloneTenantOwnerRecoveryService recoveryService,
             SecurityAuditPort audit,
-            ApplicationRunner runner,
-            Instant now) {}
+            ApplicationRunner runner) {}
 }
