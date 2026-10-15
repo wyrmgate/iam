@@ -113,6 +113,8 @@ Decorative metric cards are not the default collection header.
 
 Object detail pages use a restrained object title, typed lifecycle/context indicators, explicit actions and semantic tabs. Ordinary scalar properties belong in definition-style sections rather than individual cards. Evidence, provenance, fulfillment and destructive operations use dedicated bounded sections when their meaning warrants a boundary.
 
+The Identity 360 reference applies this pattern without creating a generic cross-capability aggregate: Identity-owned state and correction operations remain authoritative Identity behavior, while Principal, Access, Governance and Audit information is read through its existing capability-owned contract and remains semantically distinct in the presentation.
+
 ## State presentation
 
 `StatusChip` is not the universal state component. Prefer `StateIndicator` for compact dot-and-label presentation where the caller already knows the semantic tone. Pills/chips are appropriate for discrete tokens such as filters, classifications or compact categorical metadata.
@@ -175,6 +177,8 @@ The shared Console standard does not use the following as normal application pat
 
 ## Reference implementation
 
-The Identity collection is the first reference migration onto this standard. It uses shared `Page`, `PageHeader`, `PageToolbar`, `Surface`, `DataTable`, form, state and modal primitives; `StateIndicator` renders lifecycle state without turning every lifecycle into a filled chip. Desktop/tablet preserve dense tabular scanning, while mobile uses a compact record presentation with the same Identity type, lifecycle, stable ID and updated-at context.
+The Identity collection is the collection reference migration onto this standard. It uses shared `Page`, `PageHeader`, `PageToolbar`, `Surface`, `DataTable`, form, state and modal primitives; `StateIndicator` renders lifecycle state without turning every lifecycle into a filled chip. Desktop/tablet preserve dense tabular scanning, while mobile uses a compact record presentation with the same Identity type, lifecycle, stable ID and updated-at context.
 
-Identity detail remains the next reference migration. Other capability workspaces should consume the shared visual contract without changing their domain or API semantics.
+Identity 360/detail is the Object 360 reference migration. It uses the same shared wide-page geometry, restrained `PageHeader`, typed lifecycle/access-eligibility context, explicit lifecycle and correction actions, semantic tabs, definition-style summary content, shared `DataTable` overflow behavior, and shared state/form/dialog primitives. The six accepted semantic views remain Overview, Governed profile, Principals, Access, Governance and Evidence. The presentation does not merge capability ownership: AccessAssignment remains authoritative Access intent, EffectiveAccess remains a projection, Governance evidence remains Governance-owned, direct AuditRecord evidence remains Audit-owned, and provider observation remains separate.
+
+Other capability workspaces should consume the shared visual contract without changing their domain or API semantics.
