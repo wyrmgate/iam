@@ -20,9 +20,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.mock.env.MockEnvironment;
 
 class StandaloneTenantOwnerRecoveryConfigurationTest {
+
+    private static final String ENABLE_ARGUMENT = "--iam.recovery.standalone-tenant-owner.enabled=true";
 
     @Test
     void nonSealedInstallationIsRejectedBeforeAdministrationMutation() throws Exception {
@@ -30,11 +33,24 @@ class StandaloneTenantOwnerRecoveryConfigurationTest {
 
         StandaloneTenantOwnerRecoveryNotEligibleException exception = assertThrows(
                 StandaloneTenantOwnerRecoveryNotEligibleException.class,
-                () -> fixture.runner.run(mock(ApplicationArguments.class)));
+                () -> fixture.runner.run(explicitRecoveryArguments()));
 
         assertEquals("installation_not_sealed", exception.reason());
         verify(fixture.recoveryService, never()).recover(any(), any(), any(), any(), any());
         verify(fixture.audit).append(any(), any());
+    }
+
+    @Test
+    void recoveryCommandRequiresExplicitCommandLineArgument() throws Exception {
+        Fixture fixture = fixture(plan(InstallationBootstrapState.SEALED));
+
+        StandaloneTenantOwnerRecoveryNotEligibleException exception = assertThrows(
+                StandaloneTenantOwnerRecoveryNotEligibleException.class,
+                () -> fixture.runner.run(new DefaultApplicationArguments()));
+
+        assertEquals("recovery_requires_explicit_command_argument", exception.reason());
+        verify(fixture.repository, never()).find();
+        verify(fixture.recoveryService, never()).recover(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -51,7 +67,7 @@ class StandaloneTenantOwnerRecoveryConfigurationTest {
 
         StandaloneTenantOwnerRecoveryNotEligibleException exception = assertThrows(
                 StandaloneTenantOwnerRecoveryNotEligibleException.class,
-                () -> runner.run(mock(ApplicationArguments.class)));
+                () -> runner.run(explicitRecoveryArguments()));
 
         assertEquals("recovery_requires_spring.main.web-application-type=none", exception.reason());
         verify(repository, never()).find();
@@ -73,7 +89,7 @@ class StandaloneTenantOwnerRecoveryConfigurationTest {
                         StandaloneTenantOwnerRecoveryResult.Status.ALREADY_COMPLETE,
                         roleId));
 
-        fixture.runner.run(mock(ApplicationArguments.class));
+        fixture.runner.run(explicitRecoveryArguments());
 
         verify(fixture.recoveryService).recover(
                 new TenantContext(plan.tenantId()),
@@ -82,6 +98,10 @@ class StandaloneTenantOwnerRecoveryConfigurationTest {
                 plan.correlationId(),
                 any(Instant.class));
         verify(fixture.audit).append(any(), any());
+    }
+
+    private static ApplicationArguments explicitRecoveryArguments() {
+        return new DefaultApplicationArguments(ENABLE_ARGUMENT);
     }
 
     private static Fixture fixture(InstallationBootstrapPlan plan) {
