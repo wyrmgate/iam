@@ -1,6 +1,4 @@
 import { type KeyboardEvent } from 'react';
-import '../access-policy-editor.css';
-import '../access-enterprise-alignment.css';
 import { AccessWorkspace as AccessGoldenWorkspace } from './AccessGoldenWorkspace';
 
 function handleAccessTabsKeyDown(event: KeyboardEvent<HTMLDivElement>) {
