@@ -77,11 +77,11 @@ class TenantIsolationSchemaIntegrationTest {
     }
 
     @Test
-    void sameCapabilityForeignKeysCarryTenantOnBothSides() {
+    void sameCapabilityForeignKeysCarryTenantOnBothSidesExceptTenantRootAnchors() {
         List<ForeignKeyShape> foreignKeys = foreignKeys();
 
         assertThat(foreignKeys)
-                .filteredOn(fk -> fk.sourceSchema().equals(fk.targetSchema()))
+                .filteredOn(fk -> fk.sourceSchema().equals(fk.targetSchema()) && !isTenantRootAnchor(fk))
                 .allSatisfy(fk -> {
                     assertThat(fk.sourceColumns())
                             .as("%s source columns", fk.describe())
@@ -93,18 +93,35 @@ class TenantIsolationSchemaIntegrationTest {
     }
 
     @Test
+    void tenantRootForeignKeysUseTenantIdToPlatformTenantId() {
+        List<ForeignKeyShape> tenantRootAnchors = foreignKeys().stream()
+                .filter(fk -> fk.targetSchema().equals("platform") && fk.targetTable().equals("tenant"))
+                .toList();
+
+        assertThat(tenantRootAnchors).isNotEmpty();
+        assertThat(tenantRootAnchors).allSatisfy(fk -> {
+            assertThat(fk.sourceColumns()).as(fk.describe()).containsExactly("tenant_id");
+            assertThat(fk.targetColumns()).as(fk.describe()).containsExactly("id");
+        });
+    }
+
+    @Test
     void crossCapabilityForeignKeysOnlyAnchorTenantOwnedRowsToPlatformTenant() {
         List<ForeignKeyShape> crossCapability = foreignKeys().stream()
                 .filter(fk -> !fk.sourceSchema().equals(fk.targetSchema()))
                 .toList();
 
         assertThat(crossCapability).isNotEmpty();
-        assertThat(crossCapability).allSatisfy(fk -> {
-            assertThat(fk.targetSchema()).as(fk.describe()).isEqualTo("platform");
-            assertThat(fk.targetTable()).as(fk.describe()).isEqualTo("tenant");
-            assertThat(fk.sourceColumns()).as(fk.describe()).containsExactly("tenant_id");
-            assertThat(fk.targetColumns()).as(fk.describe()).containsExactly("id");
-        });
+        assertThat(crossCapability).allSatisfy(fk -> assertThat(isTenantRootAnchor(fk))
+                .as(fk.describe())
+                .isTrue());
+    }
+
+    private static boolean isTenantRootAnchor(ForeignKeyShape fk) {
+        return fk.targetSchema().equals("platform")
+                && fk.targetTable().equals("tenant")
+                && fk.sourceColumns().equals(List.of("tenant_id"))
+                && fk.targetColumns().equals(List.of("id"));
     }
 
     private static List<ForeignKeyShape> foreignKeys() {
