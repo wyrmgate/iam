@@ -1,72 +1,53 @@
 import test from 'node:test';
 import { assertSourceContains, assertSourceExcludes, readConsoleSource } from './helpers/source-contract.mjs';
 
-const accessWorkspace = await readConsoleSource('workspaces/AccessWorkspace.tsx');
+const accessWorkspace = await readConsoleSource('workspaces/AccessGoldenWorkspace.tsx');
+const accessBoundary = await readConsoleSource('workspaces/AccessWorkspace.tsx');
+const accessAlignment = await readConsoleSource('access-enterprise-alignment.css');
+const accessApi = await readConsoleSource('accessApi.ts');
+const api = await readConsoleSource('api.ts');
 
-test('Access workspace separates authoritative assignment intent from read-only EffectiveAccess projection', () => {
-  assertSourceContains(
-    accessWorkspace,
-    /Access · authoritative intent/,
-    /Authoritative business intent/,
-    /Access · derived projection/,
-    /Derived, read-only projection/,
-    /no edit or lifecycle operation is available here/,
-  );
+test('Access golden page is Assignments-first and keeps authority, projection, and expert policy distinct', () => {
+  assertSourceContains(accessWorkspace, /Assignments/, /AUTHORITATIVE · ACCESS/, /Effective access/, /DERIVED · READ ONLY/, /Lifecycle access policy/, /AUTHORITATIVE POLICY · EXPERT/);
 });
 
-test('Access assignment presentation keeps target, principal constraint, validity, and explicit lifecycle semantics visible', () => {
-  assertSourceContains(
-    accessWorkspace,
-    /targetKind/,
-    /roleId/,
-    /entitlementId/,
-    /principalConstraintKind/,
-    /specificPrincipalId/,
-    /validFrom/,
-    /validUntil/,
-    /Suspend current access/,
-    /Resume suspended access/,
-    /Cancel scheduled access/,
-    /Revoke current access/,
-  );
+test('Access assignment detail separates lifecycle, temporal validity, provenance, and principal constraint', () => {
+  assertSourceContains(accessWorkspace, /Authoritative intent/, /Temporal validity/, /Principal constraint/, /Manual grant/, /Request item/, /Lifecycle policy rule/);
 });
 
-test('Access lifecycle reduction operations are consequence-aware and keep server concurrency semantics delegated', () => {
-  assertSourceContains(
-    accessWorkspace,
-    /Suspend current access[\s\S]*destructive: true/,
-    /Cancel scheduled access[\s\S]*destructive: true/,
-    /Revoke current access[\s\S]*destructive: true/,
-    /Server authorization, revision checks, and idempotency remain final/,
-  );
+test('Access lifecycle operations remain explicit, consequence-aware, revision guarded, and causally idempotent', () => {
+  assertSourceContains(accessWorkspace, /Suspend access/, /Resume access/, /Cancel scheduled access/, /Revoke access/, /provider failure will not reactivate this assignment/, /another assignment still supports it/, /createIdempotencyKey/);
+  assertSourceContains(accessApi, /mutateAssignment/, /idempotencyKey/);
+  assertSourceContains(api, /If-Match/, /Idempotency-Key/);
+  assertSourceExcludes(accessWorkspace, /Change status/);
 });
 
-test('Lifecycle policy is presented as the accepted closed typed model rather than a generic expression editor', () => {
-  assertSourceContains(
-    accessWorkspace,
-    /Closed typed predicate model/,
-    /ALWAYS/,
-    /SINGLE equality/,
-    /MULTI CONTAINS/,
-    /CONTAINS_ANY \/ CONTAINS_ALL/,
-    /DECIMAL, DATE, and DATETIME/,
-    /immutable successor/,
-  );
-  assertSourceExcludes(
-    accessWorkspace,
-    /expressionJson|jsonPath|generic expression editor|provider state editor|desired provider state/,
-  );
+test('manual grant uses bounded selectors and does not expose lifecycle or provenance mutation', () => {
+  assertSourceContains(accessWorkspace, /Search governed identities/, /TargetPicker/, /searchAccessTargets/, /Specific Principal/, /Manual grant/, /Lifecycle state is not operator-selectable/, /Provider realization happens asynchronously/);
 });
 
-test('Access workspace remains within accepted public routes and does not introduce provider mutation surfaces', () => {
-  assertSourceContains(
-    accessWorkspace,
-    /\/access-assignments/,
-    /\/effective-access/,
-    /\/lifecycle-access-policy/,
-  );
-  assertSourceExcludes(
-    accessWorkspace,
-    /\/provisioning-|\/connector-|ObservedGrant|DesiredGrantState|DesiredPrincipalState/,
-  );
+test('EffectiveAccess is explanation-only, human-readable, and routes changes through supporting authoritative assignments', () => {
+  assertSourceContains(accessWorkspace, /Why is this entitlement effective/, /DERIVED · READ ONLY/, /identityLabel/, /entitlementLabel/, /Current supports/, /Role-derived access/, /Direct entitlement assignment/, /Open supporting assignment/, /Deterministic path reference/, /Change supporting intent, never this projection/);
+  assertSourceExcludes(accessWorkspace, /Revoke EffectiveAccess|Edit EffectiveAccess|Suspend EffectiveAccess/);
+});
+
+test('Lifecycle policy has a closed typed immutable-successor editor', () => {
+  assertSourceContains(accessWorkspace, /Closed typed rule model/, /arbitrary JSON/, /generic AND\/OR\/NOT/, /Lifecycle policy successor/, /PolicyRuleEditor/, /CONTAINS_ANY/, /CONTAINS_ALL/, /2–20 distinct homogeneous values/, /stable IDs/, /tenant-wide retroactive sweep/, /Governance evaluation/);
+  assertSourceExcludes(accessWorkspace, /expressionJson|jsonPath|free-form expression/);
+});
+
+test('Access workspace does not invent provider fulfillment state or provider mutation surfaces', () => {
+  assertSourceContains(accessWorkspace, /Technical realization is separate/, /Provisioning tasks, provider attempts and provider observations are Integration-owned/);
+  assertSourceExcludes(accessWorkspace, /\/provisioning-|\/connector-|ObservedGrant|DesiredGrantState|DesiredPrincipalState/);
+});
+
+test('Access tabs satisfy keyboard navigation and destructive actions keep restrained pre-confirmation presentation', () => {
+  assertSourceContains(accessWorkspace, /role="tablist"/, /role="tab"/);
+  assertSourceContains(accessBoundary, /ArrowRight/, /ArrowLeft/, /Home/, /End/, /preventDefault/, /focus\(\)/, /click\(\)/);
+  assertSourceContains(accessAlignment, /Lifecycle \/ validity \/ outcome state uses compact dot-and-label presentation/, /Destructive intent remains deliberate but not permanently saturated/);
+  assertSourceContains(accessAlignment, /\.access-state::before/, /\.MuiButton-containedError/);
+});
+
+test('Access mobile controls retain the enterprise 44px touch-target baseline', () => {
+  assertSourceContains(accessAlignment, /@media \(max-width: 760px\)/, /min-height: 44px/, /\.access-detail-close/, /width: 44px/, /height: 44px/);
 });

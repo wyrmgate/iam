@@ -6,7 +6,7 @@ import {
   type SystemInfo,
 } from './api';
 import { OverviewPage } from './OverviewPage';
-import { RequestsApprovalsPage } from './RequestsApprovalsPage';
+import { RequestsApprovalsWithAccessLinks } from './RequestsApprovalsWithAccessLinks';
 import { useConsolePathname } from './consoleLocation';
 import {
   identityDetailPath,
@@ -17,12 +17,12 @@ import {
 import { Button, Page, PageHeader } from './ui';
 import { AccessWorkspace } from './workspaces/AccessWorkspace';
 import { AdministrationWorkspace } from './workspaces/AdministrationWorkspace';
-import { AuditWorkspace } from './workspaces/AuditWorkspace';
+import { AuditWorkspaceWithAccessLink } from './workspaces/AuditWorkspaceWithAccessLink';
 import { CatalogWorkspace } from './workspaces/CatalogWorkspace';
 import { CredentialsWorkspace } from './workspaces/CredentialsWorkspace';
 import { PoliciesWorkspace, ReviewsWorkspace } from './workspaces/GovernanceWorkspace';
 import { IdentityCollectionPage } from './workspaces/IdentityCollectionPage';
-import { IdentityWorkspace } from './workspaces/IdentityWorkspace';
+import { IdentityWorkspaceWithAccessLinks } from './workspaces/IdentityWorkspaceWithAccessLinks';
 import { IntegrationsWorkspace } from './workspaces/IntegrationsWorkspace';
 import { PrincipalsWorkspace } from './workspaces/PrincipalsWorkspace';
 
@@ -75,7 +75,7 @@ export function App() {
         />
       )}
       {route === 'identities' && identityId && (
-        <IdentityWorkspace
+        <IdentityWorkspaceWithAccessLinks
           selectedId={identityId}
           authority={authority.status === 'ready' ? authority.value : null}
           onSelect={(id) => go(id ? identityDetailPath(id) : '/identities')}
@@ -84,13 +84,13 @@ export function App() {
       {route === 'principals' && <PrincipalsWorkspace />}
       {route === 'catalog' && <CatalogWorkspace />}
       {route === 'access' && <AccessWorkspace />}
-      {route === 'requests' && <RequestsApprovalsPage />}
+      {route === 'requests' && <RequestsApprovalsWithAccessLinks />}
       {route === 'reviews' && <ReviewsWorkspace />}
       {route === 'policies' && <PoliciesWorkspace />}
       {route === 'credentials' && <CredentialsWorkspace />}
       {route === 'integrations' && <IntegrationsWorkspace />}
       {route === 'administration' && <AdministrationWorkspace />}
-      {route === 'audit' && <AuditWorkspace />}
+      {route === 'audit' && <AuditWorkspaceWithAccessLink />}
       {route === 'not-found' && (
         <Page>
           <PageHeader eyebrow="404" title="Page not found" description="The requested Console route is not available." />

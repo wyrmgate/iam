@@ -1,0 +1,221 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "Wyrmgate IAM Access Operator Read API",
+    "version": "0.1.0",
+    "description": "Read-only Access-owned operator presentation for authoritative AccessAssignment investigation and derived EffectiveAccess explanation. This contract introduces no new authoritative aggregate or mutation surface."
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "security": [{ "controlPlaneBearer": [] }],
+  "paths": {
+    "/access-assignment-views": {
+      "get": {
+        "operationId": "listAccessAssignmentViews",
+        "summary": "List bounded authoritative AccessAssignment operator views",
+        "parameters": [
+          { "$ref": "#/components/parameters/IdentityId" },
+          { "$ref": "#/components/parameters/LifecycleState" },
+          { "$ref": "#/components/parameters/TargetKind" },
+          { "$ref": "#/components/parameters/TargetId" },
+          { "$ref": "#/components/parameters/Provenance" },
+          { "$ref": "#/components/parameters/Validity" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded AccessAssignment operator page",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AssignmentViewPage" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        },
+        "x-wyrmgate-authority": "Access authoritative state presented through a read-only operator projection",
+        "x-wyrmgate-administrative-permission": "access-assignment:read",
+        "x-wyrmgate-consistency": "Temporal classification is evaluated by the server at read time; optional foreign labels require independent foreign read authority."
+      }
+    },
+    "/access-assignment-views/{assignmentId}": {
+      "get": {
+        "operationId": "getAccessAssignmentView",
+        "summary": "Get one authoritative AccessAssignment operator view",
+        "parameters": [{ "$ref": "#/components/parameters/AssignmentId" }],
+        "responses": {
+          "200": {
+            "description": "AccessAssignment operator view",
+            "headers": { "ETag": { "$ref": "#/components/headers/RevisionEtag" } },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AssignmentView" } } }
+          },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        },
+        "x-wyrmgate-authority": "Access authoritative state presented through a read-only operator projection",
+        "x-wyrmgate-administrative-permission": "access-assignment:read"
+      }
+    },
+    "/effective-access-views": {
+      "get": {
+        "operationId": "listEffectiveAccessViews",
+        "summary": "List read-only EffectiveAccess operator views",
+        "parameters": [
+          { "$ref": "#/components/parameters/IdentityId" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded EffectiveAccess operator page",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EffectiveViewPage" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        },
+        "x-wyrmgate-authority": "Access rebuildable projection",
+        "x-wyrmgate-administrative-permission": "effective-access:read",
+        "x-wyrmgate-consistency": "Projection semantics and read-time support validation are delegated to the canonical EffectiveAccess query service."
+      }
+    },
+    "/effective-access-views/{effectiveAccessId}": {
+      "get": {
+        "operationId": "getEffectiveAccessView",
+        "summary": "Get read-only EffectiveAccess explanation with supporting assignment paths",
+        "parameters": [{ "$ref": "#/components/parameters/EffectiveAccessId" }],
+        "responses": {
+          "200": {
+            "description": "EffectiveAccess operator detail",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EffectiveViewResource" } } }
+          },
+          "403": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        },
+        "x-wyrmgate-authority": "Access rebuildable projection",
+        "x-wyrmgate-administrative-permission": "effective-access:read"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "controlPlaneBearer": { "type": "http", "scheme": "bearer" }
+    },
+    "headers": {
+      "RevisionEtag": { "description": "Strong authoritative AccessAssignment revision ETag.", "schema": { "type": "string" } }
+    },
+    "parameters": {
+      "AssignmentId": { "name": "assignmentId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "EffectiveAccessId": { "name": "effectiveAccessId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "IdentityId": { "name": "identityId", "in": "query", "required": false, "schema": { "type": "string", "format": "uuid" } },
+      "LifecycleState": { "name": "lifecycleState", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/AssignmentLifecycle" } },
+      "TargetKind": { "name": "targetKind", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/TargetKind" } },
+      "TargetId": { "name": "targetId", "in": "query", "required": false, "description": "Exact target filter. Requires targetKind.", "schema": { "type": "string", "format": "uuid" } },
+      "Provenance": { "name": "provenance", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/ProvenanceKind" } },
+      "Validity": { "name": "validity", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/ValidityState" } },
+      "Cursor": { "name": "cursor", "in": "query", "required": false, "description": "Opaque signed tenant/context-bound time-bounded continuation cursor.", "schema": { "type": "string" } },
+      "Limit": { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 } }
+    },
+    "responses": {
+      "Error": {
+        "description": "Stable control-plane error",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      }
+    },
+    "schemas": {
+      "TargetKind": { "type": "string", "enum": ["ROLE", "ENTITLEMENT"] },
+      "PrincipalConstraintKind": { "type": "string", "enum": ["ANY", "SPECIFIC"] },
+      "AssignmentLifecycle": { "type": "string", "enum": ["SCHEDULED", "ACTIVE", "SUSPENDED", "REVOKED", "EXPIRED", "CANCELLED"] },
+      "ProvenanceKind": { "type": "string", "enum": ["MANUAL", "REQUEST_ITEM", "LIFECYCLE_POLICY_RULE"] },
+      "ValidityState": { "type": "string", "enum": ["CURRENT", "FUTURE", "ENDED"] },
+      "AssignmentView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "identityId", "targetKind", "targetId", "principalConstraintKind", "provenanceKind", "lifecycleState", "validityState", "evaluatedAt", "revision", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "identityId": { "type": "string", "format": "uuid" },
+          "identityLabel": { "type": ["string", "null"] },
+          "targetKind": { "$ref": "#/components/schemas/TargetKind" },
+          "targetId": { "type": "string", "format": "uuid" },
+          "targetLabel": { "type": ["string", "null"] },
+          "principalConstraintKind": { "$ref": "#/components/schemas/PrincipalConstraintKind" },
+          "specificPrincipalId": { "type": ["string", "null"], "format": "uuid" },
+          "specificPrincipalLabel": { "type": ["string", "null"] },
+          "provenanceKind": { "$ref": "#/components/schemas/ProvenanceKind" },
+          "provenanceRefId": { "type": ["string", "null"], "format": "uuid" },
+          "lifecycleState": { "$ref": "#/components/schemas/AssignmentLifecycle" },
+          "validityState": { "$ref": "#/components/schemas/ValidityState" },
+          "evaluatedAt": { "type": "string", "format": "date-time" },
+          "validFrom": { "type": ["string", "null"], "format": "date-time" },
+          "validUntil": { "type": ["string", "null"], "format": "date-time" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 1 },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AssignmentViewPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items", "evaluatedAt"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/AssignmentView" } },
+          "nextCursor": { "type": ["string", "null"] },
+          "evaluatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "EffectiveViewSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "identityId", "entitlementId", "principalConstraintKey", "supportCount", "computedAt", "projectionGeneration"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "identityId": { "type": "string", "format": "uuid" },
+          "identityLabel": { "type": ["string", "null"] },
+          "entitlementId": { "type": "string", "format": "uuid" },
+          "entitlementLabel": { "type": ["string", "null"] },
+          "principalConstraintKey": { "type": "string" },
+          "supportCount": { "type": "integer", "minimum": 1 },
+          "computedAt": { "type": "string", "format": "date-time" },
+          "projectionGeneration": { "type": "integer", "format": "int64", "minimum": 1 }
+        }
+      },
+      "EffectiveSupport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accessAssignmentId", "pathHash", "pathDepth", "roleVersionPath"],
+        "properties": {
+          "accessAssignmentId": { "type": "string", "format": "uuid" },
+          "pathHash": { "type": "string" },
+          "pathDepth": { "type": "integer", "minimum": 0 },
+          "roleVersionPath": { "type": "array", "items": { "type": "string", "format": "uuid" } }
+        }
+      },
+      "EffectiveViewResource": {
+        "allOf": [
+          { "$ref": "#/components/schemas/EffectiveViewSummary" },
+          {
+            "type": "object",
+            "required": ["supports"],
+            "properties": { "supports": { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/EffectiveSupport" } } }
+          }
+        ]
+      },
+      "EffectiveViewPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/EffectiveViewSummary" } },
+          "nextCursor": { "type": ["string", "null"] }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "correlationId": { "type": ["string", "null"], "format": "uuid" }
+        }
+      }
+    }
+  },
+  "x-wyrmgate-contract-status": "runtime-exposed-authenticated-authorized"
+}

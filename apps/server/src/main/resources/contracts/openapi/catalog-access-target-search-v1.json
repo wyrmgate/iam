@@ -1,0 +1,92 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "Wyrmgate IAM Catalog Access Target Search API",
+    "version": "0.1.0",
+    "description": "Catalog-owned bounded Role/Entitlement lookup for semantic access-target selectors. This read-only search does not grant Access assignment authority and does not expose provider observations."
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "security": [{ "controlPlaneBearer": [] }],
+  "paths": {
+    "/catalog/access-targets": {
+      "get": {
+        "operationId": "searchCatalogAccessTargets",
+        "summary": "Search active governed Roles or Entitlements for bounded access selection",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "enum": ["ROLE", "ENTITLEMENT"] }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 200, "default": "" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 20, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded active Catalog access targets",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SearchPage" } } }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        },
+        "x-wyrmgate-authority": "Catalog authoritative state queried read-only",
+        "x-wyrmgate-administrative-permission": "role:read for ROLE; entitlement:read for ENTITLEMENT",
+        "x-wyrmgate-bounded-search": "Maximum 20 active targets; refine q instead of enumerating the tenant Catalog."
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "controlPlaneBearer": { "type": "http", "scheme": "bearer" }
+    },
+    "responses": {
+      "Error": {
+        "description": "Stable control-plane error",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      }
+    },
+    "schemas": {
+      "SearchResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "label", "code"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "kind": { "type": "string", "enum": ["ROLE", "ENTITLEMENT"] },
+          "label": { "type": "string" },
+          "code": { "type": "string" },
+          "secondaryLabel": { "type": ["string", "null"] }
+        }
+      },
+      "SearchPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/SearchResult" } }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "correlationId": { "type": ["string", "null"], "format": "uuid" }
+        }
+      }
+    }
+  },
+  "x-wyrmgate-contract-status": "runtime-exposed-authenticated-authorized"
+}

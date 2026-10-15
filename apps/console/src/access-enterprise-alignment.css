@@ -1,0 +1,89 @@
+.access-enterprise-boundary {
+  min-width: 0;
+}
+
+/* Enterprise UI Standard v1: page hierarchy stays operator-scale rather than hero-scale. */
+.access-enterprise-boundary .access-golden-header h1 {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+/* Lifecycle / validity / outcome state uses compact dot-and-label presentation, not filled pills. */
+.access-enterprise-boundary .access-state {
+  gap: 6px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #172033;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.access-enterprise-boundary .access-state::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #66758a;
+}
+
+.access-enterprise-boundary .access-state-active::before,
+.access-enterprise-boundary .access-state-current::before,
+.access-enterprise-boundary .access-state-success::before {
+  background: #257149;
+}
+
+.access-enterprise-boundary .access-state-scheduled::before,
+.access-enterprise-boundary .access-state-future::before {
+  background: #356b9b;
+}
+
+.access-enterprise-boundary .access-state-suspended::before,
+.access-enterprise-boundary .access-state-denied::before {
+  background: #875f12;
+}
+
+.access-enterprise-boundary .access-state-revoked::before,
+.access-enterprise-boundary .access-state-failure::before {
+  background: #a12b35;
+}
+
+/* Destructive intent remains deliberate but not permanently saturated; confirmation owns danger emphasis. */
+.access-enterprise-boundary .access-action-row .MuiButton-containedError {
+  background: #ffffff;
+  color: #a12b35;
+  border: 1px solid #bbc7d4;
+  box-shadow: none;
+}
+
+.access-enterprise-boundary .access-action-row .MuiButton-containedError:hover {
+  background: #f8fafc;
+  border-color: #a12b35;
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .access-enterprise-boundary .access-golden-header h1 {
+    font-size: 24px;
+  }
+
+  .access-enterprise-boundary .access-golden-tab,
+  .access-enterprise-boundary .access-clear-filters,
+  .access-enterprise-boundary .access-filter-toolbar select,
+  .access-enterprise-boundary .access-field select,
+  .access-enterprise-boundary .access-field input,
+  .access-enterprise-boundary .access-picker input {
+    min-height: 44px;
+  }
+
+  .access-enterprise-boundary .access-detail-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .access-enterprise-boundary .access-picker-results button {
+    min-height: 44px;
+  }
+}

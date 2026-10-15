@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react';
 import { CONSOLE_NAVIGATION_EVENT } from './consoleNavigation';
 
-export function useConsolePathname(): string {
-  const [pathname, setPathname] = useState(() => window.location.pathname);
+export type ConsoleLocation = {
+  pathname: string;
+  search: string;
+};
+
+function currentLocation(): ConsoleLocation {
+  return { pathname: window.location.pathname, search: window.location.search };
+}
+
+export function useConsoleLocation(): ConsoleLocation {
+  const [location, setLocation] = useState<ConsoleLocation>(currentLocation);
 
   useEffect(() => {
-    const onLocationChange = () => setPathname(window.location.pathname);
+    const onLocationChange = () => setLocation(currentLocation());
     window.addEventListener('popstate', onLocationChange);
     window.addEventListener(CONSOLE_NAVIGATION_EVENT, onLocationChange);
     return () => {
@@ -14,5 +23,9 @@ export function useConsolePathname(): string {
     };
   }, []);
 
-  return pathname;
+  return location;
+}
+
+export function useConsolePathname(): string {
+  return useConsoleLocation().pathname;
 }

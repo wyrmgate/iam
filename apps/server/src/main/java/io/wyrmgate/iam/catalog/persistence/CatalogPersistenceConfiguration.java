@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.catalog.persistence;
 
+import io.wyrmgate.iam.catalog.application.CatalogAccessTargetSearchQuery;
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.application.CatalogRepository;
@@ -24,6 +25,11 @@ public class CatalogPersistenceConfiguration {
     @Bean
     CatalogRepository catalogRepository(JdbcTemplate jdbc) {
         return new JdbcCatalogRepository(jdbc);
+    }
+
+    @Bean
+    CatalogAccessTargetSearchQuery catalogAccessTargetSearchQuery(JdbcTemplate jdbc) {
+        return new JdbcCatalogAccessTargetSearchQuery(jdbc);
     }
 
     @Bean

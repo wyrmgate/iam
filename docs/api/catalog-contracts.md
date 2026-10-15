@@ -67,6 +67,26 @@ The initial public composition member union is intentionally typed:
 
 Arbitrary JSON composition and arbitrary status mutation are not public contracts.
 
+## Bounded Access-target lookup
+
+The Console's manual AccessAssignment grant flow needs human-scale Role/Entitlement
+selection without downloading Catalog collections. Catalog therefore exposes a narrow
+read-only lookup:
+
+- `GET /catalog/access-targets?kind=ROLE&q=<text>&limit=<1..20>`
+- `GET /catalog/access-targets?kind=ENTITLEMENT&q=<text>&limit=<1..20>`
+
+This is a Catalog-owned query helper, not an Access DTO and not a new authoritative
+aggregate. It returns only active Role or Entitlement references with bounded presentation
+fields suitable for a typeahead selector. Search ordering is deterministic; the query is
+bounded to at most 20 results and does not expose arbitrary predicates or provider-native
+observation data.
+
+`ROLE` lookup requires the existing `role:read` administrative permission.
+`ENTITLEMENT` lookup requires the existing `entitlement:read` permission. Access creation
+is still re-authorized separately through `access-assignment:create`; being able to read a
+Catalog target never grants authority to assign it.
+
 ## Structural invariants
 
 - ApplicationTarget belongs to exactly one Application.
@@ -135,6 +155,10 @@ Entitlements:
 - `GET /entitlements/{entitlementId}`
 - `POST /entitlements/{entitlementId}/retire`
 
+Access-target lookup:
+
+- `GET /catalog/access-targets`
+
 Lifecycle is not exposed as arbitrary status mutation.
 
 ## Concurrency and idempotency
@@ -159,6 +183,9 @@ Continuation cursors use the platform signing boundary and are:
 - resource-family bound;
 - Application-bound for target/entitlement collections;
 - time-bounded.
+
+The bounded access-target lookup is not cursor paged; it is deliberately capped at 20
+results and callers refine the search string rather than enumerating the tenant Catalog.
 
 A target-list cursor cannot be replayed as an entitlement-list cursor or against another Application.
 
