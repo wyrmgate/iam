@@ -56,5 +56,6 @@ infra/ansible/inventory/hosts.ini
 # Runtime/database dumps
 *.sql
 !apps/server/src/main/resources/db/migration/*.sql
+!apps/server/src/test/resources/db/history/pre-rebaseline/*.sql
 *.dump
 *.backup
