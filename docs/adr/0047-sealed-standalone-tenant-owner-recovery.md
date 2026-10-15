@@ -18,7 +18,7 @@ That compatibility problem cannot safely be solved by a schema migration that si
 
 ### Recovery is an explicit local maintenance command
 
-Wyrmgate provides one narrowly scoped compatibility command in the existing server executable. The command is enabled only by the exact startup property `iam.recovery.standalone-tenant-owner.enabled=true` and additionally requires `spring.main.web-application-type=none`. The executable exits after the command path completes.
+Wyrmgate provides one narrowly scoped compatibility command in the existing server executable. The command requires the exact command-line option `--iam.recovery.standalone-tenant-owner.enabled=true`; a lingering environment/configuration property is not sufficient. It additionally requires `--spring.main.web-application-type=none`. The executable exits after the command path completes.
 
 There is no HTTP recovery endpoint. The command accepts no tenant ID, identity ID, principal ID, role ID, grant ID, permission set, scope, or authority flag from the operator. Local process execution and access to the deployment's normal database configuration are the operator control boundary.
 
@@ -48,7 +48,7 @@ Recovery requires the tenant's immutable `InitialAdminBootstrap` marker to exist
 
 The marker-linked role must retain the bootstrap role ID, code `tenant-initial-administrator`, name `Tenant Initial Administrator`, and bootstrap creation timestamp. The marker-linked direct grant must still be the same actor/role relationship, `GLOBAL`, `ACTIVE`, unbounded after its bootstrap `validFrom`, `grantable=true`, `delegable=true`, with no authority-basis grant, revision 1, and unchanged bootstrap timestamps.
 
-The bootstrap Identity must have exactly one direct AdministrativeGrant, the bootstrap role must be referenced by exactly one direct grant, and the bootstrap role must have no delegation. These checks prevent recovery from normalizing a tenant whose bootstrap authority has already been composed with additional direct or delegated authority.
+The bootstrap Identity must have exactly one direct AdministrativeGrant, the bootstrap role must be referenced by exactly one direct grant, and the bootstrap role must have no delegation, temporary elevation, or break-glass operation. These checks prevent recovery from normalizing a tenant whose bootstrap authority has already been composed into any later Administration authority source.
 
 ### Exact legacy state is the only mutable state
 
@@ -59,9 +59,9 @@ The recoverable legacy permission membership is exactly `AdministrativePermissio
 - `identity:create`
 - `identity:update`
 
-The role must still be revision 1 and unchanged since bootstrap. An extra permission, a missing permission, a renamed role, a changed scope, changed validity, changed grantability/delegability, extra grant, delegation, revised grant, mismatched marker, changed anchor, changed ownership relationship, or any other material mismatch fails closed. Recovery never overwrites or repairs customized state.
+The role must still be revision 1 and unchanged since bootstrap. An extra permission, a missing permission, a renamed role, a changed scope, changed validity, changed grantability/delegability, extra grant, delegation, elevation, break-glass operation, revised grant, mismatched marker, changed anchor, changed ownership relationship, or any other material mismatch fails closed. Recovery never overwrites or repairs customized state.
 
-For the exact legacy state, the service atomically adds only the permissions necessary to make role membership exactly equal to the current finite `AdministrativePermissions.STANDALONE_TENANT_OWNER` set and advances the role's optimistic revision from 1 to 2. It may materialize missing Administration permission-catalog rows for those explicit semantic permissions, using normal Administration-owned persistence. It does not create a Tenant, Identity, Principal, Credential, role, grant, or delegation.
+For the exact legacy state, the service atomically adds only the permissions necessary to make role membership exactly equal to the current finite `AdministrativePermissions.STANDALONE_TENANT_OWNER` set and advances the role's optimistic revision from 1 to 2. It may materialize missing Administration permission-catalog rows for those explicit semantic permissions, using normal Administration-owned persistence. It does not create a Tenant, Identity, Principal, Credential, role, grant, delegation, elevation, or break-glass operation.
 
 No wildcard, root bit, evaluator bypass, implicit future permission, or arbitrary permission input is introduced.
 
