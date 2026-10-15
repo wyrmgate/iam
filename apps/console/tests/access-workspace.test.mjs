@@ -42,7 +42,7 @@ test('Access lifecycle operations remain explicit, consequence-aware, revision g
     /Resume access/,
     /Cancel scheduled access/,
     /Revoke access/,
-    /Provider failure will not reactivate this assignment/,
+    /provider failure will not reactivate this assignment/,
     /another assignment still supports it/,
     /createIdempotencyKey/,
     /result\.etag/,
