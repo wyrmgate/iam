@@ -12,7 +12,7 @@ It is **not** an administrator recovery procedure. A deployment that has reached
 
 Use this path only on a fresh database with no Tenant rows and no prior `platform.installation_bootstrap` row.
 
-The accepted first-party IdP/session configuration required for normal Console login must also be enabled. Database migrations must be current through the installation-bootstrap and standalone tenant-owner authority migration set.
+The accepted first-party IdP/session configuration required for normal Console login must also be enabled. Database migrations must be current through the installation-bootstrap migration set.
 
 Do not enable the legacy external `iam.bootstrap.initial-admin` adapter at the same time as fresh-install bootstrap.
 
@@ -114,13 +114,11 @@ A sealed deployment checks the durable seal before resolving bootstrap secret in
 
 The Console UI/runtime supplies its configured `client_id` and ApplicationTarget to the local authentication contract. The human login experience is username + password; those hidden routing selectors do not become user-selected Tenant input.
 
-## Existing sealed first-party installations
+## Existing sealed installations created before ADR-0046
 
-Deployments sealed before ADR-0046 may contain the original narrow ADR-0011 permission membership even though their marker is `FIRST_PARTY_PRINCIPAL`. Do **not** reopen setup and do **not** edit Administration tables manually.
+ADR-0046 changes fresh first-party bootstrap semantics prospectively. The repository does not carry a general-purpose schema migration that rewrites already-sealed Administration authority.
 
-Flyway V70 performs the controlled compatibility correction during normal deployment. It selects only first-party initial-bootstrap markers, ensures the reviewed standalone tenant-owner permissions, attaches missing memberships to the marker-linked role and advances that role revision. It does not alter the installation seal, external-subject bootstrap roles, grant identity/scope, or grantable/delegable state.
-
-After the V70 deployment is healthy, sign out and establish a fresh Console session (or otherwise force current authority/navigation projections to reload), then verify the tenant-owner surface. If an operation is still denied, treat that as an authorization defect or an independent high-impact control rather than attempting to reuse bootstrap.
+A pre-ADR-0046 sealed installation may therefore still have the original narrow ADR-0011 permission membership. Do not reopen setup and do not treat direct table edits as a supported recovery path. For disposable pre-release environments, recreate the installation from a clean database using the corrected bootstrap. A durable production-grade authority recovery/upgrade path requires its own accepted recovery mechanism rather than a hidden historical backfill.
 
 ## Security notes
 
