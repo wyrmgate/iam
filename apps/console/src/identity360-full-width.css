@@ -1,7 +1,21 @@
-/* Identity 360 follows the shared shell workspace geometry. The shell owns page gutters. */
+/* Identity routes follow the shared shell workspace geometry. The shell owns page gutters. */
+.shell-workspace .identity-golden-page,
 .shell-workspace .identity360-page {
   width: 100% !important;
   max-width: none !important;
   margin: 0 !important;
-  padding: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Keep both collection and detail headers on the same left/right grid as the shell gutter. */
+.shell-workspace .identity-golden-header {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Identity 360 used to carry its own vertical page padding; the shell already supplies it. */
+.shell-workspace .identity360-page {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }
