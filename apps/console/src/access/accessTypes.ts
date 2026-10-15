@@ -66,9 +66,9 @@ export type EffectiveSupport = {
   roleVersionPath: string[];
 };
 
-export type EffectiveDetail = {
-  effective: EffectiveResource;
-  supports: EffectiveSupport[];
+export type EffectiveSupportPage = {
+  items: EffectiveSupport[];
+  nextCursor?: string | null;
 };
 
 export type OptionResource = {
