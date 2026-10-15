@@ -12,11 +12,14 @@ public class WyrmgateIamApplication {
     private static final String MIGRATE_ONLY_ARGUMENT = "--wyrmgate.migrate-only=true";
     private static final String INITIAL_ADMIN_BOOTSTRAP_ARGUMENT =
             "--iam.bootstrap.initial-admin.enabled=true";
+    private static final String STANDALONE_TENANT_OWNER_RECOVERY_ARGUMENT =
+            "--iam.recovery.standalone-tenant-owner.enabled=true";
 
     public static void main(String[] args) {
         ConfigurableApplicationContext context = SpringApplication.run(WyrmgateIamApplication.class, args);
         if (Arrays.asList(args).contains(MIGRATE_ONLY_ARGUMENT)
-                || Arrays.asList(args).contains(INITIAL_ADMIN_BOOTSTRAP_ARGUMENT)) {
+                || Arrays.asList(args).contains(INITIAL_ADMIN_BOOTSTRAP_ARGUMENT)
+                || Arrays.asList(args).contains(STANDALONE_TENANT_OWNER_RECOVERY_ARGUMENT)) {
             int exitCode = SpringApplication.exit(context);
             System.exit(exitCode);
         }
