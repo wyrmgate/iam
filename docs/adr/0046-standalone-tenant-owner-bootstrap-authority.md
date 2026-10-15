@@ -37,20 +37,11 @@ ADR-0032 self-escalation prevention is unchanged. `administration:manage-authori
 
 The bootstrap establishes the reviewed root of tenant authority once; normal Administration semantics govern all subsequent delegation and narrowing.
 
-### Upgrade already-sealed first-party installations
+### Prospective bootstrap correction
 
-Existing deployments that completed ADR-0044 before this decision may already be irreversibly `SEALED` with the narrow role. Reopening setup or mutating Administration tables manually is forbidden.
+ADR-0046 changes the semantics of new `FIRST_PARTY_PRINCIPAL` bootstrap only. A fresh standalone installation constructs its initial AdministrativeRole from `STANDALONE_TENANT_OWNER` before the deployment is sealed.
 
-The implementation therefore includes a one-time Administration-owned Flyway migration that:
-
-- selects only immutable `initial_admin_bootstrap` markers whose `authentication_anchor_type` is `FIRST_PARTY_PRINCIPAL`;
-- ensures the explicit tenant-owner permission rows exist for those tenants;
-- attaches missing tenant-owner permissions to the marker-linked initial AdministrativeRole;
-- advances that role's revision/update timestamp when its membership is expanded;
-- leaves `EXTERNAL_SUBJECT` bootstrap roles unchanged;
-- leaves the initial AdministrativeGrant identity, GLOBAL scope, grantable/delegable state and the deployment installation seal unchanged.
-
-This is a compatibility correction to Administration authoritative state under an accepted architecture amendment, not a recovery bypass. It runs exactly once in normal schema migration order.
+This ADR does not authorize a generic historical schema backfill that rewrites Administration authority for already-sealed tenants. Existing sealed installations created before ADR-0046 remain governed by their committed Administration state. Disposable pre-release environments may be recreated from a clean database; durable recovery or upgrade of existing authority requires an explicit supported Administration/recovery mechanism rather than direct table mutation or reopening installation setup.
 
 ### Bootstrap verification
 
@@ -59,7 +50,7 @@ ADR-0044's pre-seal verification continues to require a current effective first-
 ## Consequences
 
 - A fresh standalone installation can configure the full implemented tenant surface after normal sign-in.
-- Existing sealed first-party installations are repaired by normal deployment migration; the wizard stays sealed.
+- Existing sealed first-party installations are not silently rewritten by a schema migration.
 - External-subject bootstrap behavior does not silently broaden.
 - There is still no permanent built-in superuser, wildcard permission or authorization bypass.
 - Future control-plane permissions do not silently become tenant-owner authority and require explicit review.
@@ -79,9 +70,13 @@ Rejected. Wildcard authority weakens semantic authorization, obscures review of 
 
 Rejected. `SEALED` is intentionally irreversible; loss or correction of Administration authority is not a reason to reactivate installation bootstrap.
 
-### Repair the current DEV database manually
+### Repair existing sealed tenants through direct table edits
 
-Rejected. Direct table edits bypass Administration ownership, migration repeatability and reviewable security semantics.
+Rejected. Direct table edits bypass Administration ownership and reviewable security semantics.
+
+### Carry a permanent historical bootstrap backfill migration
+
+Rejected. The accepted semantic correction is prospective. Historical authority repair belongs in an explicit supported recovery/upgrade mechanism or disposable-environment rebuild, not an opaque schema migration that mutates already-sealed tenant authority.
 
 ### Give the expanded set to every external bootstrap
 
