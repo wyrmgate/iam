@@ -133,6 +133,25 @@ jobs:
           grep -Fq 'include: health,info' apps/server/src/main/resources/application.yml
           test ! -f apps/server/railway.json
 
+          if IAM_DEPLOYMENT_ENVIRONMENT=dev IAM_BOOTSTRAP_INSTALLATION_ENABLED=true \
+              sh apps/server/docker-entrypoint.sh true >/tmp/wyrmgate-entrypoint-out 2>/tmp/wyrmgate-entrypoint-err; then
+            echo 'DEV startup bootstrap unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -Fq 'startup installation bootstrap is disabled for DEV' /tmp/wyrmgate-entrypoint-err
+
+          runtime_root=$(mktemp -d)
+          transport_secret='setup-fixture-setup-fixture-setup-fixture'
+          IAM_BOOTSTRAP_WEB_SETUP_SECRET="$transport_secret" TMPDIR="$runtime_root" \
+            sh apps/server/docker-entrypoint.sh sh -ceu '
+              test -z "${IAM_BOOTSTRAP_WEB_SETUP_SECRET+x}"
+              test -n "${IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE:-}"
+              test -f "$IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE"
+              test "$(cat "$IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE")" = "setup-fixture-setup-fixture-setup-fixture"
+              test "$(stat -c %a "$IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE")" = "600"
+            '
+          rm -rf "$runtime_root"
+
   docs:
     name: dev-topology-docs
     needs: changes
