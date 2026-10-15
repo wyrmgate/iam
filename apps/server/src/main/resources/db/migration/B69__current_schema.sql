@@ -1,3 +1,5 @@
+SET check_function_bodies = false;
+
 CREATE SCHEMA access;
 
 CREATE SCHEMA administration;
