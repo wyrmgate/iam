@@ -55,6 +55,26 @@ public final class JdbcStandaloneTenantOwnerRecoveryRepository
     }
 
     @Override
+    public long countElevationsForRole(TenantContext tenant, UUID roleId) {
+        Long count = jdbc.queryForObject(
+                "SELECT count(*) FROM administration.administrative_elevation WHERE tenant_id = ? AND role_id = ?",
+                Long.class,
+                tenant.tenantId(),
+                roleId);
+        return count == null ? 0 : count;
+    }
+
+    @Override
+    public long countBreakGlassOperationsForRole(TenantContext tenant, UUID roleId) {
+        Long count = jdbc.queryForObject(
+                "SELECT count(*) FROM administration.administrative_break_glass_operation WHERE tenant_id = ? AND role_id = ?",
+                Long.class,
+                tenant.tenantId(),
+                roleId);
+        return count == null ? 0 : count;
+    }
+
+    @Override
     public void upgradeLegacyRolePermissions(
             TenantContext tenant,
             UUID roleId,
@@ -184,7 +204,11 @@ public final class JdbcStandaloneTenantOwnerRecoveryRepository
 
     private static String valuesSql(Set<AdministrativePermission> permissions) {
         return permissions.stream()
-                .map(permission -> "('" + sqlLiteral(permission.resourceType()) + "','" + sqlLiteral(permission.action()) + "')")
+                .map(permission -> "('"
+                        + sqlLiteral(permission.resourceType())
+                        + "','"
+                        + sqlLiteral(permission.action())
+                        + "')")
                 .sorted()
                 .reduce((left, right) -> left + "," + right)
                 .orElseThrow();
