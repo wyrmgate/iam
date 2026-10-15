@@ -78,7 +78,7 @@ public class StandaloneTenantOwnerRecoveryConfiguration {
         if (!args.containsOption(ENABLE_OPTION)
                 || values == null
                 || values.size() != 1
-                || !"true".equalsIgnoreCase(values.getFirst())) {
+                || !"true".equalsIgnoreCase(values.get(0))) {
             throw new StandaloneTenantOwnerRecoveryNotEligibleException(
                     "recovery_requires_explicit_command_argument");
         }
