@@ -1,0 +1,74 @@
+name: Persistence Baseline Artifact
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/server/src/main/resources/db/migration/**'
+      - '.github/workflows/persistence-baseline-artifact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: apps/server/pom.xml
+
+      - name: Start PostgreSQL
+        run: |
+          docker run --detach --rm --name wyrmgate-baseline-postgres \
+            -e POSTGRES_DB=wyrmgate_iam \
+            -e POSTGRES_USER=wyrmgate \
+            -e POSTGRES_PASSWORD=wyrmgate \
+            -p 5432:5432 \
+            postgres:18.4-alpine
+          for attempt in $(seq 1 30); do
+            if docker exec wyrmgate-baseline-postgres pg_isready -U wyrmgate -d wyrmgate_iam; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs wyrmgate-baseline-postgres
+          exit 1
+
+      - name: Apply current versioned migration history
+        env:
+          IAM_DB_URL: jdbc:postgresql://localhost:5432/wyrmgate_iam
+          IAM_DB_USER: wyrmgate
+          IAM_DB_PASSWORD: wyrmgate
+          IAM_AUTH_ENABLED: 'false'
+          IAM_OTEL_ENABLED: 'false'
+        run: |
+          sh ./apps/server/mvnw -f apps/server/pom.xml \
+            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --wyrmgate.migrate-only=true" \
+            spring-boot:run
+
+      - name: Dump canonical schema through V69
+        run: |
+          mkdir -p /tmp/wyrmgate-baseline
+          docker exec wyrmgate-baseline-postgres \
+            pg_dump -U wyrmgate -d wyrmgate_iam \
+              --schema-only --no-owner --no-privileges \
+              --exclude-table=public.flyway_schema_history \
+            > /tmp/wyrmgate-baseline/B69__current_schema.sql
+          test -s /tmp/wyrmgate-baseline/B69__current_schema.sql
+
+      - name: Upload baseline
+        uses: actions/upload-artifact@v6
+        with:
+          name: persistence-baseline-v69
+          path: /tmp/wyrmgate-baseline/B69__current_schema.sql
+          if-no-files-found: error
