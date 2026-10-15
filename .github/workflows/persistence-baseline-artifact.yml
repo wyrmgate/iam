@@ -9,15 +9,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Java
         uses: actions/setup-java@v6
@@ -44,6 +46,12 @@ jobs:
           docker logs wyrmgate-baseline-postgres
           exit 1
 
+      - name: Prepare historical migration location
+        run: |
+          mkdir -p /tmp/wyrmgate-historical-migrations
+          cp apps/server/src/main/resources/db/migration/V*.sql /tmp/wyrmgate-historical-migrations/
+          test ! -e /tmp/wyrmgate-historical-migrations/V70__*.sql
+
       - name: Apply current versioned migration history
         env:
           IAM_DB_URL: jdbc:postgresql://localhost:5432/wyrmgate_iam
@@ -53,17 +61,48 @@ jobs:
           IAM_OTEL_ENABLED: 'false'
         run: |
           sh ./apps/server/mvnw -f apps/server/pom.xml \
-            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --wyrmgate.migrate-only=true" \
+            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:/tmp/wyrmgate-historical-migrations --wyrmgate.migrate-only=true" \
             spring-boot:run
 
-      - name: Dump canonical schema through V69
+      - name: Dump and normalize canonical schema through V69
         run: |
           mkdir -p /tmp/wyrmgate-baseline
           docker exec wyrmgate-baseline-postgres \
             pg_dump -U wyrmgate -d wyrmgate_iam \
               --schema-only --no-owner --no-privileges \
               --exclude-table=public.flyway_schema_history \
-            > /tmp/wyrmgate-baseline/B69__current_schema.sql
+            > /tmp/wyrmgate-baseline/raw.sql
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('/tmp/wyrmgate-baseline/raw.sql').read_text().splitlines()
+          output = []
+          in_dollar_quote = False
+          previous_blank = False
+          for line in source:
+              if line.startswith('\\restrict') or line.startswith('\\unrestrict'):
+                  continue
+              if not in_dollar_quote and (
+                  line.startswith('--')
+                  or line.startswith('SET ')
+                  or line.startswith("SELECT pg_catalog.set_config('search_path'")
+              ):
+                  continue
+              blank = not line.strip()
+              if blank and previous_blank:
+                  continue
+              output.append(line.rstrip())
+              previous_blank = blank
+              if line.count('$$') % 2 == 1:
+                  in_dollar_quote = not in_dollar_quote
+          text = '\n'.join(output).strip() + '\n'
+          target = Path('/tmp/wyrmgate-baseline/B69__current_schema.sql')
+          target.write_text(text)
+          if not text.startswith('CREATE SCHEMA access;'):
+              raise SystemExit('normalized baseline does not start with expected application schema')
+          if '\\restrict' in text or '\\unrestrict' in text:
+              raise SystemExit('psql-only meta commands remain in baseline')
+          PY
           test -s /tmp/wyrmgate-baseline/B69__current_schema.sql
 
       - name: Upload baseline
@@ -72,3 +111,17 @@ jobs:
           name: persistence-baseline-v69
           path: /tmp/wyrmgate-baseline/B69__current_schema.sql
           if-no-files-found: error
+
+      - name: Commit baseline on feature branch when absent
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          target=apps/server/src/main/resources/db/migration/B69__current_schema.sql
+          if [ -f "$target" ]; then
+            exit 0
+          fi
+          cp /tmp/wyrmgate-baseline/B69__current_schema.sql "$target"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$target"
+          git commit -m "chore(db): add V69 persistence baseline"
+          git push origin HEAD:${{ github.head_ref }}
