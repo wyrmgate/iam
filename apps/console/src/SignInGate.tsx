@@ -2,13 +2,16 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { App } from './App';
 import { AuthControlPlaneGraphic, AuthIcon } from './AuthControlPlaneGraphic';
 import { ShellChrome } from './ShellChrome';
+import { SetupWizard } from './SetupWizard';
 import { Alert, Button, CircularProgress, TextInput } from './ui';
 import { ApiError, getAuthSession, getLoginRoute, signIn, signOut, type LoginRoute } from './api';
+import { getInstallationStatus, type InstallationStatus } from './installationApi';
 
-type GateState = 'checking' | 'first-party-login' | 'authenticated' | 'external-mode';
+type GateState = 'checking' | 'setup' | 'first-party-login' | 'authenticated' | 'external-mode';
 
 export function SignInGate() {
   const [state, setState] = useState<GateState>('checking');
+  const [setupStatus, setSetupStatus] = useState<InstallationStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loginRoute, setLoginRoute] = useState<LoginRoute | null>(null);
@@ -16,29 +19,56 @@ export function SignInGate() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  async function resolveAuthentication(signal?: AbortSignal) {
+    setError(null);
+    try {
+      const session = await getAuthSession(signal);
+      if (session.authenticated) {
+        setState('authenticated');
+        return;
+      }
+      const route = await getLoginRoute(signal);
+      setLoginRoute(route);
+      setState('first-party-login');
+    } catch (cause: unknown) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      if (cause instanceof ApiError && (cause.status === 403 || cause.status === 404)) {
+        setState('external-mode');
+        return;
+      }
+      setError('Sign-in is unavailable until Wyrmgate installation and Console routing are ready.');
+      setState('first-party-login');
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
-    getAuthSession(controller.signal)
-      .then(async (session) => {
-        if (session.authenticated) {
-          setState('authenticated');
+    getInstallationStatus(controller.signal)
+      .then(async (installation) => {
+        if (installation.status !== 'SEALED') {
+          setSetupStatus(installation);
+          setState('setup');
           return;
         }
-        const route = await getLoginRoute(controller.signal);
-        setLoginRoute(route);
-        setState('first-party-login');
+        await resolveAuthentication(controller.signal);
       })
-      .catch((cause: unknown) => {
+      .catch(async (cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        if (cause instanceof ApiError && (cause.status === 403 || cause.status === 404)) {
-          setState('external-mode');
+        // A 404 means the deployment did not enable the optional web setup adapter.
+        if (cause instanceof ApiError && cause.status === 404) {
+          await resolveAuthentication(controller.signal);
           return;
         }
-        setError('Sign-in is unavailable until Wyrmgate installation and Console routing are ready.');
-        setState('first-party-login');
+        await resolveAuthentication(controller.signal);
       });
     return () => controller.abort();
   }, []);
+
+  async function setupComplete() {
+    setSetupStatus(null);
+    setState('checking');
+    await resolveAuthentication();
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -84,6 +114,10 @@ export function SignInGate() {
         </div>
       </main>
     );
+  }
+
+  if (state === 'setup' && setupStatus) {
+    return <SetupWizard initialStatus={setupStatus} onComplete={() => void setupComplete()} />;
   }
 
   if (state === 'first-party-login') {
