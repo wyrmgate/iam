@@ -6,7 +6,9 @@ import { assertSourceContains, assertSourceExcludes, readConsoleSources } from '
 const sources = await readConsoleSources({
   app: 'App.tsx',
   requests: 'RequestsApprovalsPage.tsx',
+  requestsAccessLinks: 'RequestsApprovalsWithAccessLinks.tsx',
   identity: 'workspaces/IdentityWorkspace.tsx',
+  identityAccessLinks: 'workspaces/IdentityWorkspaceWithAccessLinks.tsx',
   principals: 'workspaces/PrincipalsWorkspace.tsx',
   catalog: 'workspaces/CatalogWorkspace.tsx',
   accessBoundary: 'workspaces/AccessWorkspace.tsx',
@@ -17,11 +19,12 @@ const sources = await readConsoleSources({
   integration: 'workspaces/IntegrationsWorkspace.tsx',
   administration: 'workspaces/AdministrationWorkspace.tsx',
   audit: 'workspaces/AuditWorkspace.tsx',
+  auditAccessLink: 'workspaces/AuditWorkspaceWithAccessLink.tsx',
   helpers: 'workspaces/workspaceSpecHelpers.ts',
 });
 
 test('App is runtime and route composition rather than a capability implementation hotspot', () => {
-  assertSourceContains(sources.app, /\.\/RequestsApprovalsPage/, /\.\/workspaces\/IdentityWorkspace/, /\.\/workspaces\/PrincipalsWorkspace/, /\.\/workspaces\/CatalogWorkspace/, /\.\/workspaces\/AccessWorkspace/, /\.\/workspaces\/GovernanceWorkspace/, /\.\/workspaces\/CredentialsWorkspace/, /\.\/workspaces\/IntegrationsWorkspace/, /\.\/workspaces\/AdministrationWorkspace/, /\.\/workspaces\/AuditWorkspace/, /matchConsoleRoute\(pathname\)/, /getCurrentAdministrativeAuthority/, /getSystemInfo/);
+  assertSourceContains(sources.app, /RequestsApprovalsWithAccessLinks/, /IdentityWorkspaceWithAccessLinks/, /\.\/workspaces\/PrincipalsWorkspace/, /\.\/workspaces\/CatalogWorkspace/, /\.\/workspaces\/AccessWorkspace/, /\.\/workspaces\/GovernanceWorkspace/, /\.\/workspaces\/CredentialsWorkspace/, /\.\/workspaces\/IntegrationsWorkspace/, /\.\/workspaces\/AdministrationWorkspace/, /AuditWorkspaceWithAccessLink/, /matchConsoleRoute\(pathname\)/, /getCurrentAdministrativeAuthority/, /getSystemInfo/);
   assertSourceExcludes(sources.app, /ControlPlanePages/, /V1_ROOT/, /apiRequest/, /getIdentity/, /listIdentities/, /transitionIdentity/);
 });
 
@@ -31,7 +34,9 @@ test('legacy multi-capability ControlPlanePages hotspot is removed', async () =>
 
 test('each capability ownership surface has a focused implementation file', () => {
   assertSourceContains(sources.requests, /export function RequestsApprovalsPage/, /My Approval Work/, /My Requests/, /New Request/);
+  assertSourceContains(sources.requestsAccessLinks, /state === 'APPLIED'/, /accessAssignmentId/, /View resulting access/);
   assertSourceContains(sources.identity, /export function IdentityWorkspace/, /\/identities/);
+  assertSourceContains(sources.identityAccessLinks, /View authoritative access/, /View effective access/, /identityId=/);
   assertSourceContains(sources.principals, /export function PrincipalsWorkspace/, /\/principals/, /Technical account authority owned by Identity/);
   assertSourceContains(sources.catalog, /export function CatalogWorkspace/, /\/applications/, /\/roles/);
   assertSourceContains(sources.accessBoundary, /AccessGoldenWorkspace/);
@@ -43,6 +48,7 @@ test('each capability ownership surface has a focused implementation file', () =
   assertSourceContains(sources.integration, /export function IntegrationsWorkspace/, /\/connectors/, /IntegrationOperationsPage/);
   assertSourceContains(sources.administration, /export function AdministrationWorkspace/, /\/administrative-/, /CurrentAdministrativeAuthorityPage/);
   assertSourceContains(sources.audit, /export function AuditWorkspace/, /\/audit-records/, /\/evidence-snapshots/);
+  assertSourceContains(sources.auditAccessLink, /access-assignment/, /View AccessAssignment/);
 });
 
 test('shared workspace helpers remain presentation-neutral and do not redefine capability contracts', () => {
