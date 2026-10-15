@@ -12,9 +12,10 @@ The change is presentation-only. It does not alter IAM requirements, domain sema
 
 The authenticated Console now has one application-facing visual vocabulary:
 
-- `src/ui/designTokens.ts` defines the named product, neutral, semantic, density, shape, typography and layout values used by the shared UI boundary.
+- `src/ui/designTokens.ts` is the single source of named product, neutral, semantic, density, shape, typography and layout values used by the shared UI boundary.
 - `src/ui/WyrmgateUiProvider.tsx` applies those values to the current component-library implementation.
-- `src/enterprise-console.css` bridges purpose-built operator workbenches and shell-era CSS onto the same named Enterprise UI roles where those screens cannot yet be expressed entirely through `src/ui` primitives.
+- `src/ui/cssVariables.ts` derives the `--wg-*` CSS roles directly from `designTokens.ts`; it contains no duplicated palette literals.
+- `src/enterprise-console.css` consumes those roles to bridge purpose-built operator workbenches and shell-era CSS where those screens cannot yet be expressed entirely through `src/ui` primitives. It does not define its own token values.
 - capability-local CSS may own workflow geometry only: split panes, charts, list/card rearrangement, sticky detail placement and narrow-screen composition. It must not define a competing product palette, type scale, surface system, status system, control shape or focus treatment.
 
 `enterprise-console.css` is therefore a compatibility/convergence layer, not a new domain or component abstraction. New capability work should prefer `src/ui` primitives and `designTokens.ts`; it should not add new selectors to the bridge unless an existing purpose-built workflow genuinely cannot be expressed through those primitives without losing semantics.
@@ -57,6 +58,7 @@ The first-party sign-in screen remains an intentionally isolated branded authent
 `apps/console/tests/enterprise-convergence.test.mjs` protects the convergence boundary by asserting that:
 
 - the authenticated Console loads the shared enterprise presentation layer last;
+- `--wg-*` variable values are derived from `designTokens.ts` rather than duplicated in CSS;
 - Access, IAM Operations and Requests/Approvals do not reintroduce private palettes or ordinary-workspace gradients;
 - the retired Access alignment shim stays absent;
 - the shell resolves its shared visual roles through Enterprise UI tokens;
