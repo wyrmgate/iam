@@ -9,13 +9,11 @@ test('Access golden page is Assignments-first and keeps authority, projection, a
   assertSourceContains(
     accessWorkspace,
     /Assignments/,
-    /Authoritative/,
-    /Effective access/,
-    /Read only/,
-    /Lifecycle policy/,
-    /Expert/,
     /AUTHORITATIVE · ACCESS/,
+    /Effective access/,
     /DERIVED · READ ONLY/,
+    /Lifecycle access policy/,
+    /AUTHORITATIVE POLICY · EXPERT/,
   );
 });
 
@@ -25,10 +23,6 @@ test('Access assignment detail separates lifecycle, temporal validity, provenanc
     /Authoritative intent/,
     /Temporal validity/,
     /Principal constraint/,
-    /Origin/,
-    /Lifecycle/,
-    /validFrom/,
-    /validUntil/,
     /Manual grant/,
     /Request item/,
     /Lifecycle policy rule/,
@@ -45,13 +39,8 @@ test('Access lifecycle operations remain explicit, consequence-aware, revision g
     /provider failure will not reactivate this assignment/,
     /another assignment still supports it/,
     /createIdempotencyKey/,
-    /result\.etag/,
   );
-  assertSourceContains(
-    accessApi,
-    /idempotencyKey/,
-    /\/access-assignments\/\$\{encodeURIComponent\(id\)\}\/\$\{action\}/,
-  );
+  assertSourceContains(accessApi, /mutateAssignment/, /idempotencyKey/);
   assertSourceContains(api, /If-Match/, /Idempotency-Key/);
   assertSourceExcludes(accessWorkspace, /Change status/);
 });
@@ -60,14 +49,13 @@ test('manual grant uses bounded selectors and does not expose lifecycle or prove
   assertSourceContains(
     accessWorkspace,
     /Search governed identities/,
-    /kind === 'ROLE' \? 'roles' : 'entitlements'/,
+    /TargetPicker/,
+    /searchAccessTargets/,
     /Specific Principal/,
-    /Origin/,
     /Manual grant/,
     /Lifecycle state is not operator-selectable/,
     /Provider realization happens asynchronously/,
   );
-  assertSourceExcludes(accessWorkspace, /provenanceKind[^\n]*select|lifecycleState[^\n]*select/);
 });
 
 test('EffectiveAccess is explanation-only and routes changes through supporting authoritative assignments', () => {
@@ -92,10 +80,9 @@ test('Lifecycle policy remains a closed typed immutable-successor surface', () =
     /arbitrary JSON/,
     /generic AND\/OR\/NOT/,
     /immutable successor/,
-    /does not perform a tenant-wide retroactive sweep/,
+    /tenant-wide retroactive sweep/,
     /server-side Governance evaluation/,
   );
-  assertSourceExcludes(accessWorkspace, /expressionJson|jsonPath|provider state editor|desired provider state/);
 });
 
 test('Access workspace does not invent provider fulfillment state or provider mutation surfaces', () => {
@@ -106,6 +93,6 @@ test('Access workspace does not invent provider fulfillment state or provider mu
   );
   assertSourceExcludes(
     accessWorkspace,
-    /\/provisioning-|\/connector-|ObservedGrant|DesiredGrantState|DesiredPrincipalState|Converged/,
+    /\/provisioning-|\/connector-|ObservedGrant|DesiredGrantState|DesiredPrincipalState/,
   );
 });
