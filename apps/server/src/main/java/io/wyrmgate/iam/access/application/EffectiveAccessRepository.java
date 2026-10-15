@@ -1,7 +1,6 @@
 package io.wyrmgate.iam.access.application;
 
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveSupport;
-import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveSupportPosition;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.domain.EffectiveAccess;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -66,22 +65,6 @@ public interface EffectiveAccessRepository {
             TenantContext tenant,
             UUID effectiveAccessId,
             Instant at);
-
-    default List<EffectiveSupport> currentSupportEvidencePage(
-            TenantContext tenant,
-            UUID effectiveAccessId,
-            EffectiveSupportPosition after,
-            int limit,
-            Instant at) {
-        List<EffectiveSupport> all = currentSupportEvidence(tenant, effectiveAccessId, at);
-        return all.stream()
-                .filter(value -> after == null
-                        || value.accessAssignmentId().compareTo(after.accessAssignmentId()) > 0
-                        || (value.accessAssignmentId().equals(after.accessAssignmentId())
-                            && value.pathHash().compareTo(after.pathHash()) > 0))
-                .limit(limit)
-                .toList();
-    }
 
     record RoleSupportPath(
             UUID entitlementId,
