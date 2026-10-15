@@ -3,6 +3,7 @@ package io.wyrmgate.iam.api.identity;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
+import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitRepository;
@@ -91,7 +92,7 @@ final class IdentitySplitCandidateController {
 
     private void requireAllowed(
             AuthenticatedAdministrativeActor actor,
-            String permission,
+            AdministrativePermission permission,
             AdministrativeResource resource,
             Instant now,
             UUID correlationId) {
