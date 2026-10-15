@@ -1,25 +1,24 @@
-name: Persistence Baseline Artifact
+name: Persistence Baseline CI
 
 on:
   pull_request:
     branches: [main]
     paths:
       - 'apps/server/src/main/resources/db/migration/**'
+      - 'apps/server/src/test/java/io/wyrmgate/iam/platform/persistence/**'
       - '.github/workflows/persistence-baseline-artifact.yml'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  generate:
+  equivalence:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - name: Checkout branch
+      - name: Checkout
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Java
         uses: actions/setup-java@v6
@@ -32,29 +31,42 @@ jobs:
       - name: Start PostgreSQL
         run: |
           docker run --detach --rm --name wyrmgate-baseline-postgres \
-            -e POSTGRES_DB=wyrmgate_iam \
+            -e POSTGRES_DB=postgres \
             -e POSTGRES_USER=wyrmgate \
             -e POSTGRES_PASSWORD=wyrmgate \
             -p 5432:5432 \
             postgres:18.4-alpine
           for attempt in $(seq 1 30); do
-            if docker exec wyrmgate-baseline-postgres pg_isready -U wyrmgate -d wyrmgate_iam; then
-              exit 0
+            if docker exec wyrmgate-baseline-postgres pg_isready -U wyrmgate -d postgres; then
+              break
             fi
             sleep 1
           done
-          docker logs wyrmgate-baseline-postgres
-          exit 1
+          docker exec wyrmgate-baseline-postgres createdb -U wyrmgate historical
+          docker exec wyrmgate-baseline-postgres createdb -U wyrmgate baseline
 
-      - name: Prepare historical migration location
+      - name: Guard migration numbering
+        run: |
+          test -f apps/server/src/main/resources/db/migration/B69__current_schema.sql
+          test ! -e apps/server/src/main/resources/db/migration/V70__*.sql
+          if find apps/server/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' -printf '%f\n' \
+              | sed -E 's/^V([0-9]+)__.*/\1/' \
+              | awk '$1 == 70 { found=1 } END { exit found ? 1 : 0 }'; then
+            :
+          else
+            echo 'V70 is permanently reserved and must not be reused.' >&2
+            exit 1
+          fi
+
+      - name: Prepare historical-only migration location
         run: |
           mkdir -p /tmp/wyrmgate-historical-migrations
           cp apps/server/src/main/resources/db/migration/V*.sql /tmp/wyrmgate-historical-migrations/
           test ! -e /tmp/wyrmgate-historical-migrations/V70__*.sql
 
-      - name: Apply current versioned migration history
+      - name: Apply historical versioned path
         env:
-          IAM_DB_URL: jdbc:postgresql://localhost:5432/wyrmgate_iam
+          IAM_DB_URL: jdbc:postgresql://localhost:5432/historical
           IAM_DB_USER: wyrmgate
           IAM_DB_PASSWORD: wyrmgate
           IAM_AUTH_ENABLED: 'false'
@@ -64,66 +76,78 @@ jobs:
             -Dspring-boot.run.arguments="--spring.main.web-application-type=none --spring.flyway.locations=filesystem:/tmp/wyrmgate-historical-migrations --wyrmgate.migrate-only=true" \
             spring-boot:run
 
-      - name: Dump and normalize canonical schema through V69
+      - name: Apply greenfield baseline path
+        env:
+          IAM_DB_URL: jdbc:postgresql://localhost:5432/baseline
+          IAM_DB_USER: wyrmgate
+          IAM_DB_PASSWORD: wyrmgate
+          IAM_AUTH_ENABLED: 'false'
+          IAM_OTEL_ENABLED: 'false'
         run: |
-          mkdir -p /tmp/wyrmgate-baseline
-          docker exec wyrmgate-baseline-postgres \
-            pg_dump -U wyrmgate -d wyrmgate_iam \
-              --schema-only --no-owner --no-privileges \
-              --exclude-table=public.flyway_schema_history \
-            > /tmp/wyrmgate-baseline/raw.sql
+          sh ./apps/server/mvnw -f apps/server/pom.xml \
+            -Dspring-boot.run.arguments="--spring.main.web-application-type=none --wyrmgate.migrate-only=true" \
+            spring-boot:run
+
+      - name: Verify baseline path used B69
+        run: |
+          docker exec wyrmgate-baseline-postgres psql -U wyrmgate -d baseline -Atc \
+            "select type || ':' || coalesce(version, '') || ':' || script from public.flyway_schema_history where success order by installed_rank" \
+            | tee /tmp/baseline-history.txt
+          grep -Eq '(^|:)69:.*B69__current_schema.sql$|^BASELINE:69:current_schema$' /tmp/baseline-history.txt \
+            || { echo 'Fresh database did not establish schema through B69 baseline.' >&2; exit 1; }
+          if grep -Eq ':(1|[2-9]|[1-6][0-8]):V(1|[2-9]|[1-6][0-8])__' /tmp/baseline-history.txt; then
+            echo 'Fresh database replayed pre-baseline versioned migrations.' >&2
+            exit 1
+          fi
+
+      - name: Compare normalized application schemas
+        run: |
+          mkdir -p /tmp/wyrmgate-schema-diff
+          for database in historical baseline; do
+            docker exec wyrmgate-baseline-postgres \
+              pg_dump -U wyrmgate -d "$database" \
+                --schema-only --no-owner --no-privileges \
+                --exclude-table=public.flyway_schema_history \
+              > "/tmp/wyrmgate-schema-diff/$database.raw.sql"
+          done
           python3 - <<'PY'
           from pathlib import Path
 
-          source = Path('/tmp/wyrmgate-baseline/raw.sql').read_text().splitlines()
-          output = []
-          in_dollar_quote = False
-          previous_blank = False
-          for line in source:
-              if line.startswith('\\restrict') or line.startswith('\\unrestrict'):
-                  continue
-              if not in_dollar_quote and (
-                  line.startswith('--')
-                  or line.startswith('SET ')
-                  or line.startswith("SELECT pg_catalog.set_config('search_path'")
-              ):
-                  continue
-              blank = not line.strip()
-              if blank and previous_blank:
-                  continue
-              output.append(line.rstrip())
-              previous_blank = blank
-              if line.count('$$') % 2 == 1:
-                  in_dollar_quote = not in_dollar_quote
-          text = '\n'.join(output).strip() + '\n'
-          target = Path('/tmp/wyrmgate-baseline/B69__current_schema.sql')
-          target.write_text(text)
-          if not text.startswith('CREATE SCHEMA access;'):
-              raise SystemExit('normalized baseline does not start with expected application schema')
-          if '\\restrict' in text or '\\unrestrict' in text:
-              raise SystemExit('psql-only meta commands remain in baseline')
-          PY
-          test -s /tmp/wyrmgate-baseline/B69__current_schema.sql
+          def normalize(path: Path) -> str:
+              output = []
+              in_dollar_quote = False
+              previous_blank = False
+              for line in path.read_text().splitlines():
+                  if line.startswith('\\restrict') or line.startswith('\\unrestrict'):
+                      continue
+                  if not in_dollar_quote and (
+                      line.startswith('--')
+                      or line.startswith('SET ')
+                      or line.startswith("SELECT pg_catalog.set_config('search_path'")
+                  ):
+                      continue
+                  blank = not line.strip()
+                  if blank and previous_blank:
+                      continue
+                  output.append(line.rstrip())
+                  previous_blank = blank
+                  if line.count('$$') % 2 == 1:
+                      in_dollar_quote = not in_dollar_quote
+              return '\n'.join(output).strip() + '\n'
 
-      - name: Upload baseline
+          root = Path('/tmp/wyrmgate-schema-diff')
+          for database in ('historical', 'baseline'):
+              (root / f'{database}.sql').write_text(normalize(root / f'{database}.raw.sql'))
+          PY
+          diff -u /tmp/wyrmgate-schema-diff/historical.sql /tmp/wyrmgate-schema-diff/baseline.sql
+
+      - name: Upload comparison artifacts
+        if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: persistence-baseline-v69
-          path: /tmp/wyrmgate-baseline/B69__current_schema.sql
-          if-no-files-found: error
-
-      - name: Commit baseline on feature branch when absent
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          target=apps/server/src/main/resources/db/migration/B69__current_schema.sql
-          git fetch origin ${{ github.head_ref }}
-          git reset --hard origin/${{ github.head_ref }}
-          if [ -f "$target" ]; then
-            exit 0
-          fi
-          cp /tmp/wyrmgate-baseline/B69__current_schema.sql "$target"
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add "$target"
-          git commit -m "chore(db): add V69 persistence baseline"
-          git push origin HEAD:${{ github.head_ref }}
+          name: persistence-baseline-equivalence
+          path: |
+            /tmp/wyrmgate-schema-diff/historical.sql
+            /tmp/wyrmgate-schema-diff/baseline.sql
+            /tmp/baseline-history.txt
+          if-no-files-found: warn
