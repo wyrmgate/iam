@@ -115,7 +115,7 @@ test('Governance tab does not broaden participant-scoped AccessRequest visibilit
   assertSourceExcludes(identity, /\/access-requests\?beneficiaryIdentityId=/);
 });
 
-test('advanced correction remains explicit and ownership preserving', () => {
+test('advanced correction remains explicit, typed, and ownership preserving', () => {
   assertSourceContains(
     identity,
     /loadMergeTarget/,
@@ -125,8 +125,22 @@ test('advanced correction remains explicit and ownership preserving', () => {
     /Foreign-capability authority never transfers implicitly/,
     /Explicit relationship selection required/,
     /No AccessAssignment or Governance authority is copied/,
+    /\/split-candidates/,
+    /Current SourceRecord links/,
+    /Current Principals/,
+    /toggleSplitSelection/,
+    /sourceRecordIds: splitSelection\.sourceRecordIds/,
+    /principalIds: splitSelection\.principalIds/,
+    /first 200 current candidates/,
   );
-  assertSourceExcludes(identity, /Absorbed authoritative revision/);
+  assertSourceExcludes(
+    identity,
+    /Absorbed authoritative revision/,
+    /label="Source record IDs"/,
+    /label="Principal IDs"/,
+    /splitValues\.sourceRecordIds\.split/,
+    /splitValues\.principalIds\.split/,
+  );
 });
 
 test('Identity workspace stays inside shared UI and authenticated API boundaries', () => {
