@@ -1,9 +1,11 @@
 package io.wyrmgate.iam.access.application;
 
+import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentFilter;
 import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentPage;
 import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentPosition;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -22,7 +24,7 @@ public final class AccessAssignmentQueryService {
     }
 
     public AssignmentPage list(TenantContext tenant, AssignmentPosition after, int limit) {
-        return list(tenant, null, after, limit);
+        return list(tenant, AssignmentFilter.none(), after, limit, Instant.now());
     }
 
     public AssignmentPage list(
@@ -30,19 +32,30 @@ public final class AccessAssignmentQueryService {
             UUID identityId,
             AssignmentPosition after,
             int limit) {
+        return list(
+                tenant,
+                new AssignmentFilter(identityId, null, null, null, null, null),
+                after,
+                limit,
+                Instant.now());
+    }
+
+    public AssignmentPage list(
+            TenantContext tenant,
+            AssignmentFilter filter,
+            AssignmentPosition after,
+            int limit,
+            Instant evaluatedAt) {
         requireLimit(limit);
-        List<AccessAssignment> fetched = identityId == null
-                ? assignments.findPage(
-                        tenant,
-                        after == null ? null : after.createdAt(),
-                        after == null ? null : after.id(),
-                        limit + 1)
-                : assignments.findPageByIdentity(
-                        tenant,
-                        identityId,
-                        after == null ? null : after.createdAt(),
-                        after == null ? null : after.id(),
-                        limit + 1);
+        Objects.requireNonNull(filter, "filter");
+        Objects.requireNonNull(evaluatedAt, "evaluatedAt");
+        List<AccessAssignment> fetched = assignments.findPageFiltered(
+                tenant,
+                filter,
+                evaluatedAt,
+                after == null ? null : after.createdAt(),
+                after == null ? null : after.id(),
+                limit + 1);
         boolean more = fetched.size() > limit;
         List<AccessAssignment> items = List.copyOf(
                 fetched.subList(0, Math.min(limit, fetched.size())));
