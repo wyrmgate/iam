@@ -14,6 +14,7 @@ on:
       - 'docs/engineering/edge.md'
       - 'docs/engineering/observability.md'
       - 'docs/operations/dev-managed-activation.md'
+      - 'docs/operations/first-run-web-setup.md'
       - 'scripts/ci/component-changes.sh'
   push:
     branches: [main]
@@ -28,6 +29,7 @@ on:
       - 'docs/engineering/edge.md'
       - 'docs/engineering/observability.md'
       - 'docs/operations/dev-managed-activation.md'
+      - 'docs/operations/first-run-web-setup.md'
       - 'scripts/ci/component-changes.sh'
   workflow_dispatch:
 
@@ -114,10 +116,15 @@ jobs:
         run: |
           set -euo pipefail
           test -f apps/server/Dockerfile
+          test -f apps/server/docker-entrypoint.sh
           grep -Fq 'COPY apps/server/pom.xml' apps/server/Dockerfile
           grep -Fq 'COPY apps/server ' apps/server/Dockerfile
+          grep -Fq 'COPY --chown=10001:10001 apps/server/docker-entrypoint.sh /app/docker-entrypoint.sh' apps/server/Dockerfile
           grep -Fq 'EXPOSE 8080' apps/server/Dockerfile
-          grep -Fq 'ENTRYPOINT ["java"' apps/server/Dockerfile
+          grep -Fq 'ENTRYPOINT ["/bin/sh","/app/docker-entrypoint.sh","java"' apps/server/Dockerfile
+          grep -Fq 'IAM_BOOTSTRAP_WEB_SETUP_SECRET' apps/server/docker-entrypoint.sh
+          grep -Fq 'unset IAM_BOOTSTRAP_WEB_SETUP_SECRET' apps/server/docker-entrypoint.sh
+          grep -Fq 'startup installation bootstrap is disabled for DEV' apps/server/docker-entrypoint.sh
           grep -Fq 'port: ${PORT:8080}' apps/server/src/main/resources/application.yml
           grep -Fq '${IAM_DB_URL:' apps/server/src/main/resources/application.yml
           grep -Fq '${IAM_DB_USER:' apps/server/src/main/resources/application.yml
@@ -142,6 +149,9 @@ jobs:
           set -euo pipefail
           grep -Fq 'Railway Serverless is the selected shared DEV compute target' docs/engineering/dev-cd.md
           grep -Fq 'Cloudflare Pages + Pages Functions, Railway Serverless, and Neon PostgreSQL' docs/engineering/dev-cd.md
+          grep -Fq 'first-run web setup wizard' docs/engineering/dev-cd.md
+          grep -Fq 'IAM_BOOTSTRAP_WEB_SETUP_SECRET' docs/operations/dev-managed-activation.md
+          grep -Fq 'startup/headless bootstrap is not the shared DEV activation path' docs/operations/dev-managed-activation.md
           grep -Fq 'Wait for CI' docs/engineering/dev-cd.md
           grep -Fq 'legacy Railway Config-as-Code file is not restored' docs/engineering/dev-cd.md
           grep -Fq 'activation is not complete until' docs/operations/dev-managed-activation.md
