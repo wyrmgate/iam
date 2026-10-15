@@ -1,0 +1,460 @@
+:root {
+  --wg-canvas: #f5f7fa;
+  --wg-surface: #ffffff;
+  --wg-surface-subtle: #f8fafc;
+  --wg-surface-selected: #eaf2fb;
+  --wg-border: #d8e0e8;
+  --wg-border-strong: #bbc7d4;
+  --wg-text: #172033;
+  --wg-text-secondary: #5f6f82;
+  --wg-text-muted: #8290a3;
+  --wg-accent: #235ea7;
+  --wg-accent-hover: #174b84;
+  --wg-accent-subtle: #eaf2fb;
+  --wg-focus: #8bb7e8;
+  --wg-success: #257149;
+  --wg-success-subtle: #e9f5ee;
+  --wg-warning: #875f12;
+  --wg-warning-subtle: #fff6dd;
+  --wg-danger: #a12b35;
+  --wg-danger-subtle: #fcecef;
+  --wg-info: #356b9b;
+  --wg-info-subtle: #edf5fc;
+  --wg-radius-badge: 4px;
+  --wg-radius-control: 6px;
+  --wg-radius-surface: 8px;
+  --wg-radius-dialog: 10px;
+  --wg-control-height: 36px;
+  --wg-mobile-target: 44px;
+  --wg-page-title: 24px;
+  --wg-section-title: 16px;
+  --wg-table-text: 13px;
+  --wg-table-header: 12px;
+}
+
+/*
+ * Shared enterprise presentation contract for purpose-built operator workbenches.
+ * Capability CSS may own geometry, chart mechanics, split panes and narrow-screen
+ * rearrangement. Product color, surface, type hierarchy, table density, control
+ * shape, focus and semantic feedback belong here.
+ */
+
+.access-golden-page,
+.iam-operations,
+.requests-approvals {
+  color: var(--wg-text);
+  font-size: 14px;
+}
+
+.access-golden-header h1,
+.iam-page-header h1,
+.ra-header h1 {
+  margin: 0;
+  color: var(--wg-text);
+  font-size: var(--wg-page-title);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.access-golden-header p,
+.iam-page-header p,
+.ra-header p,
+.access-collection-heading p,
+.iam-panel-header p,
+.ra-panel-head p {
+  color: var(--wg-text-secondary);
+  line-height: 1.45;
+}
+
+.access-golden-eyebrow,
+.access-detail-kicker,
+.iam-eyebrow,
+.ra-eyebrow {
+  color: var(--wg-accent);
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.access-collection,
+.access-detail,
+.access-detail-placeholder,
+.access-policy,
+.iam-panel,
+.ra-panel {
+  border: 1px solid var(--wg-border);
+  border-radius: var(--wg-radius-surface);
+  background: var(--wg-surface);
+  box-shadow: none;
+}
+
+.access-collection-heading h2,
+.access-detail h2,
+.access-detail-placeholder h2,
+.access-policy h2,
+.iam-panel-header h2,
+.iam-section-heading h2,
+.ra-panel-head h2 {
+  color: var(--wg-text);
+  font-size: var(--wg-section-title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.access-golden-tabs,
+.ra-workspace-tabs {
+  border-color: var(--wg-border);
+}
+
+.access-golden-tab,
+.ra-tabs button {
+  color: var(--wg-text-secondary);
+  font-weight: 600;
+}
+
+.access-golden-tab.is-selected,
+.ra-tabs button.active {
+  color: var(--wg-accent);
+}
+
+.access-golden-tab::after,
+.ra-tabs button.active::after {
+  background: transparent;
+}
+
+.access-golden-tab.is-selected::after,
+.ra-tabs button.active::after {
+  background: var(--wg-accent);
+}
+
+.access-golden-tab:focus-visible,
+.access-review-button:focus-visible,
+.access-inline-link:focus-visible,
+.access-detail-close:focus-visible,
+.access-clear-filters:focus-visible,
+.access-picker-results button:focus-visible,
+.access-mobile-card:focus-visible,
+.iam-recon-row:focus-visible,
+.iam-segmented button:focus-visible,
+.ra-tabs button:focus-visible,
+.ra-preset-list button:focus-visible,
+.ra-metric:focus-visible,
+.iam-attention-card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--wg-focus) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.access-filter-toolbar,
+.access-effective-filter,
+.iam-section-toolbar,
+.ra-workspace-tabs {
+  background: var(--wg-surface-subtle);
+  border-color: var(--wg-border);
+}
+
+.access-filter-toolbar label,
+.access-field,
+.access-picker label,
+.iam-inline-select,
+.ra-sort,
+.ra-field > span {
+  color: var(--wg-text-secondary);
+}
+
+.access-filter-toolbar select,
+.access-field select,
+.access-field input,
+.access-picker input,
+.iam-header-controls select,
+.iam-inline-select select,
+.ra-header-controls select,
+.ra-sort select,
+.ra-field select {
+  min-height: var(--wg-control-height);
+  border: 1px solid var(--wg-border-strong);
+  border-radius: var(--wg-radius-control);
+  background: var(--wg-surface);
+  color: var(--wg-text);
+  box-shadow: none;
+}
+
+.access-filter-toolbar select:focus,
+.access-field select:focus,
+.access-field input:focus,
+.access-picker input:focus,
+.iam-header-controls select:focus,
+.iam-inline-select select:focus,
+.ra-header-controls select:focus,
+.ra-sort select:focus,
+.ra-field select:focus {
+  outline: 0;
+  border-color: var(--wg-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wg-focus) 30%, transparent);
+}
+
+.access-table,
+.iam-table,
+.ra-table {
+  color: var(--wg-text);
+  font-size: var(--wg-table-text);
+}
+
+.access-table th,
+.iam-table thead th,
+.ra-table th {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--wg-border);
+  background: var(--wg-surface-subtle);
+  color: var(--wg-text-secondary);
+  font-size: var(--wg-table-header);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.access-table td,
+.iam-table tbody td,
+.ra-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--wg-border);
+  color: var(--wg-text);
+}
+
+.access-table tbody tr:hover,
+.iam-table tbody tr:hover,
+.ra-table tbody tr:hover {
+  background: var(--wg-surface-subtle);
+}
+
+.access-table tbody tr.is-selected {
+  background: var(--wg-surface-selected);
+  box-shadow: inset 3px 0 var(--wg-accent);
+}
+
+.access-review-button,
+.access-inline-link,
+.access-clear-filters,
+.iam-chart-table summary {
+  color: var(--wg-accent);
+}
+
+.access-review-button:hover,
+.access-inline-link:hover,
+.access-clear-filters:hover,
+.iam-chart-table summary:hover {
+  color: var(--wg-accent-hover);
+}
+
+/* Typed state remains caller-owned; this layer only renders caller-selected tone. */
+.access-state,
+.iam-badge,
+.ra-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wg-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.access-state::before,
+.iam-badge::before,
+.ra-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--wg-text-muted);
+}
+
+.access-state-active::before,
+.access-state-current::before,
+.access-state-success::before,
+.iam-badge-success::before,
+.ra-badge-success::before { background: var(--wg-success); }
+
+.access-state-scheduled::before,
+.access-state-future::before,
+.iam-badge-info::before,
+.ra-badge-info::before { background: var(--wg-info); }
+
+.access-state-suspended::before,
+.access-state-denied::before,
+.iam-badge-warning::before,
+.ra-badge-warning::before { background: var(--wg-warning); }
+
+.access-state-revoked::before,
+.access-state-failure::before,
+.iam-badge-danger::before,
+.ra-badge-danger::before { background: var(--wg-danger); }
+
+.access-validity-card,
+.access-origin-fixed,
+.access-support-list article,
+.access-policy-rule-editor,
+.ra-detail-grid > div,
+.ra-stage-list > div,
+.ra-item-list > div,
+.iam-recon-summary .iam-summary-stat,
+.iam-environment-card,
+.iam-activity-card {
+  border: 1px solid var(--wg-border);
+  border-radius: var(--wg-radius-control);
+  background: var(--wg-surface-subtle);
+  box-shadow: none;
+}
+
+.access-policy-meta,
+.access-policy-rule-editor > header,
+.ra-detail-hero,
+.access-detail-heading,
+.access-detail-section,
+.access-pagination {
+  border-color: var(--wg-border);
+}
+
+.access-picker-results {
+  border: 1px solid var(--wg-border-strong);
+  border-radius: var(--wg-radius-surface);
+  background: var(--wg-surface);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+}
+
+.access-picker-results button:hover,
+.ra-preset-list button:hover,
+.iam-recon-row:hover {
+  background: var(--wg-surface-subtle);
+}
+
+/* Work-entry summaries are operational navigation, not decorative KPI cards. */
+.iam-attention-card,
+.ra-metric {
+  border: 1px solid var(--wg-border);
+  border-radius: var(--wg-radius-surface);
+  background: var(--wg-surface);
+  box-shadow: none;
+  transform: none;
+}
+
+button.iam-attention-card:hover,
+.ra-metric:hover {
+  border-color: var(--wg-border-strong);
+  background: var(--wg-surface-subtle);
+  box-shadow: none;
+  transform: none;
+}
+
+.iam-attention-icon,
+.ra-metric-icon,
+.iam-environment-icon,
+.ra-preset-icon {
+  border-radius: var(--wg-radius-control);
+  background: var(--wg-accent-subtle);
+  color: var(--wg-accent);
+}
+
+.iam-tone-danger,
+.ra-metric-danger .ra-metric-icon { background: var(--wg-danger-subtle); color: var(--wg-danger); }
+.iam-tone-warning,
+.ra-metric-warning .ra-metric-icon { background: var(--wg-warning-subtle); color: var(--wg-warning); }
+.iam-tone-info,
+.ra-metric-info .ra-metric-icon { background: var(--wg-info-subtle); color: var(--wg-info); }
+.ra-metric-success .ra-metric-icon { background: var(--wg-success-subtle); color: var(--wg-success); }
+
+.iam-attention-danger,
+.iam-attention-warning,
+.iam-attention-info,
+.ra-metric-danger,
+.ra-metric-warning,
+.ra-metric-info,
+.ra-metric-success {
+  background: var(--wg-surface);
+}
+
+.iam-segmented {
+  border: 1px solid var(--wg-border);
+  border-radius: var(--wg-radius-control);
+  background: var(--wg-surface-subtle);
+}
+
+.iam-segmented button {
+  border-radius: calc(var(--wg-radius-control) - 1px);
+  color: var(--wg-text-secondary);
+}
+
+.iam-segmented button.active {
+  background: var(--wg-surface);
+  color: var(--wg-accent);
+  box-shadow: none;
+}
+
+.iam-empty-chart,
+.iam-section-state,
+.iam-empty-state,
+.ra-empty {
+  border: 1px dashed var(--wg-border-strong);
+  border-radius: var(--wg-radius-surface);
+  background: var(--wg-surface-subtle);
+  color: var(--wg-text-secondary);
+}
+
+.iam-partial-banner {
+  border: 1px solid color-mix(in srgb, var(--wg-warning) 35%, var(--wg-border));
+  border-radius: var(--wg-radius-surface);
+  background: var(--wg-warning-subtle);
+  color: var(--wg-warning);
+}
+
+.iam-last-complete {
+  border-radius: var(--wg-radius-control);
+  background: var(--wg-success-subtle);
+  color: var(--wg-success);
+}
+
+.iam-signal-strip > div {
+  border-color: color-mix(in srgb, var(--wg-danger) 25%, var(--wg-border));
+  border-radius: var(--wg-radius-control);
+  background: var(--wg-danger-subtle);
+}
+
+.iam-skeleton,
+.ra-skeleton {
+  border-radius: var(--wg-radius-surface);
+  background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 50%, #eef2f7 75%);
+}
+
+@media (max-width: 760px) {
+  .access-golden-tab,
+  .access-clear-filters,
+  .access-filter-toolbar select,
+  .access-field select,
+  .access-field input,
+  .access-picker input,
+  .access-picker-results button,
+  .iam-header-controls select,
+  .iam-inline-select select,
+  .iam-segmented button,
+  .ra-header-controls select,
+  .ra-sort select,
+  .ra-field select,
+  .ra-tabs button {
+    min-height: var(--wg-mobile-target);
+  }
+
+  .access-detail-close {
+    width: var(--wg-mobile-target);
+    height: var(--wg-mobile-target);
+  }
+}
