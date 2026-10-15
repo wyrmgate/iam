@@ -33,24 +33,38 @@ final class AccessCursorCodec {
     }
 
     String encodeAssignments(TenantContext tenant, AssignmentPosition position) {
-        return encodeAssignments(tenant, null, position);
+        return encodeAssignmentsForContext(tenant, "", position);
     }
 
     String encodeAssignments(TenantContext tenant, UUID identityId, AssignmentPosition position) {
+        return encodeAssignmentsForContext(tenant, context(identityId), position);
+    }
+
+    String encodeAssignmentsForContext(
+            TenantContext tenant,
+            String contextBinding,
+            AssignmentPosition position) {
         return position == null ? null : sign(payload(
-                "access-assignment", tenant.tenantId().toString(), context(identityId), clock.instant().toString(),
+                "access-assignment", tenant.tenantId().toString(), contextBinding(contextBinding), clock.instant().toString(),
                 Long.toString(position.createdAt().getEpochSecond()), Integer.toString(position.createdAt().getNano()),
                 position.id().toString()));
     }
 
     AssignmentPosition decodeAssignments(String cursor, TenantContext tenant) {
-        return decodeAssignments(cursor, tenant, null);
+        return decodeAssignmentsForContext(cursor, tenant, "");
     }
 
     AssignmentPosition decodeAssignments(String cursor, TenantContext tenant, UUID identityId) {
+        return decodeAssignmentsForContext(cursor, tenant, context(identityId));
+    }
+
+    AssignmentPosition decodeAssignmentsForContext(
+            String cursor,
+            TenantContext tenant,
+            String contextBinding) {
         String[] parts = verifiedPayload(cursor);
         if (parts.length != 8 || !PAYLOAD_VERSION.equals(parts[0]) || !"access-assignment".equals(parts[1])
-                || !tenant.tenantId().toString().equals(parts[2]) || !context(identityId).equals(parts[3])) throw invalid();
+                || !tenant.tenantId().toString().equals(parts[2]) || !contextBinding(contextBinding).equals(parts[3])) throw invalid();
         validateIssuedAt(parts[4]);
         try {
             return new AssignmentPosition(
@@ -74,6 +88,12 @@ final class AccessCursorCodec {
     }
 
     private static String context(UUID identityId) { return identityId == null ? "" : identityId.toString(); }
+
+    private static String contextBinding(String value) {
+        if (value == null || value.indexOf('\u0000') >= 0 || value.length() > 1024) throw invalid();
+        return value;
+    }
+
     private String sign(String payload) {
         SigningKeyProvider keys = requireKeys();
         SigningKeyMaterial key = keys.currentSigningKey();
@@ -82,6 +102,7 @@ final class AccessCursorCodec {
         String signedValue = ENVELOPE_VERSION + "." + key.keyId() + "." + encodedPayload;
         return signedValue + "." + encode(keys.sign(signedValue.getBytes(StandardCharsets.UTF_8)));
     }
+
     private String[] verifiedPayload(String cursor) {
         if (cursor == null || cursor.isBlank() || cursor.length() > MAX_CURSOR_LENGTH) throw invalid();
         String[] envelope = cursor.split("\\.", -1);
@@ -91,6 +112,7 @@ final class AccessCursorCodec {
         if (!verify(key, signedValue.getBytes(StandardCharsets.UTF_8), decode(envelope[3]))) throw invalid();
         return new String(decode(envelope[2]), StandardCharsets.UTF_8).split("\u0000", -1);
     }
+
     private void validateIssuedAt(String value) {
         try {
             Instant issuedAt = Instant.parse(value); Instant now = clock.instant();
@@ -100,21 +122,26 @@ final class AccessCursorCodec {
             throw invalid(invalid);
         }
     }
+
     private static String payload(String... parts) {
         for (String part : parts) if (part == null || part.indexOf('\u0000') >= 0) throw invalid();
         return PAYLOAD_VERSION + "\u0000" + String.join("\u0000", parts);
     }
+
     private static boolean verify(SigningKeyMaterial key, byte[] payload, byte[] signatureBytes) {
         try {
             Signature verifier = Signature.getInstance(key.signingAlgorithm()); verifier.initVerify(key.publicKey());
             verifier.update(payload); return verifier.verify(signatureBytes);
         } catch (GeneralSecurityException invalid) { throw invalid(invalid); }
     }
+
     private static String encode(byte[] value) { return Base64.getUrlEncoder().withoutPadding().encodeToString(value); }
+
     private static byte[] decode(String value) {
         try { byte[] decoded = Base64.getUrlDecoder().decode(value); if (!encode(decoded).equals(value)) throw invalid(); return decoded; }
         catch (IllegalArgumentException invalid) { throw invalid(invalid); }
     }
+
     private SigningKeyProvider requireKeys() { if (signingKeys == null) throw new IllegalStateException("cursor signing keys are not configured"); return signingKeys; }
     private static IllegalArgumentException invalid() { return new IllegalArgumentException("invalid cursor"); }
     private static IllegalArgumentException invalid(Throwable cause) { return new IllegalArgumentException("invalid cursor", cause); }
