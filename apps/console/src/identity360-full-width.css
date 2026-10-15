@@ -1,0 +1,7 @@
+/* Identity 360 follows the shared shell workspace geometry. The shell owns page gutters. */
+.shell-workspace .identity360-page {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
