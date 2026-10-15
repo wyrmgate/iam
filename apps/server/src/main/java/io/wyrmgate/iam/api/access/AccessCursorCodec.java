@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.api.access;
 
+import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentFilter;
 import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentPosition;
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectivePosition;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
@@ -33,24 +34,34 @@ final class AccessCursorCodec {
     }
 
     String encodeAssignments(TenantContext tenant, AssignmentPosition position) {
-        return encodeAssignments(tenant, null, position);
+        return encodeAssignments(tenant, AssignmentFilter.none(), position);
     }
 
     String encodeAssignments(TenantContext tenant, UUID identityId, AssignmentPosition position) {
+        return encodeAssignments(tenant, identityFilter(identityId), position);
+    }
+
+    String encodeAssignments(TenantContext tenant, AssignmentFilter filter, AssignmentPosition position) {
+        Objects.requireNonNull(filter, "filter");
         return position == null ? null : sign(payload(
-                "access-assignment", tenant.tenantId().toString(), context(identityId), clock.instant().toString(),
+                "access-assignment", tenant.tenantId().toString(), filter.cursorBinding(), clock.instant().toString(),
                 Long.toString(position.createdAt().getEpochSecond()), Integer.toString(position.createdAt().getNano()),
                 position.id().toString()));
     }
 
     AssignmentPosition decodeAssignments(String cursor, TenantContext tenant) {
-        return decodeAssignments(cursor, tenant, null);
+        return decodeAssignments(cursor, tenant, AssignmentFilter.none());
     }
 
     AssignmentPosition decodeAssignments(String cursor, TenantContext tenant, UUID identityId) {
+        return decodeAssignments(cursor, tenant, identityFilter(identityId));
+    }
+
+    AssignmentPosition decodeAssignments(String cursor, TenantContext tenant, AssignmentFilter filter) {
+        Objects.requireNonNull(filter, "filter");
         String[] parts = verifiedPayload(cursor);
         if (parts.length != 8 || !PAYLOAD_VERSION.equals(parts[0]) || !"access-assignment".equals(parts[1])
-                || !tenant.tenantId().toString().equals(parts[2]) || !context(identityId).equals(parts[3])) throw invalid();
+                || !tenant.tenantId().toString().equals(parts[2]) || !filter.cursorBinding().equals(parts[3])) throw invalid();
         validateIssuedAt(parts[4]);
         try {
             return new AssignmentPosition(
@@ -73,6 +84,9 @@ final class AccessCursorCodec {
         catch (RuntimeException invalid) { throw invalid(invalid); }
     }
 
+    private static AssignmentFilter identityFilter(UUID identityId) {
+        return new AssignmentFilter(identityId, null, null, null, null, null);
+    }
     private static String context(UUID identityId) { return identityId == null ? "" : identityId.toString(); }
     private String sign(String payload) {
         SigningKeyProvider keys = requireKeys();
