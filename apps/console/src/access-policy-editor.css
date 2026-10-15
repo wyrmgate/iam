@@ -4,8 +4,9 @@
 }
 
 .access-policy-rule-editor {
-  border: 1px solid #dfe4eb;
-  background: #fafbfd;
+  border: 1px solid var(--wg-border);
+  border-radius: var(--wg-radius-surface);
+  background: var(--wg-surface-subtle);
 }
 
 .access-policy-rule-editor > header {
@@ -14,8 +15,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border-bottom: 1px solid #e5e9ef;
-  background: #f4f7fa;
+  border-bottom: 1px solid var(--wg-border);
+  background: var(--wg-surface-subtle);
 }
 
 .access-policy-rule-editor > header > div {
@@ -24,16 +25,16 @@
 }
 
 .access-policy-rule-editor > header span {
-  color: #7c8799;
-  font-size: 9px;
-  font-weight: 800;
+  color: var(--wg-text-muted);
+  font-size: 11px;
+  font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
 
 .access-policy-rule-editor > header strong {
-  color: #243048;
-  font-size: 12px;
+  color: var(--wg-text);
+  font-size: 13px;
 }
 
 .access-policy-rule-grid {

@@ -74,7 +74,12 @@ test('overview is responsive and accessible while remaining wired to the root ro
     /<caption className="sr-only">/,
     /prefers-reduced-motion|iam-chart-table/,
   );
-  assertSourceContains(styles, /@media\(max-width:760px\)/, /@media\(prefers-reduced-motion:reduce\)/, /iam-attention-grid/);
+  assertSourceContains(
+    styles,
+    /@media\s*\(\s*max-width:\s*760px\s*\)/,
+    /@media\s*\(\s*prefers-reduced-motion:\s*reduce\s*\)/,
+    /iam-attention-grid/,
+  );
   assertSourceContains(app, /OverviewPage/, /route === 'overview'/);
   assertSourceExcludes(overview, /WyrmgateUiProvider|createTheme|ThemeProvider/);
 });

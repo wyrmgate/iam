@@ -3,7 +3,8 @@ import { assertSourceContains, assertSourceExcludes, readConsoleSource } from '.
 
 const accessWorkspace = await readConsoleSource('workspaces/AccessGoldenWorkspace.tsx');
 const accessBoundary = await readConsoleSource('workspaces/AccessWorkspace.tsx');
-const accessAlignment = await readConsoleSource('access-enterprise-alignment.css');
+const enterprisePresentation = await readConsoleSource('enterprise-console.css');
+const cssVariables = await readConsoleSource('ui/cssVariables.ts');
 const accessApi = await readConsoleSource('accessApi.ts');
 const api = await readConsoleSource('api.ts');
 
@@ -41,13 +42,14 @@ test('Access workspace does not invent provider fulfillment state or provider mu
   assertSourceExcludes(accessWorkspace, /\/provisioning-|\/connector-|ObservedGrant|DesiredGrantState|DesiredPrincipalState/);
 });
 
-test('Access tabs satisfy keyboard navigation and destructive actions keep restrained pre-confirmation presentation', () => {
+test('Access tabs satisfy keyboard navigation and destructive actions use shared restrained state presentation', () => {
   assertSourceContains(accessWorkspace, /role="tablist"/, /role="tab"/);
   assertSourceContains(accessBoundary, /ArrowRight/, /ArrowLeft/, /Home/, /End/, /preventDefault/, /focus\(\)/, /click\(\)/);
-  assertSourceContains(accessAlignment, /Lifecycle \/ validity \/ outcome state uses compact dot-and-label presentation/, /Destructive intent remains deliberate but not permanently saturated/);
-  assertSourceContains(accessAlignment, /\.access-state::before/, /\.MuiButton-containedError/);
+  assertSourceContains(enterprisePresentation, /Typed state remains caller-owned/, /\.access-state::before/, /\.access-state-revoked::before/, /\.access-state-suspended::before/);
+  assertSourceExcludes(accessBoundary, /access-enterprise-alignment\.css/);
 });
 
 test('Access mobile controls retain the enterprise 44px touch-target baseline', () => {
-  assertSourceContains(accessAlignment, /@media \(max-width: 760px\)/, /min-height: 44px/, /\.access-detail-close/, /width: 44px/, /height: 44px/);
+  assertSourceContains(cssVariables, /'--wg-mobile-target': px\(tokens\.density\.mobileTargetHeight\)/);
+  assertSourceContains(enterprisePresentation, /@media \(max-width: 760px\)/, /\.access-detail-close/, /width: var\(--wg-mobile-target\)/, /height: var\(--wg-mobile-target\)/);
 });

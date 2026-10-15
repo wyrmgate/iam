@@ -1,16 +1,29 @@
 :root {
   color-scheme: light;
+  --shell-canvas: var(--wg-canvas);
+  --shell-surface: var(--wg-surface);
+  --shell-border: var(--wg-border);
+  --shell-border-strong: var(--wg-border-strong);
+  --shell-text: var(--wg-text);
+  --shell-muted: var(--wg-text-secondary);
+  --shell-nav: #0c1b2c;
+  --shell-nav-hover: #142a42;
+  --shell-nav-active: #193652;
+  --shell-nav-text: #d7e2ed;
+  --shell-nav-muted: #7f95aa;
+  --shell-accent: var(--wg-accent);
+  --shell-accent-soft: var(--wg-accent-subtle);
 }
 
 .product-shell button:focus-visible,
 .command-palette button:focus-visible,
 .actor-menu button:focus-visible {
-  outline: 3px solid #8bb7e8;
+  outline: 3px solid var(--wg-focus);
   outline-offset: 2px;
 }
 
 .command-input-row:focus-within {
-  box-shadow: inset 0 0 0 2px #8bb7e8;
+  box-shadow: inset 0 0 0 2px var(--wg-focus);
 }
 
 @media (prefers-reduced-motion: reduce) {

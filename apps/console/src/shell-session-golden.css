@@ -3,8 +3,8 @@
     content: 'IAM';
     display: block;
     padding: 0 12px 8px;
-    color: #91a7c1;
-    font-size: .62rem;
+    color: var(--shell-nav-muted);
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: .08em;
   }
@@ -16,13 +16,8 @@
     padding: 10px 12px 12px !important;
   }
 
-  .dock-runtime {
-    padding: 0 4px;
-  }
-
-  .dock-session-wrap {
-    position: relative;
-  }
+  .dock-runtime { padding: 0 4px; }
+  .dock-session-wrap { position: relative; }
 
   .dock-session {
     width: 100%;
@@ -33,21 +28,19 @@
     gap: 8px;
     padding: 7px 6px;
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--wg-radius-control);
     background: transparent;
-    color: #fff;
+    color: var(--shell-nav-text);
     text-align: left;
     font: inherit;
     cursor: pointer;
   }
 
   .dock-session:hover,
-  .dock-session:focus-visible {
-    background: rgba(255,255,255,.06);
-  }
+  .dock-session:focus-visible { background: var(--shell-nav-hover); }
 
   .dock-session:focus-visible {
-    outline: 3px solid rgba(82,156,255,.3);
+    outline: 3px solid var(--wg-focus);
     outline-offset: 1px;
   }
 
@@ -56,11 +49,11 @@
     height: 30px;
     display: grid;
     place-items: center;
-    border-radius: 999px;
-    background: #f8fbff;
-    color: #15365f;
-    font-size: .63rem;
-    font-weight: 850;
+    border-radius: var(--wg-radius-control);
+    background: var(--wg-surface);
+    color: var(--shell-nav);
+    font-size: 10px;
+    font-weight: 700;
   }
 
   .dock-session-copy {
@@ -77,14 +70,14 @@
   }
 
   .dock-session-copy strong {
-    color: #f7fbff;
-    font-size: .68rem;
-    font-weight: 750;
+    color: var(--shell-nav-text);
+    font-size: 11px;
+    font-weight: 700;
   }
 
   .dock-session-copy small {
-    color: #aebfd3;
-    font-size: .6rem;
+    color: var(--shell-nav-muted);
+    font-size: 10px;
   }
 
   .dock-session-wrap .actor-menu {
@@ -98,7 +91,5 @@
 }
 
 @media (max-width: 900px) {
-  .navigation-dock .dock-session-wrap {
-    display: none !important;
-  }
+  .navigation-dock .dock-session-wrap { display: none !important; }
 }
