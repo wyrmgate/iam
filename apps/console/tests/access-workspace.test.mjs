@@ -2,71 +2,109 @@ import test from 'node:test';
 import { assertSourceContains, assertSourceExcludes, readConsoleSource } from './helpers/source-contract.mjs';
 
 const accessWorkspace = await readConsoleSource('workspaces/AccessWorkspace.tsx');
+const accessApi = await readConsoleSource('accessApi.ts');
 
-test('Access workspace separates authoritative assignment intent from read-only EffectiveAccess projection', () => {
+test('Access golden page is Assignments-first and keeps authority, projection, and expert policy distinct', () => {
   assertSourceContains(
     accessWorkspace,
-    /Access · authoritative intent/,
-    /Authoritative business intent/,
-    /Access · derived projection/,
-    /Derived, read-only projection/,
-    /no edit or lifecycle operation is available here/,
+    /Assignments/,
+    /Authoritative/,
+    /Effective access/,
+    /Read only/,
+    /Lifecycle policy/,
+    /Expert/,
+    /AUTHORITATIVE · ACCESS/,
+    /DERIVED · READ ONLY/,
   );
 });
 
-test('Access assignment presentation keeps target, principal constraint, validity, and explicit lifecycle semantics visible', () => {
+test('Access assignment detail separates lifecycle, temporal validity, provenance, and principal constraint', () => {
   assertSourceContains(
     accessWorkspace,
-    /targetKind/,
-    /roleId/,
-    /entitlementId/,
-    /principalConstraintKind/,
-    /specificPrincipalId/,
+    /Authoritative intent/,
+    /Temporal validity/,
+    /Principal constraint/,
+    /Origin/,
+    /Lifecycle/,
     /validFrom/,
     /validUntil/,
-    /Suspend current access/,
-    /Resume suspended access/,
+    /Manual grant/,
+    /Request item/,
+    /Lifecycle policy rule/,
+  );
+});
+
+test('Access lifecycle operations remain explicit, consequence-aware, revision guarded, and causally idempotent', () => {
+  assertSourceContains(
+    accessWorkspace,
+    /Suspend access/,
+    /Resume access/,
     /Cancel scheduled access/,
-    /Revoke current access/,
+    /Revoke access/,
+    /Provider failure will not reactivate this assignment/,
+    /another assignment still supports it/,
+    /createIdempotencyKey/,
+    /result\.etag/,
   );
+  assertSourceContains(
+    accessApi,
+    /If-Match/,
+    /idempotencyKey/,
+    /\/access-assignments\/\$\{encodeURIComponent\(id\)\}\/\$\{action\}/,
+  );
+  assertSourceExcludes(accessWorkspace, /Change status/);
 });
 
-test('Access lifecycle reduction operations are consequence-aware and keep server concurrency semantics delegated', () => {
+test('manual grant uses bounded selectors and does not expose lifecycle or provenance mutation', () => {
   assertSourceContains(
     accessWorkspace,
-    /Suspend current access[\s\S]*destructive: true/,
-    /Cancel scheduled access[\s\S]*destructive: true/,
-    /Revoke current access[\s\S]*destructive: true/,
-    /Server authorization, revision checks, and idempotency remain final/,
+    /Search governed identities/,
+    /Search roles/,
+    /Search entitlements/,
+    /Specific Principal/,
+    /Origin/,
+    /Manual grant/,
+    /Lifecycle state is not operator-selectable/,
+    /Provider realization happens asynchronously/,
   );
+  assertSourceExcludes(accessWorkspace, /provenanceKind[^\n]*select|lifecycleState[^\n]*select/);
 });
 
-test('Lifecycle policy is presented as the accepted closed typed model rather than a generic expression editor', () => {
+test('EffectiveAccess is explanation-only and routes changes through supporting authoritative assignments', () => {
   assertSourceContains(
     accessWorkspace,
-    /Closed typed predicate model/,
-    /ALWAYS/,
-    /SINGLE equality/,
-    /MULTI CONTAINS/,
-    /CONTAINS_ANY \/ CONTAINS_ALL/,
-    /DECIMAL, DATE, and DATETIME/,
+    /Why is this entitlement effective/,
+    /Read-only projection/,
+    /Current supports/,
+    /Role-derived access/,
+    /Direct entitlement assignment/,
+    /Open supporting assignment/,
+    /Deterministic path reference/,
+  );
+  assertSourceExcludes(accessWorkspace, /Revoke EffectiveAccess|Edit EffectiveAccess|Suspend EffectiveAccess/);
+});
+
+test('Lifecycle policy remains a closed typed immutable-successor surface', () => {
+  assertSourceContains(
+    accessWorkspace,
+    /Closed typed rule model/,
+    /arbitrary JSON/,
+    /generic AND\/OR\/NOT/,
     /immutable successor/,
+    /does not perform a tenant-wide retroactive sweep/,
+    /server-side Governance evaluation/,
   );
-  assertSourceExcludes(
-    accessWorkspace,
-    /expressionJson|jsonPath|generic expression editor|provider state editor|desired provider state/,
-  );
+  assertSourceExcludes(accessWorkspace, /expressionJson|jsonPath|provider state editor|desired provider state/);
 });
 
-test('Access workspace remains within accepted public routes and does not introduce provider mutation surfaces', () => {
+test('Access workspace does not invent provider fulfillment state or provider mutation surfaces', () => {
   assertSourceContains(
     accessWorkspace,
-    /\/access-assignments/,
-    /\/effective-access/,
-    /\/lifecycle-access-policy/,
+    /Technical realization is separate/,
+    /Provisioning tasks, provider attempts and provider observations are Integration-owned/,
   );
   assertSourceExcludes(
     accessWorkspace,
-    /\/provisioning-|\/connector-|ObservedGrant|DesiredGrantState|DesiredPrincipalState/,
+    /\/provisioning-|\/connector-|ObservedGrant|DesiredGrantState|DesiredPrincipalState|Converged/,
   );
 });
