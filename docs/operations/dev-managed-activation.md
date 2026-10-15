@@ -114,6 +114,16 @@ The durable `SEALED` state is irreversible; removing or recreating deployment se
 
 See [`first-run-web-setup.md`](first-run-web-setup.md) for the full security and resume contract.
 
+## Existing SEALED DEV installation with legacy bootstrap authority
+
+Do not reset Neon, delete the installation seal, rerun the first-run wizard, or edit Administration rows merely because a pre-ADR-0046 DEV installation sealed its first administrator with ADR-0011's narrow four-permission role.
+
+Use ADR-0047's operator-only recovery procedure in [`sealed-standalone-owner-recovery.md`](sealed-standalone-owner-recovery.md). It derives the only candidate tenant/Identity/Principal/role/grant from durable installation/bootstrap state, accepts no object IDs or permission inputs, upgrades only the exact untouched legacy first-party state, and fails closed on customization or ambiguity.
+
+A DEV database that already ran the subsequently withdrawn pre-release V70 may first fail normal Flyway validation because that migration is no longer present in current migration resources. Follow the runbook's explicit `flyway info` / operator-approved `flyway repair` metadata procedure only after confirming V70 is the expected missing applied migration and no unrelated migration discrepancy exists. Do not restore V70's automatic authority SQL and do not install a permanent missing-migration ignore rule.
+
+After schema-history reconciliation when needed, run the ADR-0047 command outside the normal Railway web process with `spring.main.web-application-type=none`. An exact V70-expanded owner state returns `ALREADY_COMPLETE`; an exact unrecovered legacy state returns `RECOVERED`; any denial requires investigation rather than database normalization.
+
 ## Activation procedure
 
 1. Select a reviewed `main` SHA with required GitHub checks green.
@@ -123,15 +133,15 @@ See [`first-run-web-setup.md`](first-run-web-setup.md) for the full security and
 5. For a fresh empty database, configure the first-run wizard inputs above; verify `IAM_BOOTSTRAP_INSTALLATION_ENABLED=false`.
 6. Deploy and wait for Railway's `/actuator/health` gate to return 2xx.
 7. Verify the deployed server reports healthy over the public Railway HTTPS origin.
-8. Verify `public.flyway_schema_history` records the repository current migration version successfully; the installation-bootstrap persistence checkpoint extends through Flyway V67.
+8. Verify `public.flyway_schema_history` records the repository current migration version successfully; current repository migration resources extend through Flyway V69. If this is a historical DEV database that recorded the withdrawn V70, use the ADR-0047 runbook's explicit schema-history reconciliation before treating migration validation as healthy.
 9. Verify the server is using non-production DEV data and that tenant isolation checks pass.
 10. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin.
 11. Exercise the console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
 12. If fresh, complete the first-run wizard and confirm the durable installation state reaches `SEALED`.
-13. Verify normal Console username/password login and a protected Administration operation after bootstrap is sealed.
+13. Verify normal Console username/password login and a protected Administration operation after bootstrap is sealed. For an eligible legacy sealed DEV installation, complete ADR-0047 recovery first instead of rerunning setup.
 14. Remove the temporary setup secret and disable web setup as described above.
 15. Verify the selected Neon recovery window and perform or record an isolation-safe recovery check before destructive migration/data tests.
-16. Record non-secret activation evidence: deployed SHA, Railway environment/service identifier, health result, Flyway version, database branch/project identifier, wizard/seal result, console routing/login result and recovery-check result.
+16. Record non-secret activation evidence: deployed SHA, Railway environment/service identifier, health result, Flyway version/history status, database branch/project identifier, wizard/seal or ADR-0047 recovery result as applicable, console routing/login result and recovery-check result.
 
 ## Cloudflare Pages contract
 
@@ -155,6 +165,8 @@ For a new or reset DEV database, verify both:
 
 The application-startup regression test remains repository-level proof that Spring Boot and Flyway wiring works against an empty PostgreSQL database. It does not replace checking the actual managed DEV database.
 
+For a historical database that recorded withdrawn V70, migration-history reconciliation is an explicit exceptional operator action documented by ADR-0047; it is not evidence that current migration resources include V70 and it must not mutate IAM authority state.
+
 ## Serverless and background work
 
 Railway Serverless is intentionally enabled for the low-cost DEV posture. Background outbound activity can keep the service awake, so remote telemetry and optional delivery workers stay disabled unless they are the subject of the test.
@@ -173,14 +185,17 @@ Neon provider-native recovery/history is the first DEV recovery path. Before des
 
 Provider-native recovery is not an independently retained backup. Production recovery requirements remain governed by [`production-readiness.md`](production-readiness.md) and [`production-recovery-drill.md`](production-recovery-drill.md).
 
+ADR-0047 authority compatibility recovery is separate from database backup/restore: it is permitted only for the exact sealed first-party legacy bootstrap state and must not be used to repair arbitrary damaged/customized Administration state.
+
 ## Completion criteria
 
 Managed DEV activation is complete only when all of the following are true:
 
 - the current Railway service deploys a reviewed green `main` SHA;
 - Railway `/actuator/health` is healthy;
-- Flyway is confirmed at the repository current migration version;
+- Flyway is confirmed at the repository current migration version/history state;
 - a fresh installation, when applicable, used the first-run web setup wizard and reached `SEALED`;
+- an affected legacy sealed installation, when applicable, completed ADR-0047 with `RECOVERED` or exact `ALREADY_COMPLETE` rather than a database reset/manual authority edit;
 - the temporary setup-access secret has been removed and web setup has been disabled after sealing;
 - the startup/headless installation bootstrap was not enabled for shared DEV;
 - the service uses the intended Neon DEV database and non-production data;
