@@ -1,13 +1,15 @@
 import { Box, Paper, Typography, type BoxProps, type PaperProps } from '@mui/material';
 import type { ReactNode } from 'react';
 
+import { wyrmgateDesignTokens as tokens } from './designTokens';
+
 type PageWidth = 'narrow' | 'standard' | 'wide';
 type PageProps = Omit<BoxProps, 'children'> & { children: ReactNode; width?: PageWidth };
 
 const pageWidths: Record<PageWidth, string> = {
-  narrow: '52rem',
-  standard: '76rem',
-  wide: '96rem',
+  narrow: tokens.layout.pageNarrow,
+  standard: tokens.layout.pageStandard,
+  wide: tokens.layout.pageWide,
 };
 
 const responsiveActionGroup = {
@@ -38,7 +40,7 @@ export function Page({ children, width = 'standard', sx, ...props }: PageProps) 
         boxSizing: 'border-box',
         mx: 'auto',
         display: 'grid',
-        gap: { xs: 2, md: 2.5 },
+        gap: { xs: 2, md: 3 },
         overflowWrap: 'anywhere',
         '& > *': { minWidth: 0, maxWidth: '100%' },
         ...sx,
@@ -69,12 +71,11 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
         justifyContent: 'space-between',
         alignItems: { xs: 'stretch', md: actions ? 'flex-start' : 'stretch' },
         gap: 2,
-        pb: 0.5,
       }}
     >
       <Box sx={{ maxWidth: '64rem', minWidth: 0, overflowWrap: 'anywhere' }}>
         {eyebrow ? (
-          <Typography component="p" variant="overline" sx={{ color: 'primary.main', fontWeight: 800, letterSpacing: '.1em', lineHeight: 1.6 }}>
+          <Typography component="p" variant="overline" sx={{ color: 'primary.main', fontWeight: 700, letterSpacing: '.08em', lineHeight: 1.6 }}>
             {eyebrow}
           </Typography>
         ) : null}
@@ -82,12 +83,12 @@ export function PageHeader({ eyebrow, title, description, actions }: PageHeaderP
           {title}
         </Typography>
         {description ? (
-          <Typography component="p" color="text.secondary" sx={{ maxWidth: '58rem', lineHeight: 1.6, m: 0, overflowWrap: 'anywhere' }}>
+          <Typography component="p" color="text.secondary" sx={{ maxWidth: '58rem', lineHeight: 1.55, m: 0, overflowWrap: 'anywhere' }}>
             {description}
           </Typography>
         ) : null}
       </Box>
-      {actions ? <Box sx={{ ...responsiveActionGroup, flex: { md: '0 1 auto' }, pt: { md: 0.5 } }}>{actions}</Box> : null}
+      {actions ? <Box sx={{ ...responsiveActionGroup, flex: { md: '0 1 auto' }, pt: { md: 0.25 } }}>{actions}</Box> : null}
     </Box>
   );
 }
@@ -137,9 +138,9 @@ export function Surface({ children, title, description, actions, sx, ...props }:
         boxSizing: 'border-box',
         p: { xs: 2, md: 2.5 },
         borderColor: 'divider',
-        borderRadius: 1.25,
+        borderRadius: `${tokens.shape.radiusSurface}px`,
         bgcolor: 'background.paper',
-        boxShadow: '0 1px 2px rgba(23, 32, 51, .035)',
+        boxShadow: 'none',
         overflowWrap: 'anywhere',
         '& > *': { minWidth: 0, maxWidth: '100%' },
         ...sx,

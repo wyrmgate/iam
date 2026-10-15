@@ -9,8 +9,28 @@ import {
   type IdentityResource,
   type IdentityType,
 } from '../api';
-import { Box, Button, Modal, SelectInput, StatePanel, TextInput } from '../ui';
-import '../identity-golden.css';
+import {
+  Box,
+  Button,
+  DataTable,
+  DataTableActionCell,
+  DataTableRow,
+  Modal,
+  Page,
+  PageHeader,
+  PageToolbar,
+  SelectInput,
+  StateIndicator,
+  StatePanel,
+  Surface,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextInput,
+  Typography,
+  type StateIndicatorTone,
+} from '../ui';
 
 type Props = {
   authority: CurrentAdministrativeAuthority | null;
@@ -35,13 +55,7 @@ function formatDateTime(value: string): string {
   return date.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function compactDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-function lifecycleTone(state: IdentityLifecycleState): string {
+function lifecycleTone(state: IdentityLifecycleState): StateIndicatorTone {
   switch (state) {
     case 'ACTIVE': return 'success';
     case 'SUSPENDED': return 'warning';
@@ -165,117 +179,185 @@ export function IdentityCollectionPage({ authority, onSelect }: Props) {
   }
 
   return (
-    <section className="identity-golden-page" aria-labelledby="identities-page-title">
-      <header className="identity-golden-header">
-        <div className="identity-golden-heading">
-          <span className="identity-golden-eyebrow">Identity · governed subjects</span>
-          <h1 id="identities-page-title">Identities</h1>
-          <p>Find and investigate canonical governed subjects. Technical accounts are Principals and remain separate from Identity authority.</p>
-        </div>
-        <div className="identity-golden-header-side">
-          {authority ? (
-            <div className="identity-golden-context">
-              <strong>Tenant: {shortId(authority.tenantId)}</strong>
-              <span>Authority evaluated {formatDateTime(authority.evaluatedAt)}</span>
-            </div>
-          ) : null}
-          <div className="identity-golden-header-actions">
+    <Page width="wide" aria-labelledby="identities-page-title">
+      <PageHeader
+        eyebrow="Identity · governed subjects"
+        title={<span id="identities-page-title">Identities</span>}
+        description="Find and investigate canonical governed subjects. Technical accounts are Principals and remain separate from Identity authority."
+        actions={(
+          <>
             <Button variant="outlined" disabled={status === 'loading'} onClick={() => setReloadKey((value) => value + 1)}>
               {status === 'loading' ? 'Refreshing…' : 'Refresh'}
             </Button>
-            <Button variant="contained" onClick={() => setCreateOpen(true)}>＋ Create Identity</Button>
-          </div>
-        </div>
-      </header>
+            <Button variant="contained" onClick={() => setCreateOpen(true)}>Create Identity</Button>
+          </>
+        )}
+      />
 
-      <section className="identity-discovery" aria-label="Identity discovery filters">
-        <div className="identity-search-field">
-          <span aria-hidden="true">⌕</span>
-          <input
-            aria-label="Search display name"
-            placeholder="Search display name…"
+      <Surface>
+        <PageToolbar
+          leading={authority ? (
+            <Box sx={{ display: 'grid', gap: 0.25 }}>
+              <Typography variant="caption" color="text.secondary">Tenant</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{shortId(authority.tenantId)}</Typography>
+              <Typography variant="caption" color="text.secondary">Authority evaluated {formatDateTime(authority.evaluatedAt)}</Typography>
+            </Box>
+          ) : undefined}
+        >
+          <Button variant="outlined" onClick={() => setLookupOpen(true)}>Open by Identity ID</Button>
+        </PageToolbar>
+
+        <Box
+          component="section"
+          aria-label="Identity discovery filters"
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'minmax(16rem, 1.6fr) minmax(10rem, .7fr) minmax(11rem, .8fr) auto' },
+            gap: 1.25,
+            mt: 2,
+            alignItems: 'start',
+          }}
+        >
+          <TextInput
+            label="Search"
+            placeholder="Search display name"
             value={filters.q}
             onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))}
           />
-        </div>
-        <label className="identity-filter-select">
-          <span>Type</span>
-          <select value={filters.type} onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value as Filters['type'] }))}>
-            <option value="">All types</option>
-            <option value="PERSON">PERSON</option>
-            <option value="SERVICE">SERVICE</option>
-            <option value="WORKLOAD">WORKLOAD</option>
-          </select>
-        </label>
-        <label className="identity-filter-select">
-          <span>Lifecycle</span>
-          <select value={filters.lifecycle} onChange={(event) => setFilters((current) => ({ ...current, lifecycle: event.target.value as Filters['lifecycle'] }))}>
-            <option value="">All lifecycles</option>
-            <option value="PENDING">PENDING</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="SUSPENDED">SUSPENDED</option>
-            <option value="INACTIVE">INACTIVE</option>
-            <option value="DECOMMISSIONED">DECOMMISSIONED</option>
-          </select>
-        </label>
-        <Button variant="outlined" className="identity-id-button" onClick={() => setLookupOpen(true)}>▣ Open by Identity ID</Button>
-        <Button variant="outlined" className="identity-clear-button" disabled={!filtersActive && !filters.q.trim()} onClick={clearFilters}>Clear filters</Button>
-      </section>
+          <SelectInput
+            label="Type"
+            value={filters.type}
+            emptyLabel="All types"
+            options={['PERSON', 'SERVICE', 'WORKLOAD']}
+            onValueChange={(value) => setFilters((current) => ({ ...current, type: value as Filters['type'] }))}
+          />
+          <SelectInput
+            label="Lifecycle"
+            value={filters.lifecycle}
+            emptyLabel="All lifecycles"
+            options={['PENDING', 'ACTIVE', 'SUSPENDED', 'INACTIVE', 'DECOMMISSIONED']}
+            onValueChange={(value) => setFilters((current) => ({ ...current, lifecycle: value as Filters['lifecycle'] }))}
+          />
+          <Button
+            variant="text"
+            disabled={!filtersActive && !filters.q.trim()}
+            onClick={clearFilters}
+            sx={{ alignSelf: { xs: 'stretch', md: 'end' }, minHeight: { md: 36 } }}
+          >
+            Clear filters
+          </Button>
+        </Box>
+      </Surface>
 
-      <section className="identity-results" aria-label="Governed identities">
-        {status === 'loading' && identities.length === 0 ? (
-          <div className="identity-result-state"><StatePanel state="loading" title="Loading identities">Reading authoritative governed subjects…</StatePanel></div>
-        ) : null}
-        {status === 'error' ? (
-          <div className="identity-result-state"><StatePanel state="error" title="Unable to load identities" action={<Button variant="outlined" onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}>{errorCopy(error)}</StatePanel></div>
-        ) : null}
-        {status === 'ready' && identities.length === 0 ? (
-          <div className="identity-result-state"><StatePanel state="empty" title={filtersActive ? 'No matching identities' : 'No identities'}>{filtersActive ? 'No governed subject matches the current filters.' : 'No governed Identity is visible to your current server-authorized context.'}</StatePanel></div>
-        ) : null}
+      {status === 'loading' && identities.length === 0 ? (
+        <StatePanel state="loading" title="Loading identities">Reading authoritative governed subjects…</StatePanel>
+      ) : null}
+      {status === 'error' ? (
+        <StatePanel state="error" title="Unable to load identities" action={<Button variant="outlined" onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}>
+          {errorCopy(error)}
+        </StatePanel>
+      ) : null}
+      {status === 'ready' && identities.length === 0 ? (
+        <StatePanel state="empty" title={filtersActive ? 'No matching identities' : 'No identities'}>
+          {filtersActive ? 'No governed subject matches the current filters.' : 'No governed Identity is visible to your current server-authorized context.'}
+        </StatePanel>
+      ) : null}
 
-        {identities.length > 0 ? (
-          <>
-            <div className="identity-golden-table-wrap">
-              <table className="identity-golden-table">
-                <caption className="sr-only">Governed identities</caption>
-                <thead><tr><th>Governed subject</th><th>Type</th><th>Lifecycle</th><th>Updated</th><th>Actions</th></tr></thead>
-                <tbody>
-                  {identities.map((identity) => (
-                    <tr key={identity.id}>
-                      <td><button type="button" className="identity-subject-link" onClick={() => onSelect(identity.id)}><strong>{identity.displayName}</strong><small>{identity.id}</small></button></td>
-                      <td><span className="identity-type-text">{identity.type}</span></td>
-                      <td><span className={`identity-life identity-life-${lifecycleTone(identity.lifecycleState)}`}><i aria-hidden="true" />{identity.lifecycleState}</span></td>
-                      <td><time dateTime={identity.updatedAt}>{compactDateTime(identity.updatedAt)}</time></td>
-                      <td><div className="identity-row-actions"><Button variant="outlined" size="small" onClick={() => onSelect(identity.id)}>View</Button><span className="identity-kebab" aria-hidden="true">⋮</span></div></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {identities.length > 0 ? (
+        <Surface
+          title="Governed identities"
+          description={`${identities.length} ${filtersActive ? 'matching ' : ''}identities currently loaded.`}
+        >
+          <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+            <DataTable ariaLabel="Governed identities" minWidth={760}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Governed subject</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Lifecycle</TableCell>
+                  <TableCell>Updated</TableCell>
+                  <TableCell align="right">Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {identities.map((identity) => (
+                  <DataTableRow key={identity.id} interactive>
+                    <TableCell>
+                      <Button variant="text" size="small" onClick={() => onSelect(identity.id)} sx={{ p: 0, minHeight: 0, justifyContent: 'flex-start', textAlign: 'left' }}>
+                        <Box sx={{ display: 'grid', gap: 0.25 }}>
+                          <Typography component="span" variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>{identity.displayName}</Typography>
+                          <Typography component="span" variant="caption" color="text.secondary" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{identity.id}</Typography>
+                        </Box>
+                      </Button>
+                    </TableCell>
+                    <TableCell>{identity.type}</TableCell>
+                    <TableCell><StateIndicator label={identity.lifecycleState} tone={lifecycleTone(identity.lifecycleState)} /></TableCell>
+                    <TableCell><time dateTime={identity.updatedAt}>{formatDateTime(identity.updatedAt)}</time></TableCell>
+                    <DataTableActionCell><Button variant="outlined" size="small" onClick={() => onSelect(identity.id)}>View</Button></DataTableActionCell>
+                  </DataTableRow>
+                ))}
+              </TableBody>
+            </DataTable>
+          </Box>
 
-            <div className="identity-golden-mobile-list">
-              {identities.map((identity) => (
-                <button className="identity-golden-mobile-card" type="button" key={identity.id} onClick={() => onSelect(identity.id)}>
-                  <div className="identity-mobile-title"><strong>{identity.displayName}</strong><span>{identity.type}</span></div>
-                  <div className="identity-mobile-id">{identity.id}</div>
-                  <div className="identity-mobile-meta"><span className={`identity-life identity-life-${lifecycleTone(identity.lifecycleState)}`}><i aria-hidden="true" />{identity.lifecycleState}</span><time dateTime={identity.updatedAt}>{compactDateTime(identity.updatedAt)}</time></div>
-                  <span className="identity-mobile-chevron" aria-hidden="true">›</span>
-                </button>
-              ))}
-            </div>
+          <Box sx={{ display: { xs: 'grid', sm: 'none' }, gap: 1 }}>
+            {identities.map((identity) => (
+              <Box
+                component="button"
+                type="button"
+                key={identity.id}
+                onClick={() => onSelect(identity.id)}
+                sx={{
+                  width: '100%',
+                  minHeight: 72,
+                  display: 'grid',
+                  gap: 0.75,
+                  p: 1.5,
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  font: 'inherit',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'action.hover' },
+                  '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.light', outlineOffset: 2 },
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{identity.displayName}</Typography>
+                    <Typography variant="caption" color="text.secondary">{identity.type}</Typography>
+                  </Box>
+                  <StateIndicator label={identity.lifecycleState} tone={lifecycleTone(identity.lifecycleState)} />
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', overflowWrap: 'anywhere' }}>{identity.id}</Typography>
+                <Typography variant="caption" color="text.secondary">Updated {formatDateTime(identity.updatedAt)}</Typography>
+              </Box>
+            ))}
+          </Box>
 
-            <footer className="identity-results-footer">
-              <span>Showing {identities.length} {filtersActive ? 'matching ' : ''}identities</span>
-              {nextCursor ? <Button variant="outlined" disabled={status === 'loading'} onClick={() => void loadMore()}>{status === 'loading' ? 'Loading…' : 'Load more identities⌄'}</Button> : <span className="identity-end-copy">End of visible collection</span>}
-            </footer>
-          </>
-        ) : null}
-      </section>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.25, mt: 2 }}>
+            <Typography variant="caption" color="text.secondary">
+              {nextCursor ? 'More identities are available.' : 'End of visible collection.'}
+            </Typography>
+            {nextCursor ? (
+              <Button variant="outlined" disabled={status === 'loading'} onClick={() => void loadMore()}>
+                {status === 'loading' ? 'Loading…' : 'Load more identities'}
+              </Button>
+            ) : null}
+          </Box>
+        </Surface>
+      ) : null}
 
       <Modal open={lookupOpen} title="Open Identity by ID" description="Direct resource lookup remains server-authorized." onClose={() => setLookupOpen(false)}>
         <Box sx={{ display: 'grid', gap: 1.5 }}>
           <TextInput autoFocus label="Identity ID" value={identityLookup} onChange={(event) => setIdentityLookup(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') openExactIdentity(); }} />
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}><Button variant="text" onClick={() => setLookupOpen(false)}>Cancel</Button><Button variant="contained" disabled={!identityLookup.trim()} onClick={openExactIdentity}>Open Identity</Button></Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button variant="text" onClick={() => setLookupOpen(false)}>Cancel</Button>
+            <Button variant="contained" disabled={!identityLookup.trim()} onClick={openExactIdentity}>Open Identity</Button>
+          </Box>
         </Box>
       </Modal>
 
@@ -285,9 +367,12 @@ export function IdentityCollectionPage({ authority, onSelect }: Props) {
           <SelectInput label="Identity type" value={create.type} options={['PERSON', 'SERVICE', 'WORKLOAD']} onValueChange={(value) => setCreate((current) => ({ ...current, type: (value || 'PERSON') as IdentityType }))} />
           <SelectInput label="Initial lifecycle" value={create.lifecycleState} options={['PENDING', 'ACTIVE', 'SUSPENDED', 'INACTIVE']} onValueChange={(value) => setCreate((current) => ({ ...current, lifecycleState: (value || 'PENDING') as Exclude<IdentityLifecycleState, 'DECOMMISSIONED'> }))} />
           <TextInput label="Display name" required value={create.displayName} onChange={(event) => setCreate((current) => ({ ...current, displayName: event.target.value }))} />
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}><Button variant="text" disabled={creating} onClick={() => setCreateOpen(false)}>Cancel</Button><Button variant="contained" disabled={creating || !create.displayName.trim()} onClick={() => void createIdentity()}>{creating ? 'Creating…' : 'Create Identity'}</Button></Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Button variant="text" disabled={creating} onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="contained" disabled={creating || !create.displayName.trim()} onClick={() => void createIdentity()}>{creating ? 'Creating…' : 'Create Identity'}</Button>
+          </Box>
         </Box>
       </Modal>
-    </section>
+    </Page>
   );
 }
