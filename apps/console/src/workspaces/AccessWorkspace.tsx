@@ -273,10 +273,10 @@ function AssignmentDetail({ selected, authority, refreshToken, onChanged }: {
     setMutationError(null); setConfirm({ action, ...config, key: newCausalKey() });
   }
   async function execute() {
-    if (!confirm || !etag) return;
+    if (!confirm || !etag || !selected) return;
     setBusy(true); setMutationError(null);
     try {
-      await mutateAssignment(detail.id, confirm.action, etag, confirm.key);
+      await mutateAssignment(selected, confirm.action, etag, confirm.key);
       setConfirm(null);
       onChanged('Authoritative Access state changed. Downstream technical realization remains asynchronous.');
     } catch (cause) {
