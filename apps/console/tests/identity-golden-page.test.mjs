@@ -10,7 +10,7 @@ const { page, css, app } = await readConsoleSources({
 test('Identity collection implements the approved discovery and dense result composition', () => {
   assertSourceContains(
     page,
-    /Identity · Governed subjects/,
+    /Identity · governed subjects/,
     /Search display name/,
     /All types/,
     /All lifecycles/,
