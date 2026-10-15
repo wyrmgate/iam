@@ -43,9 +43,10 @@ Creation supports exactly one target:
 
 Public creation uses `MANUAL` provenance only. Governance applies authorized
 RequestItems through the internal semantic `AccessIntentCommand`; Access creates
-`REQUEST_ITEM` provenance with `provenanceRefId = requestItemId`. That internal
-path is idempotent by provenance and is not exposed as a public arbitrary-provenance
-creation option.
+`REQUEST_ITEM` provenance with `provenanceRefId = requestItemId`. Lifecycle-access
+reconciliation creates `LIFECYCLE_POLICY_RULE` provenance with the stable logical rule
+ID as `provenanceRefId`. Those internal paths are idempotent by provenance and are not
+exposed as public arbitrary-provenance creation options.
 
 Principal constraints remain typed:
 
@@ -55,6 +56,41 @@ Principal constraints remain typed:
 
 Target, principal constraint and validity are not patched after creation in this slice.
 Changed business intent creates a successor/new authoritative assignment.
+
+## AccessAssignment operator view
+
+The Console uses a separate bounded read-only operator projection:
+
+- `GET /access-assignment-views`
+- `GET /access-assignment-views/{assignmentId}`
+
+This surface does **not** introduce a second authoritative Access resource. The
+underlying lifecycle, target, Principal constraint, validity, provenance and revision are
+read from the same AccessAssignment authority. The view adds only presentation/query
+material needed by the golden Console page:
+
+- optional human labels composed through owning-capability semantic queries;
+- server-evaluated temporal classification `CURRENT`, `FUTURE` or `ENDED`;
+- the `evaluatedAt` instant for that temporal interpretation;
+- bounded server-side filters.
+
+Supported collection filters are:
+
+- `identityId`;
+- `lifecycleState`;
+- `targetKind` and optional exact `targetId`;
+- `provenance`;
+- `validity`.
+
+Collection continuation remains ordered by authoritative `createdAt + id`. The signed
+cursor is bound to the normalized filter tuple, so a continuation obtained under one
+filter context cannot be replayed under another.
+
+Human labels are optional and permission-aware. Access may ask Identity, Catalog or
+Principal semantic queries for the current presentation label only when the requesting
+operator independently has the corresponding foreign read authority. If not, the stable
+identifier remains available without leaking the foreign label. Foreign labels are not
+copied into Access authoritative state and cannot mutate it.
 
 ## Lifecycle semantics
 
@@ -113,6 +149,23 @@ currently semantically effective support evidence, not an unverified persisted c
 
 There is intentionally no EffectiveAccess mutation endpoint.
 
+## EffectiveAccess operator view
+
+The Console may use the equivalent read-only presentation surface:
+
+- `GET /effective-access-views`
+- `GET /effective-access-views/{effectiveAccessId}`
+
+This view delegates projection semantics and support filtering to the same
+`EffectiveAccessReadService`; it does not persist or mutate EffectiveAccess. It adds only
+optional permission-aware Identity and Entitlement presentation labels. Collection
+filtering, pagination, support semantics, projection generation and read-time validity
+checks remain identical to the canonical EffectiveAccess query.
+
+Failure to resolve a foreign presentation label never changes whether EffectiveAccess is
+semantically present. The stable Identity/Entitlement IDs remain the cross-capability
+references.
+
 ## Pagination
 
 AccessAssignment uses deterministic `createdAt + id` ordering.
@@ -124,6 +177,7 @@ Continuation cursors follow ADR-0012:
 - signed;
 - tenant-bound;
 - resource-kind-bound;
+- AccessAssignment operator-filter-bound where filters are supplied;
 - EffectiveAccess identity-filter-bound;
 - time-bounded;
 - rotation-safe through signing key IDs.
@@ -139,6 +193,10 @@ The semantic control-plane permissions are:
 - `access-assignment:cancel`
 - `access-assignment:revoke`
 - `effective-access:read`
+
+The operator-view endpoints reuse these same Access permissions; they do not define a
+parallel authorization model. Foreign presentation labels additionally require the
+corresponding Identity/Catalog/Principal read authority before Access asks the owner query.
 
 Authentication does not grant these permissions. Every operation consumes the trusted
 authenticated actor context and re-evaluates `AdministrativeAuthorizationService`.
@@ -162,7 +220,6 @@ Common semantic errors include:
 
 Provider failure does not appear as an AccessAssignment lifecycle error and never restores
 revoked/suspended business authority.
-
 
 ## Lifecycle-access policy API
 
