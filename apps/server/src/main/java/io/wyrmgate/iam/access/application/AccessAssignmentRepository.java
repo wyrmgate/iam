@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.access.application;
 
+import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentFilter;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
@@ -31,6 +32,31 @@ public interface AccessAssignmentRepository {
 
     default List<AccessAssignment> findPageByIdentity(
             TenantContext tenant, UUID identityId, Instant afterCreatedAt, UUID afterId, int limit) { return List.of(); }
+
+    /**
+     * Bounded authoritative collection read used by the public Access API. Filters are exact typed
+     * query context only; they never mutate or reinterpret AccessAssignment authority.
+     */
+    default List<AccessAssignment> findPageFiltered(
+            TenantContext tenant,
+            AssignmentFilter filter,
+            Instant evaluatedAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        if (filter == null || filter.equals(AssignmentFilter.none())) {
+            return findPage(tenant, afterCreatedAt, afterId, limit);
+        }
+        if (filter.identityId() != null
+                && filter.lifecycleState() == null
+                && filter.targetKind() == null
+                && filter.targetId() == null
+                && filter.provenanceKind() == null
+                && filter.validity() == null) {
+            return findPageByIdentity(tenant, filter.identityId(), afterCreatedAt, afterId, limit);
+        }
+        return List.of();
+    }
 
     default List<AccessAssignment> findReviewPage(
             TenantContext tenant, UUID identityId, Instant snapshotAt,
