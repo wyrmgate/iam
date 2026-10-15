@@ -116,7 +116,17 @@ A privilege-increasing direct grant must name one current effective grantable di
 
 AdministrativeRole permission edits are evaluated prospectively. Adding a permission must be justified for every current direct grant/delegation whose effective authority would increase; otherwise the whole edit fails closed. Permission removal is authority reduction and does not require the privilege-increase ceiling check, although normal operation authorization and optimistic revision still apply.
 
-The burn-once bootstrap permission set is not expanded. Its root grant may be explicitly materialized as grantable/delegable only for its existing role/scope/validity; no wildcard authority is introduced.
+ADR-0011 external-subject bootstrap remains the original finite four-permission authority and is never implicitly expanded. ADR-0046 fresh standalone first-party bootstrap instead creates the separately reviewed finite `STANDALONE_TENANT_OWNER` profile directly. ADR-0047 permits exactly one compatibility transition for a previously sealed first-party installation only after durable installation/bootstrap lineage and the exact untouched ADR-0011 role/grant state are proven. No wildcard authority is introduced, and ordinary role/grant changes remain subject to ADR-0032.
+
+## Sealed standalone owner compatibility recovery
+
+ADR-0047 recovery is not an Administrative Authorization API and is not reachable over HTTP. An operator explicitly launches the existing server executable in non-web mode with `iam.recovery.standalone-tenant-owner.enabled=true`. The operation accepts no tenant, role, grant, scope or permission identifiers from the operator; the only candidate is derived from the deployment-local sealed `InstallationBootstrapPlan` and cross-checked against the Administration-owned `InitialAdminBootstrap` marker.
+
+Recovery requires `FIRST_PARTY_PRINCIPAL`, exact tenant/Identity/Principal/correlation linkage, the unchanged marker-linked bootstrap role and direct GLOBAL ACTIVE grant, exact bootstrap timestamps/revisions, grantable/delegable bootstrap semantics, no authority-basis grant, exactly one direct grant for the bootstrap Identity, exactly one direct grant referencing the bootstrap role, and no delegation referencing that role. The only mutable permission state is exactly the four-permission `INITIAL_TENANT_ADMIN` profile at role revision 1. Any extra/missing permission or other material mismatch fails closed and is not normalized.
+
+The target is exactly the current finite `AdministrativePermissions.STANDALONE_TENANT_OWNER` set. The mutation advances the role optimistic revision once and does not create a Tenant, Identity, Principal, Credential, role, grant or delegation. An exact owner state at revision 1 (fresh ADR-0046) or revision 2 (historical finite expansion or ADR-0047 recovery), with every other invariant still matching, is an idempotent `ALREADY_COMPLETE` result. Higher revisions or mixed/custom state fail closed.
+
+The compatibility service is deliberately separate from ordinary role/grant mutation so it does not introduce a self-escalation exception. No provider call occurs in its authoritative Administration transaction. The command appends data-minimized Audit evidence after the Administration outcome is known; passwords, credential material, signing keys and other secrets are not recovery inputs or evidence fields.
 
 ## Implemented direct role/grant management foundation
 
