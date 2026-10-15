@@ -111,13 +111,13 @@ PY
     esac
 
     case "${file}" in
-      apps/server/*|.dockerignore|.github/workflows/dev-cd.yml)
+      apps/server/*|scripts/ci/dev-bootstrap-entrypoint.sh|.dockerignore|.github/workflows/dev-cd.yml)
         dev_server=true
         ;;
     esac
 
     case "${file}" in
-      docs/README.md|docs/engineering/dev-cd.md|docs/engineering/public-demo.md|docs/engineering/edge.md|docs/engineering/observability.md|docs/operations/dev-managed-activation.md|.github/workflows/dev-cd.yml)
+      docs/README.md|docs/engineering/dev-cd.md|docs/engineering/public-demo.md|docs/engineering/edge.md|docs/engineering/observability.md|docs/operations/dev-managed-activation.md|docs/operations/first-run-web-setup.md|.github/workflows/dev-cd.yml)
         dev_docs=true
         ;;
     esac

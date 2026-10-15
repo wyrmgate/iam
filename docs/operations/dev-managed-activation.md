@@ -55,45 +55,66 @@ Do not commit or paste real secrets into issues, PRs, documentation or ordinary 
 
 ## Fresh DEV installation bootstrap
 
-For a new empty DEV database, use ADR-0044 fresh-install bootstrap. Railway's secret-variable boundary is the preferred DEV password source:
+Shared DEV uses the ADR-0045 first-run web setup wizard. The ADR-0044 startup/headless mutation adapter is not supported for managed DEV and the container rejects `IAM_BOOTSTRAP_INSTALLATION_ENABLED=true` when `IAM_DEPLOYMENT_ENVIRONMENT=dev`.
+
+For a fresh empty DEV database, configure Railway:
 
 ```text
-IAM_BOOTSTRAP_INSTALLATION_ENABLED=true
-IAM_BOOTSTRAP_INSTALLATION_TENANT_DISPLAY_NAME=Wyrmgate
-IAM_BOOTSTRAP_INSTALLATION_IDENTITY_DISPLAY_NAME=Initial Administrator
-IAM_BOOTSTRAP_INSTALLATION_USERNAME=admin
-IAM_BOOTSTRAP_INSTALLATION_PASSWORD=<temporary Railway secret>
+IAM_BOOTSTRAP_WEB_ENABLED=true
+IAM_BOOTSTRAP_WEB_SETUP_SECRET=<temporary Railway secret, at least 32 characters>
+IAM_BOOTSTRAP_WEB_SESSION_TTL=PT15M
+
+IAM_BOOTSTRAP_INSTALLATION_ENABLED=false
 IAM_BOOTSTRAP_INSTALLATION_CONSOLE_REDIRECT_URI=https://wyrmgate-iam-dev.pages.dev/callback
 ```
 
-Mark `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` as a Railway secret. Do not configure `IAM_BOOTSTRAP_INSTALLATION_PASSWORD_FILE` at the same time.
+`IAM_BOOTSTRAP_WEB_SETUP_SECRET` is consumed only by the checked-in container entrypoint. It is not a Spring application property and it is not IAM state. Before starting the JVM, the entrypoint materializes the value through a private one-use file boundary, exports only `IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE`, and removes the raw provider variable from the JVM environment. The existing ADR-0045 application adapter still reads only its operator-controlled file source.
 
-After startup reaches the irreversible `SEALED` state and normal username/password login is verified:
+Do not also configure `IAM_BOOTSTRAP_WEB_SETUP_SECRET_FILE` in Railway when using `IAM_BOOTSTRAP_WEB_SETUP_SECRET`. Exactly one deployment adapter source is allowed.
 
-1. remove `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` from Railway;
-2. disable or remove `IAM_BOOTSTRAP_INSTALLATION_ENABLED`;
-3. redeploy/restart under normal configuration if Railway does not already restart because of the variable change.
+Deploy the server, verify health, then open the Cloudflare Console. On an unsealed installation the Console must show the first-run setup flow:
 
-A sealed deployment checks its durable installation seal before resolving bootstrap secret input, so post-seal restarts do not require the temporary secret and cannot reopen installation bootstrap.
+```text
+Secure setup access
+  -> Installation
+  -> Initial administrator
+  -> Review
+  -> Initialize / resume
+  -> VERIFIED
+  -> SEALED
+  -> Normal sign-in
+```
 
-See [`fresh-install-bootstrap.md`](fresh-install-bootstrap.md) for recovery/resume and the alternative secret-file input.
+Use the Railway `IAM_BOOTSTRAP_WEB_SETUP_SECRET` value only on the **Secure setup access** step. It is separate from the administrator password created later in the wizard.
+
+After the wizard reaches irreversible `SEALED` and normal username/password login is verified:
+
+1. remove `IAM_BOOTSTRAP_WEB_SETUP_SECRET` from Railway;
+2. disable or remove `IAM_BOOTSTRAP_WEB_ENABLED`;
+3. leave `IAM_BOOTSTRAP_INSTALLATION_ENABLED=false`;
+4. redeploy/restart under normal configuration if Railway does not already restart because of the variable change.
+
+The durable seal prevents later setup reopening. Loss of administrators after sealing is recovery, not bootstrap.
+
+See [`first-run-web-setup.md`](first-run-web-setup.md) for wizard resume semantics and the standalone file-source contract.
 
 ## Activation procedure
 
 1. Select a reviewed `main` SHA with required GitHub checks green.
 2. Confirm Railway `Wait for CI` is enabled and the deployment is associated with that exact reviewed SHA.
-3. Confirm Railway is building the checked-in `apps/server/Dockerfile` from repository root.
+3. Confirm Railway is building the checked-in `apps/server/Dockerfile` from repository root and is not overriding the image entrypoint.
 4. Confirm required Neon database variables are present in Railway secret/configuration storage.
-5. If this is a fresh empty database, configure and execute the fresh-install bootstrap above.
+5. For a fresh empty database, configure `IAM_BOOTSTRAP_WEB_ENABLED=true`, the temporary `IAM_BOOTSTRAP_WEB_SETUP_SECRET`, trusted Console redirect and `IAM_BOOTSTRAP_INSTALLATION_ENABLED=false`.
 6. Deploy and wait for Railway's `/actuator/health` gate to return 2xx.
 7. Verify the deployed server reports healthy over the public Railway HTTPS origin.
-8. Verify `public.flyway_schema_history` records the repository current migration version successfully; the ADR-0044 implementation checkpoint extends persistence through Flyway V67.
+8. Verify `public.flyway_schema_history` records the repository current migration version successfully; the installation-bootstrap persistence checkpoint is through Flyway V67.
 9. Verify the server is using non-production DEV data and that tenant isolation checks pass.
 10. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin.
-11. Exercise the console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
-12. Verify normal Console username/password login and a protected Administration operation after bootstrap is sealed.
-13. Verify the selected Neon recovery window and perform or record an isolation-safe recovery check before destructive migration/data tests.
-14. Record non-secret activation evidence: deployed SHA, Railway environment/service identifier, health result, Flyway version, database branch/project identifier, console routing/login result and recovery-check result.
+11. Exercise the Console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
+12. On a fresh database, verify the Console presents the setup wizard, unlock it with the temporary setup-access proof, complete Tenant/admin inputs and reach `SEALED`.
+13. Remove the temporary setup-access secret, disable web setup, redeploy if necessary, then verify normal Console username/password login and a protected Administration operation.
+14. Verify the selected Neon recovery window and perform or record an isolation-safe recovery check before destructive migration/data tests.
+15. Record non-secret activation evidence: deployed SHA, Railway environment/service identifier, health result, Flyway version, database branch/project identifier, wizard/seal result, Console routing/login result and recovery-check result.
 
 ## Cloudflare Pages contract
 
@@ -142,7 +163,9 @@ Managed DEV activation is complete only when all of the following are true:
 - the current Railway service deploys a reviewed green `main` SHA;
 - Railway `/actuator/health` is healthy;
 - Flyway is confirmed at the repository current migration version;
-- a fresh installation, when applicable, has reached `SEALED` and the temporary bootstrap secret has been removed;
+- a fresh installation, when applicable, completed through the web wizard and reached `SEALED`;
+- the temporary `IAM_BOOTSTRAP_WEB_SETUP_SECRET` has been removed and web setup disabled after sealing;
+- `IAM_BOOTSTRAP_INSTALLATION_ENABLED` is not enabled in shared DEV;
 - the service uses the intended Neon DEV database and non-production data;
 - tenant isolation verification passes;
 - Cloudflare Pages `/api/*` routes to the intended Railway DEV origin;

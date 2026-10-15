@@ -2,28 +2,32 @@
 
 ## Purpose
 
-This runbook covers ADR-0044 standalone installation only. It establishes the first Tenant, governed administrator Identity/Principal/PASSWORD Credential, governed Wyrmgate Console SSO client and initial Administration authority, then permanently seals the deployment bootstrap.
+This runbook covers the ADR-0044 **startup/headless** installation adapter. It establishes the first Tenant, governed administrator Identity/Principal/PASSWORD Credential, governed Wyrmgate Console SSO client and initial Administration authority, then permanently seals the deployment bootstrap.
+
+Shared managed DEV does **not** use this adapter. Shared DEV uses the ADR-0045 first-run web setup wizard documented in [`first-run-web-setup.md`](first-run-web-setup.md) and [`dev-managed-activation.md`](dev-managed-activation.md). The managed DEV container rejects `IAM_BOOTSTRAP_INSTALLATION_ENABLED=true` when `IAM_DEPLOYMENT_ENVIRONMENT=dev`.
+
+This startup/headless path remains supported for explicit standalone and automated installation scenarios.
 
 It is **not** an administrator recovery procedure. A deployment that has reached `SEALED` never reopens installation bootstrap if all administrators are later lost.
 
 ## Preconditions
 
-Use this path only on a fresh database with no Tenant rows and no prior `platform.installation_bootstrap` row.
+Use this path only on a fresh database with no Tenant rows and no prior `platform.installation_bootstrap` row, and only where the deployment intentionally selected the startup/headless adapter rather than ADR-0045 web setup.
 
 The accepted first-party IdP/session configuration required for normal Console login must also be enabled. Database migrations must be current through the installation-bootstrap migration set.
 
-Do not enable the legacy external `iam.bootstrap.initial-admin` adapter at the same time as fresh-install bootstrap.
+Do not enable the legacy external `iam.bootstrap.initial-admin` adapter at the same time as fresh-install bootstrap. Do not enable `IAM_BOOTSTRAP_WEB_ENABLED=true` at the same time as this adapter.
 
 ## Prepare the initial password
 
 The trusted startup adapter accepts exactly one of two password sources before installation is sealed:
 
-1. `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` — a temporary deployment-secret value, preferred for managed DEV/runtime platforms such as Railway where secret variables are the normal operator boundary; or
-2. `IAM_BOOTSTRAP_INSTALLATION_PASSWORD_FILE` — a local operator-controlled secret file, preferred where an ephemeral secret mount/file is available.
+1. `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` — a temporary deployment-secret value for explicit automation/runtime environments that intentionally use this headless adapter; or
+2. `IAM_BOOTSTRAP_INSTALLATION_PASSWORD_FILE` — a local operator-controlled secret file.
 
 Do not configure both. The startup adapter fails closed if both are present or if neither is present before `SEALED`.
 
-### Managed deployment secret example
+### Deployment-secret example
 
 ```text
 IAM_BOOTSTRAP_INSTALLATION_ENABLED=true
@@ -112,9 +116,10 @@ The Console UI/runtime supplies its configured `client_id` and ApplicationTarget
 
 ## Security notes
 
+- Shared managed DEV must use ADR-0045 web setup instead of this startup adapter.
 - There is no `/api/bootstrap` endpoint.
 - There is no permanent `admin/admin`, root user, wildcard grant or reusable bootstrap password.
-- Managed deployment secret variables may remain recoverable in provider-internal configuration/history according to that provider's controls; remove the temporary bootstrap variable immediately after `SEALED` and use the file/secret-mount option where a tighter secret lifecycle is required.
+- Deployment secret variables may remain recoverable in provider-internal configuration/history according to that provider's controls; remove temporary bootstrap material immediately after `SEALED` and prefer the file/secret-mount option where a tighter secret lifecycle is required.
 - The local verifier provider is `wyrmgate-local-password-v1` and is system-managed by Credential; ordinary Credential creation cannot select it.
 - The private local verifier store contains salted one-way PBKDF2-HMAC-SHA-256 material, not plaintext or reversible password material.
 - `platform.installation_bootstrap` contains non-secret plan data and the irreversible seal only.
