@@ -2,17 +2,17 @@
 
 ## Purpose
 
-This runbook covers ADR-0044 standalone installation only. It establishes the first Tenant, governed administrator Identity/Principal/PASSWORD Credential, governed Wyrmgate Console SSO client and initial Administration authority, then permanently seals the deployment bootstrap.
+This runbook covers ADR-0044 standalone installation as amended by ADR-0049. It establishes the first Tenant, governed administrator Identity/Principal/PASSWORD Credential, governed Wyrmgate Console SSO client, the first Tenant's `TENANT_OWNER` authority and the deployment-scoped `PLATFORM_OWNER` authority, then permanently seals the deployment bootstrap.
 
-ADR-0046 makes that first-party Administration authority an explicit standalone tenant-owner permission set so the first administrator can configure the implemented tenant surface after normal sign-in. It is not wildcard/root authority and does not bypass independent governance, assurance, secret or destructive-operation controls.
+ADR-0046 defines the finite reviewed tenant-owner permission profile. ADR-0049 makes `TENANT_OWNER` an explicit tenant authority designation over that grant and adds separate deployment-scoped `PLATFORM_OWNER` authority. The historical `STANDALONE_TENANT_OWNER` permission-set name remains compatibility lineage only; it is not deployment authority. Neither owner type is wildcard/root authority and neither bypasses independent governance, assurance, secret or destructive-operation controls.
 
-It is **not** an administrator recovery procedure. A deployment that has reached `SEALED` never reopens installation bootstrap if all administrators are later lost. ADR-0047 provides a separate, explicit compatibility command only for the exact legacy first-party bootstrap state described below.
+This procedure is **not** administrator recovery. A deployment that has reached `SEALED` never reopens installation bootstrap if owners are later lost. ADR-0047 remains a separate compatibility recovery only for the exact historical tenant-owner permission state. A sealed pre-ADR-0049 installation that already has the reviewed standalone tenant-owner grant but lacks explicit ADR-0049 owner rows uses the separate [Legacy Platform Owner Adoption](../runbooks/platform-owner-adoption.md) operation.
 
 ## Preconditions
 
 Use this path only on a fresh database with no Tenant rows and no prior `platform.installation_bootstrap` row.
 
-The accepted first-party IdP/session configuration required for normal Console login must also be enabled. Database migrations must be current through the installation-bootstrap migration set.
+The accepted first-party IdP/session configuration required for normal Console login must also be enabled. Database migrations must be current, including V11 on an ADR-0049 build.
 
 Do not enable the legacy external `iam.bootstrap.initial-admin` adapter at the same time as fresh-install bootstrap.
 
@@ -75,7 +75,14 @@ The Console Application/ApplicationTarget precedes Principal creation because th
 
 Each capability owns its authoritative mutation. The installation service does not directly insert into Identity, Catalog, Credential or Administration tables.
 
-For `FIRST_PARTY_PRINCIPAL` bootstrap, Administration creates the marker-linked initial role from the explicit `STANDALONE_TENANT_OWNER` set defined by ADR-0046. The direct grant remains GLOBAL, active, grantable and delegable so the owner can establish narrower long-lived administrative roles through normal ADR-0032 authority-basis checks. The older `EXTERNAL_SUBJECT` bootstrap keeps ADR-0011's narrow four-permission set.
+For `FIRST_PARTY_PRINCIPAL` bootstrap, Administration performs one transaction that:
+
+1. creates the marker-linked initial role from the reviewed finite tenant-owner permission set whose persisted compatibility name is `STANDALONE_TENANT_OWNER`;
+2. creates the direct same-Tenant GLOBAL grant, active, grantable and delegable under the existing ADR-0032 authority model;
+3. designates that grant as the first explicit `TENANT_OWNER`; and
+4. creates deployment-scoped `PLATFORM_OWNER` authority for the same governed Identity and first-party Principal.
+
+The tenant GLOBAL grant remains global **inside the first Tenant only**. It is never interpreted as platform authority. The older `EXTERNAL_SUBJECT` bootstrap keeps ADR-0011's narrow four-permission set and does not create ADR-0049 owner authority.
 
 ## Interruption and resume
 
@@ -84,6 +91,8 @@ Restart with the same non-secret installation inputs and the same password throu
 All capability object IDs are preallocated in the durable plan. If a capability transaction committed but its checkpoint did not, replay verifies/reuses the exact object instead of creating a duplicate.
 
 For the password step, Credential uses the preallocated Credential ID as the stable private verifier reference. If verifier material already exists, the same supplied password is verified and processing resumes. A different password fails closed.
+
+For the Administration step, marker, grant, `TENANT_OWNER`, and `PLATFORM_OWNER` state are established transactionally on a fresh ADR-0049 bootstrap. A historical pre-ADR-0049 bootstrap marker is not silently promoted by retry; use the explicit adoption operation for an already sealed legacy installation.
 
 Do not edit the durable plan to skip a failed step. Resolve the underlying configuration/storage problem and restart.
 
@@ -95,7 +104,9 @@ The installer does not seal from command-return history alone. Before `SEALED` i
 - the planned ACTIVE Principal resolves to the planned ACTIVE Identity on the Console target;
 - normal Credential password verification succeeds using the planned PASSWORD Credential;
 - the globally unique Console `client_id` resolves to the planned Tenant and Catalog registration;
-- the Administration `InitialAdminBootstrap` marker names the same Identity/Principal and its grant is currently effective.
+- the Administration `InitialAdminBootstrap` marker names the same Identity/Principal and its direct tenant grant is currently effective;
+- the marker-linked tenant grant is the current effective `TENANT_OWNER` authority for that Identity; and
+- the same governed Identity/Principal has current effective deployment-scoped `PLATFORM_OWNER` authority.
 
 Only then does the deployment process advance `VERIFIED -> SEALED`.
 
@@ -107,27 +118,35 @@ After `SEALED`:
 2. remove `IAM_BOOTSTRAP_INSTALLATION_PASSWORD` from deployment configuration, or remove/unmount the password file, depending on the selected source;
 3. restart under normal configuration if needed;
 4. open the Wyrmgate Console and authenticate with the configured username and password;
-5. verify protected Administration and normal tenant-owner operations succeed through normal session authentication plus Administration authorization, including representative Catalog/Integration/Audit reads where enabled;
-6. create the normal administrator/delegation/recovery posture required for the deployment rather than retaining installation material.
+5. verify protected tenant-owner Administration operations succeed through normal session authentication plus tenant authorization;
+6. verify a representative deployment-scoped Platform Owner operation succeeds through explicit Platform Owner authorization where the corresponding platform command is enabled;
+7. verify representative Catalog/Integration/Audit reads under their normal authority boundaries where enabled; and
+8. create the normal additional owner/delegation/recovery posture required for the deployment rather than retaining installation material as the only continuity plan.
 
 A sealed deployment checks the durable seal before resolving bootstrap secret input. Therefore normal restarts after `SEALED` do not require either password source and stale/missing bootstrap secret configuration cannot reopen installation.
 
 The Console UI/runtime supplies its configured `client_id` and ApplicationTarget to the local authentication contract. The human login experience is username + password; those hidden routing selectors do not become user-selected Tenant input.
 
-## Existing sealed installations created before ADR-0046
+## Existing sealed installations created before ADR-0049
 
-ADR-0047 now defines the supported compatibility path for a pre-ADR-0046 standalone installation that was already sealed with ADR-0011's exact narrow first-party authority. Do not rerun this fresh-install procedure, reopen setup, delete the seal, recreate the first administrator, or edit IAM domain rows directly.
+There are two separate compatibility concerns; do not conflate them.
 
-Use [Sealed standalone tenant-owner recovery](sealed-standalone-owner-recovery.md). The recovery command derives the only candidate from the durable sealed installation plan and requires the Administration bootstrap marker, first-party Principal anchor, role/grant shape, four-permission membership, scope, revisions, timestamps and exclusivity checks to match the exact legacy bootstrap state. Exact owner state is an idempotent no-op; customized or ambiguous state fails closed.
+A pre-ADR-0046 standalone installation that was sealed with ADR-0011's exact narrow first-party authority first uses [Sealed standalone tenant-owner recovery](sealed-standalone-owner-recovery.md) if it satisfies ADR-0047's exact fail-closed evidence fence. That operation only expands the historical finite tenant permission profile; it does not create Platform Owner authority.
 
-A historical pre-release database that already applied the subsequently withdrawn V70 authority-expansion migration may need an explicit Flyway schema-history `repair` before normal application validation can start. That history repair is separate from authority recovery and must never be implemented by restoring the automatic V70 authority mutation or by permanently ignoring missing migrations.
+A sealed first-party installation that already has the reviewed standalone tenant-owner grant but lacks explicit ADR-0049 `TENANT_OWNER` / `PLATFORM_OWNER` rows uses [Legacy Platform Owner Adoption](../runbooks/platform-owner-adoption.md). The adoption command proves the exact durable sealed installation lineage and matching Administration evidence, rejects ambiguous/customized authority state, creates both explicit owner designations transactionally, and is disabled by default.
+
+Do not rerun fresh installation, delete the seal, infer Platform Owner from a tenant GLOBAL grant, or edit IAM domain rows directly.
+
+A historical pre-release database that already applied the subsequently withdrawn V70 authority-expansion migration may need an explicit Flyway schema-history `repair` before normal application validation can start. That history repair is separate from ADR-0047 tenant-owner recovery and ADR-0049 owner adoption. Never restore automatic V70 authority mutation or permanently ignore missing migrations.
 
 ## Security notes
 
-- There is no `/api/bootstrap` endpoint and no ADR-0047 HTTP recovery endpoint.
+- There is no `/api/bootstrap` endpoint and no HTTP ADR-0047 recovery or ADR-0049 owner-adoption endpoint.
 - There is no permanent `admin/admin`, root user, wildcard grant or reusable bootstrap password.
-- `STANDALONE_TENANT_OWNER` is a reviewed explicit permission set. New product permissions are not inherited automatically.
-- Possession of tenant-owner permissions does not bypass typed scopes, grantability ceilings, governance approval, strong-assurance requirements, maker-checker controls, secret boundaries, break-glass semantics or destructive-operation controls.
+- `STANDALONE_TENANT_OWNER` is the historical persisted name of a reviewed finite permission set; deployment authority exists only as explicit `PLATFORM_OWNER` state.
+- Platform Owner and Tenant Owner are distinct authority layers even when bootstrap assigns both to the same Identity.
+- Mutations that would make the final viable Platform Owner or final viable Tenant Owner non-viable are rejected by the owning mutation path, with database guards providing defense in depth for direct authority/grant loss.
+- Possession of owner authority does not bypass typed scopes, grantability ceilings, governance approval, strong-assurance requirements, maker-checker controls, secret boundaries, break-glass semantics or destructive-operation controls.
 - Managed deployment secret variables may remain recoverable in provider-internal configuration/history according to that provider's controls; remove the temporary bootstrap variable immediately after `SEALED` and use the file/secret-mount option where a tighter secret lifecycle is required.
 - The local verifier provider is `wyrmgate-local-password-v1` and is system-managed by Credential; ordinary Credential creation cannot select it.
 - The private local verifier store contains salted one-way PBKDF2-HMAC-SHA-256 material, not plaintext or reversible password material.
@@ -136,4 +155,4 @@ A historical pre-release database that already applied the subsequently withdraw
 
 ## Failure after sealing
 
-Do not attempt to delete or alter the installation seal to recover administration access. ADR-0047 is deliberately limited to the exact legacy bootstrap-authority compatibility case; general loss of all active administrators, Credentials or Console registrations remains a separate governed recovery problem.
+Do not attempt to delete or alter the installation seal to recover administration access. ADR-0047 is deliberately limited to the exact legacy tenant-owner permission compatibility case, and ADR-0049 legacy owner adoption is deliberately limited to the exact already-sealed pre-ADR-0049 bootstrap lineage. General loss of all viable Platform Owners, Tenant Owners, Credentials or Console registrations remains a separate governed recovery problem.
