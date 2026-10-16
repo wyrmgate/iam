@@ -298,7 +298,7 @@ export function TenantOverviewPage({ authority }: Props) {
             size="small"
             disabled={!tab.path}
             title={tab.disabledReason}
-            onClick={tab.path ? () => navigateConsole(tab.path) : undefined}
+            onClick={tab.path ? () => navigateConsole(tab.path!) : undefined}
             sx={{ flex: '0 0 auto', minHeight: 40, borderRadius: 0, borderBottom: tab.path === '/tenant' ? '2px solid' : '2px solid transparent', borderBottomColor: tab.path === '/tenant' ? 'primary.main' : 'transparent', color: tab.path === '/tenant' ? 'primary.main' : 'text.secondary', fontWeight: tab.path === '/tenant' ? 700 : 500 }}
           >{tab.label}</Button>
         ))}
