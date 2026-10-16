@@ -8,7 +8,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Verifies the physical tenant-isolation contract from the canonical data model. */
+/** Verifies tenant isolation plus the explicit ADR-0049 platform-owned persistence boundary. */
 class TenantIsolationSchemaIntegrationTest {
 
     private static final Set<String> APPLICATION_SCHEMAS = Set.of(
@@ -22,6 +22,16 @@ class TenantIsolationSchemaIntegrationTest {
             "audit",
             "platform");
 
+    /**
+     * Explicit platform-owned tables accepted by architecture. Adding to this set is an
+     * architecture change, not a workaround for a missing tenant_id.
+     */
+    private static final Set<String> PLATFORM_OWNED_TABLES = Set.of(
+            "administration.platform_owner_authority",
+            "catalog.platform_application_offering",
+            "catalog.platform_application_tenant_admission",
+            "catalog.platform_application_binding");
+
     private static JdbcTemplate jdbc;
 
     @BeforeAll
@@ -30,8 +40,112 @@ class TenantIsolationSchemaIntegrationTest {
     }
 
     @Test
-    void everyApplicationTableExceptTenantRootHasRequiredTenantId() {
-        List<TableTenantColumn> tables = jdbc.query(
+    void everyTenantOwnedApplicationTableHasRequiredTenantId() {
+        List<TableTenantColumn> tables = applicationTables();
+
+        assertThat(tables).isNotEmpty();
+        assertThat(tables)
+                .filteredOn(table -> isTenantRoot(table.schema(), table.table()))
+                .singleElement()
+                .satisfies(table -> {
+                    assertThat(table.hasTenantId()).isFalse();
+                    assertThat(table.tenantIdNotNull()).isFalse();
+                });
+
+        assertThat(tables)
+                .filteredOn(table -> !isTenantRoot(table.schema(), table.table()))
+                .filteredOn(table -> !isPlatformOwned(table.schema(), table.table()))
+                .allSatisfy(table -> {
+                    assertThat(table.hasTenantId())
+                            .as("%s.%s has tenant_id", table.schema(), table.table())
+                            .isTrue();
+                    assertThat(table.tenantIdNotNull())
+                            .as("%s.%s tenant_id is NOT NULL", table.schema(), table.table())
+                            .isTrue();
+                });
+    }
+
+    @Test
+    void platformOwnedTablesAreExplicitAndNeverUseNullableTenantOwnership() {
+        List<TableTenantColumn> platformOwned = applicationTables().stream()
+                .filter(table -> isPlatformOwned(table.schema(), table.table()))
+                .toList();
+
+        assertThat(platformOwned)
+                .extracting(table -> table.schema() + "." + table.table())
+                .containsExactlyInAnyOrderElementsOf(PLATFORM_OWNED_TABLES);
+
+        assertThat(platformOwned)
+                .filteredOn(TableTenantColumn::hasTenantId)
+                .allSatisfy(table -> assertThat(table.tenantIdNotNull())
+                        .as("%s.%s tenant reference is NOT NULL", table.schema(), table.table())
+                        .isTrue());
+
+        assertThat(platformOwned)
+                .filteredOn(table -> !table.hasTenantId())
+                .extracting(table -> table.schema() + "." + table.table())
+                .containsExactlyInAnyOrder(
+                        "administration.platform_owner_authority",
+                        "catalog.platform_application_offering");
+    }
+
+    @Test
+    void sameCapabilityForeignKeysCarryTenantOnBothSidesUnlessPlatformOwned() {
+        List<ForeignKeyShape> foreignKeys = foreignKeys();
+
+        assertThat(foreignKeys)
+                .filteredOn(fk -> fk.sourceSchema().equals(fk.targetSchema()))
+                .filteredOn(fk -> !isTenantRootAnchor(fk))
+                .filteredOn(fk -> !isPlatformOwned(fk.sourceSchema(), fk.sourceTable()))
+                .filteredOn(fk -> !isPlatformOwned(fk.targetSchema(), fk.targetTable()))
+                .allSatisfy(fk -> {
+                    assertThat(fk.sourceColumns())
+                            .as("%s source columns", fk.describe())
+                            .contains("tenant_id");
+                    assertThat(fk.targetColumns())
+                            .as("%s target columns", fk.describe())
+                            .contains("tenant_id");
+                });
+    }
+
+    @Test
+    void tenantRootForeignKeysAreEitherTenantOwnershipOrExplicitPlatformReferences() {
+        List<ForeignKeyShape> tenantRootAnchors = foreignKeys().stream()
+                .filter(fk -> fk.targetSchema().equals("platform") && fk.targetTable().equals("tenant"))
+                .toList();
+
+        assertThat(tenantRootAnchors).isNotEmpty();
+        assertThat(tenantRootAnchors).allSatisfy(fk -> {
+            assertThat(fk.targetColumns()).as(fk.describe()).containsExactly("id");
+            if (isPlatformOwned(fk.sourceSchema(), fk.sourceTable())) {
+                boolean approvedReference = fk.sourceColumns().equals(List.of("tenant_id"))
+                        || fk.sourceColumns().equals(List.of("actor_tenant_id"));
+                assertThat(approvedReference).as(fk.describe()).isTrue();
+            } else {
+                assertThat(fk.sourceColumns()).as(fk.describe()).containsExactly("tenant_id");
+            }
+        });
+    }
+
+    @Test
+    void crossCapabilityForeignKeysOnlyReferencePlatformTenant() {
+        List<ForeignKeyShape> crossCapability = foreignKeys().stream()
+                .filter(fk -> !fk.sourceSchema().equals(fk.targetSchema()))
+                .toList();
+
+        assertThat(crossCapability).isNotEmpty();
+        assertThat(crossCapability).allSatisfy(fk -> {
+            assertThat(fk.targetSchema()).as(fk.describe()).isEqualTo("platform");
+            assertThat(fk.targetTable()).as(fk.describe()).isEqualTo("tenant");
+            assertThat(fk.targetColumns()).as(fk.describe()).containsExactly("id");
+            if (!isPlatformOwned(fk.sourceSchema(), fk.sourceTable())) {
+                assertThat(fk.sourceColumns()).as(fk.describe()).containsExactly("tenant_id");
+            }
+        });
+    }
+
+    private static List<TableTenantColumn> applicationTables() {
+        return jdbc.query(
                 """
                 SELECT n.nspname,
                        c.relname,
@@ -54,67 +168,14 @@ class TenantIsolationSchemaIntegrationTest {
                         rs.getString("relname"),
                         rs.getBoolean("has_tenant_id"),
                         rs.getBoolean("tenant_id_not_null")));
-
-        assertThat(tables).isNotEmpty();
-        assertThat(tables)
-                .filteredOn(table -> table.schema().equals("platform") && table.table().equals("tenant"))
-                .singleElement()
-                .satisfies(table -> {
-                    assertThat(table.hasTenantId()).isFalse();
-                    assertThat(table.tenantIdNotNull()).isFalse();
-                });
-
-        assertThat(tables)
-                .filteredOn(table -> !(table.schema().equals("platform") && table.table().equals("tenant")))
-                .allSatisfy(table -> {
-                    assertThat(table.hasTenantId())
-                            .as("%s.%s has tenant_id", table.schema(), table.table())
-                            .isTrue();
-                    assertThat(table.tenantIdNotNull())
-                            .as("%s.%s tenant_id is NOT NULL", table.schema(), table.table())
-                            .isTrue();
-                });
     }
 
-    @Test
-    void sameCapabilityForeignKeysCarryTenantOnBothSidesExceptTenantRootAnchors() {
-        List<ForeignKeyShape> foreignKeys = foreignKeys();
-
-        assertThat(foreignKeys)
-                .filteredOn(fk -> fk.sourceSchema().equals(fk.targetSchema()) && !isTenantRootAnchor(fk))
-                .allSatisfy(fk -> {
-                    assertThat(fk.sourceColumns())
-                            .as("%s source columns", fk.describe())
-                            .contains("tenant_id");
-                    assertThat(fk.targetColumns())
-                            .as("%s target columns", fk.describe())
-                            .contains("tenant_id");
-                });
+    private static boolean isTenantRoot(String schema, String table) {
+        return schema.equals("platform") && table.equals("tenant");
     }
 
-    @Test
-    void tenantRootForeignKeysUseTenantIdToPlatformTenantId() {
-        List<ForeignKeyShape> tenantRootAnchors = foreignKeys().stream()
-                .filter(fk -> fk.targetSchema().equals("platform") && fk.targetTable().equals("tenant"))
-                .toList();
-
-        assertThat(tenantRootAnchors).isNotEmpty();
-        assertThat(tenantRootAnchors).allSatisfy(fk -> {
-            assertThat(fk.sourceColumns()).as(fk.describe()).containsExactly("tenant_id");
-            assertThat(fk.targetColumns()).as(fk.describe()).containsExactly("id");
-        });
-    }
-
-    @Test
-    void crossCapabilityForeignKeysOnlyAnchorTenantOwnedRowsToPlatformTenant() {
-        List<ForeignKeyShape> crossCapability = foreignKeys().stream()
-                .filter(fk -> !fk.sourceSchema().equals(fk.targetSchema()))
-                .toList();
-
-        assertThat(crossCapability).isNotEmpty();
-        assertThat(crossCapability).allSatisfy(fk -> assertThat(isTenantRootAnchor(fk))
-                .as(fk.describe())
-                .isTrue());
+    private static boolean isPlatformOwned(String schema, String table) {
+        return PLATFORM_OWNED_TABLES.contains(schema + "." + table);
     }
 
     private static boolean isTenantRootAnchor(ForeignKeyShape fk) {

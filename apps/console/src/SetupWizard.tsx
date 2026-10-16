@@ -19,8 +19,8 @@ const PHASES: Array<{ phase: InstallationPhase; label: string }> = [
   { phase: 'CONSOLE_REGISTERED', label: 'Wyrmgate Console registered' },
   { phase: 'PRINCIPAL_CREATED', label: 'Administrator principal created' },
   { phase: 'CREDENTIAL_ENROLLED', label: 'Password credential enrolled' },
-  { phase: 'ADMIN_BOOTSTRAPPED', label: 'Administrative authority established' },
-  { phase: 'VERIFIED', label: 'Installation verified' },
+  { phase: 'ADMIN_BOOTSTRAPPED', label: 'Platform Owner and Tenant Owner authority established' },
+  { phase: 'VERIFIED', label: 'Installation and owner authority verified' },
   { phase: 'SEALED', label: 'Bootstrap permanently sealed' },
 ];
 
@@ -126,7 +126,7 @@ export function SetupWizard({ initialStatus, onComplete }: {
           <div>
             <p className="setup-eyebrow">First-run setup</p>
             <h1 id="setup-title">Initialize Wyrmgate IAM</h1>
-            <p>Establish the first tenant and administrator, verify the Console, then permanently seal bootstrap.</p>
+            <p>Establish the first tenant, its Tenant Owner, and the deployment Platform Owner; verify the Console, then permanently seal bootstrap.</p>
           </div>
         </header>
 
@@ -185,7 +185,7 @@ export function SetupWizard({ initialStatus, onComplete }: {
             <h2>{frozenPlan ? 'Resume administrator setup' : 'Initial administrator'}</h2>
             <p>{frozenPlan
               ? `Durable setup is at “${currentPhaseLabel}”. The original non-secret values are locked; re-enter the original password to resume.`
-              : 'Create the governed person identity, Console principal, password credential and initial administrative authority.'}</p>
+              : 'Create the governed person identity, Console principal and password credential. This identity becomes the deployment Platform Owner and the first Tenant Owner.'}</p>
             <TextInput label="Administrator display name" required disabled={frozenPlan} value={identityDisplayName} onChange={(event) => setIdentityDisplayName(event.target.value)} />
             <TextInput label="Username" autoComplete="username" required disabled={frozenPlan} value={username} onChange={(event) => setUsername(event.target.value)} />
             <TextInput label="Password" type="password" autoComplete="new-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
@@ -213,10 +213,12 @@ export function SetupWizard({ initialStatus, onComplete }: {
               <div><dt>Tenant</dt><dd>{tenantDisplayName}</dd></div>
               <div><dt>Administrator</dt><dd>{identityDisplayName}</dd></div>
               <div><dt>Username</dt><dd>{username}</dd></div>
+              <div><dt>Deployment authority</dt><dd>Platform Owner</dd></div>
+              <div><dt>Tenant authority</dt><dd>Tenant Owner</dd></div>
               <div><dt>Console redirect</dt><dd>{status.consoleRedirectUri}</dd></div>
               <div><dt>Password</dt><dd>••••••••</dd></div>
             </dl>
-            <Alert severity="info">Initialization is resumable. Once verification succeeds, bootstrap is permanently sealed and cannot be reopened.</Alert>
+            <Alert severity="info">Initialization creates both owner authorities atomically with the first administrative grant. Once all authority and authentication checks pass, bootstrap is permanently sealed and cannot be reopened.</Alert>
             <div className="setup-actions">
               <Button variant="outlined" onClick={() => setStep('administrator')}>Back</Button>
               <Button variant="contained" onClick={() => void initialize()}>Initialize Wyrmgate</Button>
@@ -238,7 +240,7 @@ export function SetupWizard({ initialStatus, onComplete }: {
           <div className="setup-form setup-complete">
             <div className="setup-complete-mark" aria-hidden="true">✓</div>
             <h2>Wyrmgate is ready</h2>
-            <p>The installation was verified and bootstrap is permanently sealed. Continue through the normal first-party sign-in flow.</p>
+            <p>The installation, Platform Owner and first Tenant Owner were verified and bootstrap is permanently sealed. Continue through the normal first-party sign-in flow.</p>
             <Button variant="contained" onClick={onComplete}>Sign in to Wyrmgate</Button>
           </div>
         )}

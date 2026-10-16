@@ -1,9 +1,13 @@
 package io.wyrmgate.iam.catalog.persistence;
 
+import io.wyrmgate.iam.administration.application.PlatformOwnerAuthorityQuery;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetSearchQuery;
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.application.CatalogRepository;
+import io.wyrmgate.iam.catalog.application.PlatformApplicationAdmissionPolicyQuery;
+import io.wyrmgate.iam.catalog.application.PlatformApplicationRepository;
+import io.wyrmgate.iam.catalog.application.PlatformApplicationService;
 import io.wyrmgate.iam.catalog.application.RoleCommandService;
 import io.wyrmgate.iam.catalog.application.RoleExpansionFactSink;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
@@ -12,9 +16,10 @@ import io.wyrmgate.iam.catalog.application.RoleRepository;
 import io.wyrmgate.iam.catalog.application.RoleQueryService;
 import io.wyrmgate.iam.catalog.application.SsoClientRegistrationRepository;
 import io.wyrmgate.iam.catalog.application.SsoClientRegistrationService;
-import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
+import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,6 +30,34 @@ public class CatalogPersistenceConfiguration {
     @Bean
     CatalogRepository catalogRepository(JdbcTemplate jdbc) {
         return new JdbcCatalogRepository(jdbc);
+    }
+
+    @Bean
+    PlatformApplicationRepository platformApplicationRepository(JdbcTemplate jdbc) {
+        return new JdbcPlatformApplicationRepository(jdbc);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(PlatformApplicationAdmissionPolicyQuery.class)
+    PlatformApplicationAdmissionPolicyQuery defaultDenyPlatformApplicationAdmissionPolicyQuery() {
+        return (offering, tenant, at) -> false;
+    }
+
+    @Bean
+    PlatformApplicationService platformApplicationService(
+            PlatformApplicationRepository platformApplicationRepository,
+            CatalogRepository catalogRepository,
+            PlatformOwnerAuthorityQuery platformOwnerAuthorityQuery,
+            PlatformApplicationAdmissionPolicyQuery admissionPolicyQuery,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new PlatformApplicationService(
+                platformApplicationRepository,
+                catalogRepository,
+                platformOwnerAuthorityQuery,
+                admissionPolicyQuery,
+                ids,
+                transactions);
     }
 
     @Bean

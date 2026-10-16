@@ -14,13 +14,18 @@ import java.util.UUID;
 /** Identity-owned commands for the first authoritative Principal slice. */
 public final class PrincipalCommandService {
 
+    private static final PrincipalAdministrativeContinuityGuard ALLOW_ALL_CONTINUITY =
+            (tenant, principalId, identityId, at) -> {};
+
     private final PrincipalRepository principals;
     private final IdentityRepository identities;
     private final CatalogTargetReferenceQuery targets;
     private final PrincipalFactSink facts;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
+    private final PrincipalAdministrativeContinuityGuard administrativeContinuityGuard;
 
+    /** Compatibility constructor for isolated tests/compositions without Administration. */
     public PrincipalCommandService(
             PrincipalRepository principals,
             IdentityRepository identities,
@@ -28,12 +33,32 @@ public final class PrincipalCommandService {
             PrincipalFactSink facts,
             IdGenerator ids,
             TransactionExecutor transactions) {
+        this(
+                principals,
+                identities,
+                targets,
+                facts,
+                ids,
+                transactions,
+                ALLOW_ALL_CONTINUITY);
+    }
+
+    public PrincipalCommandService(
+            PrincipalRepository principals,
+            IdentityRepository identities,
+            CatalogTargetReferenceQuery targets,
+            PrincipalFactSink facts,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            PrincipalAdministrativeContinuityGuard administrativeContinuityGuard) {
         this.principals = Objects.requireNonNull(principals, "principals");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.targets = Objects.requireNonNull(targets, "targets");
         this.facts = Objects.requireNonNull(facts, "facts");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.administrativeContinuityGuard = Objects.requireNonNull(
+                administrativeContinuityGuard, "administrativeContinuityGuard");
     }
 
     public Principal create(
@@ -210,6 +235,11 @@ public final class PrincipalCommandService {
             }
             if (existing.lifecycleState() == desiredState) {
                 return existing;
+            }
+            if (existing.lifecycleState() == PrincipalLifecycleState.ACTIVE
+                    && desiredState == PrincipalLifecycleState.DISABLED) {
+                administrativeContinuityGuard.assertMayDisable(
+                        tenant, existing.id(), identityId, now);
             }
             Principal updated = principals.updateLifecycle(
                     tenant,

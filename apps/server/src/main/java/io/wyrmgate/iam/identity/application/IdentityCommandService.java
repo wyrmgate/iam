@@ -14,20 +14,36 @@ import java.util.UUID;
 /** Application commands for the first authoritative Identity persistence slice. */
 public final class IdentityCommandService {
 
+    private static final IdentityAdministrativeContinuityGuard ALLOW_ALL_CONTINUITY =
+            (tenant, identityId, at) -> {};
+
     private final IdentityRepository repository;
     private final IdentityFactSink factSink;
     private final IdGenerator idGenerator;
     private final TransactionExecutor transactions;
+    private final IdentityAdministrativeContinuityGuard administrativeContinuityGuard;
 
+    /** Compatibility constructor for isolated tests/compositions without Administration. */
     public IdentityCommandService(
             IdentityRepository repository,
             IdentityFactSink factSink,
             IdGenerator idGenerator,
             TransactionExecutor transactions) {
+        this(repository, factSink, idGenerator, transactions, ALLOW_ALL_CONTINUITY);
+    }
+
+    public IdentityCommandService(
+            IdentityRepository repository,
+            IdentityFactSink factSink,
+            IdGenerator idGenerator,
+            TransactionExecutor transactions,
+            IdentityAdministrativeContinuityGuard administrativeContinuityGuard) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.factSink = Objects.requireNonNull(factSink, "factSink");
         this.idGenerator = Objects.requireNonNull(idGenerator, "idGenerator");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.administrativeContinuityGuard = Objects.requireNonNull(
+                administrativeContinuityGuard, "administrativeContinuityGuard");
     }
 
     public Identity create(
@@ -166,6 +182,11 @@ public final class IdentityCommandService {
             requireLifecycleTransition(
                     current.lifecycleState(),
                     lifecycleState);
+            if (current.lifecycleState() == IdentityLifecycleState.ACTIVE
+                    && lifecycleState != IdentityLifecycleState.ACTIVE) {
+                administrativeContinuityGuard.assertMayBecomeAdministrativelyIneligible(
+                        tenant, identityId, now);
+            }
             Identity updated = repository.updateLifecycle(
                     tenant,
                     identityId,

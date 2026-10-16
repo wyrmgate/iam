@@ -6,6 +6,8 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativeRole;
 import io.wyrmgate.iam.administration.domain.InitialAdminAuthenticationAnchorType;
 import io.wyrmgate.iam.administration.domain.InitialAdminBootstrap;
+import io.wyrmgate.iam.administration.domain.PlatformOwnerAuthority;
+import io.wyrmgate.iam.administration.domain.TenantOwnerAuthority;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -81,6 +83,62 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
                 tenant.tenantId(),
                 grantId,
                 actorIdentityId,
+                Timestamp.from(at),
+                Timestamp.from(at));
+        return count != null && count == 1;
+    }
+
+    @Override
+    public boolean isTenantOwnerAuthorityEffective(
+            TenantContext tenant,
+            UUID grantId,
+            UUID actorIdentityId,
+            Instant at) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM administration.tenant_owner_authority owner_authority
+                JOIN administration.administrative_grant grant_authority
+                  ON grant_authority.tenant_id = owner_authority.tenant_id
+                 AND grant_authority.id = owner_authority.administrative_grant_id
+                WHERE owner_authority.tenant_id = ?
+                  AND owner_authority.administrative_grant_id = ?
+                  AND owner_authority.actor_identity_id = ?
+                  AND owner_authority.state = 'ACTIVE'
+                  AND grant_authority.state = 'ACTIVE'
+                  AND (grant_authority.valid_from IS NULL OR grant_authority.valid_from <= ?)
+                  AND (grant_authority.valid_until IS NULL OR grant_authority.valid_until > ?)
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                grantId,
+                actorIdentityId,
+                Timestamp.from(at),
+                Timestamp.from(at));
+        return count != null && count == 1;
+    }
+
+    @Override
+    public boolean isPlatformOwnerAuthorityEffective(
+            TenantContext actorTenant,
+            UUID actorIdentityId,
+            UUID actorPrincipalId,
+            Instant at) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM administration.platform_owner_authority
+                WHERE actor_tenant_id = ?
+                  AND actor_identity_id = ?
+                  AND actor_principal_id = ?
+                  AND state = 'ACTIVE'
+                  AND (valid_from IS NULL OR valid_from <= ?)
+                  AND (valid_until IS NULL OR valid_until > ?)
+                """,
+                Integer.class,
+                actorTenant.tenantId(),
+                actorIdentityId,
+                actorPrincipalId,
                 Timestamp.from(at),
                 Timestamp.from(at));
         return count != null && count == 1;
@@ -206,5 +264,55 @@ public final class JdbcInitialAdminBootstrapRepository implements InitialAdminBo
                 grant.revision(),
                 Timestamp.from(grant.createdAt()),
                 Timestamp.from(grant.updatedAt()));
+    }
+
+    @Override
+    public void insertTenantOwnerAuthority(TenantContext tenant, TenantOwnerAuthority authority) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO administration.tenant_owner_authority (
+                    id, tenant_id, actor_identity_id, administrative_grant_id,
+                    state, created_at, revoked_at, revision, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                authority.id(),
+                tenant.tenantId(),
+                authority.actorIdentityId(),
+                authority.administrativeGrantId(),
+                authority.state().name(),
+                Timestamp.from(authority.createdAt()),
+                authority.revokedAt() == null ? null : Timestamp.from(authority.revokedAt()),
+                authority.revision(),
+                Timestamp.from(authority.updatedAt()));
+    }
+
+    @Override
+    public void insertPlatformOwnerAuthority(PlatformOwnerAuthority authority) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO administration.platform_owner_authority (
+                    id, actor_tenant_id, actor_identity_id, actor_principal_id,
+                    state, grantable, delegable, authority_basis_id,
+                    valid_from, valid_until, revoked_by_identity_id, revoked_at,
+                    correlation_id, causation_id, revision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                authority.id(),
+                authority.actorTenantId(),
+                authority.actorIdentityId(),
+                authority.actorPrincipalId(),
+                authority.state().name(),
+                authority.grantable(),
+                authority.delegable(),
+                authority.authorityBasisId(),
+                authority.validFrom() == null ? null : Timestamp.from(authority.validFrom()),
+                authority.validUntil() == null ? null : Timestamp.from(authority.validUntil()),
+                authority.revokedByIdentityId(),
+                authority.revokedAt() == null ? null : Timestamp.from(authority.revokedAt()),
+                authority.correlationId(),
+                authority.causationId(),
+                authority.revision(),
+                Timestamp.from(authority.createdAt()),
+                Timestamp.from(authority.updatedAt()));
     }
 }

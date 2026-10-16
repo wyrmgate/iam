@@ -11,6 +11,7 @@ import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluato
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
+import io.wyrmgate.iam.identity.application.IdentityAdministrativeContinuityGuard;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQueryService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
@@ -20,6 +21,7 @@ import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.IdentityQueryRepository;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
+import io.wyrmgate.iam.identity.application.PrincipalAdministrativeContinuityGuard;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.identity.application.PrincipalQueryService;
@@ -107,8 +109,14 @@ public class IdentityPersistenceConfiguration {
             IdentityRepository identityRepository,
             IdentityFactSink identityFactSink,
             IdGenerator idGenerator,
-            TransactionExecutor transactionExecutor) {
-        return new IdentityCommandService(identityRepository, identityFactSink, idGenerator, transactionExecutor);
+            TransactionExecutor transactionExecutor,
+            IdentityAdministrativeContinuityGuard administrativeContinuityGuard) {
+        return new IdentityCommandService(
+                identityRepository,
+                identityFactSink,
+                idGenerator,
+                transactionExecutor,
+                administrativeContinuityGuard);
     }
 
     @Bean
@@ -201,14 +209,16 @@ public class IdentityPersistenceConfiguration {
             CatalogTargetReferenceQuery targetReferenceQuery,
             PrincipalFactSink principalFactSink,
             IdGenerator idGenerator,
-            TransactionExecutor transactionExecutor) {
+            TransactionExecutor transactionExecutor,
+            PrincipalAdministrativeContinuityGuard administrativeContinuityGuard) {
         return new PrincipalCommandService(
                 principalRepository,
                 identityRepository,
                 targetReferenceQuery,
                 principalFactSink,
                 idGenerator,
-                transactionExecutor);
+                transactionExecutor,
+                administrativeContinuityGuard);
     }
 
     @Bean
