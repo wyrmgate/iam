@@ -83,6 +83,18 @@ A `PlatformApplicationBinding` links one platform offering to one existing tenan
 
 Shared application tenancy does not change the trusted routing rule. Every SSO `client_id` resolves server-side to exactly one Tenant. A physical SaaS application shared by several Tenants therefore has tenant-local SSO registrations/bindings as required; no browser-controlled tenant header, query parameter or untrusted claim becomes authoritative routing context.
 
+## Console tenant context
+
+The authenticated Console exposes `/tenant` as a current-Tenant management and navigation surface under Administration. It is not a new Tenant aggregate, lifecycle API or browser-side authority source.
+
+- The Tenant identifier and governed actor come from the server-derived current administrative-authority context; the browser does not supply an authoritative Tenant selector.
+- Tenant inventory reuses the existing `/api/v1/console/iam-operations` read projection for currently implemented Identity, Catalog, Access and Integration counts. The page does not fabricate cross-capability totals or introduce a second projection authority.
+- Tenant management actions navigate to the owning capability workspaces. Identity remains authoritative for governed subjects and Principals; Catalog for Applications and application structure; Access for `AccessAssignment` intent and `EffectiveAccess` projection; Governance for approval/review/policy; Integration for connectors and fulfillment; Administration for tenant administrative authority; Audit for evidence.
+- The Console does not model generic `UserTenantMembership` or `UserApplication` authority. Tenant ownership of Identity expresses normal subject tenancy, while individual application access remains an `AccessAssignment` to a Role or Entitlement.
+- Platform-shared/internal offering definitions remain platform-owned. Tenant-facing application use remains represented by the explicit Catalog binding to a tenant-local `Application` described above.
+
+Operation-time server authorization remains final for every linked workspace and command.
+
 ## Persistence boundary
 
 The following V11 tables are explicitly platform/deployment owned and therefore are exceptions to the older blanket assumption that every capability table is tenant-owned:

@@ -20,6 +20,7 @@ export type ShellGroup = {
 
 export type ConsoleRouteId =
   | 'overview'
+  | 'tenant'
   | 'requests'
   | 'reviews'
   | 'identities'
@@ -70,6 +71,7 @@ export const consoleRoutes: ConsoleRoute[] = [
   { id: 'catalog', path: '/catalog', label: 'Catalog', group: 'catalog', resourceTypes: ['application', 'sso-client', 'application-target', 'entitlement', 'role', 'role-version'] },
   { id: 'integrations', path: '/integrations', label: 'Integrations', group: 'integration', resourceTypes: ['connector', 'connector-binding', 'connector-worker', 'entitlement-observation-mapping', 'provisioning-job', 'provisioning-task', 'provisioning-attempt', 'reconciliation-run'] },
   { id: 'credentials', path: '/credentials', label: 'Credentials', group: 'credentials', resourceTypes: ['credential', 'credential-rotation'] },
+  { id: 'tenant', path: '/tenant', label: 'Current Tenant', group: 'administration' },
   { id: 'administration', path: '/administration', label: 'Administration', group: 'administration', visibleWithoutAdministrativeEligibility: true },
   { id: 'audit', path: '/audit', label: 'Audit', group: 'audit', resourceTypes: ['audit', 'evidence-snapshot'] },
 ];

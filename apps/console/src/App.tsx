@@ -7,6 +7,7 @@ import {
 } from './api';
 import { OverviewPage } from './OverviewPage';
 import { RequestsApprovalsWithAccessLinks } from './RequestsApprovalsWithAccessLinks';
+import { TenantOverviewPage } from './TenantOverviewPage';
 import { useConsolePathname } from './consoleLocation';
 import {
   identityDetailPath,
@@ -68,6 +69,7 @@ export function App() {
   return (
     <>
       {route === 'overview' && <OverviewPage system={system} authority={authority} />}
+      {route === 'tenant' && <TenantOverviewPage authority={authority.status === 'ready' ? authority.value : null} />}
       {route === 'identities' && !identityId && (
         <IdentityCollectionPage
           authority={authority.status === 'ready' ? authority.value : null}
