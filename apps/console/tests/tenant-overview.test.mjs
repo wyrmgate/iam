@@ -5,7 +5,7 @@ import test from 'node:test';
 const page = await readFile(new URL('../src/TenantOverviewPage.tsx', import.meta.url), 'utf8');
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const navigation = await readFile(new URL('../src/consoleNavigation.ts', import.meta.url), 'utf8');
-const architecture = await readFile(new URL('../../docs/architecture/platform-authority-and-application-tenancy.md', import.meta.url), 'utf8');
+const architecture = await readFile(new URL('../../../docs/architecture/platform-authority-and-application-tenancy.md', import.meta.url), 'utf8');
 
 test('current Tenant route is an Administration surface rather than a new capability', () => {
   assert.match(navigation, /\{ id: 'tenant', path: '\/tenant', label: 'Current Tenant', group: 'administration' \}/);
