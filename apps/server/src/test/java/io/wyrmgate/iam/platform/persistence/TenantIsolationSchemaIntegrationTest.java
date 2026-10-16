@@ -76,7 +76,7 @@ class TenantIsolationSchemaIntegrationTest {
                 .containsExactlyInAnyOrderElementsOf(PLATFORM_OWNED_TABLES);
 
         assertThat(platformOwned)
-                .filteredOn(table -> table.hasTenantId())
+                .filteredOn(TableTenantColumn::hasTenantId)
                 .allSatisfy(table -> assertThat(table.tenantIdNotNull())
                         .as("%s.%s tenant reference is NOT NULL", table.schema(), table.table())
                         .isTrue());
@@ -118,11 +118,9 @@ class TenantIsolationSchemaIntegrationTest {
         assertThat(tenantRootAnchors).allSatisfy(fk -> {
             assertThat(fk.targetColumns()).as(fk.describe()).containsExactly("id");
             if (isPlatformOwned(fk.sourceSchema(), fk.sourceTable())) {
-                assertThat(fk.sourceColumns())
-                        .as(fk.describe())
-                        .satisfiesAnyOf(
-                                columns -> assertThat(columns).containsExactly("tenant_id"),
-                                columns -> assertThat(columns).containsExactly("actor_tenant_id"));
+                boolean approvedReference = fk.sourceColumns().equals(List.of("tenant_id"))
+                        || fk.sourceColumns().equals(List.of("actor_tenant_id"));
+                assertThat(approvedReference).as(fk.describe()).isTrue();
             } else {
                 assertThat(fk.sourceColumns()).as(fk.describe()).containsExactly("tenant_id");
             }
