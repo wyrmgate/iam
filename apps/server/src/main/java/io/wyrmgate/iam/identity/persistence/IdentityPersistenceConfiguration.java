@@ -21,6 +21,7 @@ import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.IdentityQueryRepository;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
+import io.wyrmgate.iam.identity.application.PrincipalAdministrativeContinuityGuard;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.identity.application.PrincipalQueryService;
@@ -208,14 +209,16 @@ public class IdentityPersistenceConfiguration {
             CatalogTargetReferenceQuery targetReferenceQuery,
             PrincipalFactSink principalFactSink,
             IdGenerator idGenerator,
-            TransactionExecutor transactionExecutor) {
+            TransactionExecutor transactionExecutor,
+            PrincipalAdministrativeContinuityGuard administrativeContinuityGuard) {
         return new PrincipalCommandService(
                 principalRepository,
                 identityRepository,
                 targetReferenceQuery,
                 principalFactSink,
                 idGenerator,
-                transactionExecutor);
+                transactionExecutor,
+                administrativeContinuityGuard);
     }
 
     @Bean
