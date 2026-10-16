@@ -31,7 +31,9 @@ CREATE TABLE administration.platform_owner_authority (
     CONSTRAINT platform_owner_authority_basis_not_self_ck CHECK (
         authority_basis_id IS NULL OR authority_basis_id <> id),
     CONSTRAINT platform_owner_authority_actor_tenant_fk
-        FOREIGN KEY (actor_tenant_id) REFERENCES platform.tenant(id)
+        FOREIGN KEY (actor_tenant_id) REFERENCES platform.tenant(id),
+    CONSTRAINT platform_owner_authority_basis_fk
+        FOREIGN KEY (authority_basis_id) REFERENCES administration.platform_owner_authority(id)
 );
 
 CREATE UNIQUE INDEX platform_owner_authority_active_actor_uq
@@ -66,7 +68,10 @@ CREATE TABLE administration.tenant_owner_authority (
         (state = 'ACTIVE' AND revoked_at IS NULL)
         OR (state = 'REVOKED' AND revoked_at IS NOT NULL)),
     CONSTRAINT tenant_owner_authority_tenant_fk
-        FOREIGN KEY (tenant_id) REFERENCES platform.tenant(id)
+        FOREIGN KEY (tenant_id) REFERENCES platform.tenant(id),
+    CONSTRAINT tenant_owner_authority_grant_fk
+        FOREIGN KEY (tenant_id, administrative_grant_id)
+        REFERENCES administration.administrative_grant(tenant_id, id)
 );
 
 CREATE UNIQUE INDEX tenant_owner_authority_active_actor_uq
@@ -78,16 +83,25 @@ CREATE UNIQUE INDEX tenant_owner_authority_grant_uq
 COMMENT ON TABLE administration.tenant_owner_authority IS
     'Explicit TENANT_OWNER designation bound to one tenant-scoped AdministrativeGrant; compatibility names do not imply deployment authority.';
 
--- Prevent direct removal/revocation of the last currently ACTIVE authority row.
--- Cross-capability governed-Identity viability remains an application-level semantic query.
+-- Database guards preserve authoritative owner rows/grants. Full governed-Identity viability is
+-- checked at the application boundary before Identity lifecycle changes commit.
 CREATE FUNCTION administration.reject_last_platform_owner_authority_loss() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 DECLARE
+    old_effective boolean;
+    new_effective boolean;
     other_count bigint;
 BEGIN
-    IF (TG_OP = 'DELETE' AND OLD.state = 'ACTIVE')
-       OR (TG_OP = 'UPDATE' AND OLD.state = 'ACTIVE' AND NEW.state <> 'ACTIVE') THEN
+    old_effective := OLD.state = 'ACTIVE'
+        AND (OLD.valid_from IS NULL OR OLD.valid_from <= CURRENT_TIMESTAMP)
+        AND (OLD.valid_until IS NULL OR OLD.valid_until > CURRENT_TIMESTAMP);
+    new_effective := TG_OP <> 'DELETE'
+        AND NEW.state = 'ACTIVE'
+        AND (NEW.valid_from IS NULL OR NEW.valid_from <= CURRENT_TIMESTAMP)
+        AND (NEW.valid_until IS NULL OR NEW.valid_until > CURRENT_TIMESTAMP);
+
+    IF old_effective AND NOT new_effective THEN
         SELECT count(*) INTO other_count
         FROM administration.platform_owner_authority p
         WHERE p.state = 'ACTIVE'
@@ -98,7 +112,10 @@ BEGIN
             RAISE EXCEPTION 'cannot remove the final active PLATFORM_OWNER authority';
         END IF;
     END IF;
-    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
 END;
 $$;
 
@@ -128,7 +145,10 @@ BEGIN
             RAISE EXCEPTION 'cannot remove the final active TENANT_OWNER authority';
         END IF;
     END IF;
-    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
 END;
 $$;
 
@@ -141,9 +161,19 @@ CREATE FUNCTION administration.reject_last_tenant_owner_grant_loss() RETURNS tri
     AS $$
 DECLARE
     owner_row administration.tenant_owner_authority%ROWTYPE;
+    old_effective boolean;
+    new_effective boolean;
     other_count bigint;
 BEGIN
-    IF OLD.state = 'ACTIVE' AND NEW.state <> 'ACTIVE' THEN
+    old_effective := OLD.state = 'ACTIVE'
+        AND (OLD.valid_from IS NULL OR OLD.valid_from <= CURRENT_TIMESTAMP)
+        AND (OLD.valid_until IS NULL OR OLD.valid_until > CURRENT_TIMESTAMP);
+    new_effective := TG_OP <> 'DELETE'
+        AND NEW.state = 'ACTIVE'
+        AND (NEW.valid_from IS NULL OR NEW.valid_from <= CURRENT_TIMESTAMP)
+        AND (NEW.valid_until IS NULL OR NEW.valid_until > CURRENT_TIMESTAMP);
+
+    IF old_effective AND NOT new_effective THEN
         SELECT * INTO owner_row
         FROM administration.tenant_owner_authority
         WHERE tenant_id = OLD.tenant_id
@@ -161,16 +191,19 @@ BEGIN
               AND (g.valid_from IS NULL OR g.valid_from <= CURRENT_TIMESTAMP)
               AND (g.valid_until IS NULL OR g.valid_until > CURRENT_TIMESTAMP);
             IF other_count = 0 THEN
-                RAISE EXCEPTION 'cannot revoke the final active TENANT_OWNER grant';
+                RAISE EXCEPTION 'cannot revoke or expire the final active TENANT_OWNER grant';
             END IF;
         END IF;
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
     END IF;
     RETURN NEW;
 END;
 $$;
 
 CREATE TRIGGER administrative_grant_last_tenant_owner_guard
-    BEFORE UPDATE OF state ON administration.administrative_grant
+    BEFORE UPDATE OR DELETE ON administration.administrative_grant
     FOR EACH ROW EXECUTE FUNCTION administration.reject_last_tenant_owner_grant_loss();
 
 CREATE TABLE catalog.platform_application_offering (
