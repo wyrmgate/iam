@@ -19,8 +19,8 @@ import java.util.UUID;
 
 /**
  * ADR-0049 explicit one-shot adoption for a sealed pre-ADR-0049 first-party installation.
- * The operation proves the exact historical bootstrap lineage and never infers authority from
- * names, role codes or a tenant GLOBAL scope alone.
+ * The operation proves exact historical bootstrap lineage and never infers authority from names,
+ * role codes or tenant GLOBAL scope alone.
  */
 public final class PlatformOwnerAdoptionService {
 
@@ -28,6 +28,7 @@ public final class PlatformOwnerAdoptionService {
     private final AdministrativeAuthorityRepository authorityRepository;
     private final StandaloneTenantOwnerRecoveryRepository historicalEvidenceRepository;
     private final PlatformOwnerAdoptionRepository adoptionRepository;
+    private final SealedInstallationBootstrapQuery sealedInstallation;
     private final GovernedActorStatusQuery governedActors;
     private final FirstPartyInitialAdminAnchorQuery firstPartyAnchors;
     private final PlatformOwnerAdoptionFactSink facts;
@@ -39,6 +40,7 @@ public final class PlatformOwnerAdoptionService {
             AdministrativeAuthorityRepository authorityRepository,
             StandaloneTenantOwnerRecoveryRepository historicalEvidenceRepository,
             PlatformOwnerAdoptionRepository adoptionRepository,
+            SealedInstallationBootstrapQuery sealedInstallation,
             GovernedActorStatusQuery governedActors,
             FirstPartyInitialAdminAnchorQuery firstPartyAnchors,
             PlatformOwnerAdoptionFactSink facts,
@@ -48,6 +50,7 @@ public final class PlatformOwnerAdoptionService {
         this.authorityRepository = Objects.requireNonNull(authorityRepository, "authorityRepository");
         this.historicalEvidenceRepository = Objects.requireNonNull(historicalEvidenceRepository, "historicalEvidenceRepository");
         this.adoptionRepository = Objects.requireNonNull(adoptionRepository, "adoptionRepository");
+        this.sealedInstallation = Objects.requireNonNull(sealedInstallation, "sealedInstallation");
         this.governedActors = Objects.requireNonNull(governedActors, "governedActors");
         this.firstPartyAnchors = Objects.requireNonNull(firstPartyAnchors, "firstPartyAnchors");
         this.facts = Objects.requireNonNull(facts, "facts");
@@ -84,6 +87,13 @@ public final class PlatformOwnerAdoptionService {
             UUID expectedBootstrapCorrelationId,
             Instant now,
             UUID correlationId) {
+        require(sealedInstallation.matchesSealedInstallation(
+                        tenant,
+                        expectedIdentityId,
+                        expectedPrincipalId,
+                        expectedBootstrapCorrelationId),
+                "installation_bootstrap_not_exact_sealed_lineage");
+
         InitialAdminBootstrap marker = bootstrapRepository.findBootstrap(tenant)
                 .orElseThrow(() -> notEligible("bootstrap_marker_missing"));
         require(marker.authenticationAnchorType() == InitialAdminAuthenticationAnchorType.FIRST_PARTY_PRINCIPAL,
