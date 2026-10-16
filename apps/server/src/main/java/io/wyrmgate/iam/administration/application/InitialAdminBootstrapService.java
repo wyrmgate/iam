@@ -12,6 +12,9 @@ import io.wyrmgate.iam.administration.domain.ControlPlaneActorBindingState;
 import io.wyrmgate.iam.administration.domain.ExternalAuthenticationSubject;
 import io.wyrmgate.iam.administration.domain.InitialAdminAuthenticationAnchorType;
 import io.wyrmgate.iam.administration.domain.InitialAdminBootstrap;
+import io.wyrmgate.iam.administration.domain.OwnerAuthorityState;
+import io.wyrmgate.iam.administration.domain.PlatformOwnerAuthority;
+import io.wyrmgate.iam.administration.domain.TenantOwnerAuthority;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -98,7 +101,7 @@ public final class InitialAdminBootstrapService {
                 tenant, actorIdentityId, externalSubject, now, correlationId));
     }
 
-    /** ADR-0044/ADR-0046 first-party bootstrap path with tenant-owner authority. */
+    /** ADR-0044/ADR-0049 first-party path establishing both Tenant Owner and Platform Owner. */
     public InitialAdminBootstrapResult bootstrapFirstParty(
             TenantContext tenant,
             UUID actorIdentityId,
@@ -135,6 +138,16 @@ public final class InitialAdminBootstrapService {
                         tenant,
                         marker.administrativeGrantId(),
                         actorIdentityId,
+                        at)
+                && bootstrapRepository.isTenantOwnerAuthorityEffective(
+                        tenant,
+                        marker.administrativeGrantId(),
+                        actorIdentityId,
+                        at)
+                && bootstrapRepository.isPlatformOwnerAuthorityEffective(
+                        tenant,
+                        actorIdentityId,
+                        actorPrincipalId,
                         at);
     }
 
@@ -167,6 +180,7 @@ public final class InitialAdminBootstrapService {
                 bindingId,
                 null,
                 AdministrativePermissions.INITIAL_TENANT_ADMIN,
+                false,
                 now,
                 correlationId);
     }
@@ -183,6 +197,8 @@ public final class InitialAdminBootstrapService {
                             == InitialAdminAuthenticationAnchorType.FIRST_PARTY_PRINCIPAL
                     && existing.actorIdentityId().equals(actorIdentityId)
                     && existing.actorPrincipalId().equals(actorPrincipalId)) {
+                // Do not synthesize ADR-0049 Platform Owner authority for a pre-existing marker.
+                // Fresh/resumed ADR-0049 bootstrap creates marker + both owner rows atomically.
                 return resultFrom(existing);
             }
             throw new InitialAdminAlreadyBootstrappedException(tenant.tenantId());
@@ -198,6 +214,7 @@ public final class InitialAdminBootstrapService {
                 null,
                 actorPrincipalId,
                 AdministrativePermissions.STANDALONE_TENANT_OWNER,
+                true,
                 now,
                 correlationId);
     }
@@ -209,6 +226,7 @@ public final class InitialAdminBootstrapService {
             UUID actorBindingId,
             UUID actorPrincipalId,
             Set<AdministrativePermission> permissions,
+            boolean establishOwnerAuthorities,
             Instant now,
             UUID correlationId) {
         UUID bootstrapId = idGenerator.nextId();
@@ -271,8 +289,41 @@ public final class InitialAdminBootstrapService {
                 now,
                 now);
         bootstrapRepository.insertGrant(tenant, grant);
-        factSink.bootstrapped(tenant, marker);
 
+        if (establishOwnerAuthorities) {
+            TenantOwnerAuthority tenantOwner = new TenantOwnerAuthority(
+                    idGenerator.nextId(),
+                    actorIdentityId,
+                    grantId,
+                    OwnerAuthorityState.ACTIVE,
+                    null,
+                    1,
+                    now,
+                    now);
+            bootstrapRepository.insertTenantOwnerAuthority(tenant, tenantOwner);
+
+            PlatformOwnerAuthority platformOwner = new PlatformOwnerAuthority(
+                    idGenerator.nextId(),
+                    tenant.tenantId(),
+                    actorIdentityId,
+                    actorPrincipalId,
+                    OwnerAuthorityState.ACTIVE,
+                    true,
+                    true,
+                    null,
+                    now,
+                    null,
+                    null,
+                    null,
+                    correlationId,
+                    correlationId,
+                    1,
+                    now,
+                    now);
+            bootstrapRepository.insertPlatformOwnerAuthority(platformOwner);
+        }
+
+        factSink.bootstrapped(tenant, marker);
         return resultFrom(marker);
     }
 
