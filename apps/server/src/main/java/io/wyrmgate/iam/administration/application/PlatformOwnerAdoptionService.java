@@ -87,12 +87,13 @@ public final class PlatformOwnerAdoptionService {
             UUID expectedBootstrapCorrelationId,
             Instant now,
             UUID correlationId) {
-        require(sealedInstallation.matchesSealedInstallation(
-                        tenant,
-                        expectedIdentityId,
-                        expectedPrincipalId,
-                        expectedBootstrapCorrelationId),
-                "installation_bootstrap_not_exact_sealed_lineage");
+        SealedInstallationBootstrapQuery.Candidate sealed = sealedInstallation.findSealedInstallation()
+                .orElseThrow(() -> notEligible("installation_bootstrap_not_sealed"));
+        require(sealed.tenant().equals(tenant), "sealed_installation_tenant_mismatch");
+        require(sealed.identityId().equals(expectedIdentityId), "sealed_installation_identity_mismatch");
+        require(sealed.principalId().equals(expectedPrincipalId), "sealed_installation_principal_mismatch");
+        require(sealed.bootstrapCorrelationId().equals(expectedBootstrapCorrelationId),
+                "sealed_installation_correlation_mismatch");
 
         InitialAdminBootstrap marker = bootstrapRepository.findBootstrap(tenant)
                 .orElseThrow(() -> notEligible("bootstrap_marker_missing"));
