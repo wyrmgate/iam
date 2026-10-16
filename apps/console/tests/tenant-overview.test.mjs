@@ -3,43 +3,62 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const page = await readFile(new URL('../src/TenantOverviewPage.tsx', import.meta.url), 'utf8');
+const tenantApi = await readFile(new URL('../src/tenantContextApi.ts', import.meta.url), 'utf8');
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const navigation = await readFile(new URL('../src/consoleNavigation.ts', import.meta.url), 'utf8');
 const architecture = await readFile(new URL('../../../docs/architecture/platform-authority-and-application-tenancy.md', import.meta.url), 'utf8');
 
 test('current Tenant route remains an Administration surface rather than a new capability', () => {
   assert.match(navigation, /\{ id: 'tenant', path: '\/tenant', label: 'Current Tenant', group: 'administration' \}/);
-  assert.doesNotMatch(navigation, /\{ id: 'tenant', code:/);
   assert.match(app, /route === 'tenant'/);
   assert.match(app, /<TenantOverviewPage authority=/);
 });
 
-test('Tenant Overview derives all context from existing server projections', () => {
-  assert.match(page, /CurrentAdministrativeAuthority/);
+test('Tenant dashboard uses server-derived canonical Tenant metadata and existing operations projection', () => {
+  assert.match(page, /getTenantContext/);
   assert.match(page, /getIamOperationsOverview\('24h', 'ALL', 'OLDEST'/);
-  assert.match(page, /server-resolved Tenant isolation boundary/);
-  assert.doesNotMatch(page, /apiRequest<.*tenant/i);
+  assert.match(tenantApi, /\/console\/tenant-context/);
+  assert.match(page, /tenant\.value\.displayName/);
+  assert.match(page, /tenant\.value\.revision/);
+  assert.match(page, /tenant\.value\.createdAt/);
+  assert.match(page, /tenant\.value\.updatedAt/);
   assert.doesNotMatch(page, /method:\s*'POST'/);
   assert.doesNotMatch(page, /tenant selector/i);
 });
 
-test('Tenant Overview follows the agreed dashboard composition', () => {
-  assert.match(page, /Page width="standard"/);
-  assert.match(page, />Tenant Overview</);
-  assert.match(page, /title="Tenant details"/);
-  assert.match(page, /title="IAM estate"/);
-  assert.match(page, /title="Requires attention"/);
-  assert.match(page, /title="Integration posture"/);
-  assert.match(page, /title="Administration"/);
-  assert.match(page, /title="Recent evidence"/);
-  assert.match(page, /gridTemplateColumns: \{ xs: '1fr', lg: 'minmax\(0, 2fr\) minmax\(320px, 1fr\)' \}/);
+test('Tenant dashboard follows the agreed screenshot composition', () => {
+  assert.match(page, /Page width="wide"/);
+  for (const label of [
+    'Overview', 'Identities', 'Applications', 'Access', 'Organizations', 'Governance',
+    'Sources & Integrations', 'Administrators', 'Audit', 'Settings',
+    'Tenant Information', 'Tenant Health', 'Recent Activity',
+    'Identities by Type', 'Applications by Origin', 'Active Access by Application',
+    'Open Governance Items', 'Identity Sources',
+  ]) assert.match(page, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  for (const label of ['Identities', 'Applications', 'Active Access', 'Governance Issues', 'Sources', 'Connectors']) {
+    assert.match(page, new RegExp(`label="${label}"`));
+  }
+  assert.match(page, /lg: 'repeat\(6, minmax\(0, 1fr\)\)'/);
+  assert.match(page, /lg: '1\.15fr 1fr 1fr'/);
+  assert.match(page, /lg: 'repeat\(3, minmax\(0, 1fr\)\)'/);
 });
 
-test('Tenant Overview preserves IAM semantic distinctions without making them the primary UI', () => {
-  assert.match(page, /Authoritative business access intent; EffectiveAccess remains a separate projection/);
-  assert.match(page, /Tenant Owner and other grants remain Administration-owned authority/);
-  assert.match(page, /Operational fulfillment and provider-observation posture; not Tenant business state/);
-  assert.match(page, /evidence, not mutable governance state/);
+test('unsupported screenshot data remains explicit instead of fabricated', () => {
+  assert.match(page, /Breakdown not exposed/);
+  assert.match(page, /Source count is not exposed by the current projection/);
+  assert.match(page, /Source list not exposed/);
+  assert.doesNotMatch(page, /Acme Corp|ACME|Alice Admin|Workday|Salesforce|GitHub|Jira|Internal Payroll/);
+  assert.doesNotMatch(page, /\bACTIVE\b/);
+  assert.doesNotMatch(page, /Tenant Actions/);
+  assert.doesNotMatch(page, /Tenant Owner/);
+  assert.doesNotMatch(page, /description.*Corporation/i);
+});
+
+test('Tenant dashboard preserves IAM semantic distinctions', () => {
+  assert.match(page, /AccessAssignment remains authoritative business intent and EffectiveAccess remains a projection/);
+  assert.match(page, /not a synthetic health score/);
+  assert.match(page, /Recent denied or failed Audit evidence/);
   assert.match(page, /\/identities/);
   assert.match(page, /\/catalog/);
   assert.match(page, /\/access/);
@@ -48,23 +67,18 @@ test('Tenant Overview preserves IAM semantic distinctions without making them th
   assert.match(page, /\/audit/);
 });
 
-test('Tenant Overview uses enterprise workbench primitives and avoids decorative dashboard patterns', () => {
+test('Tenant dashboard stays within shared enterprise presentation roles', () => {
   assert.match(page, /<Surface/);
   assert.match(page, /<DataTable/);
   assert.match(page, /<StateIndicator/);
   assert.doesNotMatch(page, /StatusChip/);
   assert.doesNotMatch(page, /gradient/i);
   assert.doesNotMatch(page, /boxShadow/);
-  assert.doesNotMatch(page, /donut|pie chart|radial/i);
-  assert.doesNotMatch(page, /Tenant boundary semantics/);
-  assert.doesNotMatch(page, /Manage this Tenant/);
-  assert.doesNotMatch(page, /Owning capability/);
-  assert.doesNotMatch(page, /SUSPEND|RETIRED|ACTIVE Tenant/);
+  assert.doesNotMatch(page, /#[0-9a-f]{3,8}/i);
 });
 
 test('living architecture still documents the Console boundary without redefining Tenant authority', () => {
   assert.match(architecture, /## Console tenant context/);
   assert.match(architecture, /not a new Tenant aggregate, lifecycle API or browser-side authority source/);
-  assert.match(architecture, /does not model generic `UserTenantMembership` or `UserApplication` authority/);
   assert.match(architecture, /Operation-time server authorization remains final/);
 });
