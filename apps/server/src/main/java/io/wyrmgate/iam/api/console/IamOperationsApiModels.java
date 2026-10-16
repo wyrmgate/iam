@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public final class IamOperationsApiModels {
     private IamOperationsApiModels() {}
+    public record TenantResource(UUID id, String displayName, long revision, Instant createdAt, Instant updatedAt) {}
     public record WindowResource(String preset, Instant from, Instant until) {}
     public record MetricResource(String status, Long value) {}
     public record AttentionResource(MetricResource pendingApprovals, MetricResource pendingReviews,
@@ -31,8 +32,8 @@ public final class IamOperationsApiModels {
             List<AuditEvidenceItemResource> recent) {}
     public record EnvironmentResource(Instant asOf, MetricResource activeIdentities, MetricResource uncorrelatedPrincipals,
             MetricResource activeAccessAssignments, MetricResource applications, MetricResource activeConnectors) {}
-    public record IamOperationsOverviewResource(Instant asOf, boolean partial, UUID tenantId, WindowResource window,
-            AttentionResource attention, MyWorkResource myWork, ProvisioningResource provisioning,
+    public record IamOperationsOverviewResource(Instant asOf, boolean partial, UUID tenantId, TenantResource tenant,
+            WindowResource window, AttentionResource attention, MyWorkResource myWork, ProvisioningResource provisioning,
             ReconciliationResource reconciliation, GovernanceActivityResource myGovernanceActivity,
             SecurityEvidenceResource securityEvidence, EnvironmentResource environment) {}
 }
