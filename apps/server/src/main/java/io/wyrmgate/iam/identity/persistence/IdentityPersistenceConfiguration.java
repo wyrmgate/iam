@@ -11,6 +11,7 @@ import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionEvaluato
 import io.wyrmgate.iam.identity.application.CanonicalAttributeResolutionService;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
+import io.wyrmgate.iam.identity.application.IdentityAdministrativeContinuityGuard;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQueryService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
@@ -107,8 +108,14 @@ public class IdentityPersistenceConfiguration {
             IdentityRepository identityRepository,
             IdentityFactSink identityFactSink,
             IdGenerator idGenerator,
-            TransactionExecutor transactionExecutor) {
-        return new IdentityCommandService(identityRepository, identityFactSink, idGenerator, transactionExecutor);
+            TransactionExecutor transactionExecutor,
+            IdentityAdministrativeContinuityGuard administrativeContinuityGuard) {
+        return new IdentityCommandService(
+                identityRepository,
+                identityFactSink,
+                idGenerator,
+                transactionExecutor,
+                administrativeContinuityGuard);
     }
 
     @Bean
