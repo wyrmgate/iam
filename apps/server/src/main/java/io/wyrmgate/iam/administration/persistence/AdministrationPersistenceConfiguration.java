@@ -21,6 +21,7 @@ import io.wyrmgate.iam.administration.application.GovernedActorStatusQuery;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapFactSink;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapRepository;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapService;
+import io.wyrmgate.iam.administration.application.PlatformOwnerAuthorityQuery;
 import io.wyrmgate.iam.identity.application.IdentityAdministrativeContinuityGuard;
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -175,6 +176,15 @@ public class AdministrationPersistenceConfiguration {
     FirstPartyInitialAdminAnchorQuery firstPartyInitialAdminAnchorQuery(
             IdentityAuthenticationQuery identityAuthenticationQuery) {
         return new IdentityFirstPartyInitialAdminAnchorQueryAdapter(identityAuthenticationQuery);
+    }
+
+    @Bean
+    PlatformOwnerAuthorityQuery platformOwnerAuthorityQuery(
+            JdbcTemplate jdbcTemplate,
+            GovernedActorStatusQuery governedActorStatusQuery,
+            FirstPartyInitialAdminAnchorQuery firstPartyInitialAdminAnchorQuery) {
+        return new JdbcPlatformOwnerAuthorityQuery(
+                jdbcTemplate, governedActorStatusQuery, firstPartyInitialAdminAnchorQuery);
     }
 
     @Bean
