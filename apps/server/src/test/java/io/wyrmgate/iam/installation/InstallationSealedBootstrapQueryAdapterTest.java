@@ -1,9 +1,9 @@
 package io.wyrmgate.iam.installation;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.administration.application.SealedInstallationBootstrapQuery;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class InstallationSealedBootstrapQueryAdapterTest {
 
     @Test
-    void acceptsOnlyExactSealedInstallationLineage() {
+    void derivesExactCandidateFromSealedInstallation() {
         UUID tenantId = UUID.randomUUID();
         UUID identityId = UUID.randomUUID();
         UUID principalId = UUID.randomUUID();
@@ -26,35 +26,26 @@ class InstallationSealedBootstrapQueryAdapterTest {
         InstallationSealedBootstrapQueryAdapter query =
                 new InstallationSealedBootstrapQueryAdapter(new FixedRepository(sealed));
 
-        assertTrue(query.matchesSealedInstallation(
-                new TenantContext(tenantId), identityId, principalId, correlationId));
-        assertFalse(query.matchesSealedInstallation(
-                new TenantContext(UUID.randomUUID()), identityId, principalId, correlationId));
-        assertFalse(query.matchesSealedInstallation(
-                new TenantContext(tenantId), UUID.randomUUID(), principalId, correlationId));
-        assertFalse(query.matchesSealedInstallation(
-                new TenantContext(tenantId), identityId, UUID.randomUUID(), correlationId));
-        assertFalse(query.matchesSealedInstallation(
-                new TenantContext(tenantId), identityId, principalId, UUID.randomUUID()));
+        SealedInstallationBootstrapQuery.Candidate candidate =
+                query.findSealedInstallation().orElseThrow();
+        assertEquals(tenantId, candidate.tenant().tenantId());
+        assertEquals(identityId, candidate.identityId());
+        assertEquals(principalId, candidate.principalId());
+        assertEquals(correlationId, candidate.bootstrapCorrelationId());
     }
 
     @Test
     void rejectsUnsealedInstallation() {
-        UUID tenantId = UUID.randomUUID();
-        UUID identityId = UUID.randomUUID();
-        UUID principalId = UUID.randomUUID();
-        UUID correlationId = UUID.randomUUID();
         InstallationBootstrapPlan unsealed = plan(
                 InstallationBootstrapState.VERIFIED,
-                tenantId,
-                identityId,
-                principalId,
-                correlationId);
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID());
         InstallationSealedBootstrapQueryAdapter query =
                 new InstallationSealedBootstrapQueryAdapter(new FixedRepository(unsealed));
 
-        assertFalse(query.matchesSealedInstallation(
-                new TenantContext(tenantId), identityId, principalId, correlationId));
+        assertTrue(query.findSealedInstallation().isEmpty());
     }
 
     private static InstallationBootstrapPlan plan(
