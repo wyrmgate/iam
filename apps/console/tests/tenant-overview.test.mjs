@@ -33,24 +33,26 @@ test('Tenant dashboard follows the agreed screenshot composition', () => {
     'Sources & Integrations', 'Administrators', 'Audit', 'Settings',
     'Tenant Information', 'Tenant Health', 'Recent Activity',
     'Identities by Type', 'Applications by Origin', 'Active Access by Application',
-    'Open Governance Items', 'Identity Sources',
+    'Open Governance Items', 'Identity Sources', 'Tenant Actions',
   ]) assert.match(page, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 
   for (const label of ['Identities', 'Applications', 'Active Access', 'Governance Issues', 'Sources', 'Connectors']) {
     assert.match(page, new RegExp(`label="${label}"`));
   }
+  assert.match(page, /startIcon={<LineIcon/);
   assert.match(page, /lg: 'repeat\(6, minmax\(0, 1fr\)\)'/);
   assert.match(page, /lg: '1\.15fr 1fr 1fr'/);
   assert.match(page, /lg: 'repeat\(3, minmax\(0, 1fr\)\)'/);
+  assert.match(page, /lg: '1\.35fr 1fr'/);
 });
 
 test('unsupported screenshot data remains explicit instead of fabricated', () => {
   assert.match(page, /Breakdown not exposed/);
   assert.match(page, /Source count is not exposed by the current projection/);
   assert.match(page, /Source list not exposed/);
+  assert.match(page, /No Tenant mutation actions are exposed by the current Console contract/);
   assert.doesNotMatch(page, /Acme Corp|ACME|Alice Admin|Workday|Salesforce|GitHub|Jira|Internal Payroll/);
   assert.doesNotMatch(page, /\bACTIVE\b/);
-  assert.doesNotMatch(page, /Tenant Actions/);
   assert.doesNotMatch(page, /Tenant Owner/);
   assert.doesNotMatch(page, /description.*Corporation/i);
 });
