@@ -22,6 +22,7 @@ import io.wyrmgate.iam.administration.application.InitialAdminBootstrapFactSink;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapRepository;
 import io.wyrmgate.iam.administration.application.InitialAdminBootstrapService;
 import io.wyrmgate.iam.administration.application.PlatformOwnerAuthorityQuery;
+import io.wyrmgate.iam.administration.application.TenantOwnerOverviewQuery;
 import io.wyrmgate.iam.identity.application.IdentityAdministrativeContinuityGuard;
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -81,6 +82,13 @@ public class AdministrationPersistenceConfiguration {
                 governedActorStatusQuery,
                 idGenerator,
                 transactionExecutor);
+    }
+
+    @Bean
+    TenantOwnerOverviewQuery tenantOwnerOverviewQuery(
+            JdbcTemplate jdbcTemplate,
+            GovernedActorStatusQuery governedActorStatusQuery) {
+        return new JdbcTenantOwnerOverviewQuery(jdbcTemplate, governedActorStatusQuery);
     }
 
     @Bean
