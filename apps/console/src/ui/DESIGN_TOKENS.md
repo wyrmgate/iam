@@ -6,15 +6,16 @@ The broader composition rules are documented in `docs/engineering/console-enterp
 
 ## Color roles
 
-The palette deliberately separates five roles:
+The palette deliberately separates six roles:
 
 - **Product** — the Wyrmgate blue accent used for primary actions, focus, selection and product emphasis.
 - **Neutral** — canvas, surfaces, borders and text hierarchy.
 - **Navigation** — dark application chrome with explicit hover/active/text roles.
 - **Semantic** — success, warning, danger and informational feedback. These are not aliases for the product accent.
 - **Lifecycle** — compact resource-state colors such as active, pending, suspended, inactive and decommissioned. Lifecycle meaning remains distinct from generic feedback severity and from product emphasis.
+- **Visualization** — restrained categorical colors and neutral tracks for charts whose categories have no success/warning/danger meaning. These colors must always be accompanied by labels or values so chart interpretation does not depend on color alone.
 
-A component chooses color by meaning, not visual similarity. Capability code should not introduce raw product/status colors when a shared semantic role already exists.
+A component chooses color by meaning, not visual similarity. Capability code should not introduce raw product/status colors when a shared semantic role already exists. Arbitrary chart categories must not borrow lifecycle or feedback colors merely to look distinct.
 
 ## Enterprise density
 
@@ -62,6 +63,8 @@ Normal surfaces and tables use borders with no decorative shadow. Shadows are re
 `WyrmgateUiProvider` normalizes common MUI implementation defaults for buttons, form controls, tables, chips, tabs, cards, dialogs, drawers and tooltips. These defaults are presentation infrastructure only. They do not change Wyrmgate IAM semantics, server authorization, route behavior, form contracts, confirmation behavior or capability-owned business state.
 
 `StateIndicator` is the preferred compact dot-and-label treatment when the caller owns a typed state and its presentation tone. `StatusChip` remains available for genuinely token-like categorical metadata; it is not the universal lifecycle component.
+
+`DonutChart` is the shared compact part-to-whole visualization primitive. It consumes the dedicated visualization palette, includes a visible textual legend and values, and does not infer or color-code business state.
 
 The public Wyrmgate primitives remain the supported application-facing boundary. MUI is still an implementation detail behind that boundary.
 
