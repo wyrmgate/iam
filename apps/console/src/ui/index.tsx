@@ -13,6 +13,7 @@ export {
   TableHead,
   TableRow,
 } from './table';
+export { DonutChart, type DonutChartItem, type DonutChartProps } from './charts';
 export { Modal, SidePanel, ConfirmDialog } from './dialogs';
 export { Tab, TabPanel, Tabs, getTabA11yProps } from './tabs';
 export type { ControlledTabsProps, UncontrolledTabsProps, WyrmgateTabsProps, TabPanelProps } from './tabs';

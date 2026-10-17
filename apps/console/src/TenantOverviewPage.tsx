@@ -15,6 +15,7 @@ import {
   Button,
   DataTable,
   DataTableRow,
+  DonutChart,
   Page,
   StateIndicator,
   StatePanel,
@@ -339,28 +340,15 @@ function BreakdownSummary({ breakdown, total, totalLabel, labels, action, path }
   const totalValue = total.status === 'AVAILABLE' && total.value !== null ? total.value : fallbackTotal;
 
   return (
-    <Box sx={{ minHeight: 176, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '112px minmax(0, 1fr)' }, gap: 2, alignItems: 'center' }}>
-      <Box sx={{ alignSelf: 'stretch', display: 'grid', alignContent: 'center', p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'action.hover' }}>
-        <Typography sx={{ fontSize: 24, lineHeight: 1.2, fontWeight: 700 }}>{totalValue.toLocaleString()}</Typography>
-        <Typography variant="caption" color="text.secondary">{totalLabel}</Typography>
-      </Box>
-      <Box sx={{ minWidth: 0, display: 'grid', gap: 1.15 }}>
-        {rows.map((row) => {
-          const share = totalValue > 0 ? Math.min(100, (row.value / totalValue) * 100) : 0;
-          return (
-            <Box key={row.key} sx={{ minWidth: 0 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 0.45 }}>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>{row.label}</Typography>
-                <Typography variant="caption" color="text.secondary">{row.value.toLocaleString()}</Typography>
-              </Box>
-              <Box sx={{ height: 6, borderRadius: 3, bgcolor: 'action.hover', overflow: 'hidden' }}>
-                <Box sx={{ width: `${share}%`, minWidth: row.value > 0 ? 4 : 0, height: '100%', bgcolor: 'primary.main' }} />
-              </Box>
-            </Box>
-          );
-        })}
-        <Button variant="text" size="small" onClick={() => navigateConsole(path)} sx={{ justifySelf: 'start', px: 0 }}>{action}</Button>
-      </Box>
+    <Box sx={{ minHeight: 210, display: 'grid', gap: 1.5, alignContent: 'start' }}>
+      <DonutChart
+        ariaLabel={`${totalLabel} distribution`}
+        items={rows}
+        totalLabel={totalLabel}
+        totalValue={totalValue}
+        size={148}
+      />
+      <Button variant="text" size="small" onClick={() => navigateConsole(path)} sx={{ justifySelf: 'start', px: 0 }}>{action}</Button>
     </Box>
   );
 }

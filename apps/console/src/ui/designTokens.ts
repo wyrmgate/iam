@@ -42,6 +42,10 @@ export const wyrmgateDesignTokens = {
       inactive: '#66758a',
       decommissioned: '#a12b35',
     },
+    visualization: {
+      categorical: ['#235ea7', '#5379a7', '#6c6aa5', '#3f7d89', '#7a688f', '#66758a'],
+      track: '#e7edf3',
+    },
   },
   spacing: {
     unit: 8,
