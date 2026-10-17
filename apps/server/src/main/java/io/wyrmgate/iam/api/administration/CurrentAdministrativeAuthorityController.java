@@ -2,6 +2,7 @@ package io.wyrmgate.iam.api.administration;
 
 import io.wyrmgate.iam.administration.application.CurrentAdministrativeAuthorityProjection;
 import io.wyrmgate.iam.administration.application.EffectiveAdministrativeAuthority;
+import io.wyrmgate.iam.administration.application.PlatformOwnerAuthorityQuery;
 import io.wyrmgate.iam.api.administration.AdministrationApiModels.CurrentAdministrativeAuthorityResource;
 import io.wyrmgate.iam.api.administration.AdministrationApiModels.EffectiveAuthorityResource;
 import io.wyrmgate.iam.api.administration.AdministrationApiModels.PermissionResource;
@@ -23,12 +24,15 @@ import org.springframework.web.bind.annotation.RestController;
 public final class CurrentAdministrativeAuthorityController {
 
     private final CurrentAdministrativeAuthorityProjection projection;
+    private final PlatformOwnerAuthorityQuery platformOwners;
     private final IdGenerator ids;
 
     public CurrentAdministrativeAuthorityController(
             CurrentAdministrativeAuthorityProjection projection,
+            PlatformOwnerAuthorityQuery platformOwners,
             IdGenerator ids) {
         this.projection = projection;
+        this.platformOwners = platformOwners;
         this.ids = ids;
     }
 
@@ -38,10 +42,13 @@ public final class CurrentAdministrativeAuthorityController {
         var actor = ControlPlaneActorRequestContext.require(request);
         Instant evaluatedAt = Instant.now();
         var result = projection.current(actor, evaluatedAt);
+        boolean viablePlatformOwner = platformOwners.isViablePlatformOwner(
+                actor.tenant(), actor.identityId(), evaluatedAt);
         var body = new CurrentAdministrativeAuthorityResource(
                 actor.tenant().tenantId(),
                 actor.identityId(),
                 result.administrativelyEligible(),
+                viablePlatformOwner,
                 evaluatedAt,
                 result.authorities().stream()
                         .map(CurrentAdministrativeAuthorityController::resource)
