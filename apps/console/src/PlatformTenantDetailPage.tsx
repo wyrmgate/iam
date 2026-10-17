@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ApiError } from './api';
 import { getPlatformTenant, type PlatformTenantResource } from './platformTenantsApi';
 import { Box, Button, Page, PageHeader, StatePanel, Surface, Typography } from './ui';
@@ -44,7 +44,7 @@ function errorCopy(error: unknown): { title: string; body: string } {
   };
 }
 
-function DefinitionRow({ label, children }: { label: string; children: React.ReactNode }) {
+function DefinitionRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Box
       sx={{
