@@ -76,7 +76,7 @@ export const consoleRoutes: ConsoleRoute[] = [
   { id: 'integrations', path: '/integrations', label: 'Integrations', group: 'integration', resourceTypes: ['connector', 'connector-binding', 'connector-worker', 'entitlement-observation-mapping', 'provisioning-job', 'provisioning-task', 'provisioning-attempt', 'reconciliation-run'] },
   { id: 'credentials', path: '/credentials', label: 'Credentials', group: 'credentials', resourceTypes: ['credential', 'credential-rotation'] },
   { id: 'platform-tenants', path: '/platform/tenants', label: 'Tenants', group: 'platform', platformOwnerOnly: true },
-  { id: 'tenant', path: '/tenant', label: 'Current Tenant', group: 'administration' },
+  { id: 'tenant', path: '/tenant', label: 'Tenant Management', group: 'administration' },
   { id: 'administration', path: '/administration', label: 'Administration', group: 'administration', visibleWithoutAdministrativeEligibility: true },
   { id: 'audit', path: '/audit', label: 'Audit', group: 'audit', resourceTypes: ['audit', 'evidence-snapshot'] },
 ];
