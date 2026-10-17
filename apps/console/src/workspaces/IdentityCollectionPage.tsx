@@ -268,75 +268,35 @@ export function IdentityCollectionPage({ authority, onSelect }: Props) {
           title="Governed identities"
           description={`${identities.length} ${filtersActive ? 'matching ' : ''}identities currently loaded.`}
         >
-          <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-            <DataTable ariaLabel="Governed identities" minWidth={760}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Governed subject</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Lifecycle</TableCell>
-                  <TableCell>Updated</TableCell>
-                  <TableCell align="right">Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {identities.map((identity) => (
-                  <DataTableRow key={identity.id} interactive>
-                    <TableCell>
-                      <Button variant="text" size="small" onClick={() => onSelect(identity.id)} sx={{ p: 0, minHeight: 0, justifyContent: 'flex-start', textAlign: 'left' }}>
-                        <Box sx={{ display: 'grid', gap: 0.25 }}>
-                          <Typography component="span" variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>{identity.displayName}</Typography>
-                          <Typography component="span" variant="caption" color="text.secondary" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{identity.id}</Typography>
-                        </Box>
-                      </Button>
-                    </TableCell>
-                    <TableCell>{identity.type}</TableCell>
-                    <TableCell><StateIndicator label={identity.lifecycleState} tone={lifecycleTone(identity.lifecycleState)} /></TableCell>
-                    <TableCell><time dateTime={identity.updatedAt}>{formatDateTime(identity.updatedAt)}</time></TableCell>
-                    <DataTableActionCell><Button variant="outlined" size="small" onClick={() => onSelect(identity.id)}>View</Button></DataTableActionCell>
-                  </DataTableRow>
-                ))}
-              </TableBody>
-            </DataTable>
-          </Box>
-
-          <Box sx={{ display: { xs: 'grid', sm: 'none' }, gap: 1 }}>
-            {identities.map((identity) => (
-              <Box
-                component="button"
-                type="button"
-                key={identity.id}
-                onClick={() => onSelect(identity.id)}
-                sx={{
-                  width: '100%',
-                  minHeight: 72,
-                  display: 'grid',
-                  gap: 0.75,
-                  p: 1.5,
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
-                  font: 'inherit',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  '&:hover': { bgcolor: 'action.hover' },
-                  '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.light', outlineOffset: 2 },
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'flex-start' }}>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{identity.displayName}</Typography>
-                    <Typography variant="caption" color="text.secondary">{identity.type}</Typography>
-                  </Box>
-                  <StateIndicator label={identity.lifecycleState} tone={lifecycleTone(identity.lifecycleState)} />
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', overflowWrap: 'anywhere' }}>{identity.id}</Typography>
-                <Typography variant="caption" color="text.secondary">Updated {formatDateTime(identity.updatedAt)}</Typography>
-              </Box>
-            ))}
-          </Box>
+          <DataTable ariaLabel="Governed identities" minWidth={760}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Governed subject</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Lifecycle</TableCell>
+                <TableCell>Updated</TableCell>
+                <TableCell align="right">Action</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {identities.map((identity) => (
+                <DataTableRow key={identity.id} interactive>
+                  <TableCell>
+                    <Button variant="text" size="small" onClick={() => onSelect(identity.id)} sx={{ p: 0, minHeight: 0, justifyContent: 'flex-start', textAlign: 'left' }}>
+                      <Box sx={{ display: 'grid', gap: 0.25 }}>
+                        <Typography component="span" variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>{identity.displayName}</Typography>
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{identity.id}</Typography>
+                      </Box>
+                    </Button>
+                  </TableCell>
+                  <TableCell>{identity.type}</TableCell>
+                  <TableCell><StateIndicator label={identity.lifecycleState} tone={lifecycleTone(identity.lifecycleState)} /></TableCell>
+                  <TableCell><time dateTime={identity.updatedAt}>{formatDateTime(identity.updatedAt)}</time></TableCell>
+                  <DataTableActionCell><Button variant="outlined" size="small" onClick={() => onSelect(identity.id)}>View</Button></DataTableActionCell>
+                </DataTableRow>
+              ))}
+            </TableBody>
+          </DataTable>
 
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.25, mt: 2 }}>
             <Typography variant="caption" color="text.secondary">
