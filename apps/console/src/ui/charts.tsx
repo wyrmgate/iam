@@ -68,7 +68,6 @@ export function DonutChart({ ariaLabel, items, totalLabel, totalValue, size = 15
                 strokeWidth="14"
                 strokeDasharray={`${segment} ${Math.max(0, circumference - segment)}`}
                 strokeDashoffset={offset}
-                pathLength={circumference}
               />
             );
           }) : null}
