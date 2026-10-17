@@ -2,8 +2,6 @@ package io.wyrmgate.iam.access.persistence;
 
 import io.wyrmgate.iam.access.application.AccessOperationsOverviewQuery;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
-import java.util.List;
-import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -22,26 +20,5 @@ public class JdbcAccessOperationsOverviewQuery implements AccessOperationsOvervi
                 Long.class,
                 tenant.tenantId());
         return value == null ? 0 : value;
-    }
-
-    @Override
-    public List<EntitlementAccessCount> effectiveAccessByEntitlement(TenantContext tenant, int limit) {
-        if (limit < 1 || limit > 20) {
-            throw new IllegalArgumentException("effective-access overview limit must be between 1 and 20");
-        }
-        return jdbc.query(
-                """
-                SELECT entitlement_id, count(*) AS total
-                FROM access.effective_access
-                WHERE tenant_id = ?
-                GROUP BY entitlement_id
-                ORDER BY total DESC, entitlement_id
-                LIMIT ?
-                """,
-                (rs, rowNum) -> new EntitlementAccessCount(
-                        rs.getObject("entitlement_id", UUID.class),
-                        rs.getLong("total")),
-                tenant.tenantId(),
-                limit);
     }
 }
