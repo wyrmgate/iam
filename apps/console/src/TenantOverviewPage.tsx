@@ -3,7 +3,9 @@ import type { CurrentAdministrativeAuthority } from './api';
 import {
   getIamOperationsOverview,
   type IamOperationsOverview,
+  type OverviewBreakdown,
   type OverviewMetric,
+  type OverviewSourceSystem,
   type OverviewStatus,
 } from './iamOperationsApi';
 import { navigateConsole } from './consoleNavigation';
@@ -58,6 +60,11 @@ type TenantTab = {
   disabledReason?: string;
 };
 
+type BreakdownLabel = {
+  key: string;
+  label: string;
+};
+
 const tenantTabs: TenantTab[] = [
   { label: 'Overview', icon: 'overview', path: '/tenant' },
   { label: 'Identities', icon: 'identities', path: '/identities' },
@@ -69,6 +76,18 @@ const tenantTabs: TenantTab[] = [
   { label: 'Administrators', icon: 'administrators', path: '/administration' },
   { label: 'Audit', icon: 'audit', path: '/audit' },
   { label: 'Settings', icon: 'settings', disabledReason: 'Tenant settings are not exposed by the current Console contract.' },
+];
+
+const identityTypeLabels: BreakdownLabel[] = [
+  { key: 'PERSON', label: 'People' },
+  { key: 'SERVICE', label: 'Service identities' },
+  { key: 'WORKLOAD', label: 'Workload identities' },
+];
+
+const applicationOriginLabels: BreakdownLabel[] = [
+  { key: 'TENANT_LOCAL', label: 'Tenant local' },
+  { key: 'PLATFORM_SHARED', label: 'Platform shared' },
+  { key: 'PLATFORM_INTERNAL', label: 'Platform internal' },
 ];
 
 function LineIcon({ name, size = 20 }: { name: IconName; size?: number }) {
@@ -140,6 +159,13 @@ function shortId(value?: string | null): string {
   return value.length <= 28 ? value : `${value.slice(0, 12)}…${value.slice(-8)}`;
 }
 
+function humanize(value: string): string {
+  return value
+    .toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
 function formatDateTime(value?: string | null): string {
   if (!value) return '—';
   const date = new Date(value);
@@ -178,6 +204,10 @@ function statusLabel(status: OverviewStatus): string {
 
 function metricText(metric: OverviewMetric): string | null {
   return metric.status === 'AVAILABLE' && metric.value !== null ? metric.value.toLocaleString() : null;
+}
+
+function metricFromCount(status: OverviewStatus, value: number | null): OverviewMetric {
+  return { status, value: status === 'AVAILABLE' ? value : null };
 }
 
 function sumMetrics(...metrics: OverviewMetric[]): OverviewMetric {
@@ -276,84 +306,148 @@ function HealthSignalRow({ label, state, tone, path }: {
   );
 }
 
-function BreakdownPlaceholder({ total, totalLabel, message, action, path }: {
+function breakdownRows(breakdown: OverviewBreakdown, labels: BreakdownLabel[]): Array<{ key: string; label: string; value: number }> {
+  const values = new Map(breakdown.items.map((item) => [item.key, item.value]));
+  const known = labels.map((item) => ({ ...item, value: values.get(item.key) ?? 0 }));
+  const knownKeys = new Set(labels.map((item) => item.key));
+  const additional = breakdown.items
+    .filter((item) => !knownKeys.has(item.key))
+    .map((item) => ({ key: item.key, label: humanize(item.key), value: item.value }));
+  return [...known, ...additional];
+}
+
+function BreakdownSummary({ breakdown, total, totalLabel, labels, action, path }: {
+  breakdown: OverviewBreakdown;
   total: OverviewMetric;
   totalLabel: string;
-  message: string;
+  labels: BreakdownLabel[];
   action: string;
   path: string;
 }) {
-  const value = metricText(total);
-  return (
-    <Box sx={{ minHeight: 176, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '146px minmax(0, 1fr)' }, gap: 2.25, alignItems: 'center' }}>
-      <Box
-        sx={{
-          width: 132,
-          height: 132,
-          borderRadius: '50%',
-          border: '14px solid',
-          borderColor: 'action.hover',
-          display: 'grid',
-          placeItems: 'center',
-          justifySelf: { xs: 'start', sm: 'center' },
-          boxSizing: 'border-box',
-        }}
-      >
-        <Box sx={{ textAlign: 'center', px: 1 }}>
-          {value !== null
-            ? <Typography sx={{ fontSize: 20, lineHeight: 1.2, fontWeight: 700 }}>{value}</Typography>
-            : <StateIndicator label={statusLabel(total.status)} tone={statusTone(total.status)} />}
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>{totalLabel}</Typography>
-        </Box>
+  if (breakdown.status !== 'AVAILABLE') {
+    return (
+      <Box sx={{ minHeight: 176, display: 'grid', alignContent: 'center', gap: 1.5 }}>
+        <StateIndicator label={statusLabel(breakdown.status)} tone={statusTone(breakdown.status)} />
+        <Typography variant="caption" color="text.secondary">This governed breakdown is not available to the current actor.</Typography>
+        <Button variant="text" size="small" onClick={() => navigateConsole(path)} sx={{ justifySelf: 'start', px: 0 }}>{action}</Button>
       </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'action.disabled' }} />
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>Breakdown not exposed</Typography>
-        </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.45, mb: 1 }}>{message}</Typography>
-        <Button variant="text" size="small" onClick={() => navigateConsole(path)} sx={{ px: 0 }}>{action}</Button>
+    );
+  }
+
+  const rows = breakdownRows(breakdown, labels);
+  const fallbackTotal = rows.reduce((sum, row) => sum + row.value, 0);
+  const totalValue = total.status === 'AVAILABLE' && total.value !== null ? total.value : fallbackTotal;
+
+  return (
+    <Box sx={{ minHeight: 176, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '112px minmax(0, 1fr)' }, gap: 2, alignItems: 'center' }}>
+      <Box sx={{ alignSelf: 'stretch', display: 'grid', alignContent: 'center', p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'action.hover' }}>
+        <Typography sx={{ fontSize: 24, lineHeight: 1.2, fontWeight: 700 }}>{totalValue.toLocaleString()}</Typography>
+        <Typography variant="caption" color="text.secondary">{totalLabel}</Typography>
+      </Box>
+      <Box sx={{ minWidth: 0, display: 'grid', gap: 1.15 }}>
+        {rows.map((row) => {
+          const share = totalValue > 0 ? Math.min(100, (row.value / totalValue) * 100) : 0;
+          return (
+            <Box key={row.key} sx={{ minWidth: 0 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 0.45 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>{row.label}</Typography>
+                <Typography variant="caption" color="text.secondary">{row.value.toLocaleString()}</Typography>
+              </Box>
+              <Box sx={{ height: 6, borderRadius: 3, bgcolor: 'action.hover', overflow: 'hidden' }}>
+                <Box sx={{ width: `${share}%`, minWidth: row.value > 0 ? 4 : 0, height: '100%', bgcolor: 'primary.main' }} />
+              </Box>
+            </Box>
+          );
+        })}
+        <Button variant="text" size="small" onClick={() => navigateConsole(path)} sx={{ justifySelf: 'start', px: 0 }}>{action}</Button>
       </Box>
     </Box>
   );
 }
 
-function AccessBreakdownPlaceholder({ total }: { total: OverviewMetric }) {
+function AccessBreakdownUnavailable({ total }: { total: OverviewMetric }) {
   const value = metricText(total);
   return (
-    <Box sx={{ minHeight: 176, display: 'grid', alignContent: 'center', gap: 2 }}>
+    <Box sx={{ minHeight: 176, display: 'grid', alignContent: 'center', gap: 1.5 }}>
       <Box>
         {value !== null
           ? <Typography sx={{ fontSize: 24, fontWeight: 700 }}>{value}</Typography>
           : <StateIndicator label={statusLabel(total.status)} tone={statusTone(total.status)} />}
-        <Typography variant="caption" color="text.secondary">Authoritative active assignments</Typography>
+        <Typography variant="caption" color="text.secondary">Authoritative active AccessAssignments</Typography>
       </Box>
-      <Box sx={{ display: 'grid', gap: 0.8 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>Per-application aggregation not exposed</Typography>
-        <Box sx={{ height: 10, borderRadius: 5, bgcolor: 'action.hover', overflow: 'hidden' }}><Box sx={{ width: '42%', height: '100%', bgcolor: 'action.disabledBackground' }} /></Box>
-        <Typography variant="caption" color="text.secondary">AccessAssignment remains authoritative business intent and EffectiveAccess remains a projection.</Typography>
-      </Box>
+      <StateIndicator label="Per-application aggregation not exposed" tone="neutral" />
+      <Typography variant="caption" color="text.secondary">
+        AccessAssignment remains authoritative business intent and EffectiveAccess remains a projection. The Console does not approximate application totals from a truncated entitlement set.
+      </Typography>
       <Button variant="text" size="small" onClick={() => navigateConsole('/access')} sx={{ justifySelf: 'start', px: 0 }}>View access</Button>
     </Box>
   );
 }
 
-function RecentActivity({ overview }: { overview: IamOperationsOverview }) {
-  if (overview.securityEvidence.status !== 'AVAILABLE') {
-    return <StateIndicator label={statusLabel(overview.securityEvidence.status)} tone={statusTone(overview.securityEvidence.status)} />;
+function ownerContinuity(overview: IamOperationsOverview): { state: string; tone: StateIndicatorTone } {
+  const owners = overview.tenantDashboard.tenantOwners;
+  if (owners.status !== 'AVAILABLE' || owners.effectiveOwnerCount === null || owners.viableOwnerCount === null) {
+    return { state: statusLabel(owners.status), tone: statusTone(owners.status) };
   }
-  if (overview.securityEvidence.recent.length === 0) {
-    return <StatePanel state="empty" title="No recent matching evidence">No denied or failed Audit records were returned in the last 24 hours.</StatePanel>;
+  if (owners.viableOwnerCount === 0) {
+    return {
+      state: owners.effectiveOwnerCount === 0 ? 'No effective owner' : `0 / ${owners.effectiveOwnerCount} viable`,
+      tone: 'danger',
+    };
+  }
+  if (owners.viableOwnerCount < owners.effectiveOwnerCount) {
+    return { state: `${owners.viableOwnerCount} / ${owners.effectiveOwnerCount} viable`, tone: 'warning' };
+  }
+  return { state: `${owners.viableOwnerCount} viable`, tone: 'success' };
+}
+
+function TenantOwnerDetails({ overview }: { overview: IamOperationsOverview }) {
+  const owners = overview.tenantDashboard.tenantOwners;
+  if (owners.status !== 'AVAILABLE' || owners.owners.length === 0) return null;
+  return (
+    <Box sx={{ pt: 1, mt: 0.5, borderTop: '1px solid', borderColor: 'divider', display: 'grid', gap: 0.6 }}>
+      <Typography variant="caption" color="text.secondary">Effective Tenant Owners</Typography>
+      {owners.owners.slice(0, 3).map((owner) => (
+        <Box key={owner.identityId} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          <Typography variant="caption" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{owner.displayName ?? shortId(owner.identityId)}</Typography>
+          <StateIndicator label={owner.administrativelyEligible ? 'Eligible' : 'Not eligible'} tone={owner.administrativelyEligible ? 'success' : 'danger'} />
+        </Box>
+      ))}
+      {owners.owners.length > 3 ? <Typography variant="caption" color="text.secondary">+{owners.owners.length - 3} more in Administration</Typography> : null}
+    </Box>
+  );
+}
+
+function auditOutcomeTone(outcome: string): StateIndicatorTone {
+  if (outcome === 'SUCCESS') return 'success';
+  if (outcome === 'FAILURE') return 'danger';
+  return 'warning';
+}
+
+function RecentActivity({ overview }: { overview: IamOperationsOverview }) {
+  const activity = overview.tenantDashboard.recentActivity;
+  if (activity.status !== 'AVAILABLE') {
+    return <StateIndicator label={statusLabel(activity.status)} tone={statusTone(activity.status)} />;
+  }
+  if (activity.items.length === 0) {
+    return <StatePanel state="empty" title="No recent Audit activity">No Audit records were returned in the last 24 hours.</StatePanel>;
   }
   return (
-    <DataTable ariaLabel="Recent Tenant Audit activity" minWidth={430}>
-      <TableHead><TableRow><TableCell>Time</TableCell><TableCell>Event</TableCell><TableCell>Resource</TableCell></TableRow></TableHead>
+    <DataTable ariaLabel="Recent Tenant Audit activity" minWidth={560}>
+      <TableHead><TableRow><TableCell>Time</TableCell><TableCell>Actor</TableCell><TableCell>Event</TableCell><TableCell>Resource</TableCell></TableRow></TableHead>
       <TableBody>
-        {overview.securityEvidence.recent.slice(0, 5).map((item) => (
+        {activity.items.slice(0, 5).map((item) => (
           <DataTableRow key={item.id}>
             <TableCell>{formatTime(item.occurredAt)}</TableCell>
-            <TableCell><Typography variant="body2" sx={{ fontWeight: 500 }}>{item.actionType}</Typography><Typography variant="caption" color="text.secondary">{item.outcome}</Typography></TableCell>
-            <TableCell>{item.resourceType}</TableCell>
+            <TableCell>{item.actorDisplayLabel ?? shortId(item.actorId) ?? '—'}</TableCell>
+            <TableCell>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>{humanize(item.actionType)}</Typography>
+              <StateIndicator label={humanize(item.outcome)} tone={auditOutcomeTone(item.outcome)} />
+            </TableCell>
+            <TableCell>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>{item.resourceDisplayLabel ?? humanize(item.resourceType)}</Typography>
+              {item.resourceDisplayLabel ? <Typography variant="caption" color="text.secondary">{humanize(item.resourceType)}</Typography> : null}
+            </TableCell>
           </DataTableRow>
         ))}
       </TableBody>
@@ -375,7 +469,7 @@ function WorkItems({ overview }: { overview: IamOperationsOverview }) {
         {overview.myWork.items.slice(0, 5).map((item) => (
           <DataTableRow key={`${item.kind}-${item.id}`}>
             <TableCell>{item.kind === 'APPROVAL' ? 'Approval' : 'Review'}</TableCell>
-            <TableCell><Typography variant="body2" sx={{ fontWeight: 500 }}>{item.subjectKind.replaceAll('_', ' ')}</Typography><Typography variant="caption" color="text.secondary">{shortId(item.subjectId)}</Typography></TableCell>
+            <TableCell><Typography variant="body2" sx={{ fontWeight: 500 }}>{humanize(item.subjectKind)}</Typography><Typography variant="caption" color="text.secondary">{shortId(item.subjectId)}</Typography></TableCell>
             <TableCell><StateIndicator label={item.kind === 'APPROVAL' ? `Stage ${item.stageOrdinal + 1}` : 'Pending'} tone="warning" /></TableCell>
             <TableCell>{formatDateTime(item.createdAt)}</TableCell>
             <TableCell align="right"><Button variant="text" size="small" onClick={() => navigateConsole(item.kind === 'APPROVAL' ? `/requests?view=approvals&approvalCaseId=${encodeURIComponent(item.id)}` : `/reviews?reviewItemId=${encodeURIComponent(item.id)}`)}>Open</Button></TableCell>
@@ -386,29 +480,56 @@ function WorkItems({ overview }: { overview: IamOperationsOverview }) {
   );
 }
 
+function sourceConnectorState(source: OverviewSourceSystem): { label: string; tone: StateIndicatorTone } {
+  const operational = source.operational;
+  if (operational.status !== 'AVAILABLE') return { label: statusLabel(operational.status), tone: statusTone(operational.status) };
+  if ((operational.activeConnectorCount ?? 0) > 0) {
+    return { label: `${operational.activeConnectorCount} active`, tone: 'success' };
+  }
+  if ((operational.activeBindingCount ?? 0) > 0) return { label: 'No active connector', tone: 'warning' };
+  return { label: 'No active binding', tone: 'neutral' };
+}
+
+function sourceReconciliationState(source: OverviewSourceSystem): { label: string; tone: StateIndicatorTone } {
+  const operational = source.operational;
+  if (operational.status !== 'AVAILABLE') return { label: statusLabel(operational.status), tone: statusTone(operational.status) };
+  const failures = operational.failedReconciliationsInWindow ?? 0;
+  return failures > 0
+    ? { label: `${failures} failed · 24h`, tone: 'danger' }
+    : { label: 'No failures · 24h', tone: 'success' };
+}
+
 function IdentitySourcesSummary({ overview }: { overview: IamOperationsOverview }) {
-  const connectorValue = metricText(overview.environment.activeConnectors);
-  const reconciliation = overview.reconciliation;
+  const sources = overview.tenantDashboard.sources;
+  if (sources.status !== 'AVAILABLE') {
+    return <StateIndicator label={statusLabel(sources.status)} tone={statusTone(sources.status)} />;
+  }
+  if (sources.items.length === 0) {
+    return <StatePanel state="empty" title="No Identity sources">No SourceSystem records are configured for this Tenant.</StatePanel>;
+  }
   return (
     <>
-      <DataTable ariaLabel="Identity source operational summary" minWidth={520}>
-        <TableHead><TableRow><TableCell>Signal</TableCell><TableCell>Status</TableCell><TableCell>Value</TableCell><TableCell>As Of</TableCell></TableRow></TableHead>
+      <DataTable ariaLabel="Identity source operational summary" minWidth={720}>
+        <TableHead><TableRow><TableCell>Source</TableCell><TableCell align="right">Linked identities</TableCell><TableCell>Connector posture</TableCell><TableCell>Reconciliation</TableCell><TableCell>Last complete</TableCell></TableRow></TableHead>
         <TableBody>
-          <DataTableRow>
-            <TableCell><Typography variant="body2" sx={{ fontWeight: 500 }}>Connector inventory</Typography><Typography variant="caption" color="text.secondary">Integration</Typography></TableCell>
-            <TableCell><StateIndicator label={overview.environment.activeConnectors.status === 'AVAILABLE' ? 'Available' : statusLabel(overview.environment.activeConnectors.status)} tone={statusTone(overview.environment.activeConnectors.status)} /></TableCell>
-            <TableCell>{connectorValue ?? '—'}</TableCell>
-            <TableCell>{formatDateTime(overview.environment.asOf)}</TableCell>
-          </DataTableRow>
-          <DataTableRow>
-            <TableCell><Typography variant="body2" sx={{ fontWeight: 500 }}>Reconciliation</Typography><Typography variant="caption" color="text.secondary">Latest effectively complete run</Typography></TableCell>
-            <TableCell><StateIndicator label={statusLabel(reconciliation.status)} tone={statusTone(reconciliation.status)} /></TableCell>
-            <TableCell>{reconciliation.status === 'AVAILABLE' && reconciliation.summary ? `${reconciliation.summary.failedInWindow.toLocaleString()} failed · 24h` : '—'}</TableCell>
-            <TableCell>{reconciliation.status === 'AVAILABLE' ? formatDateTime(reconciliation.summary?.lastCompleteAt) : '—'}</TableCell>
-          </DataTableRow>
+          {sources.items.map((source) => {
+            const connector = sourceConnectorState(source);
+            const reconciliation = sourceReconciliationState(source);
+            return (
+              <DataTableRow key={source.id}>
+                <TableCell><Typography variant="body2" sx={{ fontWeight: 500 }}>{source.name}</Typography><Typography variant="caption" color="text.secondary">{source.code}</Typography></TableCell>
+                <TableCell align="right">{source.linkedIdentityCount.toLocaleString()}</TableCell>
+                <TableCell><StateIndicator label={connector.label} tone={connector.tone} /></TableCell>
+                <TableCell><StateIndicator label={reconciliation.label} tone={reconciliation.tone} /></TableCell>
+                <TableCell>{source.operational.status === 'AVAILABLE' ? formatDateTime(source.operational.lastCompleteAt) : '—'}</TableCell>
+              </DataTableRow>
+            );
+          })}
         </TableBody>
       </DataTable>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>Source list not exposed. The current projection does not provide fake HR system, directory, or manual-source rows.</Typography>
+      {sources.totalCount !== null && sources.totalCount > sources.items.length
+        ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>Showing {sources.items.length} of {sources.totalCount.toLocaleString()} configured sources.</Typography>
+        : null}
     </>
   );
 }
@@ -444,6 +565,10 @@ export function TenantOverviewPage({ authority }: Props) {
 
   const governanceIssues = useMemo(() => overview.status === 'ready'
     ? sumMetrics(overview.value.attention.pendingApprovals, overview.value.attention.pendingReviews)
+    : undefined, [overview]);
+
+  const sourceCount = useMemo(() => overview.status === 'ready'
+    ? metricFromCount(overview.value.tenantDashboard.sources.status, overview.value.tenantDashboard.sources.totalCount)
     : undefined, [overview]);
 
   const tenantName = tenant.status === 'ready' ? tenant.value.displayName : 'Current Tenant';
@@ -483,7 +608,7 @@ export function TenantOverviewPage({ authority }: Props) {
             disabled={!tab.path}
             title={tab.disabledReason}
             startIcon={<LineIcon name={tab.icon} size={16} />}
-            onClick={tab.path ? () => navigateConsole(tab.path!) : undefined}
+            onClick={tab.path ? () => navigateConsole(tab.path) : undefined}
             sx={{
               flex: '0 0 auto',
               minHeight: 42,
@@ -503,77 +628,82 @@ export function TenantOverviewPage({ authority }: Props) {
       {tenant.status === 'error' ? <StatePanel state="error" title="Tenant information is unavailable" action={<Button variant="outlined" onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}>{errorMessage(tenant.error, 'Wyrmgate could not read the current Tenant metadata.')}</StatePanel> : null}
       {overview.status === 'error' ? <StatePanel state="error" title="Tenant operations are unavailable" action={<Button variant="outlined" onClick={() => setReloadKey((value) => value + 1)}>Retry</Button>}>{errorMessage(overview.error, 'Wyrmgate could not read the Tenant operations projection.')}</StatePanel> : null}
 
-      {overview.status === 'ready' ? (
-        <Box sx={{ display: 'grid', gap: 1.5 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(6, minmax(0, 1fr))' }, gap: 1.5 }}>
-            <SummaryTile label="Identities" icon="identities" metric={overview.value.environment.activeIdentities} detail="Active governed subjects" path="/identities" tone="info" />
-            <SummaryTile label="Applications" icon="applications" metric={overview.value.environment.applications} detail="Tenant-local Catalog applications" path="/catalog" tone="info" />
-            <SummaryTile label="Active Access" icon="access" metric={overview.value.environment.activeAccessAssignments} detail="Authoritative assignments" path="/access" tone="warning" />
-            <SummaryTile label="Governance Issues" icon="warning" metric={governanceIssues} detail="Pending approvals + reviews" path="/requests" tone="danger" />
-            <SummaryTile label="Sources" icon="sources" detail="Source count is not exposed by the current projection" path="/integrations" tone="info" />
-            <SummaryTile label="Connectors" icon="connectors" metric={overview.value.environment.activeConnectors} detail="Active connector instances" path="/integrations" tone="info" />
+      {overview.status === 'ready' ? (() => {
+        const continuity = ownerContinuity(overview.value);
+        return (
+          <Box sx={{ display: 'grid', gap: 1.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(6, minmax(0, 1fr))' }, gap: 1.5 }}>
+              <SummaryTile label="Identities" icon="identities" metric={overview.value.environment.activeIdentities} detail="Active governed subjects" path="/identities" tone="info" />
+              <SummaryTile label="Applications" icon="applications" metric={overview.value.environment.applications} detail="Active tenant-bound Catalog applications" path="/catalog" tone="info" />
+              <SummaryTile label="Active Access" icon="access" metric={overview.value.environment.activeAccessAssignments} detail="Authoritative AccessAssignments" path="/access" tone="warning" />
+              <SummaryTile label="Governance Issues" icon="warning" metric={governanceIssues} detail="Pending approvals + reviews" path="/requests" tone="danger" />
+              <SummaryTile label="Sources" icon="sources" metric={sourceCount} detail="Configured Identity SourceSystems" path="/integrations" tone="info" />
+              <SummaryTile label="Connectors" icon="connectors" metric={overview.value.environment.activeConnectors} detail="Active connector instances" path="/integrations" tone="info" />
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.15fr 1fr 1fr' }, gap: 1.5 }}>
+              <Surface
+                title="Tenant Information"
+                actions={<Button variant="outlined" size="small" disabled startIcon={<LineIcon name="edit" size={15} />} title="Tenant mutation is not exposed by the current Console contract.">Edit</Button>}
+                sx={{ height: '100%', p: 2 }}
+              >
+                {tenant.status === 'ready' ? <Box component="dl" sx={{ m: 0 }}>
+                  <Definition term="Name">{tenant.value.displayName}</Definition>
+                  <Definition term="Tenant ID">{tenant.value.id}</Definition>
+                  <Definition term="Created At">{formatDateTime(tenant.value.createdAt)}</Definition>
+                  <Definition term="Updated At">{formatDateTime(tenant.value.updatedAt)}</Definition>
+                  <Definition term="Revision">{tenant.value.revision}</Definition>
+                </Box> : <StateIndicator label="Unavailable" tone="danger" />}
+              </Surface>
+
+              <Surface
+                title="Tenant Health"
+                aria-label="Tenant Health — explicit operational and owner-continuity signals, not a synthetic health score"
+                actions={<Button variant="text" size="small" onClick={() => navigateConsole('/administration')}>View Details</Button>}
+                sx={{ height: '100%', p: 2 }}
+              >
+                <HealthSignalRow label="Tenant Owner continuity" state={continuity.state} tone={continuity.tone} path="/administration" />
+                <HealthSignalRow label="Administrative actor eligible" state={authority?.administrativelyEligible ? 'Eligible' : 'Not eligible'} tone={authority?.administrativelyEligible ? 'success' : 'danger'} path="/administration" />
+                <HealthSignalRow label="Pending approvals" state={metricText(overview.value.attention.pendingApprovals) ?? statusLabel(overview.value.attention.pendingApprovals.status)} tone={overview.value.attention.pendingApprovals.status === 'AVAILABLE' && (overview.value.attention.pendingApprovals.value ?? 0) === 0 ? 'success' : 'warning'} path="/requests?view=approvals" />
+                <HealthSignalRow label="Pending reviews" state={metricText(overview.value.attention.pendingReviews) ?? statusLabel(overview.value.attention.pendingReviews.status)} tone={overview.value.attention.pendingReviews.status === 'AVAILABLE' && (overview.value.attention.pendingReviews.value ?? 0) === 0 ? 'success' : 'warning'} path="/reviews" />
+                <HealthSignalRow label="Provisioning failures" state={metricText(overview.value.attention.finalProvisioningFailures) ?? statusLabel(overview.value.attention.finalProvisioningFailures.status)} tone={overview.value.attention.finalProvisioningFailures.status === 'AVAILABLE' && (overview.value.attention.finalProvisioningFailures.value ?? 0) === 0 ? 'success' : 'warning'} path="/integrations" />
+                <HealthSignalRow label="Failed reconciliations" state={metricText(overview.value.attention.failedReconciliations) ?? statusLabel(overview.value.attention.failedReconciliations.status)} tone={overview.value.attention.failedReconciliations.status === 'AVAILABLE' && (overview.value.attention.failedReconciliations.value ?? 0) === 0 ? 'success' : 'warning'} path="/integrations" />
+                <TenantOwnerDetails overview={overview.value} />
+              </Surface>
+
+              <Surface
+                title="Recent Activity"
+                aria-label="Recent Audit activity"
+                actions={<Button variant="text" size="small" onClick={() => navigateConsole('/audit')}>View All</Button>}
+                sx={{ height: '100%', p: 2 }}
+              >
+                <RecentActivity overview={overview.value} />
+              </Surface>
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5 }}>
+              <Surface title="Identities by Type" sx={{ height: '100%', p: 2 }}>
+                <BreakdownSummary breakdown={overview.value.tenantDashboard.identityTypes} total={overview.value.environment.activeIdentities} totalLabel="Active identities" labels={identityTypeLabels} action="View identities" path="/identities" />
+              </Surface>
+              <Surface title="Applications by Origin" sx={{ height: '100%', p: 2 }}>
+                <BreakdownSummary breakdown={overview.value.tenantDashboard.applicationOrigins} total={overview.value.environment.applications} totalLabel="Active applications" labels={applicationOriginLabels} action="View applications" path="/catalog" />
+              </Surface>
+              <Surface title="Active Access by Application" actions={<Button variant="text" size="small" onClick={() => navigateConsole('/access')}>View All</Button>} sx={{ height: '100%', p: 2 }}>
+                <AccessBreakdownUnavailable total={overview.value.environment.activeAccessAssignments} />
+              </Surface>
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.35fr 1fr' }, gap: 1.5 }}>
+              <Surface title="Open Governance Items" actions={<Button variant="text" size="small" onClick={() => navigateConsole('/requests')}>View All</Button>} sx={{ height: '100%', p: 2 }}>
+                <WorkItems overview={overview.value} />
+              </Surface>
+              <Surface title="Identity Sources" actions={<Button variant="text" size="small" onClick={() => navigateConsole('/integrations')}>View All</Button>} sx={{ height: '100%', p: 2 }}>
+                <IdentitySourcesSummary overview={overview.value} />
+              </Surface>
+            </Box>
           </Box>
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.15fr 1fr 1fr' }, gap: 1.5 }}>
-            <Surface
-              title="Tenant Information"
-              actions={<Button variant="outlined" size="small" disabled startIcon={<LineIcon name="edit" size={15} />} title="Tenant mutation is not exposed by the current Console contract.">Edit</Button>}
-              sx={{ height: '100%', p: 2 }}
-            >
-              {tenant.status === 'ready' ? <Box component="dl" sx={{ m: 0 }}>
-                <Definition term="Name">{tenant.value.displayName}</Definition>
-                <Definition term="Tenant ID">{tenant.value.id}</Definition>
-                <Definition term="Created At">{formatDateTime(tenant.value.createdAt)}</Definition>
-                <Definition term="Updated At">{formatDateTime(tenant.value.updatedAt)}</Definition>
-                <Definition term="Revision">{tenant.value.revision}</Definition>
-              </Box> : <StateIndicator label="Unavailable" tone="danger" />}
-            </Surface>
-
-            <Surface
-              title="Tenant Health"
-              aria-label="Tenant Health — explicit operational signals, not a synthetic health score"
-              actions={<Button variant="text" size="small" onClick={() => navigateConsole('/administration')}>View Details</Button>}
-              sx={{ height: '100%', p: 2 }}
-            >
-              <HealthSignalRow label="Administrative actor eligible" state={authority?.administrativelyEligible ? 'Eligible' : 'Not eligible'} tone={authority?.administrativelyEligible ? 'success' : 'danger'} path="/administration" />
-              <HealthSignalRow label="Pending approvals" state={metricText(overview.value.attention.pendingApprovals) ?? statusLabel(overview.value.attention.pendingApprovals.status)} tone={overview.value.attention.pendingApprovals.status === 'AVAILABLE' && (overview.value.attention.pendingApprovals.value ?? 0) === 0 ? 'success' : 'warning'} path="/requests?view=approvals" />
-              <HealthSignalRow label="Pending reviews" state={metricText(overview.value.attention.pendingReviews) ?? statusLabel(overview.value.attention.pendingReviews.status)} tone={overview.value.attention.pendingReviews.status === 'AVAILABLE' && (overview.value.attention.pendingReviews.value ?? 0) === 0 ? 'success' : 'warning'} path="/reviews" />
-              <HealthSignalRow label="Provisioning failures" state={metricText(overview.value.attention.finalProvisioningFailures) ?? statusLabel(overview.value.attention.finalProvisioningFailures.status)} tone={overview.value.attention.finalProvisioningFailures.status === 'AVAILABLE' && (overview.value.attention.finalProvisioningFailures.value ?? 0) === 0 ? 'success' : 'warning'} path="/integrations" />
-              <HealthSignalRow label="Failed reconciliations" state={metricText(overview.value.attention.failedReconciliations) ?? statusLabel(overview.value.attention.failedReconciliations.status)} tone={overview.value.attention.failedReconciliations.status === 'AVAILABLE' && (overview.value.attention.failedReconciliations.value ?? 0) === 0 ? 'success' : 'warning'} path="/integrations" />
-            </Surface>
-
-            <Surface
-              title="Recent Activity"
-              aria-label="Recent denied or failed Audit evidence"
-              actions={<Button variant="text" size="small" onClick={() => navigateConsole('/audit')}>View All</Button>}
-              sx={{ height: '100%', p: 2 }}
-            >
-              <RecentActivity overview={overview.value} />
-            </Surface>
-          </Box>
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5 }}>
-            <Surface title="Identities by Type" sx={{ height: '100%', p: 2 }}>
-              <BreakdownPlaceholder total={overview.value.environment.activeIdentities} totalLabel="Identities" message="The current Console projection exposes the authoritative active total but not PERSON / SERVICE / WORKLOAD distribution." action="View identities" path="/identities" />
-            </Surface>
-            <Surface title="Applications by Origin" sx={{ height: '100%', p: 2 }}>
-              <BreakdownPlaceholder total={overview.value.environment.applications} totalLabel="Applications" message="TENANT_LOCAL / PLATFORM_SHARED / PLATFORM_INTERNAL origin distribution is not exposed by the current Console projection." action="View applications" path="/catalog" />
-            </Surface>
-            <Surface title="Active Access by Application" actions={<Button variant="text" size="small" onClick={() => navigateConsole('/access')}>View All</Button>} sx={{ height: '100%', p: 2 }}>
-              <AccessBreakdownPlaceholder total={overview.value.environment.activeAccessAssignments} />
-            </Surface>
-          </Box>
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.35fr 1fr' }, gap: 1.5 }}>
-            <Surface title="Open Governance Items" actions={<Button variant="text" size="small" onClick={() => navigateConsole('/requests')}>View All</Button>} sx={{ height: '100%', p: 2 }}>
-              <WorkItems overview={overview.value} />
-            </Surface>
-            <Surface title="Identity Sources" actions={<Button variant="text" size="small" onClick={() => navigateConsole('/integrations')}>View All</Button>} sx={{ height: '100%', p: 2 }}>
-              <IdentitySourcesSummary overview={overview.value} />
-            </Surface>
-          </Box>
-        </Box>
-      ) : null}
+        );
+      })() : null}
     </Page>
   );
 }
