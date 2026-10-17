@@ -217,7 +217,6 @@ const theme = createTheme({
       defaultProps: { variant: 'outlined' },
       styleOverrides: {
         root: { borderRadius: tokens.shape.radiusSurface, alignItems: 'flex-start' },
-        standardInfo: { backgroundColor: tokens.color.semantic.infoSubtle },
       },
     },
     MuiDialog: {
