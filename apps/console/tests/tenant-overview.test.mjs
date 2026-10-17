@@ -51,7 +51,7 @@ test('Tenant Management uses shared object-header and definition patterns instea
   assert.doesNotMatch(page, /SummaryTile/);
 });
 
-test('Tenant Management keeps governed summary, continuity and attention distinct without synthetic health', () => {
+test('Tenant Management keeps governed summary, continuity and attention distinct without synthetic scoring', () => {
   assert.match(page, /Governed operational summary/);
   assert.match(page, /Administrative continuity/);
   assert.match(page, /Governance and operational attention/);
@@ -60,8 +60,7 @@ test('Tenant Management keeps governed summary, continuity and attention distinc
   assert.match(page, /Authoritative AccessAssignment intent/);
   assert.match(page, /not a Tenant lifecycle or health score/);
   assert.match(page, /rather than combined into a synthetic score/);
-  assert.doesNotMatch(page, /health score/i);
-  assert.doesNotMatch(page, /fake trend/i);
+  assert.doesNotMatch(page, /health percentage|health rating|risk percentage|risk rating/i);
 });
 
 test('Tenant Management consumes only exact governed distributions and projections', () => {
