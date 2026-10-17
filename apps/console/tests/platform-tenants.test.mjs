@@ -39,29 +39,37 @@ test('Platform Tenant collection and detail use protected server endpoints', () 
   assert.match(detail, /current viable Platform Owner/);
 });
 
-test('Platform Tenant detail uses Tenant Management presentation but only canonical metadata', () => {
+test('Platform Tenant detail aligns with shared object-detail vocabulary and canonical metadata only', () => {
   for (const field of ['displayName', 'id', 'revision', 'createdAt', 'updatedAt']) {
     assert.match(detail, new RegExp(`state\\.tenant\\.${field}`));
   }
-  assert.match(detail, /Tenant Management presentation in deployment inspection mode/);
+  assert.match(detail, /<PageHeader/);
+  assert.match(detail, /eyebrow="Platform · Tenant inspection"/);
+  assert.match(detail, /Platform inspection · read-only/);
+  assert.match(detail, /Deployment inspection boundary/);
   assert.match(detail, /does not change your current Tenant context/);
-  assert.match(detail, /tenant-scoped administrative authority/);
-  assert.match(detail, /Tenant-owned Identity, Principal, Access, Governance, Credential, Integration and Audit workspaces are intentionally not exposed/);
-  assert.match(detail, /excludes Tenant lifecycle\/status, code, description, subscription, domains, tenant-owned IAM data and mutation controls/);
+  assert.match(detail, /grant tenant-scoped administrative authority/);
+  assert.match(detail, /Tenant-owned capability workspaces are intentionally not linked/);
+  assert.match(detail, /Tenant lifecycle\/status, code, description, subscription, domains, tenant-owned IAM data and mutation controls/);
   assert.doesNotMatch(detail, /tenant\.status|tenant\.code|tenant\.description|tenant\.owner/);
 });
 
-test('Platform Tenant detail is responsive without introducing a second authority model', () => {
-  assert.match(detail, /display: \{ xs: 'none', sm: 'flex' \}/);
-  assert.match(detail, /display: \{ xs: 'flex', sm: 'none' \}/);
-  assert.match(detail, /Back to Tenant inventory/);
-  assert.match(detail, /Platform inspection/);
+test('Platform Tenant detail uses shared responsive header/action behavior instead of duplicate mobile chrome', () => {
+  assert.match(detail, /<Page width="standard"/);
+  assert.match(detail, /<Button variant="outlined" onClick=\{onBack\}>Back to Tenants<\/Button>/);
+  assert.doesNotMatch(detail, /display: \{ xs: 'none', sm: 'flex' \}/);
+  assert.doesNotMatch(detail, /display: \{ xs: 'flex', sm: 'none' \}/);
+  assert.doesNotMatch(detail, /borderRadius: '50%'/);
+  assert.doesNotMatch(detail, /Back to Tenant inventory/);
 });
 
 test('Platform Tenant detail preserves authorization and not-found states', () => {
   assert.match(detail, /error\.status === 403/);
   assert.match(detail, /error\.status === 404/);
   assert.match(detail, /Tenant not found/);
+  assert.match(detail, /state="informational"/);
+  assert.match(detail, /state="loading"/);
+  assert.match(detail, /state="error"/);
 });
 
 test('living contracts keep deployment inspection separate from tenant context switching', () => {
