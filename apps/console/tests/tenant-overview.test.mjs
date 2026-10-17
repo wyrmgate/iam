@@ -58,21 +58,30 @@ test('Tenant dashboard follows the agreed screenshot composition', () => {
   assert.match(page, /lg: '1\.35fr 1fr'/);
 });
 
-test('unsupported screenshot data remains explicit instead of fabricated', () => {
-  assert.match(page, /Breakdown not exposed/);
-  assert.match(page, /Source count is not exposed by the current projection/);
-  assert.match(page, /Source list not exposed/);
+test('Tenant dashboard consumes the governed read projections instead of fabricating screenshot data', () => {
+  assert.match(page, /tenantDashboard\.sources\.totalCount/);
+  assert.match(page, /tenantDashboard\.identityTypes/);
+  assert.match(page, /tenantDashboard\.applicationOrigins/);
+  assert.match(page, /tenantDashboard\.tenantOwners/);
+  assert.match(page, /tenantDashboard\.recentActivity/);
+  assert.match(page, /linkedIdentityCount/);
+  assert.match(page, /failedReconciliationsInWindow/);
+  assert.match(page, /Tenant Owner continuity/);
+  assert.match(page, /Effective Tenant Owners/);
+  assert.match(page, /Per-application aggregation not exposed/);
   assert.match(page, /No Tenant mutation actions are exposed by the current Console contract/);
+  assert.doesNotMatch(page, /Source count is not exposed by the current projection/);
+  assert.doesNotMatch(page, /Source list not exposed/);
   assert.doesNotMatch(page, /Acme Corp|ACME|Alice Admin|Workday|Salesforce|GitHub|Jira|Internal Payroll/);
   assert.doesNotMatch(page, /\bACTIVE\b/);
-  assert.doesNotMatch(page, /Tenant Owner/);
   assert.doesNotMatch(page, /description.*Corporation/i);
 });
 
 test('Tenant dashboard preserves IAM semantic distinctions', () => {
   assert.match(page, /AccessAssignment remains authoritative business intent and EffectiveAccess remains a projection/);
   assert.match(page, /not a synthetic health score/);
-  assert.match(page, /Recent denied or failed Audit evidence/);
+  assert.match(page, /Recent Audit activity/);
+  assert.match(page, /does not approximate application totals from a truncated entitlement set/);
   assert.match(page, /\/identities/);
   assert.match(page, /\/catalog/);
   assert.match(page, /\/access/);
