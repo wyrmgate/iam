@@ -12,6 +12,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,7 +22,6 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/v1/console/platform")
 public final class PlatformTenantController {
-    private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 100;
 
     private final PlatformOwnerAuthorityQuery platformOwners;
@@ -42,11 +42,7 @@ public final class PlatformTenantController {
             HttpServletRequest request,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(required = false) String cursor) {
-        AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
-        Instant now = Instant.now();
-        if (!platformOwners.isViablePlatformOwner(actor.tenant(), actor.identityId(), now)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform Owner authority is required.");
-        }
+        requirePlatformOwner(request);
         if (limit < 1 || limit > MAX_LIMIT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit must be between 1 and 100.");
         }
@@ -76,6 +72,25 @@ public final class PlatformTenantController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(new TenantPageResource(items, nextCursor));
+    }
+
+    @GetMapping("/tenants/{tenantId}")
+    ResponseEntity<TenantResource> detail(
+            HttpServletRequest request,
+            @PathVariable UUID tenantId) {
+        requirePlatformOwner(request);
+        PlatformTenantOverviewQuery.TenantSummary tenant = tenants.find(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant was not found."));
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(resource(tenant));
+    }
+
+    private void requirePlatformOwner(HttpServletRequest request) {
+        AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
+        if (!platformOwners.isViablePlatformOwner(actor.tenant(), actor.identityId(), Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform Owner authority is required.");
+        }
     }
 
     private static TenantResource resource(PlatformTenantOverviewQuery.TenantSummary tenant) {
