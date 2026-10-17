@@ -9,7 +9,7 @@ const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const navigation = await readFile(new URL('../src/consoleNavigation.ts', import.meta.url), 'utf8');
 const tenantManagement = await readFile(new URL('../../../docs/engineering/tenant-management-console.md', import.meta.url), 'utf8');
 
-test('current Tenant route is presented as Tenant Management without changing route semantics', () => {
+test('current Tenant route remains Tenant Management without changing route semantics', () => {
   assert.match(navigation, /\{ id: 'tenant', path: '\/tenant', label: 'Tenant Management', group: 'administration' \}/);
   assert.match(app, /route === 'tenant'/);
   assert.match(app, /<TenantOverviewPage authority=/);
@@ -25,54 +25,67 @@ test('Tenant Management uses server-derived canonical Tenant metadata and existi
   }
   assert.doesNotMatch(page, /method:\s*'POST'/);
   assert.doesNotMatch(page, /tenant selector/i);
+  assert.doesNotMatch(page, /tenant\.value\.(?:status|code|description|owner)\b/);
 });
 
-test('Tenant Management navigation is authority-aware and contains only implemented destinations', () => {
+test('Tenant Management treats the shell as primary navigation and keeps local orientation compact', () => {
   assert.match(page, /visibleConsoleRoutes\(authority\)/);
   assert.match(page, /allowedRouteIds/);
-  assert.match(page, /availableSections/);
-  for (const label of ['Overview', 'Identities', 'Principals', 'Applications', 'Access', 'Governance', 'Credentials', 'Sources & Integrations', 'Administration', 'Audit']) {
-    assert.match(page, new RegExp(`label: '${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`));
+  assert.match(page, /aria-label="Related Tenant workspaces"/);
+  for (const label of ['Identities', 'Access', 'Governance', 'Integrations', 'Administration']) {
+    assert.match(page, new RegExp(`label: '${label}'`));
   }
-  assert.doesNotMatch(page, /Organizations/);
-  assert.doesNotMatch(page, /Settings/);
-  assert.doesNotMatch(page, /disabledReason/);
+  assert.doesNotMatch(page, /tenantSections/);
+  assert.doesNotMatch(page, /Tenant management sections/);
+  assert.doesNotMatch(page, /<SelectInput/);
+  assert.doesNotMatch(page, /Organizations|Settings/);
 });
 
-test('Tenant Management has distinct mobile and desktop navigation and content treatments', () => {
-  assert.match(page, /display: \{ xs: 'block', sm: 'none' \}/);
-  assert.match(page, /<SelectInput/);
-  assert.match(page, /label="Tenant area"/);
-  assert.match(page, /display: \{ xs: 'none', sm: 'flex' \}/);
-  assert.match(page, /aria-label="Tenant management sections"/);
-  assert.match(page, /display: \{ xs: 'grid', md: 'none' \}/);
-  assert.match(page, /display: \{ xs: 'none', md: 'block' \}/);
-  assert.match(page, /minWidth=\{600\}/);
-  assert.match(page, /minWidth=\{720\}/);
+test('Tenant Management uses shared object-header and definition patterns instead of a page-local dashboard header', () => {
+  assert.match(page, /<PageHeader/);
+  assert.match(page, /eyebrow="Administration · current Tenant"/);
+  assert.match(page, /Current Tenant context/);
+  assert.match(page, /component="dl"/);
+  assert.match(page, /gridTemplateColumns: \{ xs: '1fr', sm: 'minmax\(9rem, 12rem\) minmax\(0, 1fr\)' \}/);
+  assert.doesNotMatch(page, /borderRadius: '50%'/);
+  assert.doesNotMatch(page, /SummaryTile/);
 });
 
-test('Tenant Management consumes governed read projections instead of fabricating Tenant semantics', () => {
+test('Tenant Management keeps governed summary, continuity and attention distinct without synthetic health', () => {
+  assert.match(page, /Governed operational summary/);
+  assert.match(page, /Administrative continuity/);
+  assert.match(page, /Governance and operational attention/);
+  assert.match(page, /Tenant Owner continuity/);
+  assert.match(page, /Active access assignments/);
+  assert.match(page, /Authoritative AccessAssignment intent/);
+  assert.match(page, /not a Tenant lifecycle or health score/);
+  assert.match(page, /rather than combined into a synthetic score/);
+  assert.doesNotMatch(page, /health score/i);
+  assert.doesNotMatch(page, /fake trend/i);
+});
+
+test('Tenant Management consumes only exact governed distributions and projections', () => {
   assert.match(operationsApi, /tenantDashboard:/);
   assert.match(page, /tenantDashboard\.identityTypes/);
   assert.match(page, /tenantDashboard\.applicationOrigins/);
   assert.match(page, /tenantDashboard\.tenantOwners/);
   assert.match(page, /tenantDashboard\.sources/);
   assert.match(page, /tenantDashboard\.recentActivity/);
-  assert.match(page, /Tenant Owner continuity/);
-  assert.match(page, /not a synthetic Tenant health score/);
-  assert.match(page, /does not expose an exact bounded per-application Access aggregation/);
-  assert.doesNotMatch(page, /Acme Corp|ACME|Alice Admin|Workday|Salesforce|GitHub|Jira|Internal Payroll/);
-  assert.doesNotMatch(page, /tenant\.value\.(?:status|code|description|owner)\b/);
-});
-
-test('Tenant Management renders exact governed distributions with shared charts', () => {
   assert.match(page, /<DonutChart/);
   assert.match(page, /ariaLabel=\{`\$\{totalLabel\} distribution`\}/);
-  assert.match(page, /tenantDashboard\.identityTypes/);
-  assert.match(page, /tenantDashboard\.applicationOrigins/);
+  assert.doesNotMatch(page, /active access by application/i);
+  assert.doesNotMatch(page, /Acme Corp|ACME|Alice Admin|Workday|Salesforce|GitHub|Jira|Internal Payroll/);
 });
 
-test('Tenant Management keeps action links aligned with projected route visibility', () => {
+test('Tenant Management keeps relational activity and source data in contained tables on narrow screens', () => {
+  assert.match(page, /<DataTable ariaLabel="Recent Tenant Audit activity" minWidth=\{620\}>/);
+  assert.match(page, /<DataTable ariaLabel="Identity source operational summary" minWidth=\{720\}>/);
+  assert.doesNotMatch(page, /display: \{ xs: 'none', md: 'block' \}/);
+  assert.doesNotMatch(page, /display: \{ xs: 'grid', md: 'none' \}/);
+  assert.match(page, /minHeight: \{ xs: 44, sm: 32 \}/);
+});
+
+test('Tenant Management action links remain aligned with projected route visibility', () => {
   assert.match(page, /routePath\('identities', '\/identities'\)/);
   assert.match(page, /routePath\('catalog', '\/catalog'\)/);
   assert.match(page, /routePath\('access', '\/access'\)/);
