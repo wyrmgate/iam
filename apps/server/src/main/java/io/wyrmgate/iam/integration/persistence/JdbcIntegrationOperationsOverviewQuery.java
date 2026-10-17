@@ -6,9 +6,11 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -189,6 +191,52 @@ public class JdbcIntegrationOperationsOverviewQuery implements IntegrationOperat
                 WHERE tenant_id = ? AND lifecycle_state = 'ACTIVE'
                 """, Long.class, tenant.tenantId());
         return value == null ? 0 : value;
+    }
+
+    @Override
+    public List<SourceOperationalSummary> sourceOperationalSummaries(
+            TenantContext tenant,
+            Set<UUID> sourceSystemIds,
+            Instant from,
+            Instant until) {
+        if (sourceSystemIds.isEmpty()) return List.of();
+        String placeholders = String.join(",", Collections.nCopies(sourceSystemIds.size(), "?"));
+        List<Object> args = new ArrayList<>();
+        args.add(tenant.tenantId());
+        args.addAll(sourceSystemIds);
+        args.add(Timestamp.from(from));
+        args.add(Timestamp.from(until));
+        return jdbc.query(
+                "SELECT b.target_id AS source_system_id, "
+                        + "count(DISTINCT b.id) FILTER (WHERE b.lifecycle_state = 'ACTIVE') AS active_bindings, "
+                        + "count(DISTINCT c.id) FILTER (WHERE b.lifecycle_state = 'ACTIVE' AND c.lifecycle_state = 'ACTIVE') AS active_connectors, "
+                        + "count(DISTINCT r.id) FILTER (WHERE r.state = 'FAILED' AND r.completed_at >= ? AND r.completed_at < ?) AS failed_runs, "
+                        + "max(r.completed_at) FILTER (WHERE r.state = 'SUCCEEDED' AND r.effective_completeness = 'COMPLETE') AS last_complete_at "
+                        + "FROM integration.connector_binding b "
+                        + "LEFT JOIN integration.connector_instance c ON c.tenant_id = b.tenant_id AND c.id = b.connector_instance_id "
+                        + "LEFT JOIN integration.reconciliation_run r ON r.tenant_id = b.tenant_id AND r.connector_binding_id = b.id "
+                        + "WHERE b.tenant_id = ? AND b.target_kind = 'SOURCE_SYSTEM' AND b.target_id IN (" + placeholders + ") "
+                        + "GROUP BY b.target_id ORDER BY b.target_id",
+                (rs, rowNum) -> {
+                    Timestamp last = rs.getTimestamp("last_complete_at");
+                    return new SourceOperationalSummary(
+                            rs.getObject("source_system_id", UUID.class),
+                            rs.getLong("active_bindings"),
+                            rs.getLong("active_connectors"),
+                            rs.getLong("failed_runs"),
+                            last == null ? null : last.toInstant());
+                },
+                reorderSourceArgs(args).toArray());
+    }
+
+    private static List<Object> reorderSourceArgs(List<Object> args) {
+        int sourceCount = args.size() - 3;
+        List<Object> ordered = new ArrayList<>();
+        ordered.add(args.get(args.size() - 2));
+        ordered.add(args.get(args.size() - 1));
+        ordered.add(args.get(0));
+        for (int i = 1; i <= sourceCount; i++) ordered.add(args.get(i));
+        return ordered;
     }
 
     private static long number(Object value) {
