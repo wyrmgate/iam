@@ -129,6 +129,20 @@ The caller remains responsible for distinguishing examples such as:
 - governance risk;
 - audit/evidence provenance.
 
+## Charts and visualization
+
+Charts are part of the enterprise operator-workbench vocabulary when a bounded, governed dataset becomes materially easier to scan visually. They are not decoration and must not manufacture a distribution, trend, risk score or aggregation that the owning capability does not expose.
+
+- Use shared `src/ui` visualization primitives rather than page-local chart systems.
+- Use part-to-whole charts only when the categories form a meaningful total and the cardinality is small enough to remain legible. The shared `DonutChart` is the baseline for compact categorical composition.
+- Categorical chart colors use the dedicated non-semantic visualization palette. Success, warning, danger, lifecycle and governance-risk colors must not be reused merely to distinguish arbitrary categories.
+- Every chart must retain color-independent meaning through an accessible chart label plus visible textual legend/data values. Do not make hover the only way to read a value.
+- Charts should avoid non-essential animation; global reduced-motion behavior remains authoritative.
+- Responsive presentation may stack chart and legend, but it must not omit categories or values.
+- If the exact aggregation is unavailable or unauthorized, render an explicit state instead of an illustrative or inferred chart.
+
+The IAM Operations provisioning outcome chart and the Tenant Overview Identity-type/Application-origin distributions are reference uses: each visualizes an existing bounded server projection while preserving the owning capability's semantics.
+
 ## Tables
 
 The shared administrative baseline is a 40 px row with approximately 8 px block and 12 px inline cell padding. Tables keep real table semantics, accessible headers/captions, bounded horizontal overflow and right-aligned row actions.
