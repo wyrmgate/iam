@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public final class IamOperationsApiModels {
     private IamOperationsApiModels() {}
+
     public record WindowResource(String preset, Instant from, Instant until) {}
     public record MetricResource(String status, Long value) {}
     public record AttentionResource(MetricResource pendingApprovals, MetricResource pendingReviews,
@@ -31,8 +32,30 @@ public final class IamOperationsApiModels {
             List<AuditEvidenceItemResource> recent) {}
     public record EnvironmentResource(Instant asOf, MetricResource activeIdentities, MetricResource uncorrelatedPrincipals,
             MetricResource activeAccessAssignments, MetricResource applications, MetricResource activeConnectors) {}
+
+    public record BreakdownItemResource(String key, long value) {}
+    public record BreakdownResource(String status, List<BreakdownItemResource> items) {}
+    public record TenantOwnerItemResource(UUID identityId, String displayName, boolean administrativelyEligible) {}
+    public record TenantOwnersResource(String status, Long effectiveOwnerCount, Long viableOwnerCount,
+            List<TenantOwnerItemResource> owners) {}
+    public record SourceOperationalResource(String status, Long activeBindingCount, Long activeConnectorCount,
+            Long failedReconciliationsInWindow, Instant lastCompleteAt) {}
+    public record SourceSystemResource(UUID id, String code, String name, long linkedIdentityCount,
+            SourceOperationalResource operational) {}
+    public record SourceSystemsResource(String status, Long totalCount, List<SourceSystemResource> items) {}
+    public record RecentActivityItemResource(UUID id, Instant occurredAt, UUID actorId, String actorDisplayLabel,
+            String actionType, String resourceType, UUID resourceId, String resourceDisplayLabel, String outcome) {}
+    public record RecentActivityResource(String status, List<RecentActivityItemResource> items) {}
+    public record TenantDashboardResource(
+            BreakdownResource identityTypes,
+            BreakdownResource applicationOrigins,
+            TenantOwnersResource tenantOwners,
+            SourceSystemsResource sources,
+            RecentActivityResource recentActivity) {}
+
     public record IamOperationsOverviewResource(Instant asOf, boolean partial, UUID tenantId, WindowResource window,
             AttentionResource attention, MyWorkResource myWork, ProvisioningResource provisioning,
             ReconciliationResource reconciliation, GovernanceActivityResource myGovernanceActivity,
-            SecurityEvidenceResource securityEvidence, EnvironmentResource environment) {}
+            SecurityEvidenceResource securityEvidence, EnvironmentResource environment,
+            TenantDashboardResource tenantDashboard) {}
 }

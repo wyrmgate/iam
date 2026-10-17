@@ -40,6 +40,39 @@ export type OverviewAuditEvidence = {
   outcome: 'DENIED' | 'FAILURE';
   correlationId?: string | null;
 };
+export type OverviewBreakdown = {
+  status: OverviewStatus;
+  items: Array<{ key: string; value: number }>;
+};
+export type OverviewTenantOwner = {
+  identityId: string;
+  displayName?: string | null;
+  administrativelyEligible: boolean;
+};
+export type OverviewSourceSystem = {
+  id: string;
+  code: string;
+  name: string;
+  linkedIdentityCount: number;
+  operational: {
+    status: OverviewStatus;
+    activeBindingCount: number | null;
+    activeConnectorCount: number | null;
+    failedReconciliationsInWindow: number | null;
+    lastCompleteAt?: string | null;
+  };
+};
+export type OverviewRecentActivity = {
+  id: string;
+  occurredAt: string;
+  actorId?: string | null;
+  actorDisplayLabel?: string | null;
+  actionType: string;
+  resourceType: string;
+  resourceId?: string | null;
+  resourceDisplayLabel?: string | null;
+  outcome: 'SUCCESS' | 'DENIED' | 'FAILURE';
+};
 
 export type IamOperationsOverview = {
   asOf: string;
@@ -113,6 +146,25 @@ export type IamOperationsOverview = {
     activeAccessAssignments: OverviewMetric;
     applications: OverviewMetric;
     activeConnectors: OverviewMetric;
+  };
+  tenantDashboard: {
+    identityTypes: OverviewBreakdown;
+    applicationOrigins: OverviewBreakdown;
+    tenantOwners: {
+      status: OverviewStatus;
+      effectiveOwnerCount: number | null;
+      viableOwnerCount: number | null;
+      owners: OverviewTenantOwner[];
+    };
+    sources: {
+      status: OverviewStatus;
+      totalCount: number | null;
+      items: OverviewSourceSystem[];
+    };
+    recentActivity: {
+      status: OverviewStatus;
+      items: OverviewRecentActivity[];
+    };
   };
 };
 

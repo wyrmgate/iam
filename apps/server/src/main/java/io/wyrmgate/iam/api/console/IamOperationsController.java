@@ -4,6 +4,7 @@ import io.wyrmgate.iam.access.application.AccessOperationsOverviewQuery;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.AdministrativeResource;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
+import io.wyrmgate.iam.administration.application.TenantOwnerOverviewQuery;
 import io.wyrmgate.iam.administration.domain.AdministrativePermission;
 import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.IntegrationOperationalPermissions;
@@ -23,9 +24,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.dao.DataAccessException;
@@ -52,6 +56,7 @@ public final class IamOperationsController {
     private final IdentityOperationsOverviewQuery identity;
     private final AccessOperationsOverviewQuery access;
     private final CatalogOperationsOverviewQuery catalog;
+    private final TenantOwnerOverviewQuery tenantOwners;
     private final AdministrativeAuthorizationService authorization;
     private final IdGenerator ids;
 
@@ -62,6 +67,7 @@ public final class IamOperationsController {
             IdentityOperationsOverviewQuery identity,
             AccessOperationsOverviewQuery access,
             CatalogOperationsOverviewQuery catalog,
+            TenantOwnerOverviewQuery tenantOwners,
             AdministrativeAuthorizationService authorization,
             IdGenerator ids) {
         this.governance = governance;
@@ -70,6 +76,7 @@ public final class IamOperationsController {
         this.identity = identity;
         this.access = access;
         this.catalog = catalog;
+        this.tenantOwners = tenantOwners;
         this.authorization = authorization;
         this.ids = ids;
     }
@@ -93,6 +100,12 @@ public final class IamOperationsController {
         boolean attemptRead = allowed(actor, IntegrationOperationalPermissions.PROVISIONING_ATTEMPT_READ, "provisioning-attempt", asOf);
         boolean taskRead = allowed(actor, IntegrationOperationalPermissions.PROVISIONING_TASK_READ, "provisioning-task", asOf);
         boolean reconciliationRead = allowed(actor, IntegrationOperationalPermissions.RECONCILIATION_RUN_READ, "reconciliation-run", asOf);
+        boolean auditRead = allowed(actor, AdministrativePermissions.AUDIT_READ, "audit", asOf);
+        boolean identityRead = allowed(actor, AdministrativePermissions.IDENTITY_READ, "identity", asOf);
+        boolean applicationRead = allowed(actor, AdministrativePermissions.APPLICATION_READ, "application", asOf);
+        boolean connectorRead = allowed(actor, AdministrativePermissions.CONNECTOR_READ, "connector", asOf);
+        boolean bindingRead = allowed(actor, AdministrativePermissions.CONNECTOR_BINDING_READ, "connector-binding", asOf);
+        boolean administrationRead = allowed(actor, AdministrativePermissions.MANAGE_AUTHORIZATION, "administration", asOf);
 
         Result<Long> finalFailures = attemptRead
                 ? safe(() -> integration.finalProvisioningFailures(actor.tenant(), spec.from(), spec.until()))
@@ -103,8 +116,11 @@ public final class IamOperationsController {
         Result<IntegrationOperationsOverviewQuery.Reconciliation> reconciliation = reconciliationRead
                 ? safe(() -> integration.reconciliation(actor.tenant(), spec.from(), spec.until(), 6))
                 : Result.notAuthorized();
-        Result<AuditOperationsOverviewQuery.Evidence> evidence = allowed(actor, AdministrativePermissions.AUDIT_READ, "audit", asOf)
+        Result<AuditOperationsOverviewQuery.Evidence> evidence = auditRead
                 ? safe(() -> audit.evidence(actor.tenant(), spec.from(), spec.until(), 5))
+                : Result.notAuthorized();
+        Result<List<AuditOperationsOverviewQuery.ActivityItem>> recentActivity = auditRead
+                ? safe(() -> audit.recentActivity(actor.tenant(), spec.from(), spec.until(), 5))
                 : Result.notAuthorized();
 
         MetricResource activeIdentities = metric(actor, AdministrativePermissions.IDENTITY_READ, "identity", asOf,
@@ -118,6 +134,21 @@ public final class IamOperationsController {
         MetricResource connectors = metric(actor, AdministrativePermissions.CONNECTOR_READ, "connector", asOf,
                 () -> integration.activeConnectors(actor.tenant()));
 
+        Result<List<IdentityOperationsOverviewQuery.IdentityTypeCount>> identityTypes = identityRead
+                ? safe(() -> identity.activeIdentityTypes(actor.tenant()))
+                : Result.notAuthorized();
+        Result<List<CatalogOperationsOverviewQuery.ApplicationOriginCount>> applicationOrigins = applicationRead
+                ? safe(() -> catalog.activeApplicationOrigins(actor.tenant()))
+                : Result.notAuthorized();
+        Result<TenantOwnerOverviewQuery.Snapshot> ownerSnapshot = administrationRead
+                ? safe(() -> tenantOwners.snapshot(actor.tenant(), asOf, 5))
+                : Result.notAuthorized();
+        Result<IdentityOperationsOverviewQuery.SourceSystems> sourceSystems = identityRead
+                ? safe(() -> identity.sourceSystems(actor.tenant(), 10))
+                : Result.notAuthorized();
+        Result<List<IntegrationOperationsOverviewQuery.SourceOperationalSummary>> sourceOperations =
+                sourceOperations(actor, sourceSystems, connectorRead && bindingRead && reconciliationRead, spec);
+
         AttentionResource attention = new AttentionResource(
                 governanceResult.metric(GovernanceOperationsOverviewQuery.Snapshot::pendingApprovals),
                 governanceResult.metric(GovernanceOperationsOverviewQuery.Snapshot::pendingReviews),
@@ -130,12 +161,24 @@ public final class IamOperationsController {
         SecurityEvidenceResource securityResource = evidence(evidence, asOf);
         EnvironmentResource environment = new EnvironmentResource(
                 asOf, activeIdentities, uncorrelatedPrincipals, activeAssignments, applications, connectors);
+        TenantDashboardResource tenantDashboard = new TenantDashboardResource(
+                identityBreakdown(identityTypes),
+                applicationBreakdown(applicationOrigins),
+                owners(ownerSnapshot, identityRead, actor),
+                sources(sourceSystems, sourceOperations),
+                recentActivity(recentActivity));
 
         boolean partial = !governanceResult.available()
                 || !finalFailures.available()
                 || !provisioning.available()
                 || !reconciliation.available()
                 || !evidence.available()
+                || !recentActivity.available()
+                || !identityTypes.available()
+                || !applicationOrigins.available()
+                || !ownerSnapshot.available()
+                || !sourceSystems.available()
+                || !sourceOperations.available()
                 || !AVAILABLE.equals(activeIdentities.status())
                 || !AVAILABLE.equals(uncorrelatedPrincipals.status())
                 || !AVAILABLE.equals(activeAssignments.status())
@@ -153,11 +196,121 @@ public final class IamOperationsController {
                 reconciliationResource,
                 governanceActivity,
                 securityResource,
-                environment);
+                environment,
+                tenantDashboard);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .header("X-Correlation-Id", correlationId.toString())
                 .body(body);
+    }
+
+    private Result<List<IntegrationOperationsOverviewQuery.SourceOperationalSummary>> sourceOperations(
+            AuthenticatedAdministrativeActor actor,
+            Result<IdentityOperationsOverviewQuery.SourceSystems> sources,
+            boolean authorized,
+            WindowSpec spec) {
+        if (!sources.available()) return new Result<>(sources.status(), null);
+        if (!authorized) return Result.notAuthorized();
+        Set<UUID> sourceIds = sources.value().items().stream()
+                .map(IdentityOperationsOverviewQuery.SourceSystemSummary::sourceSystemId)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        if (sourceIds.isEmpty()) return Result.available(List.of());
+        return safe(() -> integration.sourceOperationalSummaries(
+                actor.tenant(), sourceIds, spec.from(), spec.until()));
+    }
+
+    private TenantOwnersResource owners(
+            Result<TenantOwnerOverviewQuery.Snapshot> result,
+            boolean identityRead,
+            AuthenticatedAdministrativeActor actor) {
+        if (!result.available()) {
+            return new TenantOwnersResource(result.status(), null, null, List.of());
+        }
+        List<TenantOwnerItemResource> items = result.value().owners().stream()
+                .map(owner -> new TenantOwnerItemResource(
+                        owner.identityId(),
+                        identityRead ? safeIdentityDisplayName(actor, owner.identityId()) : null,
+                        owner.administrativelyEligible()))
+                .toList();
+        return new TenantOwnersResource(
+                AVAILABLE,
+                result.value().effectiveOwnerCount(),
+                result.value().viableOwnerCount(),
+                items);
+    }
+
+    private String safeIdentityDisplayName(AuthenticatedAdministrativeActor actor, UUID identityId) {
+        try {
+            return identity.identityDisplayName(actor.tenant(), identityId).orElse(null);
+        } catch (DataAccessException unavailable) {
+            return null;
+        }
+    }
+
+    private static SourceSystemsResource sources(
+            Result<IdentityOperationsOverviewQuery.SourceSystems> sourceResult,
+            Result<List<IntegrationOperationsOverviewQuery.SourceOperationalSummary>> operationalResult) {
+        if (!sourceResult.available()) {
+            return new SourceSystemsResource(sourceResult.status(), null, List.of());
+        }
+        Map<UUID, IntegrationOperationsOverviewQuery.SourceOperationalSummary> operational = new HashMap<>();
+        if (operationalResult.available()) {
+            for (var item : operationalResult.value()) operational.put(item.sourceSystemId(), item);
+        }
+        List<SourceSystemResource> items = sourceResult.value().items().stream()
+                .map(source -> {
+                    var op = operational.get(source.sourceSystemId());
+                    SourceOperationalResource opResource = operationalResult.available()
+                            ? new SourceOperationalResource(
+                                    AVAILABLE,
+                                    op == null ? 0L : op.activeBindingCount(),
+                                    op == null ? 0L : op.activeConnectorCount(),
+                                    op == null ? 0L : op.failedReconciliationsInWindow(),
+                                    op == null ? null : op.lastCompleteAt())
+                            : new SourceOperationalResource(
+                                    operationalResult.status(), null, null, null, null);
+                    return new SourceSystemResource(
+                            source.sourceSystemId(),
+                            source.code(),
+                            source.name(),
+                            source.linkedIdentityCount(),
+                            opResource);
+                })
+                .toList();
+        return new SourceSystemsResource(AVAILABLE, sourceResult.value().totalCount(), items);
+    }
+
+    private static BreakdownResource identityBreakdown(
+            Result<List<IdentityOperationsOverviewQuery.IdentityTypeCount>> result) {
+        if (!result.available()) return new BreakdownResource(result.status(), List.of());
+        return new BreakdownResource(
+                AVAILABLE,
+                result.value().stream()
+                        .map(item -> new BreakdownItemResource(item.identityType(), item.count()))
+                        .toList());
+    }
+
+    private static BreakdownResource applicationBreakdown(
+            Result<List<CatalogOperationsOverviewQuery.ApplicationOriginCount>> result) {
+        if (!result.available()) return new BreakdownResource(result.status(), List.of());
+        return new BreakdownResource(
+                AVAILABLE,
+                result.value().stream()
+                        .map(item -> new BreakdownItemResource(item.origin(), item.count()))
+                        .toList());
+    }
+
+    private static RecentActivityResource recentActivity(
+            Result<List<AuditOperationsOverviewQuery.ActivityItem>> result) {
+        if (!result.available()) return new RecentActivityResource(result.status(), List.of());
+        return new RecentActivityResource(
+                AVAILABLE,
+                result.value().stream()
+                        .map(item -> new RecentActivityItemResource(
+                                item.id(), item.occurredAt(), item.actorId(), item.actorDisplayLabel(),
+                                item.actionType(), item.resourceType(), item.resourceId(),
+                                item.resourceDisplayLabel(), item.outcome()))
+                        .toList());
     }
 
     private MetricResource metric(
