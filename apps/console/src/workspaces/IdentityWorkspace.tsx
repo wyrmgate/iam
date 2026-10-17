@@ -323,16 +323,6 @@ export function IdentityWorkspace({ selectedId, onSelect, authority = null }: { 
       actions={<><Button variant="outlined" onClick={() => setReloadKey((value) => value + 1)}>Refresh</Button><Button variant="outlined" onClick={() => setEditOpen(true)}>Edit metadata</Button><Button variant="outlined" onClick={() => setMoreOpen(true)}>Advanced correction</Button></>}
     />
 
-    <Surface title="Governed state and actions" description="Lifecycle state is authoritative Identity state. Access eligibility is derived directly from the current lifecycle; provider convergence remains separate.">
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.4fr) minmax(15rem, .8fr) minmax(16rem, 1fr)' }, gap: 2, alignItems: 'start' }}>
-        <Alert severity={eligible ? 'success' : 'warning'} icon={false}>
-          <Box sx={{ display: 'grid', gap: 0.75 }}><StateIndicator label={eligible ? 'Currently access-eligible' : 'Currently access-ineligible'} tone={eligible ? 'success' : 'warning'} /><Typography variant="body2">{eligible ? 'ACTIVE is the only access-eligible Identity lifecycle state. This does not itself confirm assignments, Principals, Credentials, EffectiveAccess, or provider grants.' : 'Only ACTIVE is access-eligible. EffectiveAccess contributes no semantic authority while this Identity is ineligible; assignment reduction and provider convergence may continue asynchronously.'}</Typography></Box>
-        </Alert>
-        <Box sx={{ display: 'grid', gap: 0.5 }}><Typography variant="overline" color="text.secondary">Control-plane context</Typography>{authority ? <><Typography variant="body2" sx={{ fontWeight: 600 }}>Tenant {shortId(authority.tenantId)}</Typography><Typography variant="caption" color="text.secondary">Authority evaluated {formatDateTime(authority.evaluatedAt)}</Typography></> : <Typography variant="body2" color="text.secondary">Current authority context unavailable.</Typography>}</Box>
-        <Box sx={{ display: 'grid', gap: 1 }}><Typography variant="overline" color="text.secondary">Lifecycle actions</Typography><Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>{actions.length ? actions.map((action) => <Button key={action} variant="outlined" size="small" color={action === 'decommission' ? 'error' : 'primary'} onClick={() => setConfirmation({ kind: 'lifecycle', action })}>{action[0].toUpperCase() + action.slice(1)}</Button>) : <Typography variant="body2" color="text.secondary">No lifecycle actions available.</Typography>}</Box></Box>
-      </Box>
-    </Surface>
-
     {mutationError ? <ErrorPanel error={mutationError} retry={() => setReloadKey((value) => value + 1)} /> : null}
 
     <Box component="section" aria-label="Identity 360 workspace" sx={{ minWidth: 0 }}>
@@ -340,9 +330,17 @@ export function IdentityWorkspace({ selectedId, onSelect, authority = null }: { 
 
       <TabPanel groupId="identity360" tabId="overview" active={view === 'overview'}>
         <Box sx={{ display: 'grid', gap: 2 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(20rem, .9fr)' }, gap: 2, alignItems: 'start' }}>
             <Surface title="Identity summary" description="Current authoritative governed-subject state."><DefinitionList items={[{ label: 'Identity type', value: identity.type }, { label: 'Lifecycle', value: <StateIndicator label={identity.lifecycleState} tone={stateTone(identity.lifecycleState)} /> }, { label: 'Access eligibility', value: eligible ? 'Eligible' : 'Ineligible' }, { label: 'Created', value: formatDateTime(identity.createdAt) }, { label: 'Updated', value: formatDateTime(identity.updatedAt) }, { label: 'Identity ID', value: identity.id, mono: true }, { label: 'Revision', value: identity.revision }]} /></Surface>
-            <Surface title="Investigation" description="Explore this Identity without collapsing authority, projections, evidence, or technical representations."><Box sx={{ display: 'grid', gap: 0.75 }}>{([['profile','Governed profile','Canonical values, resolution, classification and visibility'],['principals','Principals','Identity-owned technical account representations'],['access','Access','Authoritative assignments and derived EffectiveAccess'],['governance','Governance','Subject reviews and GovernanceExceptions'],['evidence','Evidence','Direct immutable Identity AuditRecord evidence']] as const).map(([target,label,detail]) => <Button key={target} variant="text" onClick={() => changeView(target)} sx={{ justifyContent: 'flex-start', textAlign: 'left', py: 1, px: 1.25 }}><Box sx={{ display: 'grid' }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{label}</Typography><Typography variant="caption" color="text.secondary">{detail}</Typography></Box></Button>)}</Box></Surface>
+            <Surface title="Lifecycle and access eligibility" description="Lifecycle is authoritative Identity state. Access eligibility follows the current lifecycle; provider convergence remains separate.">
+              <Box sx={{ display: 'grid', gap: 2 }}>
+                <Alert severity={eligible ? 'success' : 'warning'} icon={false}>
+                  <Box sx={{ display: 'grid', gap: 0.75 }}><StateIndicator label={eligible ? 'Currently access-eligible' : 'Currently access-ineligible'} tone={eligible ? 'success' : 'warning'} /><Typography variant="body2">{eligible ? 'ACTIVE is the only access-eligible Identity lifecycle state. This does not itself confirm assignments, Principals, Credentials, EffectiveAccess, or provider grants.' : 'Only ACTIVE is access-eligible. EffectiveAccess contributes no semantic authority while this Identity is ineligible; assignment reduction and provider convergence may continue asynchronously.'}</Typography></Box>
+                </Alert>
+                <Box sx={{ display: 'grid', gap: 0.5 }}><Typography variant="overline" color="text.secondary">Control-plane context</Typography>{authority ? <><Typography variant="body2" sx={{ fontWeight: 600 }}>Tenant {shortId(authority.tenantId)}</Typography><Typography variant="caption" color="text.secondary">Authority evaluated {formatDateTime(authority.evaluatedAt)}</Typography></> : <Typography variant="body2" color="text.secondary">Current authority context unavailable.</Typography>}</Box>
+                <Box sx={{ display: 'grid', gap: 1 }}><Typography variant="overline" color="text.secondary">Lifecycle actions</Typography><Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>{actions.length ? actions.map((action) => <Button key={action} variant="outlined" size="small" color={action === 'decommission' ? 'error' : 'primary'} onClick={() => setConfirmation({ kind: 'lifecycle', action })}>{action[0].toUpperCase() + action.slice(1)}</Button>) : <Typography variant="body2" color="text.secondary">No lifecycle actions available.</Typography>}</Box></Box>
+              </Box>
+            </Surface>
           </Box>
           <SemanticNote title="Identity is the governed subject.">Principals are separate technical representations/accounts. Provider observations are not Identity authority.</SemanticNote>
         </Box>

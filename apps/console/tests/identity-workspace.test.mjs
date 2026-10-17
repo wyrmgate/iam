@@ -47,15 +47,12 @@ test('canonical attribute disclosure follows classification authorization and re
   assertSourceExcludes(identity, /valueRedacted|\[authorized value\]/);
 });
 
-test('Identity detail is the approved persistent-header six-tab enterprise workbench', () => {
+test('Identity detail is the approved six-tab object workbench with lifecycle context inside Overview', () => {
   assertSourceContains(
     identity,
     /<Page width="wide">/,
     /<PageHeader/,
     /Identity · governed subject/,
-    /Governed state and actions/,
-    /Currently access-eligible/,
-    /Currently access-ineligible/,
     /Identity 360 workspace/,
     /label="Overview"/,
     /label="Governed profile"/,
@@ -64,14 +61,23 @@ test('Identity detail is the approved persistent-header six-tab enterprise workb
     /label="Governance"/,
     /label="Evidence"/,
     /Identity summary/,
-    /Investigation/,
+    /Lifecycle and access eligibility/,
+    /Currently access-eligible/,
+    /Currently access-ineligible/,
+    /Control-plane context/,
+    /Lifecycle actions/,
     /Edit metadata/,
     /Advanced Identity correction/,
     /<Surface/,
     /<DataTable/,
     /<StateIndicator/,
   );
-  assertSourceExcludes(identity, /title="Lifecycle operations"|title="Display name"|identity360-[a-z-]+/);
+  assertSourceExcludes(
+    identity,
+    /Governed state and actions/,
+    /title="Investigation"/,
+    /title="Lifecycle operations"|title="Display name"|identity360-[a-z-]+/,
+  );
 });
 
 test('Identity 360 tabs use bounded server-owned subject reads rather than client aggregation', () => {

@@ -23,26 +23,30 @@ test('Identity collection implements the approved discovery and dense result com
   );
 });
 
-test('Identity collection uses shared desktop table and semantic mobile record presentations', () => {
+test('Identity collection keeps one information-preserving table across viewport sizes', () => {
   assertSourceContains(
     collection,
-    /<DataTable ariaLabel="Governed identities"/,
-    /display: \{ xs: 'none', sm: 'block' \}/,
-    /display: \{ xs: 'grid', sm: 'none' \}/,
+    /<DataTable ariaLabel="Governed identities" minWidth=\{760\}>/,
     /<StateIndicator label=\{identity\.lifecycleState\}/,
     /identity\.id/,
-    /Updated \{formatDateTime\(identity\.updatedAt\)\}/,
+    /<time dateTime=\{identity\.updatedAt\}>/,
   );
+  assert.doesNotMatch(collection, /display: \{ xs: 'none', sm: 'block' \}/);
+  assert.doesNotMatch(collection, /display: \{ xs: 'grid', sm: 'none' \}/);
+  assert.doesNotMatch(collection, /component="button"/);
   assert.doesNotMatch(collection, /identity-golden-table-wrap|identity-golden-mobile-list|identity-golden-mobile-card/);
   assert.doesNotMatch(collection, /[⌕▣＋⋮⌄]/);
 });
 
-test('Identity 360 uses the shared Object 360 enterprise composition', () => {
+test('Identity 360 makes semantic views primary and keeps lifecycle context in Overview', () => {
   assertSourceContains(
     detail,
     /<Page width="wide">/,
     /<PageHeader/,
-    /Governed state and actions/,
+    /Identity 360 workspace/,
+    /Lifecycle and access eligibility/,
+    /Control-plane context/,
+    /Lifecycle actions/,
     /<StateIndicator label=\{identity\.lifecycleState\}/,
     /<DataTable ariaLabel="Governed canonical attributes"/,
     /<DataTable ariaLabel="Identity Principals"/,
@@ -51,6 +55,8 @@ test('Identity 360 uses the shared Object 360 enterprise composition', () => {
     /<DataTable ariaLabel="Identity access review campaigns"/,
     /<DataTable ariaLabel="Direct Identity AuditRecord evidence"/,
   );
+  assert.doesNotMatch(detail, /Governed state and actions/);
+  assert.doesNotMatch(detail, /title="Investigation"/);
   assert.doesNotMatch(detail, /identity-detail-golden\.css|identity360-[a-z-]+/);
   assert.doesNotMatch(detail, /[←✎⚙⌄⋮✓›ⓘ⚠]/);
 });
