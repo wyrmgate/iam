@@ -202,16 +202,16 @@ public class JdbcIntegrationOperationsOverviewQuery implements IntegrationOperat
         if (sourceSystemIds.isEmpty()) return List.of();
         String placeholders = String.join(",", Collections.nCopies(sourceSystemIds.size(), "?"));
         List<Object> args = new ArrayList<>();
-        args.add(tenant.tenantId());
-        args.addAll(sourceSystemIds);
         args.add(Timestamp.from(from));
         args.add(Timestamp.from(until));
+        args.add(tenant.tenantId());
+        args.addAll(sourceSystemIds);
         return jdbc.query(
                 "SELECT b.target_id AS source_system_id, "
                         + "count(DISTINCT b.id) FILTER (WHERE b.lifecycle_state = 'ACTIVE') AS active_bindings, "
                         + "count(DISTINCT c.id) FILTER (WHERE b.lifecycle_state = 'ACTIVE' AND c.lifecycle_state = 'ACTIVE') AS active_connectors, "
-                        + "count(DISTINCT r.id) FILTER (WHERE r.state = 'FAILED' AND r.completed_at >= ? AND r.completed_at < ?) AS failed_runs, "
-                        + "max(r.completed_at) FILTER (WHERE r.state = 'SUCCEEDED' AND r.effective_completeness = 'COMPLETE') AS last_complete_at "
+                        + "count(DISTINCT r.id) FILTER (WHERE b.lifecycle_state = 'ACTIVE' AND r.state = 'FAILED' AND r.completed_at >= ? AND r.completed_at < ?) AS failed_runs, "
+                        + "max(r.completed_at) FILTER (WHERE b.lifecycle_state = 'ACTIVE' AND r.state = 'SUCCEEDED' AND r.effective_completeness = 'COMPLETE') AS last_complete_at "
                         + "FROM integration.connector_binding b "
                         + "LEFT JOIN integration.connector_instance c ON c.tenant_id = b.tenant_id AND c.id = b.connector_instance_id "
                         + "LEFT JOIN integration.reconciliation_run r ON r.tenant_id = b.tenant_id AND r.connector_binding_id = b.id "
@@ -226,17 +226,7 @@ public class JdbcIntegrationOperationsOverviewQuery implements IntegrationOperat
                             rs.getLong("failed_runs"),
                             last == null ? null : last.toInstant());
                 },
-                reorderSourceArgs(args).toArray());
-    }
-
-    private static List<Object> reorderSourceArgs(List<Object> args) {
-        int sourceCount = args.size() - 3;
-        List<Object> ordered = new ArrayList<>();
-        ordered.add(args.get(args.size() - 2));
-        ordered.add(args.get(args.size() - 1));
-        ordered.add(args.get(0));
-        for (int i = 1; i <= sourceCount; i++) ordered.add(args.get(i));
-        return ordered;
+                args.toArray());
     }
 
     private static long number(Object value) {
