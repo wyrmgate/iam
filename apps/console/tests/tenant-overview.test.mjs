@@ -78,7 +78,7 @@ test('Tenant Management keeps action links aligned with projected route visibili
   assert.match(page, /routePath\('access', '\/access'\)/);
   assert.match(page, /routePath\('integrations', '\/integrations'\)/);
   assert.match(page, /routePath\('audit', '\/audit'\)/);
-  assert.match(page, /operation-time server authorization/i);
+  assert.match(tenantManagement, /Operation-time server authorization remains final/);
 });
 
 test('Tenant Management stays within shared enterprise presentation roles', () => {
