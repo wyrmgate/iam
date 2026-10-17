@@ -37,7 +37,7 @@ test('each capability ownership surface has a focused implementation file', () =
   assertSourceContains(sources.requestsAccessLinks, /state === 'APPLIED'/, /accessAssignmentId/, /View resulting access/);
   assertSourceContains(sources.identity, /export function IdentityWorkspace/, /\/identities/);
   assertSourceContains(sources.identityAccessLinks, /View authoritative access/, /View effective access/, /identityId=/);
-  assertSourceContains(sources.principals, /export function PrincipalsWorkspace/, /\/principals/, /Technical account authority owned by Identity/);
+  assertSourceContains(sources.principals, /export function PrincipalsWorkspace/, /\/principals/, /Authoritative Identity-owned Principal state/);
   assertSourceContains(sources.catalog, /export function CatalogWorkspace/, /\/applications/, /\/roles/);
   assertSourceContains(sources.accessBoundary, /AccessGoldenWorkspace/);
   assertSourceContains(sources.access, /export function AccessWorkspace/, /Authoritative assignments/, /Effective access/, /Lifecycle access policy/);
