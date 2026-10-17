@@ -58,6 +58,15 @@ test('Tenant dashboard follows the agreed screenshot composition', () => {
   assert.match(page, /lg: '1\.35fr 1fr'/);
 });
 
+test('Tenant dashboard renders exact governed distributions as shared charts', () => {
+  assert.match(page, /<DonutChart/);
+  assert.match(page, /ariaLabel=\{`\$\{totalLabel\} distribution`\}/);
+  assert.match(page, /items=\{rows\}/);
+  assert.match(page, /totalValue=\{totalValue\}/);
+  assert.match(page, /tenantDashboard\.identityTypes/);
+  assert.match(page, /tenantDashboard\.applicationOrigins/);
+});
+
 test('Tenant dashboard consumes the governed read projections instead of fabricating screenshot data', () => {
   assert.match(page, /tenantDashboard\.sources\.totalCount/);
   assert.match(page, /tenantDashboard\.identityTypes/);
@@ -94,6 +103,7 @@ test('Tenant dashboard stays within shared enterprise presentation roles', () =>
   assert.match(page, /<Surface/);
   assert.match(page, /<DataTable/);
   assert.match(page, /<StateIndicator/);
+  assert.match(page, /<DonutChart/);
   assert.doesNotMatch(page, /StatusChip/);
   assert.doesNotMatch(page, /gradient/i);
   assert.doesNotMatch(page, /boxShadow/);
