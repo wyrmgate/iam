@@ -9,6 +9,7 @@ export type ShellGroupId =
   | 'catalog'
   | 'integration'
   | 'credentials'
+  | 'platform'
   | 'administration'
   | 'audit';
 
@@ -21,6 +22,7 @@ export type ShellGroup = {
 export type ConsoleRouteId =
   | 'overview'
   | 'tenant'
+  | 'platform-tenants'
   | 'requests'
   | 'reviews'
   | 'identities'
@@ -40,6 +42,7 @@ export type ConsoleRoute = {
   group: ShellGroupId;
   resourceTypes?: string[];
   visibleWithoutAdministrativeEligibility?: boolean;
+  platformOwnerOnly?: boolean;
 };
 
 export type ConsoleRouteMatch = {
@@ -56,6 +59,7 @@ export const shellGroups: ShellGroup[] = [
   { id: 'catalog', code: 'CT', label: 'Catalog' },
   { id: 'integration', code: 'IN', label: 'Integration' },
   { id: 'credentials', code: 'CR', label: 'Credentials' },
+  { id: 'platform', code: 'PL', label: 'Platform' },
   { id: 'administration', code: 'AD', label: 'Administration' },
   { id: 'audit', code: 'AU', label: 'Audit' },
 ];
@@ -71,6 +75,7 @@ export const consoleRoutes: ConsoleRoute[] = [
   { id: 'catalog', path: '/catalog', label: 'Catalog', group: 'catalog', resourceTypes: ['application', 'sso-client', 'application-target', 'entitlement', 'role', 'role-version'] },
   { id: 'integrations', path: '/integrations', label: 'Integrations', group: 'integration', resourceTypes: ['connector', 'connector-binding', 'connector-worker', 'entitlement-observation-mapping', 'provisioning-job', 'provisioning-task', 'provisioning-attempt', 'reconciliation-run'] },
   { id: 'credentials', path: '/credentials', label: 'Credentials', group: 'credentials', resourceTypes: ['credential', 'credential-rotation'] },
+  { id: 'platform-tenants', path: '/platform/tenants', label: 'Tenants', group: 'platform', platformOwnerOnly: true },
   { id: 'tenant', path: '/tenant', label: 'Current Tenant', group: 'administration' },
   { id: 'administration', path: '/administration', label: 'Administration', group: 'administration', visibleWithoutAdministrativeEligibility: true },
   { id: 'audit', path: '/audit', label: 'Audit', group: 'audit', resourceTypes: ['audit', 'evidence-snapshot'] },
@@ -127,16 +132,17 @@ export function replaceConsole(path: string): void {
 }
 
 export function visibleConsoleRoutes(authority: CurrentAdministrativeAuthority | null): ConsoleRoute[] {
-  if (!authority) return consoleRoutes;
+  if (!authority) return consoleRoutes.filter((route) => !route.platformOwnerOnly);
   if (!authority.administrativelyEligible) {
     return consoleRoutes.filter((route) => route.visibleWithoutAdministrativeEligibility === true);
   }
   const available = new Set(authority.authorities.map((item) => item.permission.resourceType));
-  return consoleRoutes.filter((route) =>
-    route.visibleWithoutAdministrativeEligibility === true
-    || !route.resourceTypes
-    || route.resourceTypes.some((resourceType) => available.has(resourceType)),
-  );
+  return consoleRoutes.filter((route) => {
+    if (route.platformOwnerOnly) return authority.viablePlatformOwner;
+    return route.visibleWithoutAdministrativeEligibility === true
+      || !route.resourceTypes
+      || route.resourceTypes.some((resourceType) => available.has(resourceType));
+  });
 }
 
 export function shellGroupFor(id: ShellGroupId): ShellGroup {

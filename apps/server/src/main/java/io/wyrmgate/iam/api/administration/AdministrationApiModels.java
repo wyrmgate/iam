@@ -22,6 +22,7 @@ final class AdministrationApiModels {
             UUID tenantId,
             UUID actorIdentityId,
             boolean administrativelyEligible,
+            boolean viablePlatformOwner,
             Instant evaluatedAt,
             List<EffectiveAuthorityResource> authorities) {}
 

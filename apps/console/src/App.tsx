@@ -6,6 +6,7 @@ import {
   type SystemInfo,
 } from './api';
 import { OverviewPage } from './OverviewPage';
+import { PlatformTenantsPage } from './PlatformTenantsPage';
 import { RequestsApprovalsWithAccessLinks } from './RequestsApprovalsWithAccessLinks';
 import { TenantOverviewPage } from './TenantOverviewPage';
 import { useConsolePathname } from './consoleLocation';
@@ -69,6 +70,7 @@ export function App() {
   return (
     <>
       {route === 'overview' && <OverviewPage system={system} authority={authority} />}
+      {route === 'platform-tenants' && <PlatformTenantsPage />}
       {route === 'tenant' && <TenantOverviewPage authority={authority.status === 'ready' ? authority.value : null} />}
       {route === 'identities' && !identityId && (
         <IdentityCollectionPage
