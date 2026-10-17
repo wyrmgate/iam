@@ -12,7 +12,7 @@ const architecture = await readFile(new URL('../../../docs/architecture/platform
 
 test('Platform Tenant collection and detail remain distinct from current-Tenant administration', () => {
   assert.match(navigation, /id: 'platform-tenants', path: '\/platform\/tenants', label: 'Tenants', group: 'platform', platformOwnerOnly: true/);
-  assert.match(navigation, /platformTenantMatch = \^\\\/platform\\\/tenants\\\/\(\[\^\/\]\+\)\$/);
+  assert.match(navigation, /const platformTenantMatch = \/\^\\\/platform\\\/tenants\\\/\(\[\^\/\]\+\)\$\//);
   assert.match(navigation, /platformTenantDetailPath/);
   assert.match(navigation, /id: 'tenant', path: '\/tenant', label: 'Current Tenant', group: 'administration'/);
   assert.match(app, /<PlatformTenantsPage onSelect=/);
