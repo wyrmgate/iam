@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ApiError } from './api';
 import { getPlatformTenant, type PlatformTenantResource } from './platformTenantsApi';
-import { Box, Button, Page, StateIndicator, StatePanel, Surface, Typography } from './ui';
+import { Box, Button, Page, PageHeader, StateIndicator, StatePanel, Surface } from './ui';
 
 type Props = {
   tenantId: string;
@@ -12,6 +12,17 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'ready'; tenant: PlatformTenantResource }
   | { status: 'error'; error: unknown };
+
+type DefinitionItem = {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+};
+
+const monoSx = {
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  overflowWrap: 'anywhere',
+} as const;
 
 function formatDateTime(value: string): string {
   const date = new Date(value);
@@ -44,25 +55,24 @@ function errorCopy(error: unknown): { title: string; body: string } {
   };
 }
 
-function DefinitionRow({ label, children }: { label: string; children: ReactNode }) {
+function DefinitionList({ items }: { items: DefinitionItem[] }) {
   return (
     <Box
+      component="dl"
       sx={{
+        m: 0,
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: '10rem minmax(0, 1fr)' },
-        gap: { xs: 0.35, sm: 2 },
-        py: 1.15,
-        borderBottom: 1,
-        borderColor: 'divider',
-        '&:last-of-type': { borderBottom: 0 },
+        gridTemplateColumns: { xs: '1fr', sm: 'minmax(9rem, 12rem) minmax(0, 1fr)' },
+        columnGap: 2,
+        '& > dt, & > dd': { py: 1, m: 0, borderBottom: 1, borderColor: 'divider' },
+        '& > dt': { color: 'text.secondary', fontSize: '0.75rem' },
+        '& > dd': { fontSize: '0.8125rem', fontWeight: 600, overflowWrap: 'anywhere' },
       }}
     >
-      <Typography component="dt" variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-        {label}
-      </Typography>
-      <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: 'anywhere' }}>
-        {children}
-      </Typography>
+      {items.flatMap((item) => [
+        <Box component="dt" key={`${item.label}-label`}>{item.label}</Box>,
+        <Box component="dd" key={`${item.label}-value`} sx={item.mono ? monoSx : undefined}>{item.value}</Box>,
+      ])}
     </Box>
   );
 }
@@ -84,40 +94,25 @@ export function PlatformTenantDetailPage({ tenantId, onBack }: Props) {
   }, [tenantId, reloadKey]);
 
   const tenantName = state.status === 'ready' ? state.tenant.displayName : 'Tenant inspection';
-  const initial = tenantName.trim().slice(0, 1).toUpperCase() || 'T';
+  const resolvedTenantId = state.status === 'ready' ? state.tenant.id : tenantId;
 
   return (
-    <Page width="standard" aria-labelledby="platform-tenant-title" sx={{ gap: 0 }}>
-      <Box component="nav" aria-label="Breadcrumb" sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 0.8, color: 'text.secondary', mb: 1.25 }}>
-        <Typography variant="caption">Platform</Typography><Typography variant="caption">›</Typography><Typography variant="caption">Tenants</Typography><Typography variant="caption">›</Typography><Typography variant="caption" color="text.primary">{tenantName}</Typography>
-      </Box>
+    <Page width="standard" aria-labelledby="platform-tenant-title">
+      <PageHeader
+        eyebrow="Platform · Tenant inspection"
+        title={<Box component="span" id="platform-tenant-title">{tenantName}</Box>}
+        description={`Deployment-scoped read-only Tenant resource · Tenant ID ${resolvedTenantId}`}
+        actions={(
+          <>
+            <StateIndicator label="Platform inspection · read-only" tone="info" />
+            <Button variant="outlined" onClick={onBack}>Back to Tenants</Button>
+          </>
+        )}
+      />
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '48px minmax(0, 1fr)', sm: '64px minmax(0, 1fr) auto' }, gap: { xs: 1.5, sm: 2 }, alignItems: 'center', mb: 2 }}>
-        <Box sx={{ width: { xs: 44, sm: 56 }, height: { xs: 44, sm: 56 }, borderRadius: '50%', bgcolor: 'primary.main', color: 'primary.contrastText', display: 'grid', placeItems: 'center', fontSize: { xs: 20, sm: 24 }, fontWeight: 600 }}>{initial}</Box>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography component="h1" id="platform-tenant-title" sx={{ fontSize: { xs: 22, sm: 26 }, lineHeight: 1.15, fontWeight: 700, overflowWrap: 'anywhere' }}>{tenantName}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.45, overflowWrap: 'anywhere' }}>Tenant ID: {state.status === 'ready' ? state.tenant.id : tenantId}</Typography>
-          {state.status === 'ready' ? <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' }, mt: 0.35 }}>Revision {state.tenant.revision} · Created {formatDateTime(state.tenant.createdAt)}</Typography> : null}
-        </Box>
-        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1, justifySelf: 'end' }}>
-          <StateIndicator label="Platform inspection" tone="info" />
-          <Button variant="outlined" onClick={onBack}>Back to Tenants</Button>
-        </Box>
-      </Box>
-
-      <Box sx={{ display: { xs: 'flex', sm: 'none' }, mb: 1.5 }}>
-        <Button variant="outlined" onClick={onBack} fullWidth>Back to Tenant inventory</Button>
-      </Box>
-
-      <Surface
-        title="Inspection boundary"
-        description="This is the Tenant Management presentation in deployment inspection mode. The selected Tenant identifier is a requested Platform resource, not authenticated current-Tenant context."
-        sx={{ mb: 1.5, p: 2 }}
-      >
-        <Typography variant="body2" color="text.secondary">
-          Inspecting this resource does not change your current Tenant context or grant tenant-scoped administrative authority. Tenant-owned Identity, Principal, Access, Governance, Credential, Integration and Audit workspaces are intentionally not exposed from this route.
-        </Typography>
-      </Surface>
+      <StatePanel state="info" title="Deployment inspection boundary">
+        The selected Tenant identifier is a requested Platform resource, not authenticated current-Tenant context. Inspecting it does not change your current Tenant context or grant tenant-scoped administrative authority. Tenant-owned capability workspaces are intentionally not linked from this route.
+      </StatePanel>
 
       {state.status === 'loading' ? (
         <StatePanel state="loading" title="Loading Tenant detail">
@@ -141,20 +136,15 @@ export function PlatformTenantDetailPage({ tenantId, onBack }: Props) {
       {state.status === 'ready' ? (
         <Surface
           title="Tenant information"
-          description="Canonical Tenant metadata only. This view intentionally excludes Tenant lifecycle/status, code, description, subscription, domains, tenant-owned IAM data and mutation controls."
-          sx={{ p: 2 }}
+          description="Canonical Platform-owned metadata only. Tenant lifecycle/status, code, description, subscription, domains, tenant-owned IAM data and mutation controls are outside this inspection contract."
         >
-          <Box component="dl" sx={{ m: 0 }}>
-            <DefinitionRow label="Display name">{state.tenant.displayName}</DefinitionRow>
-            <DefinitionRow label="Tenant ID">
-              <Box component="span" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                {state.tenant.id}
-              </Box>
-            </DefinitionRow>
-            <DefinitionRow label="Revision">{state.tenant.revision}</DefinitionRow>
-            <DefinitionRow label="Created"><time dateTime={state.tenant.createdAt}>{formatDateTime(state.tenant.createdAt)}</time></DefinitionRow>
-            <DefinitionRow label="Updated"><time dateTime={state.tenant.updatedAt}>{formatDateTime(state.tenant.updatedAt)}</time></DefinitionRow>
-          </Box>
+          <DefinitionList items={[
+            { label: 'Display name', value: state.tenant.displayName },
+            { label: 'Tenant ID', value: state.tenant.id, mono: true },
+            { label: 'Revision', value: state.tenant.revision },
+            { label: 'Created', value: <time dateTime={state.tenant.createdAt}>{formatDateTime(state.tenant.createdAt)}</time> },
+            { label: 'Updated', value: <time dateTime={state.tenant.updatedAt}>{formatDateTime(state.tenant.updatedAt)}</time> },
+          ]} />
         </Surface>
       ) : null}
     </Page>
