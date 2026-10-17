@@ -99,16 +99,19 @@ The authenticated Console exposes `/tenant` as a current-Tenant management and n
 
 Operation-time server authorization remains final for every linked workspace and command.
 
-## Platform Tenant inventory
+## Platform Tenant inventory and inspection
 
 The authenticated Console exposes `/platform/tenants` as a deployment-scoped, read-only inventory surface. It is distinct from `/tenant` and is visible only when the server-derived current administrative-authority projection reports the actor as a current viable `PLATFORM_OWNER`.
 
 - The navigation hint is not itself authority. `GET /api/v1/console/platform/tenants` independently re-evaluates current viable `PLATFORM_OWNER` authority on every request and fails closed for tenant-scoped administrators, including a Tenant Owner with a tenant `GLOBAL` grant.
-- The Platform-owned query returns only canonical Tenant metadata: `id`, `displayName`, `revision`, `createdAt`, and `updatedAt`.
+- Each selected Tenant is addressable at `/platform/tenants/{tenantId}` in the Console and through read-only `GET /api/v1/console/platform/tenants/{tenantId}`. The requested identifier selects a deployment-scoped resource only; it is never treated as authoritative current-Tenant context.
+- The detail endpoint independently re-evaluates current viable `PLATFORM_OWNER` authority before resolving the Tenant, returns not-found when no canonical Tenant exists for the requested identifier, and does not derive authorization from the Tenant row or browser route state.
+- The Platform-owned collection and detail queries return only canonical Tenant metadata: `id`, `displayName`, `revision`, `createdAt`, and `updatedAt`.
 - Collection reads are bounded and deterministically ordered by `createdAt` then `id`, with an integrity-protected continuation cursor. The Console never loads an unbounded Tenant collection.
-- Opening or paging the Platform Tenant inventory does not change the current Tenant context. The browser may request a deployment-scoped resource, but browser state, query parameters, headers, row selection, or route state are not authoritative Tenant switching mechanisms.
-- The surface does not introduce Tenant lifecycle/status, Tenant code, description, mutation, provisioning, or cross-tenant impersonation semantics. Those remain unavailable until separately accepted and implemented.
-- `PLATFORM_OWNER` remains a deployment authority owned by Administration. The inventory does not create a generic `SUPER_ADMIN` role and does not reinterpret tenant-scoped Administration authority as platform authority.
+- Opening, deep-linking to, or paging Platform Tenant inventory/detail does not change the current Tenant context. Browser state, query parameters, headers, row selection, or route state are not authoritative Tenant switching mechanisms.
+- Platform Owner inspection does not automatically expose tenant-owned Identity, Principal, Access, Governance, Credential, Integration or Audit data. Any future cross-Tenant inspection of capability-owned state requires an explicit semantic query and authorization contract from that owning capability.
+- The surface does not introduce Tenant lifecycle/status, Tenant code, description, mutation, provisioning, subscription, domain management, or cross-tenant impersonation semantics. Those remain unavailable until separately accepted and implemented.
+- `PLATFORM_OWNER` remains a deployment authority owned by Administration. The inventory/detail surface does not create a generic `SUPER_ADMIN` role and does not reinterpret tenant-scoped Administration authority as platform authority.
 
 ## Persistence boundary
 
