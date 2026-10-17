@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const page = await readFile(new URL('../src/TenantOverviewPage.tsx', import.meta.url), 'utf8');
 const tenantApi = await readFile(new URL('../src/tenantContextApi.ts', import.meta.url), 'utf8');
+const operationsApi = await readFile(new URL('../src/iamOperationsApi.ts', import.meta.url), 'utf8');
 const app = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const navigation = await readFile(new URL('../src/consoleNavigation.ts', import.meta.url), 'utf8');
 const architecture = await readFile(new URL('../../../docs/architecture/platform-authority-and-application-tenancy.md', import.meta.url), 'utf8');
@@ -24,6 +25,17 @@ test('Tenant dashboard uses server-derived canonical Tenant metadata and existin
   assert.match(page, /tenant\.value\.updatedAt/);
   assert.doesNotMatch(page, /method:\s*'POST'/);
   assert.doesNotMatch(page, /tenant selector/i);
+});
+
+test('IAM operations contract exposes governed Tenant dashboard read projections', () => {
+  assert.match(operationsApi, /tenantDashboard:/);
+  assert.match(operationsApi, /identityTypes: OverviewBreakdown/);
+  assert.match(operationsApi, /applicationOrigins: OverviewBreakdown/);
+  assert.match(operationsApi, /effectiveOwnerCount: number \| null/);
+  assert.match(operationsApi, /viableOwnerCount: number \| null/);
+  assert.match(operationsApi, /linkedIdentityCount: number/);
+  assert.match(operationsApi, /failedReconciliationsInWindow: number \| null/);
+  assert.match(operationsApi, /recentActivity:/);
 });
 
 test('Tenant dashboard follows the agreed screenshot composition', () => {
@@ -79,8 +91,10 @@ test('Tenant dashboard stays within shared enterprise presentation roles', () =>
   assert.doesNotMatch(page, /#[0-9a-f]{3,8}/i);
 });
 
-test('living architecture still documents the Console boundary without redefining Tenant authority', () => {
+test('living architecture documents the Console projection boundary without redefining Tenant authority', () => {
   assert.match(architecture, /## Console tenant context/);
   assert.match(architecture, /not a new Tenant aggregate, lifecycle API or browser-side authority source/);
+  assert.match(architecture, /Identity-owned active counts by `PERSON` \/ `SERVICE` \/ `WORKLOAD`/);
+  assert.match(architecture, /Per-application access aggregation remains deliberately unavailable/);
   assert.match(architecture, /Operation-time server authorization remains final/);
 });
