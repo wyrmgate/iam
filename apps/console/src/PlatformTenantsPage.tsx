@@ -114,11 +114,7 @@ export function PlatformTenantsPage() {
       ) : null}
 
       {state.status === 'ready' && state.items.length > 0 ? (
-        <Surface
-          title="Tenant inventory"
-          aria-label="Platform Tenant inventory"
-          sx={{ p: 0, overflow: 'hidden' }}
-        >
+        <Surface title="Tenant inventory" aria-label="Platform Tenant inventory" sx={{ overflow: 'hidden' }}>
           <DataTable ariaLabel="Platform Tenant inventory" minWidth={880}>
             <TableHead>
               <TableRow>
@@ -141,7 +137,7 @@ export function PlatformTenantsPage() {
               ))}
             </TableBody>
           </DataTable>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', px: 2, pt: 1.25 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', pt: 1.25 }}>
             Showing {state.items.length.toLocaleString()} Tenant{state.items.length === 1 ? '' : 's'}. Tenant lifecycle/status, code and description are not part of the current canonical Tenant contract.
           </Typography>
           {state.nextCursor ? (
@@ -150,7 +146,7 @@ export function PlatformTenantsPage() {
               size="small"
               disabled={loadingMore}
               onClick={() => void loadMore()}
-              sx={{ m: 1.25 }}
+              sx={{ mt: 1 }}
             >
               {loadingMore ? 'Loading…' : 'Load more'}
             </Button>
