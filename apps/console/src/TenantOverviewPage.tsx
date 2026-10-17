@@ -608,7 +608,7 @@ export function TenantOverviewPage({ authority }: Props) {
             disabled={!tab.path}
             title={tab.disabledReason}
             startIcon={<LineIcon name={tab.icon} size={16} />}
-            onClick={tab.path ? () => navigateConsole(tab.path) : undefined}
+            onClick={tab.path ? () => navigateConsole(tab.path!) : undefined}
             sx={{
               flex: '0 0 auto',
               minHeight: 42,
