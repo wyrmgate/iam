@@ -62,7 +62,7 @@ test('Tenant Management consumes governed read projections instead of fabricatin
   assert.match(page, /not a synthetic Tenant health score/);
   assert.match(page, /does not expose an exact bounded per-application Access aggregation/);
   assert.doesNotMatch(page, /Acme Corp|ACME|Alice Admin|Workday|Salesforce|GitHub|Jira|Internal Payroll/);
-  assert.doesNotMatch(page, /tenant\.status|tenant\.code|tenant\.description|tenant\.owner/);
+  assert.doesNotMatch(page, /tenant\.value\.(?:status|code|description|owner)\b/);
 });
 
 test('Tenant Management renders exact governed distributions with shared charts', () => {
