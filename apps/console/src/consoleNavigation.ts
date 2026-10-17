@@ -94,6 +94,13 @@ export function matchConsoleRoute(pathname: string): ConsoleRouteMatch | null {
   const exact = consoleRoutes.find((route) => route.path === pathname);
   if (exact) return { route: exact, params: {} };
 
+  const platformTenantMatch = /^\/platform\/tenants\/([^/]+)$/.exec(pathname);
+  if (platformTenantMatch) {
+    const tenantId = decodedPathSegment(platformTenantMatch[1]);
+    const route = consoleRoutes.find((candidate) => candidate.id === 'platform-tenants');
+    if (tenantId && route) return { route, params: { tenantId } };
+  }
+
   const identityMatch = /^\/identities\/([^/]+)$/.exec(pathname);
   if (identityMatch) {
     const identityId = decodedPathSegment(identityMatch[1]);
@@ -110,6 +117,10 @@ export function activeRouteFor(pathname: string): ConsoleRoute | null {
 
 export function identityDetailPath(identityId: string): string {
   return `/identities/${encodeURIComponent(identityId)}`;
+}
+
+export function platformTenantDetailPath(tenantId: string): string {
+  return `/platform/tenants/${encodeURIComponent(tenantId)}`;
 }
 
 export const CONSOLE_NAVIGATION_EVENT = 'wyrmgate:console-navigation';
