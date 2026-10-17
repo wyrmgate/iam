@@ -13,6 +13,7 @@ import java.util.Base64;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +30,7 @@ final class PlatformTenantCursorCodec {
     private final Duration lifetime;
     private final Clock clock;
 
+    @Autowired
     PlatformTenantCursorCodec(
             ObjectProvider<SigningKeyProvider> signingKeys,
             ControlPlaneAuthProperties authProperties,
@@ -60,9 +62,8 @@ final class PlatformTenantCursorCodec {
         String payload = verifiedPayload(cursor);
         String[] parts = payload.split("\u0000", -1);
         if (parts.length != 5 || !PAYLOAD_VERSION.equals(parts[0])) throw invalid();
-        Instant issuedAt;
         try {
-            issuedAt = Instant.parse(parts[1]);
+            Instant issuedAt = Instant.parse(parts[1]);
             Instant now = clock.instant();
             if (issuedAt.isAfter(now) || !now.isBefore(issuedAt.plus(lifetime))) throw invalid();
             return new Position(
