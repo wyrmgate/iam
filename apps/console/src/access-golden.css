@@ -88,6 +88,8 @@
   border-bottom: 1px solid var(--wg-border);
 }
 .access-collection-heading p { font-size: 12px; }
+/* The page header owns the one dominant Grant access action. */
+section[aria-labelledby="assignment-collection-title"] > .access-collection-heading > button { display: none; }
 
 .access-table-wrap { width: 100%; overflow-x: auto; }
 .access-table { width: 100%; min-width: 940px; border-collapse: collapse; }
@@ -96,6 +98,7 @@
 .access-review-button { border: 0; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .access-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--wg-border); color: var(--wg-text-secondary); font-size: 11px; }
 .access-state-wrap { padding: 16px; }
+/* Legacy mobile cards remain non-presentational; the information-preserving table owns every viewport. */
 .access-mobile-list { display: none; }
 
 .access-detail { overflow: hidden; }
@@ -121,6 +124,19 @@
 .access-validity-card > strong { display: block; margin: 8px 0 10px; font-size: 13px; }
 .access-validity-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; }
 .access-action-row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Removal entry points stay restrained; danger emphasis belongs to the confirmation boundary. */
+.access-action-row .MuiButton-containedError {
+  border: 1px solid var(--wg-border);
+  background: transparent;
+  color: var(--wg-text);
+  box-shadow: none;
+}
+.access-action-row .MuiButton-containedError:hover {
+  border-color: var(--wg-text-secondary);
+  background: var(--wg-surface-subtle);
+  color: var(--wg-text);
+  box-shadow: none;
+}
 .access-detail > .MuiAlert-root,
 .access-detail > [class*="StatePanel"] { margin: 14px 20px; }
 .access-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -189,19 +205,6 @@
   .access-filter-context { grid-column: 1 / -1; }
   .access-clear-filters { justify-self: start; }
   .access-collection-heading { padding: 15px 12px; }
-  .access-collection-heading > button { display: none; }
-  .access-table-wrap { display: none; }
-  .access-mobile-list { display: grid; gap: 8px; padding: 10px 12px; background: var(--wg-surface-subtle); }
-  .access-mobile-card { position: relative; display: grid; gap: 5px; width: 100%; padding: 13px 34px 13px 13px; border: 1px solid var(--wg-border); border-radius: var(--wg-radius-control); background: var(--wg-surface); text-align: left; cursor: pointer; }
-  .access-mobile-card.is-selected { border-color: var(--wg-accent); background: var(--wg-surface-selected); }
-  .access-mobile-card > strong { color: var(--wg-accent); font-size: 12px; }
-  .access-mobile-card > b { color: var(--wg-text); font-size: 14px; }
-  .access-mobile-card > span { color: var(--wg-text-secondary); font-size: 11px; }
-  .access-mobile-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 7px 0 0; }
-  .access-mobile-card dl > div { min-width: 0; }
-  .access-mobile-card dt { color: var(--wg-text-muted); font-size: 10px; text-transform: uppercase; }
-  .access-mobile-card dd { margin: 3px 0 0; color: var(--wg-text); font-size: 11px; }
-  .access-mobile-card > i { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); color: var(--wg-text-muted); font-size: 22px; font-style: normal; }
   .access-pagination { padding-inline: 12px; }
   .access-pagination span { display: none; }
   .access-assignment-layout.has-selection .access-collection { display: none; }
@@ -219,7 +222,7 @@
   .access-grant-times { grid-template-columns: 1fr; }
   .access-policy-meta { grid-template-columns: 1fr 1fr; margin-inline: 12px; }
   .access-policy > .MuiAlert-root { margin-inline: 12px; }
-  .access-policy .access-table-wrap { display: block; overflow-x: auto; }
+  .access-policy .access-table-wrap { overflow-x: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
