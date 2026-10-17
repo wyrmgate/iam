@@ -97,10 +97,10 @@ export function PlatformTenantDetailPage({ tenantId, onBack }: Props) {
   const resolvedTenantId = state.status === 'ready' ? state.tenant.id : tenantId;
 
   return (
-    <Page width="standard" aria-labelledby="platform-tenant-title">
+    <Page width="standard" aria-label="Platform Tenant inspection">
       <PageHeader
         eyebrow="Platform · Tenant inspection"
-        title={<Box component="span" id="platform-tenant-title">{tenantName}</Box>}
+        title={tenantName}
         description={`Deployment-scoped read-only Tenant resource · Tenant ID ${resolvedTenantId}`}
         actions={(
           <>
@@ -110,7 +110,7 @@ export function PlatformTenantDetailPage({ tenantId, onBack }: Props) {
         )}
       />
 
-      <StatePanel state="info" title="Deployment inspection boundary">
+      <StatePanel state="informational" title="Deployment inspection boundary">
         The selected Tenant identifier is a requested Platform resource, not authenticated current-Tenant context. Inspecting it does not change your current Tenant context or grant tenant-scoped administrative authority. Tenant-owned capability workspaces are intentionally not linked from this route.
       </StatePanel>
 
