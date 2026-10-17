@@ -48,6 +48,7 @@ export type CurrentAdministrativeAuthority = {
   tenantId: string;
   actorIdentityId: string;
   administrativelyEligible: boolean;
+  viablePlatformOwner: boolean;
   evaluatedAt: string;
   authorities: EffectiveAdministrativeAuthority[];
 };
