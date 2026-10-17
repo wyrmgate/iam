@@ -51,6 +51,7 @@ Update this ledger when a UI task is claimed, its branch ancestry changes, a sha
 | UI-029 | #450 | DONE | issue #450 agent | `feat/platform-tenant-inventory` | exact `main` at `20f8a7d5289c27e660d5ba84ad94070556c65285` | ADR-0049; UI-028 DONE | `consoleNavigation.ts` + `App.tsx` Platform route/composition lock RELEASED | Platform Tenant read endpoint/page, authority hint, bounded query, focused tests/docs | Tenant lifecycle/mutation, browser Tenant switching, tenant `GLOBAL` reinterpretation, unrelated shared UI redesign | #451 | Exact head `051116a32bbac4a2cd2947ffe8acb9e9c2cb6942` passed Core/Security/Container/DEV, including full server verify, Console tests/typecheck/build, and server/console image scans; squash-merged to `main` as `4918f12abafb121552a8ff7468085b481bd21e42`; issue #450 closed completed |
 | UI-031 | #453 | DONE | issue #453 agent | `feat/platform-tenant-detail` | exact `main` at `20a987cfc848989fbada6aa76e8014842797ef36` | ADR-0049; UI-029 DONE | `consoleNavigation.ts` + `App.tsx` Platform Tenant detail route/composition lock RELEASED | Platform Tenant canonical detail read/deep-link, focused tests/docs | Tenant mutation/lifecycle, browser Tenant switching, cross-tenant capability data, unrelated shared UI redesign | #454 | Exact head `f3e57eae9209fe14ad468f94203d5818ec4053c9` passed Core/Security/Container/DEV, including full server verify, Console tests/typecheck/build, and server/console image scans; squash-merged to `main` as `a3fa0ed1cecb377fde86896b1a3de78d87fad4ec`; issue #453 closed completed |
 | UI-040 | #458 | DONE | issue #458 agent | `feat/ui-040-tenant-standardization` | exact `main` at `59f3130c62481fdbc7f68d6b890afb761f30c468` | ADR-0049; Enterprise UI Standard; follow-up to #456/#457 | Tenant Management and Platform Tenant page presentation only; no shared public-contract lock required | Capability-local work outside those pages; shared primitives consumed unchanged | IAM/domain/API/persistence/auth/route semantics, Tenant lifecycle, browser authority, shared primitive redesign | #459 | Exact head `3d913f2652dba462fcdbd2680a270627b0884c80` passed Core #1798, Security #1795, Container #1786 and DEV #1629 including Console tests/typecheck/build; squash-merged to `main` as `b11f7e4c14a315a9224976dea8bd761776680407` with reviewed tree `d61e5da35bc5461dc62529cb35f40d345ec4bc27`; issue #458 closed completed |
+| UI-041 | #461 | DONE | issue #461 agent | `feat/ui-041-flow-first-foundation` | exact `main` at `5903bbb98765bdbef3a1a97fe9b0beadb0d42eb2` | UI-022/UI-024 shared enterprise foundation; flow-first redesign phase | Shared design tokens/CSS-variable bridge/MUI provider/page primitives/shell-theme/living UI presentation lock RELEASED | Follow-up capability/page-archetype migrations may consume the merged foundation | IAM/domain/API/persistence/auth/routing semantics, browser authority, competing shared visual contract | #462 | Exact head `1952f766e294a02735a6e386a22cbd1e6539734e` passed Core #1804, Security #1801, Container #1792 and DEV #1633 including Console source-contract tests, typecheck/build and console image scan; squash-merged to `main` as `65869635e3fb79023a38358a146122f503fbf5ff`; issue #461 closed completed |
 
 ## Current phase
 
@@ -133,40 +134,3 @@ UI-019 / #357 is DONE / VERIFIED and establishes the stable implementation owner
 | Audit | `/audit` | `apps/console/src/workspaces/AuditWorkspace.tsx` | Audit capability |
 
 `apps/console/src/workspaces/workspaceSpecHelpers.ts` is shared only for existing cursor/value normalization helpers (`list`, `nullable`, `iso`, `csv`). It is not a domain model, route registry, authorization layer or replacement for typed capability semantics. `App.tsx` remains the route/runtime composition owner, while `SemanticWorkspace` and `src/ui` retain their existing shared presentation contracts.
-
-### Wave 5 — residual enterprise convergence
-
-UI-024 / #422 is **DONE / VERIFIED**. It was serialized cross-cutting presentation work on `refactor/console-enterprise-convergence` from exact `main` `9248ea6164a1f2273b6fdf8f128b175318a3d6a2`, passed the full release-quality gate on exact head `36b7a5f2a2a1511d2f1817d874ff01ae9ae1fd95`, and merged through #423 as `99536c2fc8f2526ed43560e5090a506f0ba82d4c`. Managed-DEV browser acceptance #394 is now the next release gate.
-
-## Shared-surface lock register
-
-Use this section for temporary locks. Add the task/issue, exact surface, reason and release condition. Mark released once the owning PR merges/closes or the task explicitly relinquishes the surface.
-
-| Surface | Owner | Status | Reason / release condition |
-| --- | --- | --- | --- |
-| Login composition files formerly owned by PR #311 | PR #311 | RELEASED | PR #311 merged into `main` at `a23733c` |
-| `src/ui` decomposition targets | UI-151 / #314 | RELEASED | Final reconciled implementation merged through PR #325 |
-| `consoleNavigation.ts` route semantics and `App.tsx` routing integration | UI-020 / #315 | RELEASED | PR #321 merged; route contract remains independently governed |
-| Reusable Console test harness | UI-140 / #316 | RELEASED | PR #320 merged; later focused tests may extend it without redefining product behavior |
-| `src/ui/WyrmgateUiProvider.tsx` global theme/token behavior | UI-011 / #328 | RELEASED | Token baseline merged; UI-018 accessibility-only focus repair completed through #355 |
-| Wave-2 primitive modules (`table.tsx`, `forms.tsx`, `state.tsx`, `dialogs.tsx`, responsive foundation, `tabs.tsx`) | UI-012 through UI-017 | RELEASED | Wave 2 promoted and verified through #354 at `3606b858...` |
-| Cross-cutting accessibility surfaces: converged shared primitives, `SemanticWorkspace`, focused shell/page call sites and accessibility tests | UI-018 / #346 | RELEASED | PR #355 merged to `main` as `fa788235...`; exact merged tree passed the release-quality PR gates |
-| `App.tsx` structural composition, legacy `ControlPlanePages.tsx`, and new `src/workspaces/*` ownership layout | UI-019 / #357 | RELEASED | PR #358 passed all four release-quality gates and squash-merged to `main` as `2bdb72ff...` with the identical reviewed tree |
-| Enterprise UI Standard v1 shared tokens/theme/page/state presentation plus Identity collection reference migration | UI-022 / #414 | RELEASED | PR #415 exact head passed Console/Core/Security/Container/DEV gates and squash-merged to `main` as `505e57e6b45ae16733ad3e8125bb9a8eda7d7a1b`. |
-| Residual authenticated-Console presentation (`enterprise-console.css`, shared/global CSS/theme, shell presentation, Access/Overview/Requests local visual layers, and any touched `src/ui`/`SemanticWorkspace` presentation contract) | UI-024 / #422 | RELEASED | PR #423 exact head `36b7a5f2a2a1511d2f1817d874ff01ae9ae1fd95` passed Core #1639, Security #1636, Container #1627 and DEV #1485, then squash-merged to `main` as `99536c2fc8f2526ed43560e5090a506f0ba82d4c`. |
-| `consoleNavigation.ts` route registry and `App.tsx` route composition for current-Tenant surface | UI-025 / #440 | RELEASED | PR #441 merged to `main` as `fba8230bd1bdfd02d366514748ec7f658168e40a`; UI-026/UI-027 follow-ups changed Tenant page composition/read projections without reopening the shared route lock. |
-| Shared `src/ui/charts.tsx` chart primitive, `src/ui/index.tsx` chart export and categorical visualization-token role | UI-028 / #447 | RELEASED | PR #448 exact head `c99f4fe9a5693857dcf1dc975225159f71e70a04` passed Core/Security/Container/DEV and squash-merged to `main` as `8585e975fd36ee499bd55c331afd265d91095f6e`. |
-| `consoleNavigation.ts` route registry and `App.tsx` route composition for deployment Platform Tenant inventory | UI-029 / #450 | RELEASED | PR #451 exact head `051116a32bbac4a2cd2947ffe8acb9e9c2cb6942` passed Core/Security/Container/DEV and squash-merged to `main` as `4918f12abafb121552a8ff7468085b481bd21e42`; `/tenant` remains current-Tenant and browser Tenant switching remains outside scope. |
-| `consoleNavigation.ts` dynamic Platform Tenant detail route and `App.tsx` detail composition | UI-031 / #453 | RELEASED | PR #454 exact head `f3e57eae9209fe14ad468f94203d5818ec4053c9` passed Core/Security/Container/DEV and squash-merged to `main` as `a3fa0ed1cecb377fde86896b1a3de78d87fad4ec`; Tenant IDs remain requested deployment resources rather than current-Tenant authority. |
-
-## PR and integration checklist
-
-When a task opens a PR, record the PR number in the active ledger and update #312 if it introduces or changes a shared-surface lock. Before marking a row `READY_FOR_INTEGRATION` or later, verify that the branch still has the recorded ancestry, its scope did not absorb another task's concern, canonical IAM/API/security semantics remain unchanged unless separately approved, and task-specific tests/checks are green.
-
-For accessibility-related follow-up work, retain the UI-018 regression baseline covering visible focus, dialog focus behavior, tab/form/table semantics, shared-token contrast, reduced motion and narrow-screen reachability. Any future route, IAM, API or authorization semantic change remains outside that baseline and must be governed independently.
-
-After merge, set `MERGED`, complete required verification, then set `VERIFIED` and finally `DONE`. If a merged change requires follow-up correction before verification, keep it out of `DONE` and record the follow-up dependency.
-
-## Authority boundary
-
-This ledger is operational coordination documentation only. In a conflict, use the project authority order: accepted ADRs and current formal requirements/specifications first, then current repository architecture/domain/interface documentation, then implementation/tests. Issue #312 controls UI concurrency mechanics but does not override those sources.
