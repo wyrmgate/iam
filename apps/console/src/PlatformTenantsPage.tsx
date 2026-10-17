@@ -4,6 +4,7 @@ import { listPlatformTenants, type PlatformTenantResource } from './platformTena
 import {
   Button,
   DataTable,
+  DataTableActionCell,
   DataTableRow,
   Page,
   PageHeader,
@@ -15,6 +16,10 @@ import {
   TableRow,
   Typography,
 } from './ui';
+
+type Props = {
+  onSelect: (tenantId: string) => void;
+};
 
 type LoadState =
   | { status: 'loading' }
@@ -46,7 +51,7 @@ function errorCopy(error: unknown): { title: string; body: string } {
   };
 }
 
-export function PlatformTenantsPage() {
+export function PlatformTenantsPage({ onSelect }: Props) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -115,7 +120,7 @@ export function PlatformTenantsPage() {
 
       {state.status === 'ready' && state.items.length > 0 ? (
         <Surface title="Tenant inventory" aria-label="Platform Tenant inventory" sx={{ overflow: 'hidden' }}>
-          <DataTable ariaLabel="Platform Tenant inventory" minWidth={880}>
+          <DataTable ariaLabel="Platform Tenant inventory" minWidth={940}>
             <TableHead>
               <TableRow>
                 <TableCell>Tenant</TableCell>
@@ -123,16 +128,35 @@ export function PlatformTenantsPage() {
                 <TableCell align="right">Revision</TableCell>
                 <TableCell>Created</TableCell>
                 <TableCell>Updated</TableCell>
+                <TableCell align="right">Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {state.items.map((tenant) => (
-                <DataTableRow key={tenant.id}>
-                  <TableCell><Typography variant="body2" sx={{ fontWeight: 600 }}>{tenant.displayName}</Typography></TableCell>
-                  <TableCell><Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{tenant.id}</Typography></TableCell>
+                <DataTableRow key={tenant.id} interactive>
+                  <TableCell>
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={() => onSelect(tenant.id)}
+                      sx={{ p: 0, minHeight: 0, justifyContent: 'flex-start', textAlign: 'left' }}
+                    >
+                      <Typography component="span" variant="body2" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                        {tenant.displayName}
+                      </Typography>
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', overflowWrap: 'anywhere' }}>
+                      {tenant.id}
+                    </Typography>
+                  </TableCell>
                   <TableCell align="right">{tenant.revision}</TableCell>
-                  <TableCell>{formatDateTime(tenant.createdAt)}</TableCell>
-                  <TableCell>{formatDateTime(tenant.updatedAt)}</TableCell>
+                  <TableCell><time dateTime={tenant.createdAt}>{formatDateTime(tenant.createdAt)}</time></TableCell>
+                  <TableCell><time dateTime={tenant.updatedAt}>{formatDateTime(tenant.updatedAt)}</time></TableCell>
+                  <DataTableActionCell>
+                    <Button variant="outlined" size="small" onClick={() => onSelect(tenant.id)}>View</Button>
+                  </DataTableActionCell>
                 </DataTableRow>
               ))}
             </TableBody>

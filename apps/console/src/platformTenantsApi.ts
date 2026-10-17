@@ -21,3 +21,12 @@ export async function listPlatformTenants(cursor?: string | null, signal?: Abort
     )
   ).data;
 }
+
+export async function getPlatformTenant(tenantId: string, signal?: AbortSignal): Promise<PlatformTenantResource> {
+  return (
+    await apiRequest<PlatformTenantResource>(
+      `${V1_ROOT}/console/platform/tenants/${encodeURIComponent(tenantId)}`,
+      { signal },
+    )
+  ).data;
+}

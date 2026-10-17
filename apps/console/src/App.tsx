@@ -6,6 +6,7 @@ import {
   type SystemInfo,
 } from './api';
 import { OverviewPage } from './OverviewPage';
+import { PlatformTenantDetailPage } from './PlatformTenantDetailPage';
 import { PlatformTenantsPage } from './PlatformTenantsPage';
 import { RequestsApprovalsWithAccessLinks } from './RequestsApprovalsWithAccessLinks';
 import { TenantOverviewPage } from './TenantOverviewPage';
@@ -14,6 +15,7 @@ import {
   identityDetailPath,
   matchConsoleRoute,
   navigateConsole,
+  platformTenantDetailPath,
   type ConsoleRouteId,
 } from './consoleNavigation';
 import { Button, Page, PageHeader } from './ui';
@@ -65,12 +67,18 @@ export function App() {
   const routeMatch = matchConsoleRoute(pathname);
   const route: RouteKey = routeMatch?.route.id ?? 'not-found';
   const identityId = routeMatch?.params.identityId;
+  const platformTenantId = routeMatch?.params.tenantId;
   function go(path: string) { navigateConsole(path); }
 
   return (
     <>
       {route === 'overview' && <OverviewPage system={system} authority={authority} />}
-      {route === 'platform-tenants' && <PlatformTenantsPage />}
+      {route === 'platform-tenants' && !platformTenantId && (
+        <PlatformTenantsPage onSelect={(tenantId) => go(platformTenantDetailPath(tenantId))} />
+      )}
+      {route === 'platform-tenants' && platformTenantId && (
+        <PlatformTenantDetailPage tenantId={platformTenantId} onBack={() => go('/platform/tenants')} />
+      )}
       {route === 'tenant' && <TenantOverviewPage authority={authority.status === 'ready' ? authority.value : null} />}
       {route === 'identities' && !identityId && (
         <IdentityCollectionPage
