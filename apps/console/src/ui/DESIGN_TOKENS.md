@@ -1,21 +1,43 @@
 # Console design-token baseline
 
-`designTokens.ts` and `WyrmgateUiProvider.tsx` define the shared visual baseline for the Wyrmgate Console. Capability pages and project-owned primitives consume this baseline rather than introducing local replacements for common color, typography, spacing, density, shape, elevation or responsive decisions.
+`designTokens.ts`, `cssVariables.ts` and `WyrmgateUiProvider.tsx` define the shared visual baseline for the Wyrmgate Console. Capability pages and project-owned primitives consume this baseline rather than introducing local replacements for common color, typography, spacing, density, shape, elevation or responsive decisions.
 
-The broader composition rules are documented in `docs/engineering/console-enterprise-ui-standard.md`.
+The experience model is defined first in `docs/engineering/console-experience-model.md`. The broader composition rules remain in `docs/engineering/console-enterprise-ui-standard.md`. Tokens encode repeated presentation decisions produced by those contracts; they are not an independent source of product meaning.
+
+## Token policy
+
+A global token must represent a reusable semantic presentation role. Do not add a token because one page needs a convenient raw value.
+
+The shared vocabulary covers:
+
+- application canvas and work surfaces;
+- text hierarchy and borders;
+- product action, selection and focus;
+- navigation surfaces and states;
+- semantic feedback;
+- lifecycle presentation;
+- non-semantic visualization;
+- overlay scrims/elevation;
+- spacing, density and control targets;
+- restrained shape;
+- typography;
+- page bounds and shell geometry.
+
+Raw colors should not be duplicated into shell or capability CSS when a shared role already expresses the intent.
 
 ## Color roles
 
-The palette deliberately separates six roles:
+The palette deliberately separates these roles:
 
-- **Product** — the Wyrmgate blue accent used for primary actions, focus, selection and product emphasis.
-- **Neutral** — canvas, surfaces, borders and text hierarchy.
-- **Navigation** — dark application chrome with explicit hover/active/text roles.
-- **Semantic** — success, warning, danger and informational feedback. These are not aliases for the product accent.
-- **Lifecycle** — compact resource-state colors such as active, pending, suspended, inactive and decommissioned. Lifecycle meaning remains distinct from generic feedback severity and from product emphasis.
-- **Visualization** — restrained categorical colors and neutral tracks for charts whose categories have no success/warning/danger meaning. These colors must always be accompanied by labels or values so chart interpretation does not depend on color alone.
+- **Product** — restrained Wyrmgate blue for primary action, selection, focus and product emphasis. Product blue is not generic status color.
+- **Neutral** — canvas, primary/subtle/raised/selected/hover surfaces, borders and text hierarchy.
+- **Navigation** — dark operator-orientation chrome with explicit normal, hover, active, indicator, border and text roles.
+- **Semantic** — success, warning, danger and informational feedback. These are not aliases for product accent.
+- **Lifecycle** — compact caller-owned lifecycle/state tones. Lifecycle meaning remains distinct from generic feedback severity.
+- **Visualization** — restrained categorical colors and neutral tracks for exact governed datasets whose categories have no success/warning/danger meaning.
+- **Overlay** — scrims used only where layering is part of the interaction model.
 
-A component chooses color by meaning, not visual similarity. Capability code should not introduce raw product/status colors when a shared semantic role already exists. Arbitrary chart categories must not borrow lifecycle or feedback colors merely to look distinct.
+A component chooses color by meaning, not visual similarity. Capability code should not introduce raw product/status colors when a shared semantic role already exists.
 
 ## Enterprise density
 
@@ -23,10 +45,11 @@ The baseline targets dense administrative work without shrinking interactive tar
 
 - 8 px spacing unit with 4 px compact increments;
 - 36 px normal controls and 32 px compact desktop actions;
-- 44 px effective mobile action/control target baseline;
+- 44 px effective narrow-screen action/control target baseline;
 - 40 px administrative table-row baseline;
 - 8 px block / 12 px inline table-cell padding;
-- compact tabs, state indicators and supporting text while preserving readable body copy.
+- compact tabs, state indicators and supporting text while preserving readable body copy;
+- 64 px desktop top bar and 56 px narrow top bar role values for shell coordination.
 
 Page-level composition uses the shared field, section, workspace and responsive gutter vocabulary rather than accumulating unrelated one-off values.
 
@@ -39,7 +62,8 @@ The default UI text size is 14 px. The preferred weight vocabulary is 400, 600 a
 - section headings: 16 px / 600-700;
 - body: 14 px;
 - table body: 13 px;
-- table headers and metadata: 12 px.
+- table headers and metadata: 12 px;
+- overline/context label: approximately 11 px.
 
 Console pages use restrained administrative hierarchy rather than marketing-scale hero typography.
 
@@ -56,11 +80,17 @@ Page-local styling must not introduce unrelated large-card rounding as a substit
 
 ## Elevation
 
-Normal surfaces and tables use borders with no decorative shadow. Shadows are reserved for overlays whose elevation communicates interaction layering, such as popovers, drawers and dialogs.
+Normal workspace surfaces and tables are flat and border-defined. Elevation communicates actual interaction layering only:
+
+- popover/menu elevation;
+- dialog elevation;
+- mobile/drawer elevation.
+
+Ordinary content regions do not receive decorative shadows.
 
 ## Shared component defaults
 
-`WyrmgateUiProvider` normalizes common MUI implementation defaults for buttons, form controls, tables, chips, tabs, cards, dialogs, drawers and tooltips. These defaults are presentation infrastructure only. They do not change Wyrmgate IAM semantics, server authorization, route behavior, form contracts, confirmation behavior or capability-owned business state.
+`WyrmgateUiProvider` normalizes common MUI implementation defaults for buttons, form controls, tables, chips, tabs, alerts, cards, dialogs, menus, popovers, drawers and tooltips. These defaults are presentation infrastructure only. They do not change Wyrmgate IAM semantics, server authorization, route behavior, form contracts, confirmation behavior or capability-owned business state.
 
 `StateIndicator` is the preferred compact dot-and-label treatment when the caller owns a typed state and its presentation tone. `StatusChip` remains available for genuinely token-like categorical metadata; it is not the universal lifecycle component.
 
@@ -76,6 +106,6 @@ The shared page widths remain:
 - standard: 76 rem;
 - wide: 96 rem.
 
-The responsive contract distinguishes desktop, tablet and mobile presentation. Desktop uses the labeled navigation rail and bounded workspace. Intermediate widths reduce chrome without changing information architecture. Mobile moves navigation to a drawer and uses 16 px normal / 12 px narrow gutters while preserving the same semantic operations and authority-relevant information.
+The responsive contract distinguishes desktop, tablet and mobile presentation. Desktop uses stable labeled navigation and bounded workspace content. Intermediate widths reduce chrome without changing information architecture. Narrow layouts move global navigation to an overlay/drawer and use 16 px normal / 12 px narrow gutters while preserving semantic operations and authority-relevant information.
 
 The global baseline honors `prefers-reduced-motion: reduce` by suppressing non-essential animation and transition duration. It preserves a 320 px minimum document width so shared responsive work can adapt layout without silently dropping semantic controls or authority-relevant information.
