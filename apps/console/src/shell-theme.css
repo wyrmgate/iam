@@ -6,13 +6,130 @@
   --shell-border-strong: var(--wg-border-strong);
   --shell-text: var(--wg-text);
   --shell-muted: var(--wg-text-secondary);
-  --shell-nav: #0c1b2c;
-  --shell-nav-hover: #142a42;
-  --shell-nav-active: #193652;
-  --shell-nav-text: #d7e2ed;
-  --shell-nav-muted: #7f95aa;
+  --shell-nav: var(--wg-nav);
+  --shell-nav-surface: var(--wg-nav-surface);
+  --shell-nav-hover: var(--wg-nav-hover);
+  --shell-nav-active: var(--wg-nav-active);
+  --shell-nav-border: var(--wg-nav-border);
+  --shell-nav-text: var(--wg-nav-text);
+  --shell-nav-text-strong: var(--wg-nav-text-strong);
+  --shell-nav-muted: var(--wg-nav-muted);
+  --shell-nav-subtle: var(--wg-nav-subtle);
+  --shell-nav-indicator: var(--wg-nav-active-indicator);
   --shell-accent: var(--wg-accent);
   --shell-accent-soft: var(--wg-accent-subtle);
+  --shell-shadow: var(--wg-shadow-popover);
+}
+
+.navigation-dock {
+  border-right-color: var(--shell-nav-border);
+  box-shadow: none;
+}
+
+.dock-brand {
+  border-bottom-color: var(--shell-nav-border);
+}
+
+.dock-brand-glyph {
+  border-color: var(--shell-nav-border);
+  background: var(--shell-nav-surface);
+  color: var(--shell-nav-text-strong);
+}
+
+.dock-brand-copy strong {
+  color: var(--shell-nav-text-strong);
+}
+
+.dock-brand-copy small,
+.dock-group-heading,
+.dock-runtime {
+  color: var(--shell-nav-muted);
+}
+
+.dock-code {
+  background: var(--shell-nav-surface);
+  color: var(--shell-nav-subtle);
+}
+
+.dock-subroutes button,
+.dock-command {
+  color: var(--shell-nav-text);
+}
+
+.dock-subroutes button::before {
+  background: var(--shell-nav-subtle);
+}
+
+.dock-subroutes button:hover,
+.dock-subroutes button:focus-visible,
+.dock-command:hover,
+.dock-command:focus-visible {
+  background: var(--shell-nav-hover);
+  color: var(--shell-nav-text-strong);
+}
+
+.dock-subroutes button.active {
+  background: var(--shell-nav-active);
+  color: var(--shell-nav-text-strong);
+  box-shadow: inset 3px 0 var(--shell-nav-indicator);
+}
+
+.dock-subroutes button.active::before {
+  background: var(--shell-nav-indicator);
+}
+
+.dock-utility {
+  border-top-color: var(--shell-nav-border);
+}
+
+.dock-command {
+  background: var(--shell-nav-surface);
+}
+
+.dock-command kbd {
+  border-color: var(--shell-nav-border);
+  border-bottom-color: var(--shell-nav-border);
+  background: var(--shell-nav);
+  color: var(--shell-nav-muted);
+}
+
+.shell-topbar {
+  background: rgba(255, 255, 255, .98);
+  backdrop-filter: none;
+}
+
+.command-trigger,
+.actor-trigger,
+.mobile-menu-trigger {
+  background: var(--shell-surface);
+}
+
+.command-trigger:hover,
+.actor-trigger:hover,
+.mobile-menu-trigger:hover {
+  border-color: var(--shell-border-strong);
+  background: var(--wg-surface-hover);
+}
+
+.actor-mark {
+  background: var(--shell-accent);
+  color: var(--wg-accent-on);
+}
+
+.actor-menu,
+.command-palette {
+  border-color: var(--shell-border);
+  background: var(--wg-surface-raised);
+  box-shadow: var(--shell-shadow);
+}
+
+.command-backdrop {
+  background: var(--wg-overlay-scrim-light);
+  backdrop-filter: none;
+}
+
+.command-results button.selected {
+  background: var(--wg-surface-selected);
 }
 
 .product-shell button:focus-visible,
@@ -24,6 +141,16 @@
 
 .command-input-row:focus-within {
   box-shadow: inset 0 0 0 2px var(--wg-focus);
+}
+
+@media (max-width: 760px) {
+  .navigation-dock {
+    box-shadow: var(--wg-shadow-drawer);
+  }
+
+  .mobile-nav-scrim {
+    background: var(--wg-overlay-scrim);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
