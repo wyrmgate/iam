@@ -81,12 +81,11 @@ export function PlatformTenantsPage() {
   }
 
   return (
-    <Page width="wide" aria-labelledby="platform-tenants-title">
+    <Page width="wide">
       <PageHeader
         eyebrow="Platform"
         title="Tenants"
         description="Deployment-wide Tenant inventory. This surface is read-only and requires current viable Platform Owner authority."
-        titleId="platform-tenants-title"
       />
 
       {state.status === 'loading' ? (
