@@ -54,13 +54,13 @@ The only assignment lifecycle actions are:
 - `Cancel scheduled access` for future SCHEDULED assignments;
 - `Revoke access` for ACTIVE or SUSPENDED assignments.
 
-There is no generic status mutation.
+There is no generic status mutation. Entry controls for cancellation and revocation remain visually restrained until the explicit consequence-confirmation boundary; danger emphasis belongs to confirmation rather than permanently saturating the ordinary workbench.
 
 Every lifecycle mutation uses the current strong revision and one causal Idempotency-Key. A retry of the same operator decision reuses the same key. A `412` never silently retries with a newly fetched revision; the operator must refresh and review current authority.
 
 ### Manual grant
 
-`Grant access` is a deliberate secondary action. The browser never selects provenance or lifecycle state.
+`Grant access` is the single dominant page-level creation action. The browser never selects provenance or lifecycle state.
 
 The flow selects:
 
@@ -154,15 +154,14 @@ The implementation assumes enterprise cardinality:
 - no browser N+1 label hydration;
 - no massive Identity/Role/Entitlement/Principal selectors.
 
-Desktop uses a dense table plus selected-detail workbench. Mobile replaces the table with semantic cards and makes selected detail a full-width state. Business meaning and lifecycle operations remain available at 390px.
+Assignments and EffectiveAccess use the same semantic tables across desktop, tablet and mobile with bounded horizontal overflow. Narrow screens do not maintain a second card representation or drop governed subject, target, Principal constraint, lifecycle, validity, provenance, support or computation context merely to fit the viewport. When a resource is selected on a narrow screen, its detail becomes the full-width task state and the collection may temporarily yield to that selected detail without changing URL semantics.
 
 ## Accessibility
 
 The page requires:
 
 - one page `h1` and semantic section headings;
-- semantic desktop tables;
-- explicit mobile field labels;
+- semantic tables with accessible captions/headers across viewport sizes;
 - keyboard-reachable tabs, rows, links, filters, and actions;
 - visible focus;
 - confirmation-dialog focus management;
@@ -187,4 +186,4 @@ The tranche does not introduce:
 
 ## Closing standard
 
-Same Wyrmgate Console product language as IAM Operations, Requests & Approvals, and Identity 360; different Access semantics; authoritative intent, effective projection, fulfillment, and provider observation remain visibly separate.
+Same Wyrmgate Console product language as IAM Operations, Requests & Approvals, Identity 360 and the flow-first Identity/Principal journeys; different Access semantics. Authoritative intent, effective projection, technical fulfillment and provider observation remain visibly separate.

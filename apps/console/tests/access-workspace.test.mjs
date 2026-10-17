@@ -1,8 +1,10 @@
+import assert from 'node:assert/strict';
 import test from 'node:test';
 import { assertSourceContains, assertSourceExcludes, readConsoleSource } from './helpers/source-contract.mjs';
 
 const accessWorkspace = await readConsoleSource('workspaces/AccessGoldenWorkspace.tsx');
 const accessBoundary = await readConsoleSource('workspaces/AccessWorkspace.tsx');
+const accessPresentation = await readConsoleSource('access-golden.css');
 const enterprisePresentation = await readConsoleSource('enterprise-console.css');
 const cssVariables = await readConsoleSource('ui/cssVariables.ts');
 const accessApi = await readConsoleSource('accessApi.ts');
@@ -20,11 +22,24 @@ test('Access lifecycle operations remain explicit, consequence-aware, revision g
   assertSourceContains(accessWorkspace, /Suspend access/, /Resume access/, /Cancel scheduled access/, /Revoke access/, /provider failure will not reactivate this assignment/, /another assignment still supports it/, /createIdempotencyKey/);
   assertSourceContains(accessApi, /mutateAssignment/, /idempotencyKey/);
   assertSourceContains(api, /If-Match/, /Idempotency-Key/);
+  assertSourceContains(accessPresentation, /danger emphasis belongs to the confirmation boundary/, /\.access-action-row \.MuiButton-containedError/, /background: transparent/);
+  assertSourceContains(accessWorkspace, /destructive=\{confirm === 'revoke' \|\| confirm === 'cancel'\}/);
   assertSourceExcludes(accessWorkspace, /Change status/);
 });
 
 test('manual grant uses bounded selectors and does not expose lifecycle or provenance mutation', () => {
   assertSourceContains(accessWorkspace, /Search governed identities/, /TargetPicker/, /searchAccessTargets/, /Specific Principal/, /Manual grant/, /Lifecycle state is not operator-selectable/, /Provider realization happens asynchronously/);
+});
+
+test('Access keeps one dominant Grant access action in presentation', () => {
+  assert.equal((accessWorkspace.match(/＋ Grant access/g) ?? []).length, 2, 'source retains the page action and legacy collection hook');
+  assertSourceContains(accessPresentation, /page header owns the one dominant Grant access action/, /assignment-collection-title/);
+});
+
+test('assignment and EffectiveAccess collections keep the information-preserving tables at narrow widths', () => {
+  assertSourceContains(accessWorkspace, /Authoritative AccessAssignments/, /Effective access projection/);
+  assertSourceContains(accessPresentation, /information-preserving table owns every viewport/, /\.access-table-wrap \{ width: 100%; overflow-x: auto; \}/, /\.access-mobile-list \{ display: none; \}/);
+  assertSourceExcludes(accessPresentation, /\.access-table-wrap \{ display: none; \}/, /\.access-mobile-list \{ display: grid/);
 });
 
 test('EffectiveAccess is explanation-only, human-readable, and routes changes through supporting authoritative assignments', () => {
