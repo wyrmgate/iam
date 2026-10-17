@@ -78,5 +78,5 @@ test('living contracts keep deployment inspection separate from tenant context s
   assert.match(architecture, /does not change the current Tenant context/);
   assert.match(architecture, /browser.*not.*authoritative/i);
   assert.match(tenantManagement, /does not switch authenticated Tenant context/);
-  assert.match(tenantManagement, /does not (?:create|grant) tenant-scoped (?:administrative|Administration) authority/);
+  assert.match(tenantManagement, /Platform Owner inheritance of tenant-scoped authority/);
 });
