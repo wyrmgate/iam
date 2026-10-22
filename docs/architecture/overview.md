@@ -10,8 +10,9 @@ The architecture is framework-neutral. Java/Spring, database technology, OAuth/O
 
 ## Canonical capabilities
 
-The logical capabilities remain:
+The logical capabilities are:
 
+- **Tenancy** — canonical Tenant isolation realm and Tenant operational lifecycle.
 - **Identity** — canonical Identity, typed profiles, organizations/relationships, SourceSystem/SourceRecord/IdentityLink, Principal, lifecycle, merge/split.
 - **Catalog** — Application, ApplicationTarget, Entitlement, Role, RoleVersion, environment and catalog governance metadata, including governed application registration inputs used by SSO protocol adapters.
 - **Access** — AccessAssignment plus EffectiveAccess and desired technical-state projections.
@@ -23,7 +24,15 @@ The logical capabilities remain:
 
 Platform supports those capabilities with replaceable implementations such as protocol endpoints, browser session handling, token issuance, signing-key infrastructure, secret/verifier providers, clocks, ID generation, notifications, schedulers, reliable event publication and persistence.
 
-**IdP/SSO is a product service composed from these capability owners, not a ninth generic business aggregate.** Protocol/session/token infrastructure must not take ownership of Identity, Principal, Credential, Application, AccessAssignment or AdministrativeGrant state merely because an OAuth/OIDC library persists technical records.
+**IdP/SSO is a product service composed from these capability owners, not a generic business aggregate.** Protocol/session/token infrastructure must not take ownership of Tenant, Identity, Principal, Credential, Application, AccessAssignment or AdministrativeGrant state merely because an OAuth/OIDC library persists technical records.
+
+## Tenant ownership and operation scope
+
+Tenant is the hard customer/isolation realm and is not Organization. Tenancy owns canonical Tenant lifecycle; Administration owns `TENANT_OWNER` and `PLATFORM_OWNER` authority; Platform provides technical infrastructure.
+
+Authoritative resources are explicitly classified as `TENANT_OWNED(TenantId)` or `DEPLOYMENT_OWNED`. Trusted execution likewise uses server-derived `TENANT(TenantId)` or `DEPLOYMENT` operation scope. Browser state, untrusted claims and nullable tenant IDs never establish authority.
+
+Tenant lifecycle is `PROVISIONING -> ACTIVE`, `ACTIVE <-> SUSPENDED`, and `ACTIVE|SUSPENDED -> DECOMMISSIONING -> DECOMMISSIONED`. Suspension is an operational gate rather than mass mutation of foreign aggregates; decommissioning is durable Tenancy-owned orchestration while every capability continues to mutate only its own authoritative state.
 
 ## First-party authentication and SSO
 
@@ -50,6 +59,7 @@ Only the owning capability may mutate its authoritative state. Cross-capability 
 
 Examples:
 
+- Tenancy gates Tenant operation and coordinates shutdown, but never rewrites Identity, Access, Credential or Administration tables.
 - Governance may authorize access, but Access creates/revokes `AccessAssignment`.
 - Integration may observe excess provider access, but it does not silently create an `AccessAssignment`.
 - Review records a decision, while remediation invokes current Access state rather than mutating a snapshot.
@@ -61,7 +71,7 @@ Examples:
 
 IAM keeps four categories separate:
 
-1. **Authoritative state** — IAM-governed truth such as Identity, RoleVersion and AccessAssignment.
+1. **Authoritative state** — IAM-governed truth such as Tenant, Identity, RoleVersion and AccessAssignment.
 2. **Observation** — source/provider facts such as SourceRecord or ObservedGrant.
 3. **Evidence** — immutable decision/execution context such as ApprovalDecision or EvidenceSnapshot.
 4. **Projection** — derived/rebuildable state such as EffectiveAccess, Identity360, desired technical state, token claims, or effective administrative access.
@@ -78,12 +88,14 @@ IAM distinguishes:
 
 Administrative roles are not IAM business/application roles, administrative grants are not access assignments, and OAuth scopes are not administrative permissions.
 
+Tenant operational eligibility is an additional lifecycle gate around those planes; it does not replace the plane-specific authority decision.
+
 ## Desired-state convergence
 
 The technical convergence chain is:
 
 ```text
-AccessAssignment / identity facts
+AccessAssignment / identity / tenant facts
         ↓
 EffectiveAccess
         ↓
@@ -100,12 +112,12 @@ Reconciliation
 Drift / GovernanceFinding / remediation
 ```
 
-Provider failures never rewrite a valid governance decision. Stale work is superseded after desired-state revision revalidation.
+Provider failures never rewrite a valid governance or Tenant lifecycle decision. Stale work is superseded after desired-state revision revalidation.
 
 For SSO, the equivalent read path is intentionally non-authoritative:
 
 ```text
-Identity / Principal / Credential + governed application/access context
+Tenant + Identity / Principal / Credential + governed application/access context
         ↓ semantic queries
 Authentication + SSO protocol service
         ↓ curated projection
