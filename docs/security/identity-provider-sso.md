@@ -2,15 +2,17 @@
 
 ## Purpose
 
-This document defines the implementation-facing first-party authentication, federation, SSO, and control-plane browser-session boundary accepted by ADR-0042. Authentication, SSO protocol issuance, business access governance, and IAM administrative authorization remain distinct decisions.
+This document defines the implementation-facing first-party authentication, federation, SSO, and control-plane browser-session boundary accepted by ADR-0042 and amended by ADR-0051. Authentication, SSO protocol issuance, business access governance, Tenant operational eligibility and IAM administrative authorization remain distinct decisions.
 
 ## Canonical ownership
 
-Identity owns governed subjects and Principal lifecycle; Credential owns authenticator metadata/lifecycle; Catalog owns Applications and SSO relying-party registration; Access/Governance own business access intent and policy decisions; Administration owns IAM administrative authority; Audit owns immutable data-minimized evidence; Platform supplies protocol/session/token/signing mechanics. Protocol or security framework objects are never competing canonical IAM authority.
+Tenancy owns canonical Tenant lifecycle/operational eligibility; Identity owns governed subjects and Principal lifecycle; Credential owns authenticator metadata/lifecycle; Catalog owns Applications and SSO relying-party registration; Access/Governance own business access intent and policy decisions; Administration owns IAM administrative authority; Audit owns immutable data-minimized evidence; Platform supplies protocol/session/token/signing mechanics. Protocol or security framework objects are never competing canonical IAM authority.
 
 ## First-party authentication
 
-Wyrmgate authenticates an existing governed Principal through Credential-owned PASSWORD authenticators. Tenant is first derived server-side from a globally unique active Catalog SSO `client_id`. The submitted ApplicationTarget ID and native Principal key are only tenant-scoped selectors; Identity requires the selected Principal and owning Identity to be ACTIVE. Credential independently verifies an effective authenticator for that Principal behind the secret-verifier boundary.
+Wyrmgate authenticates an existing governed Principal through Credential-owned PASSWORD authenticators. Tenant is first derived server-side from a globally unique active Catalog SSO `client_id`. The resolved Tenant must also be operationally eligible under current Tenancy state for ordinary authentication. The submitted ApplicationTarget ID and native Principal key are only tenant-scoped selectors; Identity requires the selected Principal and owning Identity to be ACTIVE. Credential independently verifies an effective authenticator for that Principal behind the secret-verifier boundary.
+
+`PROVISIONING`, `SUSPENDED`, `DECOMMISSIONING` and `DECOMMISSIONED` do not permit ordinary tenant authentication/session establishment merely because Catalog routing, Identity and Credential checks succeed. Explicit bootstrap/recovery/security-reduction paths remain separately governed and must not be inferred from ordinary login.
 
 All authentication failures are intentionally non-enumerating. Passwords and private verifier material never enter ordinary persistence, logs, audit, events, errors, URLs, or browser storage. There is no permanent built-in administrator password, hidden root credential, or wildcard superuser.
 
@@ -18,9 +20,11 @@ All authentication failures are intentionally non-enumerating. Passwords and pri
 
 Successful login always establishes a fresh 256-bit opaque session token, preventing fixation. Only SHA-256 digests are persisted. A global unique digest index permits the server to locate the session and derive Tenant from server-side state for same-origin control-plane requests; browser input never selects authoritative Tenant.
 
-Sessions default to 30 minutes idle and 8 hours absolute and contain only authentication context: session ID, Principal/Identity IDs, exact establishing Credential ID/revision, and time bounds. They carry no Administration permission, AccessAssignment, entitlement, or OAuth scope.
+Sessions default to 30 minutes idle and 8 hours absolute and contain only authentication context: session ID, Principal/Identity IDs, exact establishing Credential ID/revision, and time bounds. They carry no Administration permission, AccessAssignment, entitlement, OAuth scope or cached Tenant lifecycle authority.
 
-Every resolution revalidates current Principal/Identity login eligibility and exact Credential ownership, kind, lifecycle, temporal validity, and revision. Any invalidation fails closed and revokes the session opportunistically. Logout revokes server state before clearing browser cookies.
+Every resolution revalidates current Tenant operational eligibility, Principal/Identity login eligibility and exact Credential ownership, kind, lifecycle, temporal validity, and revision. Any invalidation fails closed and revokes the session opportunistically. A Tenant entering `SUSPENDED`, `DECOMMISSIONING` or `DECOMMISSIONED` therefore makes ordinary Wyrmgate-side tenant sessions unusable without waiting for the session's idle/absolute timeout. Logout revokes server state before clearing browser cookies.
+
+This Wyrmgate-side session rule does not imply universal revocation of already-issued self-contained OAuth/OIDC tokens at external relying parties. The current ADR-0042 baseline does not include token introspection/revocation. Tenant suspension/decommissioning prevents new ordinary issuance; stronger immediate relying-party token invalidation requires a separately accepted protocol contract.
 
 ## Cookie boundary
 
@@ -32,7 +36,9 @@ The management console uses same-origin `/api/*` calls with browser credentials 
 
 ## Control-plane authority
 
-A valid first-party session creates only provider-neutral authenticated actor context from the server-derived Tenant and governed Identity. Administration authorization remains final at operation time for every protected control-plane operation.
+A valid first-party session creates only provider-neutral authenticated actor context from the server-derived Tenant and governed Identity. Current Tenant operational eligibility and Administration authorization remain final at operation time for every protected control-plane operation.
+
+Tenant lifecycle gates ordinary operation but does not itself mint or replace Administration authority. Security-reducing, recovery, evidence and shutdown operations during non-ACTIVE Tenant states require explicit accepted semantic authorization paths rather than a blanket session bypass.
 
 The external JWT/OIDC resource-server adapter remains a supported federation-compatible control-plane authentication source. When external bearer mode is also enabled, an explicit bearer header takes precedence and follows validated issuer/audience plus server-side external-subject binding. External groups, roles, scopes, claims, tenant claims, or provider assurance strings never automatically become `AdministrativePermission`, business access, or canonical assurance.
 
@@ -40,7 +46,9 @@ The external JWT/OIDC resource-server adapter remains a supported federation-com
 
 The first-party public baseline is OpenID Connect over OAuth Authorization Code with mandatory S256 PKCE. Implemented surfaces are discovery, JWKS, authorization, and token endpoints. Redirect URIs are exact registered strings. Unknown/retired clients and invalid redirects never cause redirects to untrusted input. Authorization codes are high-entropy, digest-only, five-minute, single-use technical credentials. State is opaque correlation data; nonce is optional protocol data, not authority.
 
-If an SSO registration requires governed access, application access is evaluated through Catalog/Access semantic queries and fails closed when the mandatory privilege-increase evaluator is unavailable. The protocol layer never mutates Access state.
+Before ordinary authorization/token issuance, the server-derived Tenant must remain operationally eligible under Tenancy. A Tenant lifecycle reduction cannot be bypassed by a still-active client registration or previously authenticated local session.
+
+If an SSO registration requires governed access, application access is evaluated through Catalog/Access semantic queries and fails closed when mandatory evaluation is unavailable. The protocol layer never mutates Access state.
 
 ## Claims and token signing
 
@@ -52,9 +60,9 @@ Private signing material remains behind Platform `SigningKeyProvider`; only publ
 
 Checkpoint 6 establishes a framework-neutral, typed federation adapter SPI. `FederatedAuthenticationAdapter<R>` requires each provider integration to declare a stable provider key, protocol family (`OIDC` or `SAML`), and concrete request type. A provider implementation must cryptographically validate its provider-specific exchange before returning the data-minimized `VerifiedFederatedSubject` of exact external `(issuer, subject)` plus authentication time.
 
-The core deliberately does **not** define a generic JSON/map federation credential or enable an adapter because a library happens to support a protocol. `FederationAdapterRegistry` contains only explicitly wired provider adapters and rejects duplicate/invalid provider keys. An empty registry enables no upstream login provider. Provider network calls, metadata, signing keys, SAML assertions, OIDC code/token exchanges, and provider-native details remain behind provider-specific Integration adapters.
+The core deliberately does **not** define a generic JSON/map federation credential or enable an adapter because a library happens to support a protocol. `FederationAdapterRegistry` contains only explicitly wired provider adapters and rejects duplicate/invalid keys. An empty registry enables no upstream login provider. Provider network calls, metadata, signing keys, SAML assertions, OIDC code/token exchanges, and provider-native details remain behind provider-specific Integration adapters.
 
-The normalized verified result intentionally excludes upstream groups, roles, scopes, tenant claims, arbitrary native attributes, and raw assurance strings. Those values remain provider/protocol input or observation until explicitly mapped through governed semantics. A concrete upstream login adapter must additionally map the verified external subject server-side to the governed Principal/Identity/Tenant required by the consuming authentication flow; client input never chooses authoritative Tenant.
+The normalized verified result intentionally excludes upstream groups, roles, scopes, tenant claims, arbitrary native attributes, and raw assurance strings. Those values remain provider/protocol input or observation until explicitly mapped through governed semantics. A concrete upstream login adapter must additionally map the verified external subject server-side to the governed Principal/Identity/Tenant required by the consuming authentication flow; client input never chooses authoritative Tenant. Current Tenancy operational eligibility is then evaluated separately from successful external-provider authentication.
 
 The existing external JWT/OIDC control-plane adapter is the currently active concrete federation-compatible path and continues to map only validated `(issuer, subject)` through server-side Administration actor binding. The new SPI is the explicit extension point for future upstream first-party-session OIDC/SAML adapters; no such provider is silently active by default.
 
@@ -66,7 +74,7 @@ Enabling any extension requires an explicit public contract, capability ownershi
 
 ## Audit and observability
 
-Audit may record data-minimized semantic evidence for authentication, session lifecycle, client configuration, signing-key administration, federation mapping, and suspicious authenticator events. Passwords, authorization codes, access/bearer tokens, raw session tokens, refresh tokens, client secrets, private keys, recovery secrets, SAML assertions, upstream authorization codes, and raw authenticator material are prohibited from ordinary audit/log payloads and error diagnostics.
+Audit may record data-minimized semantic evidence for authentication, session lifecycle, Tenant lifecycle gating, client configuration, signing-key administration, federation mapping, and suspicious authenticator events. Passwords, authorization codes, access/bearer tokens, raw session tokens, refresh tokens, client secrets, private keys, recovery secrets, SAML assertions, upstream authorization codes, and raw authenticator material are prohibited from ordinary audit/log payloads and error diagnostics.
 
 ## Implementation checkpoints
 
@@ -75,6 +83,7 @@ Audit may record data-minimized semantic evidence for authentication, session li
 3. first-party local authentication and bounded browser-session runtime — implemented;
 4. Authorization Code + PKCE, exact redirect validation, state/nonce handling, discovery, and signed token issuance — implemented;
 5. same-origin console sign-in/session/logout, secure cookies, fixation prevention, CSRF protection, and first-party control-plane actor context — implemented;
-6. explicit federation adapter/extension boundary, external JWT/OIDC compatibility, and retained JWKS verification-key overlap — implemented.
+6. explicit federation adapter/extension boundary, external JWT/OIDC compatibility, and retained JWKS verification-key overlap — implemented;
+7. ADR-0051 Tenant operational-eligibility checks in ordinary authentication/session/token paths — architecture accepted; implementation migration required.
 
 Concrete upstream OIDC/SAML login providers and optional OAuth/OIDC extensions are future product slices, not incomplete baseline behavior. Each future activation requires its own explicit accepted contract and negative security coverage.
