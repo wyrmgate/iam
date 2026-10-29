@@ -10,7 +10,7 @@ Before substantial design or implementation work, read:
 2. `docs/README.md`
 3. `docs/adr/README.md`
 
-Then read the task-relevant architecture/domain/security/API documents and accepted ADRs.
+Then read the task-relevant architecture/domain/security/API documents and accepted ADRs. For layered architecture work also read `docs/architecture/layered-architecture.md`.
 
 For requirements or controlled design baselines, use the current Wyrmgate IAM `Formal Specifications` package in Google Drive as referenced by `docs/PROJECT_INSTRUCTIONS.md`.
 
@@ -28,8 +28,11 @@ Do not ask the user to restate decisions that are available in these canonical s
 ## Architecture guardrails
 
 - Keep canonical architecture framework-neutral.
-- Logical capabilities are Identity, Catalog, Access, Governance, Credential, Integration, Administration and Audit, with Platform as supporting infrastructure.
+- Canonical Layer-4 business capabilities are Tenancy, Identity, Catalog, Access, Governance, Credential, Integration, Administration and Audit; Platform is supporting Layer-6 infrastructure.
+- Authentication/IdP/SSO is a composed product/application service across the layers, not an additional Layer-4 capability.
 - Capability ownership is not equivalent to package, Maven module, process, service or database schema.
+- Tenant is the hard isolation/customer realm; Organization is business structure inside a Tenant.
+- Every authoritative aggregate is explicitly tenant-owned or deployment-owned; deployment ownership is not a nullable-tenant shortcut.
 - Only an owning capability mutates its authoritative state.
 - Cross-capability collaboration uses semantic commands, queries and facts; do not mutate another capability through its repository/tables.
 - Keep Authoritative State, Observation, Evidence and Projection distinct.
@@ -39,12 +42,14 @@ Do not ask the user to restate decisions that are available in these canonical s
 - First-class relationships such as manager, organization, ownership and role composition stay first-class relationships.
 - Identity is the governed subject; Principal is the technical representation/account; Credential belongs to Principal.
 - AccessAssignment is authoritative business access intent; EffectiveAccess and desired provider state are derived projections.
+- Catalog owns target availability; terminal target retirement causes immediate semantic Access suppression and Access-owned durable reduction, never Catalog mutation of AccessAssignment.
+- Integration may own typed provider-observation mappings, including PrincipalObservationMapping, but never Principal authority.
+- Audit evidence ownership is explicit TENANT or DEPLOYMENT scope; platform authority never implies unrestricted tenant Audit visibility.
 - Partial import/reconciliation never implies destructive absence.
-- Privilege increase fails closed when mandatory governance evaluation is unavailable; authoritative privilege reduction/revocation must not be blocked by unrelated evaluator failure.
+- Privilege increase fails closed when mandatory governance/admission evaluation is unavailable; authoritative privilege reduction/revocation must not be blocked by unrelated evaluator failure.
 - External/provider calls never run inside the authoritative transaction that commits governance state.
 - Async processing assumes at-least-once delivery and must tolerate retry, duplication, replay and out-of-order events.
 - Secrets/private credential material must not appear in ordinary APIs, events, audit, logs, tasks or errors.
-- Tenant is an isolation boundary; Organization is business structure.
 - Avoid premature microservices.
 
 ## Workflow/API rules
