@@ -215,7 +215,7 @@ class IdentityOrganizationRelationshipPersistenceIntegrationTest {
                         RelationshipProvenance.sourceRecord(UUID.randomUUID()),
                         now))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("relationship SourceRecord does not exist");
+                .hasMessage("relationship SourceRecord is not currently accepted for the subject Identity");
     }
 
     private static TenantContext tenant(String name, Instant now) {
