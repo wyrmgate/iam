@@ -238,6 +238,14 @@ class AccessApiIntegrationTest {
                     }
 
                     @Override
+                    public boolean supportsPolicyMultiAttribute(
+                            TenantContext tenant,
+                            String canonicalKey,
+                            ScalarType type) {
+                        return false;
+                    }
+
+                    @Override
                     public Context currentContext(
                             TenantContext tenant,
                             UUID identityId,
