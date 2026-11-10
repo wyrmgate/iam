@@ -147,6 +147,16 @@ class GovernanceReviewApiIntegrationTest {
                     }
 
                     @Override
+                    public IdentityAccessStatus accessStatus(
+                            TenantContext tenant,
+                            UUID identityId) {
+                        return identityExists(tenant, identityId)
+                                ? IdentityAccessStatus.eligible("ACTIVE", 1)
+                                : IdentityAccessStatus.notFound();
+                    }
+
+
+                    @Override
                     public PrincipalReference principal(
                             TenantContext ignored,
                             UUID principalId) {
