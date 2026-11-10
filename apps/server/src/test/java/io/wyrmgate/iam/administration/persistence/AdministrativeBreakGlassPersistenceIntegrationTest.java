@@ -92,7 +92,8 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
                 ids,
                 transactions);
         identityCommands = new IdentityCommandService(
-                identities, new JdbcIdentityFactSink(outbox, ids), ids, transactions);
+                identities, new JdbcIdentityFactSink(outbox, ids), ids, transactions,
+                (tenant, identityId, at) -> {});
     }
 
     @BeforeEach
