@@ -74,7 +74,7 @@ public final class IntegrationPrincipalMappingService {
 
             PrincipalObservationMapping created = mappings.createPrincipalMapping(
                     tenant, ids.nextId(), connectorBindingId, providerId, principalId, now);
-            facts.mappingChanged(
+            facts.principalMappingChanged(
                     tenant,
                     "integration.principal-observation-mapped",
                     created.id(),
@@ -102,7 +102,7 @@ public final class IntegrationPrincipalMappingService {
         return transactions.required(() -> {
             PrincipalObservationMapping retired =
                     mappings.retirePrincipalMapping(tenant, mappingId, expectedRevision, now);
-            facts.mappingChanged(
+            facts.principalMappingChanged(
                     tenant,
                     "integration.principal-observation-unmapped",
                     retired.id(),
