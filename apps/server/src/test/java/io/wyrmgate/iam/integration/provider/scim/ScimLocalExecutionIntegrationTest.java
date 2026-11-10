@@ -15,7 +15,7 @@ import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.tenancy.tenant.TenantContext;
+import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
