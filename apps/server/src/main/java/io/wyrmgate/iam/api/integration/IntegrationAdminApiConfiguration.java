@@ -5,6 +5,8 @@ import io.wyrmgate.iam.integration.application.IntegrationAdministrationCommandS
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingRepository;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingService;
 import io.wyrmgate.iam.api.security.ControlPlaneAuthProperties;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
@@ -28,13 +30,24 @@ class IntegrationAdminApiConfiguration {
             IntegrationAdministrationRepository repository,
             IntegrationEntitlementMappingService mappingCommands,
             IntegrationEntitlementMappingRepository mappings,
+            IntegrationPrincipalMappingService principalMappingCommands,
+            IntegrationPrincipalMappingRepository principalMappings,
             JdbcIdempotencyRepository idempotency,
             TransactionExecutor transactions,
             SecurityAuditPort audit,
             IdGenerator ids) {
         return new IntegrationAdminApiMutationService(
-                authorization,commands,repository,mappingCommands,mappings,
-                idempotency,transactions,audit,ids);
+                authorization,
+                commands,
+                repository,
+                mappingCommands,
+                mappings,
+                principalMappingCommands,
+                principalMappings,
+                idempotency,
+                transactions,
+                audit,
+                ids);
     }
 
     @Bean
