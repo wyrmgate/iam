@@ -19,9 +19,9 @@ import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -36,7 +36,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static IdentityCommandService identityCommands;
     private static AdministrativeAuthorizationService authorization;
 
@@ -46,7 +46,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         JdbcIdentityRepository identities = new JdbcIdentityRepository(jdbc);
         identityCommands = new IdentityCommandService(
                 identities,
@@ -70,7 +70,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -255,7 +255,7 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
     }
 
     private static TenantContext tenant(String name, Instant now) {
-        return new TenantContext(tenants.create(name, now).id());
+        return new TenantContext(tenants.createActive(name, now).id());
     }
 
     private static Identity actor(TenantContext tenant, IdentityLifecycleState state, Instant now) {
