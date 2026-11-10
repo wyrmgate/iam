@@ -57,10 +57,10 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.math.BigDecimal;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -87,7 +87,7 @@ class IdentityApiIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcIdentityRepository identities;
     private static IdentityCommandService commands;
     private static JdbcIdempotencyRepository idempotency;
@@ -109,7 +109,7 @@ class IdentityApiIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         identities = new JdbcIdentityRepository(jdbc);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         JdbcOutboxRepository outbox = new JdbcOutboxRepository(jdbc);
@@ -144,11 +144,11 @@ class IdentityApiIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
         Instant now = Instant.parse("2026-09-16T10:00:00Z");
-        tenant = new TenantContext(tenants.create("HTTP Tenant", now).id());
+        tenant = new TenantContext(tenants.createActive("HTTP Tenant", now).id());
         actorIdentity = commands.create(
                 tenant,
                 IdentityType.PERSON,
@@ -952,7 +952,7 @@ class IdentityApiIntegrationTest {
     void lifecycleOperationsRespectTenantIsolationAndRejectGenericPatch() throws Exception {
         Instant now = Instant.parse("2026-09-16T12:00:00Z");
         TenantContext otherTenant = new TenantContext(
-                tenants.create("Other HTTP Tenant", now).id());
+                tenants.createActive("Other HTTP Tenant", now).id());
         Identity foreign = commands.create(
                 otherTenant,
                 IdentityType.WORKLOAD,
