@@ -52,7 +52,8 @@ class AdministrativeAuthorizationPersistenceIntegrationTest {
                 identities,
                 new JdbcIdentityFactSink(new JdbcOutboxRepository(jdbc), ids),
                 ids,
-                new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource)));
+                new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource)),
+                (tenant, identityId, at) -> {});
         authorization = new AdministrativeAuthorizationService(
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
