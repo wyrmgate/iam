@@ -9,14 +9,9 @@ public interface IdentityAccessReferenceQuery {
 
     boolean identityExists(TenantContext tenant, UUID identityId);
 
-    default IdentityAccessStatus accessStatus(
+    IdentityAccessStatus accessStatus(
             TenantContext tenant,
-            UUID identityId) {
-        return identityExists(tenant, identityId)
-                ? IdentityAccessStatus.eligible(
-                        "ACTIVE", 0)
-                : IdentityAccessStatus.notFound();
-    }
+            UUID identityId);
 
     PrincipalReference principal(TenantContext tenant, UUID principalId);
 
