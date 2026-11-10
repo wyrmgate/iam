@@ -1,7 +1,6 @@
 package io.wyrmgate.iam.identity.application;
 
 import io.wyrmgate.iam.platform.tenant.TenantContext;
-import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -23,16 +22,4 @@ public interface PrincipalObservationReferenceQuery {
         TARGET_MISMATCH
     }
 
-    record Reference(
-            UUID principalId,
-            UUID applicationTargetId,
-            long revision) {
-        public Reference {
-            Objects.requireNonNull(principalId, "principalId");
-            Objects.requireNonNull(applicationTargetId, "applicationTargetId");
-            if (revision < 1) {
-                throw new IllegalArgumentException("revision must be positive");
-            }
-        }
-    }
 }
