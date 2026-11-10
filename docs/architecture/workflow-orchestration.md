@@ -46,7 +46,7 @@ Adoption is incremental. Existing state machines should move to the kernel only 
 | application or target retirement | Catalog coordinating semantic commands | retirement operation/process record when cross-capability work is required |
 | administrative elevation | Administration, with optional Governance ApprovalCase | AdministrativeElevation plus Governance-owned approval evidence |
 | administrative break-glass | Administration | AdministrativeBreakGlassOperation plus durable notification/review obligations |
-| tenant decommissioning | Platform/Administration coordination | explicit durable decommissioning operation |
+| tenant decommissioning | Tenancy, using Administration continuity guards and owner-specific semantic commands | TenantDecommissioning durable process state |
 
 A process that crosses capabilities coordinates through semantic commands and facts. It does not directly mutate another capability's repository.
 
