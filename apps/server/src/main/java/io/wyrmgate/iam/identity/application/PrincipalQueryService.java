@@ -8,7 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-public final class PrincipalQueryService implements PrincipalResolutionQuery {
+public final class PrincipalQueryService {
 
     private final PrincipalRepository repository;
 
@@ -48,22 +48,4 @@ public final class PrincipalQueryService implements PrincipalResolutionQuery {
         return new PrincipalPage(items, next);
     }
 
-    @Override
-    public Resolution resolve(
-            TenantContext tenant,
-            UUID applicationTargetId,
-            String nativePrincipalKey) {
-        Objects.requireNonNull(tenant, "tenant");
-        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
-        if (nativePrincipalKey == null || nativePrincipalKey.isBlank()) {
-            throw new IllegalArgumentException("nativePrincipalKey must not be blank");
-        }
-
-        return repository.findByTargetAndNativeKey(
-                        tenant, applicationTargetId, nativePrincipalKey.trim())
-                .map(principal -> principal.identityId() == null
-                        ? Resolution.uncorrelated(principal.id())
-                        : Resolution.resolved(principal.id(), principal.identityId()))
-                .orElseGet(Resolution::notFound);
-    }
 }
