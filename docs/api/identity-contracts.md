@@ -49,7 +49,7 @@ The reconciled v3 backend now also persists Identity-owned Organization, manager
 - semantic authoritative revision;
 - created/updated timestamps.
 
-The v0.2 controlled package does not define profile-specific business fields, so the API does not invent any. The profile shape is typed by `kind` only until formal/domain requirements add concrete profile fields.
+The controlled formal package through v0.8 does not define profile-specific business fields, so the API does not invent any. The profile shape is typed by `kind` only until formal/domain requirements add concrete profile fields.
 
 Tenant is not a writable resource attribute. Tenant/isolation context is resolved from authenticated control-plane context before normal authorization.
 
