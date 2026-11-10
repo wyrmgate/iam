@@ -13,16 +13,11 @@ public interface IdentityQueryRepository {
 
     List<Identity> findIdentityPage(TenantContext tenant, IdentityPagePosition after, int limit);
 
-    default List<Identity> findIdentityPage(
+    List<Identity> findIdentityPage(
             TenantContext tenant,
             IdentityListFilter filter,
             IdentityPagePosition after,
-            int limit) {
-        if (filter == null || filter.isEmpty()) {
-            return findIdentityPage(tenant, after, limit);
-        }
-        throw new UnsupportedOperationException("filtered Identity collection query is not implemented by this adapter");
-    }
+            int limit);
 
     List<CanonicalAttributeDefinitionEntry> findActiveCanonicalDefinitionPage(
             TenantContext tenant,
