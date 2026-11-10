@@ -26,20 +26,27 @@ public final class JdbcIdentityRelationshipRepository implements IdentityRelatio
     }
 
     @Override
-    public boolean sourceRecordExists(TenantContext tenant, UUID sourceRecordId) {
+    public boolean sourceRecordAcceptedForIdentity(
+            TenantContext tenant, UUID sourceRecordId, UUID identityId) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(sourceRecordId, "sourceRecordId");
+        Objects.requireNonNull(identityId, "identityId");
         Boolean result = jdbcTemplate.queryForObject(
                 """
                 SELECT EXISTS (
                     SELECT 1
-                    FROM identity.source_record
-                    WHERE tenant_id = ? AND id = ?
+                    FROM identity.identity_link
+                    WHERE tenant_id = ?
+                      AND source_record_id = ?
+                      AND identity_id = ?
+                      AND link_state = 'ACCEPTED'
+                      AND ended_at IS NULL
                 )
                 """,
                 Boolean.class,
                 tenant.tenantId(),
-                sourceRecordId);
+                sourceRecordId,
+                identityId);
         return Boolean.TRUE.equals(result);
     }
 
