@@ -73,7 +73,8 @@ class SourceDrivenIdentityProcessingIntegrationTest {
                 identityRepository,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
         sources = new SourceCorrelationService(
                 sourceRepository,
                 identityRepository,
