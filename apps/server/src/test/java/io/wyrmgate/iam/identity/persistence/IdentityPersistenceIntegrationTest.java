@@ -51,7 +51,8 @@ class IdentityPersistenceIntegrationTest {
                 identities,
                 new JdbcIdentityFactSink(outbox, idGenerator),
                 idGenerator,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
 }
 
     @BeforeEach
@@ -379,7 +380,8 @@ class IdentityPersistenceIntegrationTest {
                 identities,
                 failingFacts,
                 idGenerator,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
 
         assertThatThrownBy(() -> failing.changeLifecycle(
                         tenant,
