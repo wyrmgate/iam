@@ -79,7 +79,8 @@ class AccessAssignmentPersistenceIntegrationTest {
             }
         };
         identities = new IdentityCommandService(
-                identityRepository, noIdentityFacts, ids, transactions);
+                identityRepository, noIdentityFacts, ids, transactions,
+                (tenant, identityId, at) -> {});
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         catalogCommands = new CatalogCommandService(
@@ -95,7 +96,8 @@ class AccessAssignmentPersistenceIntegrationTest {
                 catalogQuery,
                 noPrincipalFacts,
                 ids,
-                transactions);
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
 
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
         assignments = new AccessAssignmentCommandService(
