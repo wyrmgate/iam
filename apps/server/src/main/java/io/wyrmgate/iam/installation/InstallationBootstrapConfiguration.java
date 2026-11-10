@@ -11,7 +11,8 @@ import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.idp.session.ConsoleLoginRouteQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
-import io.wyrmgate.iam.platform.tenant.TenantProvisioningService;
+import io.wyrmgate.iam.tenancy.application.TenantCommandService;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -48,7 +49,8 @@ public class InstallationBootstrapConfiguration {
     @Bean
     InstallationBootstrapService installationBootstrapService(
             InstallationBootstrapRepository repository,
-            TenantProvisioningService tenants,
+            TenantCommandService tenants,
+            TenantOverviewQuery tenantOverview,
             IdentityCommandService identities,
             CatalogCommandService catalog,
             SsoClientRegistrationService ssoClients,
@@ -62,6 +64,7 @@ public class InstallationBootstrapConfiguration {
         return new InstallationBootstrapService(
                 repository,
                 tenants,
+                tenantOverview,
                 identities,
                 catalog,
                 ssoClients,

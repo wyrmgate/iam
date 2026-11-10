@@ -24,7 +24,7 @@ import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
@@ -42,7 +42,7 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static IdentityCommandService identityCommands;
     private static InitialAdminBootstrapService bootstrap;
     private static AdministrativeAuthorityService authority;
@@ -54,7 +54,7 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         JdbcIdentityRepository identities = new JdbcIdentityRepository(jdbc);
         JdbcOutboxRepository outbox = new JdbcOutboxRepository(jdbc);
         TransactionExecutor transactions =
@@ -98,7 +98,7 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -668,7 +668,7 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
     }
 
     private static TenantContext tenant(String name, Instant now) {
-        return new TenantContext(tenants.create(name, now).id());
+        return new TenantContext(tenants.createActive(name, now).id());
     }
 
     private static Identity identity(TenantContext tenant, IdentityLifecycleState state, Instant now) {

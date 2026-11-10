@@ -20,7 +20,7 @@ import io.wyrmgate.iam.governance.persistence.JdbcLifecycleAccessApprovalCandida
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -48,7 +48,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static TransactionExecutor transactions;
 
     private TenantContext tenant;
@@ -159,7 +159,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
     }
@@ -184,12 +184,12 @@ class GovernancePolicyRiskSoDIntegrationTest {
                     governance.access_request,
                     governance.approval_case,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
 
         tenant = new TenantContext(
-                tenants.create(
+                tenants.createActive(
                         "Policy SoD test", NOW).id());
         requests = new JdbcAccessRequestRepository(jdbc);
         approvalRepository =

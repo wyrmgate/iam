@@ -23,7 +23,7 @@ import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -54,7 +54,7 @@ class AuditApiIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcAuditRecordRepository records;
     private static AuditCommandService commands;
     private static AuditQueryService queries;
@@ -72,7 +72,7 @@ class AuditApiIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         records = new JdbcAuditRecordRepository(jdbc);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
@@ -87,11 +87,11 @@ class AuditApiIntegrationTest {
         jdbc.execute("""
                 TRUNCATE TABLE
                     audit.audit_record,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
         tenant = new TenantContext(
-                tenants.create("Audit API", NOW).id());
+                tenants.createActive("Audit API", NOW).id());
         actor = new AuthenticatedAdministrativeActor(
                 tenant, ids.nextId());
         cursors = cursorCodec();
@@ -231,7 +231,7 @@ class AuditApiIntegrationTest {
                 .andExpect(status().isForbidden());
 
         TenantContext other = new TenantContext(
-                tenants.create("Other Audit API", NOW).id());
+                tenants.createActive("Other Audit API", NOW).id());
         UUID foreignId = append(
                 other,
                 NOW.minusSeconds(4),

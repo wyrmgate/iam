@@ -13,8 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.application.PlatformOwnerAuthorityQuery;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
-import io.wyrmgate.iam.platform.tenant.PlatformTenantOverviewQuery;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.domain.TenantLifecycleState;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -30,14 +31,14 @@ class PlatformTenantControllerTest {
     @Test
     void viablePlatformOwnerCanReadCanonicalTenantPage() throws Exception {
         var platformOwners = mock(PlatformOwnerAuthorityQuery.class);
-        var tenants = mock(PlatformTenantOverviewQuery.class);
+        var tenants = mock(TenantOverviewQuery.class);
         var cursors = mock(PlatformTenantCursorCodec.class);
         var actor = actor();
         Instant created = Instant.parse("2026-10-17T00:00:00Z");
-        var first = new PlatformTenantOverviewQuery.TenantSummary(
-                UUID.randomUUID(), "Alpha", 1, created, created.plusSeconds(30));
-        var second = new PlatformTenantOverviewQuery.TenantSummary(
-                UUID.randomUUID(), "Beta", 2, created.plusSeconds(1), created.plusSeconds(60));
+        var first = new TenantOverviewQuery.TenantSummary(
+                UUID.randomUUID(), "Alpha", TenantLifecycleState.ACTIVE, 1, created, created.plusSeconds(30));
+        var second = new TenantOverviewQuery.TenantSummary(
+                UUID.randomUUID(), "Beta", TenantLifecycleState.SUSPENDED, 2, created.plusSeconds(1), created.plusSeconds(60));
         when(platformOwners.isViablePlatformOwner(eq(actor.tenant()), eq(actor.identityId()), any())).thenReturn(true);
         when(tenants.listAfter(null, null, 2)).thenReturn(List.of(first, second));
         when(cursors.encode(any())).thenReturn("next-signed-cursor");
@@ -53,6 +54,7 @@ class PlatformTenantControllerTest {
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.items[0].id").value(first.id().toString()))
                 .andExpect(jsonPath("$.items[0].displayName").value("Alpha"))
+                .andExpect(jsonPath("$.items[0].lifecycleState").value("ACTIVE"))
                 .andExpect(jsonPath("$.items[0].revision").value(1))
                 .andExpect(jsonPath("$.nextCursor").value("next-signed-cursor"));
     }
@@ -60,13 +62,13 @@ class PlatformTenantControllerTest {
     @Test
     void viablePlatformOwnerCanReadCanonicalTenantDetail() throws Exception {
         var platformOwners = mock(PlatformOwnerAuthorityQuery.class);
-        var tenants = mock(PlatformTenantOverviewQuery.class);
+        var tenants = mock(TenantOverviewQuery.class);
         var cursors = mock(PlatformTenantCursorCodec.class);
         var actor = actor();
         UUID tenantId = UUID.randomUUID();
         Instant created = Instant.parse("2026-10-17T00:00:00Z");
-        var tenant = new PlatformTenantOverviewQuery.TenantSummary(
-                tenantId, "Alpha", 4, created, created.plusSeconds(90));
+        var tenant = new TenantOverviewQuery.TenantSummary(
+                tenantId, "Alpha", TenantLifecycleState.ACTIVE, 4, created, created.plusSeconds(90));
         when(platformOwners.isViablePlatformOwner(eq(actor.tenant()), eq(actor.identityId()), any())).thenReturn(true);
         when(tenants.find(tenantId)).thenReturn(Optional.of(tenant));
 
@@ -78,6 +80,7 @@ class PlatformTenantControllerTest {
                 .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
                 .andExpect(jsonPath("$.id").value(tenantId.toString()))
                 .andExpect(jsonPath("$.displayName").value("Alpha"))
+                .andExpect(jsonPath("$.lifecycleState").value("ACTIVE"))
                 .andExpect(jsonPath("$.revision").value(4))
                 .andExpect(jsonPath("$.createdAt").value(created.toString()))
                 .andExpect(jsonPath("$.updatedAt").value(created.plusSeconds(90).toString()));
@@ -86,7 +89,7 @@ class PlatformTenantControllerTest {
     @Test
     void unknownTenantDetailReturnsNotFound() throws Exception {
         var platformOwners = mock(PlatformOwnerAuthorityQuery.class);
-        var tenants = mock(PlatformTenantOverviewQuery.class);
+        var tenants = mock(TenantOverviewQuery.class);
         var cursors = mock(PlatformTenantCursorCodec.class);
         var actor = actor();
         UUID tenantId = UUID.randomUUID();
@@ -102,7 +105,7 @@ class PlatformTenantControllerTest {
     @Test
     void tenantScopedAdministratorCannotReadDeploymentTenantInventory() throws Exception {
         var platformOwners = mock(PlatformOwnerAuthorityQuery.class);
-        var tenants = mock(PlatformTenantOverviewQuery.class);
+        var tenants = mock(TenantOverviewQuery.class);
         var cursors = mock(PlatformTenantCursorCodec.class);
         var actor = actor();
         when(platformOwners.isViablePlatformOwner(eq(actor.tenant()), eq(actor.identityId()), any())).thenReturn(false);
@@ -117,7 +120,7 @@ class PlatformTenantControllerTest {
     @Test
     void tenantScopedAdministratorCannotReadDeploymentTenantDetail() throws Exception {
         var platformOwners = mock(PlatformOwnerAuthorityQuery.class);
-        var tenants = mock(PlatformTenantOverviewQuery.class);
+        var tenants = mock(TenantOverviewQuery.class);
         var cursors = mock(PlatformTenantCursorCodec.class);
         var actor = actor();
         when(platformOwners.isViablePlatformOwner(eq(actor.tenant()), eq(actor.identityId()), any())).thenReturn(false);
@@ -136,7 +139,7 @@ class PlatformTenantControllerTest {
 
     private static MockMvc mvc(
             PlatformOwnerAuthorityQuery platformOwners,
-            PlatformTenantOverviewQuery tenants,
+            TenantOverviewQuery tenants,
             PlatformTenantCursorCodec cursors) {
         return MockMvcBuilders.standaloneSetup(
                         new PlatformTenantController(platformOwners, tenants, cursors))

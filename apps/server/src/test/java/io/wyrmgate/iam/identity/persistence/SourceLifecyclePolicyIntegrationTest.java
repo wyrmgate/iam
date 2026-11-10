@@ -19,7 +19,7 @@ import io.wyrmgate.iam.identity.domain.SourceSystem;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -36,7 +36,7 @@ class SourceLifecyclePolicyIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcOutboxRepository outbox;
     private static JdbcIdentityRepository identityRepository;
     private static JdbcSourceCorrelationRepository sourceRepository;
@@ -51,7 +51,7 @@ class SourceLifecyclePolicyIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         outbox = new JdbcOutboxRepository(jdbc);
         identityRepository = new JdbcIdentityRepository(jdbc);
         sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
@@ -81,7 +81,7 @@ class SourceLifecyclePolicyIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -408,7 +408,7 @@ class SourceLifecyclePolicyIntegrationTest {
     }
 
     private static TenantContext tenant(String name, Instant now) {
-        return new TenantContext(tenants.create(name, now).id());
+        return new TenantContext(tenants.createActive(name, now).id());
     }
 
     private static SourceSystem source(TenantContext tenant, String code, Instant now) {

@@ -21,7 +21,9 @@ import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
-import io.wyrmgate.iam.platform.tenant.TenantProvisioningService;
+import io.wyrmgate.iam.tenancy.application.TenantCommandService;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
+import io.wyrmgate.iam.tenancy.domain.TenantLifecycleState;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,7 +45,8 @@ class InstallationBootstrapServiceTest {
         UUID correlationId = UUID.randomUUID();
 
         MutableRepository repository = new MutableRepository();
-        TenantProvisioningService tenants = mock(TenantProvisioningService.class);
+        TenantCommandService tenants = mock(TenantCommandService.class);
+        TenantOverviewQuery tenantOverview = mock(TenantOverviewQuery.class);
         IdentityCommandService identities = mock(IdentityCommandService.class);
         CatalogCommandService catalog = mock(CatalogCommandService.class);
         SsoClientRegistrationService ssoClients = mock(SsoClientRegistrationService.class);
@@ -64,7 +67,11 @@ class InstallationBootstrapServiceTest {
                 principalId,
                 credentialId,
                 correlationId);
-        when(tenants.matches(tenantId, "Wyrmgate")).thenReturn(true);
+        when(tenantOverview.find(tenantId)).thenReturn(
+                Optional.of(new TenantOverviewQuery.TenantSummary(
+                        tenantId, "Wyrmgate", TenantLifecycleState.PROVISIONING, 1, NOW, NOW)),
+                Optional.of(new TenantOverviewQuery.TenantSummary(
+                        tenantId, "Wyrmgate", TenantLifecycleState.ACTIVE, 2, NOW, NOW)));
         when(authenticationSubjects.resolveEligible(
                         new TenantContext(tenantId), targetId, "admin"))
                 .thenReturn(Optional.of(new IdentityAuthenticationQuery.AuthenticationSubject(
@@ -87,6 +94,7 @@ class InstallationBootstrapServiceTest {
         InstallationBootstrapService service = new InstallationBootstrapService(
                 repository,
                 tenants,
+                tenantOverview,
                 identities,
                 catalog,
                 ssoClients,
@@ -117,6 +125,7 @@ class InstallationBootstrapServiceTest {
         assertEquals(InstallationBootstrapState.SEALED, repository.find().orElseThrow().state());
 
         verify(tenants).ensureFirstTenant(tenantId, "Wyrmgate", NOW);
+        verify(tenants).activate(tenantId, 1, NOW);
         verify(identities).ensureInstallationPerson(
                 eq(new TenantContext(tenantId)), eq(identityId), eq("Initial Administrator"),
                 eq(NOW), eq(correlationId), eq(correlationId));
@@ -155,7 +164,8 @@ class InstallationBootstrapServiceTest {
 
         MutableRepository repository = new MutableRepository();
         repository.plan = sealed;
-        TenantProvisioningService tenants = mock(TenantProvisioningService.class);
+        TenantCommandService tenants = mock(TenantCommandService.class);
+        TenantOverviewQuery tenantOverview = mock(TenantOverviewQuery.class);
         IdentityCommandService identities = mock(IdentityCommandService.class);
         CatalogCommandService catalog = mock(CatalogCommandService.class);
         SsoClientRegistrationService ssoClients = mock(SsoClientRegistrationService.class);
@@ -166,6 +176,7 @@ class InstallationBootstrapServiceTest {
         InstallationBootstrapService service = new InstallationBootstrapService(
                 repository,
                 tenants,
+                tenantOverview,
                 identities,
                 catalog,
                 ssoClients,

@@ -88,7 +88,7 @@ The agreed v3 layered architecture reconciliation is now represented durably by 
 
 - **Layer 4 contains nine business capabilities:** Tenancy, Identity, Catalog, Access, Governance, Credential, Integration, Administration and Audit. Platform is Layer-6 technical support. Authentication/IdP/SSO is a composed service rather than another Layer-4 capability.
 - ADR-0050 defines Integration-owned `PrincipalObservationMapping` while Identity remains the sole owner of Principal authority.
-- ADR-0051 promotes Tenancy to a first-class capability owning deployment-scoped Tenant identity/lifecycle and trusted TENANT/DEPLOYMENT operation scope.
+- ADR-0051 promotes Tenancy to a first-class capability owning deployment-scoped Tenant identity/lifecycle and trusted TENANT/DEPLOYMENT operation scope. The first backend implementation is V12: the stable Tenant root moves from `platform.tenant` to `tenancy.tenant`, existing operational Tenants migrate to `ACTIVE`, and fresh installation creates `PROVISIONING` then activates only after Administration confirms viable owner authority.
 - ADR-0052 defines Catalog target availability and Access-owned fail-safe `AccessTargetReduction` for terminal target retirement.
 - ADR-0053 defines explicit `AuditEvidenceScope = TENANT(ownerTenantId) | DEPLOYMENT` without granting platform operators implicit tenant Audit visibility.
 - [`architecture/layered-architecture.md`](architecture/layered-architecture.md) consolidates L1–L6 and Layer 6A–6I. The image-86 internal `Layer 6L` heading is treated as a labeling error; the reconciled area is 6I Runtime/Deployment/Availability/Recovery.

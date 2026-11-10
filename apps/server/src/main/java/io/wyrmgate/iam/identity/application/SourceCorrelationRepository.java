@@ -55,6 +55,10 @@ public interface SourceCorrelationRepository {
 
     Optional<SourceRecord> findSourceRecordForUpdate(TenantContext tenant, UUID sourceRecordId);
 
+    /**
+     * Serialize Tenant-scoped no-match correlation creation inside Identity.
+     * Implementations must not acquire or mutate Tenancy-owned authoritative state.
+     */
     void lockTenantForCorrelation(TenantContext tenant);
 
     Optional<SourceRecord> findSourceRecordByNativeKey(

@@ -8,7 +8,7 @@ It is not a production recovery procedure and it is not automatic application be
 
 ## Why reset is appropriate at this pre-release checkpoint
 
-ADR-0048 replaces the former development-era Flyway V1-V69 chronology with a clean current-state baseline for new empty databases. ADR-0049 adds the first semantic delta at V11 for explicit deployment/tenant owner authority and platform-owned application offerings. The old SQL migrations were removed from the repository after exact schema equivalence was proven.
+ADR-0048 replaces the former development-era Flyway V1-V69 chronology with a clean current-state baseline for new empty databases. ADR-0049 adds the first semantic delta at V11 for explicit deployment/tenant owner authority and platform-owned application offerings. ADR-0051 is implemented by V12, which moves the stable Tenant root into the Tenancy schema and adds canonical Tenant lifecycle state. The old SQL migrations were removed from the repository after exact schema equivalence was proven.
 
 The reset does not redefine architecture. The recreated database still uses Tenant as the isolation root, Organization as tenant-local business structure, capability-owned authoritative state, the current first-run installation flow, explicit first-Tenant `TENANT_OWNER`, and explicit deployment-scoped `PLATFORM_OWNER` authority.
 
@@ -49,9 +49,10 @@ The active Flyway sequence at the ADR-0049 checkpoint is:
 9. `V9__administration_baseline.sql`
 10. `V10__audit_baseline.sql`
 11. `V11__platform_authority_and_shared_applications.sql`
-12. any legitimate later semantic migrations.
+12. `V12__tenancy_capability.sql`
+13. any legitimate later semantic migrations.
 
-V1-V10 are the ADR-0048 capability baseline. V11 is schema-only: it adds explicit ADR-0049 platform/tenant-owner and platform-application structures but grants no authority, infers no owner and rewrites no tenant-owned Application row.
+V1-V10 are the ADR-0048 capability baseline. V11 is schema-only: it adds explicit ADR-0049 platform/tenant-owner and platform-application structures but grants no authority, infers no owner and rewrites no tenant-owned Application row. V12 moves the existing Tenant table object from `platform` to `tenancy`, preserves stable IDs/foreign-key references, marks existing operational Tenants `ACTIVE`, and adds the ADR-0051 lifecycle constraint; fresh-install code creates new Tenants as `PROVISIONING`.
 
 The former V1-V69 development migrations are no longer present in the repository or runtime migration location. Do not restore/copy them into a fresh deployment. Historical withdrawn V70 remains absent and reserved.
 
@@ -60,7 +61,7 @@ A database carrying the old V1-V69 Flyway history must not be switched in place 
 Verify before bootstrap:
 
 1. Flyway/application startup succeeds on the empty database;
-2. `flyway_schema_history` contains the capability baseline V1-V10 followed by V11 and only legitimate later migrations;
+2. `flyway_schema_history` contains the capability baseline V1-V10 followed by V11, V12 and only legitimate later migrations;
 3. no failed or unresolved migration exists;
 4. schemas `platform`, `identity`, `catalog`, `access`, `governance`, `credential`, `integration`, `administration` and `audit` exist;
 5. ADR-0049 platform-owned tables exist while ordinary tenant-owned capability tables still satisfy the tenant-isolation verifier; and
@@ -90,7 +91,7 @@ Record non-secret evidence for:
 
 - deployed `main` SHA;
 - DEV database/project/branch identifier;
-- Flyway current status showing V1-V10 plus V11 and legitimate later deltas;
+- Flyway current status showing V1-V10 plus V11, V12 and legitimate later deltas;
 - first-run installation reaching `SEALED`;
 - current effective deployment `PLATFORM_OWNER` for the bootstrap Identity/Principal;
 - current effective first-Tenant `TENANT_OWNER` authority;

@@ -8,6 +8,8 @@ import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository.ClaimedWork;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.domain.Tenant;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -31,7 +33,7 @@ class PersistenceFoundationIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator idGenerator;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcOutboxRepository outbox;
     private static JdbcInboxRepository inbox;
     private static JdbcIdempotencyRepository idempotency;
@@ -44,7 +46,7 @@ class PersistenceFoundationIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         idGenerator = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, idGenerator);
+        tenants = new TenantTestFixture(jdbc, idGenerator);
         outbox = new JdbcOutboxRepository(jdbc);
         inbox = new JdbcInboxRepository(jdbc, idGenerator);
         idempotency = new JdbcIdempotencyRepository(jdbc, idGenerator);
@@ -60,7 +62,7 @@ class PersistenceFoundationIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -76,6 +78,7 @@ class PersistenceFoundationIntegrationTest {
                 "integration",
                 "administration",
                 "audit",
+                "tenancy",
                 "platform");
 
         for (String schema : schemas) {
@@ -101,57 +104,40 @@ class PersistenceFoundationIntegrationTest {
     }
 
     @Test
-    void optimisticRevisionRejectsStaleWrites() {
+    void transactionExecutorRollsBackPlatformOutboxAtomically() {
         Instant now = Instant.now();
-        JdbcTenantRepository.Tenant tenant = tenants.create("Tenant A", now);
-
-        JdbcTenantRepository.Tenant updated = tenants.rename(
-                tenant.id(), "Tenant A renamed", tenant.revision(), now.plusSeconds(1));
-        assertThat(updated.revision()).isEqualTo(2);
-
-        assertThatThrownBy(() -> tenants.rename(
-                        tenant.id(), "stale rename", tenant.revision(), now.plusSeconds(2)))
-                .isInstanceOf(StaleWriteException.class);
-        assertThat(tenants.get(tenant.id()).displayName()).isEqualTo("Tenant A renamed");
-    }
-
-    @Test
-    void authoritativeMutationAndOutboxRollbackAtomically() {
-        Instant now = Instant.now();
-        JdbcTenantRepository.Tenant tenant = tenants.create("Atomic Tenant", now);
+        Tenant tenant = tenants.createActive("Atomic Tenant", now);
         TenantContext context = new TenantContext(tenant.id());
         UUID eventId = idGenerator.nextId();
 
         assertThatThrownBy(() -> transactions.required((Runnable) () -> {
-                    tenants.rename(tenant.id(), "must rollback", tenant.revision(), now.plusSeconds(1));
                     outbox.append(
                             context,
                             new OutboxEvent(
                                     eventId,
-                                    "platform.tenant-renamed",
+                                    "platform.transaction-test",
                                     1,
-                                    "tenant",
+                                    "test-subject",
                                     tenant.id(),
-                                    2L,
-                                    now.plusSeconds(1),
+                                    1L,
+                                    now,
                                     idGenerator.nextId(),
                                     null,
-                                    "{\"displayNameChanged\":true}"),
-                            now.plusSeconds(1));
+                                    "{\"test\":true}"),
+                            now);
                     throw new IllegalStateException("force rollback");
                 }))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("force rollback");
 
-        assertThat(tenants.get(tenant.id()).revision()).isEqualTo(1);
         assertThat(outbox.countPending(context)).isZero();
     }
 
     @Test
     void inboxDeduplicatesPerTenantConsumerAndMessage() {
         Instant now = Instant.now();
-        JdbcTenantRepository.Tenant firstTenant = tenants.create("Tenant One", now);
-        JdbcTenantRepository.Tenant secondTenant = tenants.create("Tenant Two", now);
+        Tenant firstTenant = tenants.createActive("Tenant One", now);
+        Tenant secondTenant = tenants.createActive("Tenant Two", now);
         TenantContext first = new TenantContext(firstTenant.id());
         TenantContext second = new TenantContext(secondTenant.id());
 
@@ -164,7 +150,7 @@ class PersistenceFoundationIntegrationTest {
     @Test
     void idempotencyReplaysSameFingerprintAndRejectsDifferentRequest() {
         Instant now = Instant.now();
-        JdbcTenantRepository.Tenant tenant = tenants.create("Idempotency Tenant", now);
+        Tenant tenant = tenants.createActive("Idempotency Tenant", now);
         TenantContext context = new TenantContext(tenant.id());
         RequestFingerprint firstFingerprint = RequestFingerprint.sha256(
                 "canonical-request-a".getBytes(StandardCharsets.UTF_8));
@@ -192,7 +178,7 @@ class PersistenceFoundationIntegrationTest {
     @Test
     void expiredLeaseCanBeReclaimedAndStaleWorkerCannotComplete() {
         Instant now = Instant.now();
-        JdbcTenantRepository.Tenant tenant = tenants.create("Lease Tenant", now);
+        Tenant tenant = tenants.createActive("Lease Tenant", now);
         TenantContext context = new TenantContext(tenant.id());
         assertThat(scheduledWork.enqueue(
                         context,
@@ -223,7 +209,7 @@ class PersistenceFoundationIntegrationTest {
     @Test
     void activeWorkerCanRenewLeaseAndPreventPrematureReclaim() {
         Instant now = Instant.now();
-        JdbcTenantRepository.Tenant tenant = tenants.create("Lease Renewal Tenant", now);
+        Tenant tenant = tenants.createActive("Lease Renewal Tenant", now);
         TenantContext context = new TenantContext(tenant.id());
         assertThat(scheduledWork.enqueue(
                         context,
@@ -265,7 +251,7 @@ class PersistenceFoundationIntegrationTest {
     @Test
     void concurrentWorkersClaimEachDueItemAtMostOnce() throws Exception {
         Instant now = Instant.now();
-        JdbcTenantRepository.Tenant tenant = tenants.create("Worker Tenant", now);
+        Tenant tenant = tenants.createActive("Worker Tenant", now);
         TenantContext context = new TenantContext(tenant.id());
 
         for (int index = 0; index < 20; index++) {

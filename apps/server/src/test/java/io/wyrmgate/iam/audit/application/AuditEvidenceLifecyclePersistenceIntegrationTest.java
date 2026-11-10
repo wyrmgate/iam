@@ -19,7 +19,7 @@ import io.wyrmgate.iam.audit.persistence.JdbcAuditRecordRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -43,7 +43,7 @@ class AuditEvidenceLifecyclePersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcAuditRecordRepository records;
     private static JdbcAuditArchiveRepository archives;
     private static JdbcAuditEvidenceLifecycleRepository lifecycleRepository;
@@ -62,7 +62,7 @@ class AuditEvidenceLifecyclePersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         records = new JdbcAuditRecordRepository(jdbc);
         archives = new JdbcAuditArchiveRepository(jdbc);
         lifecycleRepository = new JdbcAuditEvidenceLifecycleRepository(jdbc);
@@ -83,10 +83,10 @@ class AuditEvidenceLifecyclePersistenceIntegrationTest {
                     audit.audit_record,
                     platform.scheduled_work,
                     platform.idempotency_record,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
-        tenant = new TenantContext(tenants.create("Audit Lifecycle", NOW).id());
+        tenant = new TenantContext(tenants.createActive("Audit Lifecycle", NOW).id());
         actor = ids.nextId();
         approver = ids.nextId();
     }

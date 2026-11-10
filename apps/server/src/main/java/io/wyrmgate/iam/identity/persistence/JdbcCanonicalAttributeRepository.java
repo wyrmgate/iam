@@ -67,7 +67,7 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
 
     @Override
     public CanonicalSchemaVersion activateSchemaVersion(TenantContext tenant, UUID schemaVersionId, Instant activatedAt) {
-        lockTenant(tenant);
+        lockCanonicalSchemaRegistry(tenant);
         jdbc.update("""
                 UPDATE identity.canonical_schema_version
                 SET state = 'SUPERSEDED', superseded_at = ?
@@ -597,10 +597,19 @@ public final class JdbcCanonicalAttributeRepository implements CanonicalAttribut
                 rs.getTimestamp("activated_at").toInstant(), instant(rs.getTimestamp("superseded_at")));
     }
 
-    private void lockTenant(TenantContext tenant) {
-        List<UUID> rows = jdbc.query("SELECT id FROM platform.tenant WHERE id = ? FOR UPDATE",
-                (rs, rowNum) -> rs.getObject("id", UUID.class), tenant.tenantId());
-        if (rows.isEmpty()) throw new IllegalArgumentException("tenant does not exist");
+    private void lockCanonicalSchemaRegistry(TenantContext tenant) {
+        /*
+         * Serialize one Tenant's Identity-owned canonical-schema activation without locking or
+         * querying the Tenancy-owned Tenant aggregate. Advisory-lock collisions only serialize
+         * unrelated work; they cannot grant authority or change domain state.
+         */
+        long lockKey = tenant.tenantId().getMostSignificantBits()
+                ^ tenant.tenantId().getLeastSignificantBits()
+                ^ 0x49414D43414E4F4EL;
+        jdbc.queryForObject(
+                "SELECT pg_advisory_xact_lock(?)",
+                (rs, rowNum) -> 1,
+                lockKey);
     }
 
     private void lockSource(TenantContext tenant, UUID sourceSystemId) {

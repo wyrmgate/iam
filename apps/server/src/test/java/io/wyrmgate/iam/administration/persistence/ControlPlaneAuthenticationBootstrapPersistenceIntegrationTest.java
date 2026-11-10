@@ -23,7 +23,7 @@ import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -39,7 +39,7 @@ class ControlPlaneAuthenticationBootstrapPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcIdentityRepository identities;
     private static IdentityCommandService identityCommands;
     private static JdbcControlPlaneActorBindingRepository bindings;
@@ -53,7 +53,7 @@ class ControlPlaneAuthenticationBootstrapPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         identities = new JdbcIdentityRepository(jdbc);
         JdbcOutboxRepository outbox = new JdbcOutboxRepository(jdbc);
         TransactionExecutor transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
@@ -90,7 +90,7 @@ class ControlPlaneAuthenticationBootstrapPersistenceIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -211,7 +211,7 @@ class ControlPlaneAuthenticationBootstrapPersistenceIntegrationTest {
     }
 
     private static TenantContext tenant(String name, Instant now) {
-        return new TenantContext(tenants.create(name, now).id());
+        return new TenantContext(tenants.createActive(name, now).id());
     }
 
     private static Identity identity(TenantContext tenant, IdentityLifecycleState state, Instant now) {

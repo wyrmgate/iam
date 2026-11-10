@@ -12,7 +12,9 @@ import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
-import io.wyrmgate.iam.platform.tenant.TenantProvisioningService;
+import io.wyrmgate.iam.tenancy.application.TenantCommandService;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
+import io.wyrmgate.iam.tenancy.domain.TenantLifecycleState;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
@@ -28,7 +30,8 @@ public final class InstallationBootstrapService {
     public static final String CONSOLE_TARGET_CODE = "local";
 
     private final InstallationBootstrapRepository repository;
-    private final TenantProvisioningService tenants;
+    private final TenantCommandService tenants;
+    private final TenantOverviewQuery tenantOverview;
     private final IdentityCommandService identities;
     private final CatalogCommandService catalog;
     private final SsoClientRegistrationService ssoClients;
@@ -42,7 +45,8 @@ public final class InstallationBootstrapService {
 
     public InstallationBootstrapService(
             InstallationBootstrapRepository repository,
-            TenantProvisioningService tenants,
+            TenantCommandService tenants,
+            TenantOverviewQuery tenantOverview,
             IdentityCommandService identities,
             CatalogCommandService catalog,
             SsoClientRegistrationService ssoClients,
@@ -55,6 +59,7 @@ public final class InstallationBootstrapService {
             IdGenerator ids) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.tenants = Objects.requireNonNull(tenants, "tenants");
+        this.tenantOverview = Objects.requireNonNull(tenantOverview, "tenantOverview");
         this.identities = Objects.requireNonNull(identities, "identities");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.ssoClients = Objects.requireNonNull(ssoClients, "ssoClients");
@@ -190,6 +195,7 @@ public final class InstallationBootstrapService {
                 return advance(plan, InstallationBootstrapState.ADMIN_BOOTSTRAPPED, now);
             }
             case ADMIN_BOOTSTRAPPED -> {
+                ensureTenantActive(plan, now);
                 verify(plan, tenant, password, now);
                 return advance(plan, InstallationBootstrapState.VERIFIED, now);
             }
@@ -203,12 +209,32 @@ public final class InstallationBootstrapService {
         throw new IllegalStateException("unsupported installation bootstrap state");
     }
 
+    private void ensureTenantActive(
+            InstallationBootstrapPlan plan,
+            Instant now) {
+        TenantOverviewQuery.TenantSummary current = tenantOverview.find(plan.tenantId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "installation activation failed: tenant_missing"));
+        if (current.lifecycleState() == TenantLifecycleState.ACTIVE) {
+            return;
+        }
+        if (current.lifecycleState() != TenantLifecycleState.PROVISIONING) {
+            throw new IllegalStateException(
+                    "installation activation failed: unexpected_tenant_lifecycle");
+        }
+        tenants.activate(plan.tenantId(), current.revision(), now);
+    }
+
     private void verify(
             InstallationBootstrapPlan plan,
             TenantContext tenant,
             char[] password,
             Instant now) {
-        if (!tenants.matches(plan.tenantId(), plan.tenantDisplayName())) {
+        TenantOverviewQuery.TenantSummary currentTenant = tenantOverview.find(plan.tenantId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "installation verification failed: tenant"));
+        if (!currentTenant.displayName().equals(plan.tenantDisplayName())
+                || currentTenant.lifecycleState() != TenantLifecycleState.ACTIVE) {
             throw new IllegalStateException("installation verification failed: tenant");
         }
         var subject = authenticationSubjects.resolveEligible(

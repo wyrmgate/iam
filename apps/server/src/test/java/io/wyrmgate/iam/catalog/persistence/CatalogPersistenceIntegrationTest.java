@@ -11,7 +11,7 @@ import io.wyrmgate.iam.catalog.domain.SsoClientLifecycleState;
 import io.wyrmgate.iam.catalog.domain.SsoClientScope;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
@@ -33,7 +33,7 @@ class CatalogPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcCatalogRepository repository;
     private static CatalogCommandService commands;
     private static CatalogQueryService queries;
@@ -44,7 +44,7 @@ class CatalogPersistenceIntegrationTest {
         var dataSource = SharedPostgresIntegrationDatabase.dataSource();
         jdbc = SharedPostgresIntegrationDatabase.jdbc();
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         repository = new JdbcCatalogRepository(jdbc);
         TransactionExecutor transactions =
                 new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
@@ -61,7 +61,7 @@ class CatalogPersistenceIntegrationTest {
                     catalog.entitlement,
                     catalog.application_target,
                     catalog.application,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -222,6 +222,6 @@ class CatalogPersistenceIntegrationTest {
     }
 
     private TenantContext tenant(String name) {
-        return new TenantContext(tenants.create(name, NOW).id());
+        return new TenantContext(tenants.createActive(name, NOW).id());
     }
 }

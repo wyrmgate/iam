@@ -27,6 +27,7 @@ The initial deployment uses one PostgreSQL database with capability-oriented sch
 - `integration`
 - `administration`
 - `audit`
+- `tenancy`
 - `platform`
 
 Schemas make physical ownership visible and allow grants/migrations to be organized coherently. They do **not** mean capability == schema, schema == Maven module, or schema == future service/database. A later extraction must preserve semantic ownership rather than preserve table location.
@@ -61,7 +62,7 @@ Business identifiers such as employee number, username, application code, entitl
 
 ## 3. Tenant isolation
 
-Every tenant-owned row carries non-null `tenant_id uuid`. The initial database contains `platform.tenant`; even a single-tenant deployment uses one configured tenant ID rather than nullable tenancy.
+Every tenant-owned row carries non-null `tenant_id uuid`. ADR-0051/V12 moves the deployment-owned isolation root to `tenancy.tenant`; even a single-tenant deployment uses one explicit Tenant ID rather than nullable tenancy. Platform may host persistence mechanics, but it does not own Tenant business state.
 
 ### Tenant-safe candidate keys and references
 
@@ -911,7 +912,7 @@ A GovernanceException has `valid_until=10:00`. At 10:00 it is semantically ineff
 Persistence implementation should now proceed in bounded vertical slices rather than by generating every entity/table at once:
 
 1. select the migration runner and establish migration/schema ownership conventions;
-2. create `platform.tenant` and the capability schemas;
+2. create the capability schemas and the Tenant isolation root; the current physical owner is `tenancy.tenant` under ADR-0051/V12;
 3. implement the application ID-generation port and tenant/revision persistence primitives without a universal domain base entity;
 4. implement capability-owned authoritative tables with the first real use cases;
 5. introduce outbox/idempotency with the first retryable authoritative mutation;

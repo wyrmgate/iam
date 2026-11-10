@@ -22,7 +22,7 @@ import io.wyrmgate.iam.governance.application.ApprovalModels.StageSpec;
 import io.wyrmgate.iam.governance.application.ApprovalModels.SubjectKind;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -42,7 +42,7 @@ class ApprovalRequestPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static TransactionExecutor transactions;
     private static JdbcApprovalRepository approvalRepository;
     private static JdbcAccessRequestRepository requestRepository;
@@ -56,7 +56,7 @@ class ApprovalRequestPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
         approvalRepository =
@@ -83,11 +83,11 @@ class ApprovalRequestPersistenceIntegrationTest {
                     governance.request_item,
                     governance.access_request,
                     governance.approval_case,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
         tenant = new TenantContext(
-                tenants.create("Approval test", NOW).id());
+                tenants.createActive("Approval test", NOW).id());
     }
 
     @Test
@@ -161,7 +161,7 @@ class ApprovalRequestPersistenceIntegrationTest {
         assertThat(rejected.completedAt()).isNotNull();
 
         TenantContext otherTenant = new TenantContext(
-                tenants.create("Other tenant", NOW).id());
+                tenants.createActive("Other tenant", NOW).id());
         assertThat(approvalRepository.findCase(
                 otherTenant, approvalCase.id()))
                 .isEmpty();

@@ -7,7 +7,7 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.administration.domain.AdministrativeRole;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -22,7 +22,7 @@ class StandaloneTenantOwnerRecoveryPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcInitialAdminBootstrapRepository bootstrapRepository;
     private static JdbcStandaloneTenantOwnerRecoveryRepository recoveryRepository;
     private static JdbcAdministrativeAuthorityRepository authorityRepository;
@@ -33,7 +33,7 @@ class StandaloneTenantOwnerRecoveryPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         bootstrapRepository = new JdbcInitialAdminBootstrapRepository(jdbc);
         recoveryRepository = new JdbcStandaloneTenantOwnerRecoveryRepository(jdbc, ids);
         authorityRepository = new JdbcAdministrativeAuthorityRepository(jdbc, ids);
@@ -48,7 +48,7 @@ class StandaloneTenantOwnerRecoveryPersistenceIntegrationTest {
                     administration.administrative_role_permission,
                     administration.administrative_role,
                     administration.administrative_permission,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -57,7 +57,7 @@ class StandaloneTenantOwnerRecoveryPersistenceIntegrationTest {
     void upgradesOnlyRoleMembershipAndRevisionToExactFiniteOwnerSet() {
         Instant completedAt = Instant.parse("2026-10-01T00:00:00Z");
         Instant recoveredAt = Instant.parse("2026-10-16T00:00:00Z");
-        TenantContext tenant = new TenantContext(tenants.create("Recovery Tenant", completedAt).id());
+        TenantContext tenant = new TenantContext(tenants.createActive("Recovery Tenant", completedAt).id());
         UUID roleId = ids.nextId();
         AdministrativeRole role = new AdministrativeRole(
                 roleId,

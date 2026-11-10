@@ -22,11 +22,6 @@ public class PersistenceFoundationConfiguration {
     }
 
     @Bean
-    JdbcTenantRepository tenantRepository(JdbcTemplate jdbcTemplate, IdGenerator idGenerator) {
-        return new JdbcTenantRepository(jdbcTemplate, idGenerator);
-    }
-
-    @Bean
     JdbcOutboxRepository outboxRepository(JdbcTemplate jdbcTemplate) {
         return new JdbcOutboxRepository(jdbcTemplate);
     }

@@ -9,7 +9,7 @@ import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.Desir
 import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.DesiredPrincipalState;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
@@ -23,7 +23,7 @@ class AccessDesiredStatePersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcDesiredStateProjectionRepository repository;
     private static AccessDesiredStateQueryService query;
 
@@ -31,7 +31,7 @@ class AccessDesiredStatePersistenceIntegrationTest {
     static void setUpDatabase() {
         jdbc = SharedPostgresIntegrationDatabase.jdbc();
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         repository = new JdbcDesiredStateProjectionRepository(jdbc, ids);
         query = new AccessDesiredStateQueryService(repository);
     }
@@ -42,7 +42,7 @@ class AccessDesiredStatePersistenceIntegrationTest {
                 TRUNCATE TABLE
                     access.desired_grant_state,
                     access.desired_principal_state,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -136,6 +136,6 @@ class AccessDesiredStatePersistenceIntegrationTest {
     }
 
     private TenantContext tenant(String name) {
-        return new TenantContext(tenants.create(name, Instant.now()).id());
+        return new TenantContext(tenants.createActive(name, Instant.now()).id());
     }
 }

@@ -17,6 +17,7 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.*;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -40,7 +41,7 @@ class GovernanceExceptionIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static TransactionExecutor transactions;
 
     private TenantContext tenant;
@@ -134,7 +135,7 @@ class GovernanceExceptionIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(
                         dataSource));
@@ -162,12 +163,12 @@ class GovernanceExceptionIntegrationTest {
                     governance.approval_case,
                     platform.scheduled_work,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
 
         tenant = new TenantContext(
-                tenants.create(
+                tenants.createActive(
                         "Governance exception test", NOW).id());
         policies = new JdbcGovernancePolicyRepository(
                 jdbc);

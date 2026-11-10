@@ -44,7 +44,7 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -66,7 +66,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcOutboxRepository outbox;
     private static JdbcScheduledWorkRepository scheduledWork;
     private static TransactionExecutor transactions;
@@ -96,7 +96,7 @@ class AccessRequestAccessApplicationIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         outbox = new JdbcOutboxRepository(jdbc);
         scheduledWork = new JdbcScheduledWorkRepository(jdbc, ids);
         transactions = new SpringTransactionExecutor(
@@ -181,12 +181,12 @@ class AccessRequestAccessApplicationIntegrationTest {
                     catalog.entitlement,
                     catalog.application_target,
                     catalog.application,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
 
         tenant = new TenantContext(
-                tenants.create("Request application", NOW).id());
+                tenants.createActive("Request application", NOW).id());
         requestRepository =
                 new JdbcAccessRequestRepository(jdbc);
         approvalRepository =

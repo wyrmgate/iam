@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.IntegrationOperationalStatusRepository.PagePosition;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -18,7 +18,7 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
 
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
     private static JdbcTemplate jdbc;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcIntegrationOperationalStatusRepository repository;
 
     @BeforeAll
@@ -26,14 +26,14 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
         io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.reset();
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
-        tenants = new JdbcTenantRepository(jdbc, new UuidV7Generator());
+        tenants = new TenantTestFixture(jdbc, new UuidV7Generator());
         repository = new JdbcIntegrationOperationalStatusRepository(jdbc);
     }
 @Test
     void tenantIsolationPaginationAndStructuralRedactionHold() throws Exception {
         Instant base = Instant.parse("2026-10-12T04:00:00Z");
-        UUID tenantA = tenants.create("Tenant A", base).id();
-        UUID tenantB = tenants.create("Tenant B", base).id();
+        UUID tenantA = tenants.createActive("Tenant A", base).id();
+        UUID tenantB = tenants.createActive("Tenant B", base).id();
         UUID bindingA = binding(tenantA, base);
         UUID bindingB = binding(tenantB, base);
 

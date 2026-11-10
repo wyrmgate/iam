@@ -41,7 +41,7 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -74,7 +74,7 @@ class PrincipalApiIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcIdentityRepository identityRepository;
     private static IdentityCommandService identities;
     private static PrincipalRepository principalRepository;
@@ -96,7 +96,7 @@ class PrincipalApiIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
         JdbcOutboxRepository outbox =
@@ -140,11 +140,11 @@ class PrincipalApiIntegrationTest {
                     catalog.entitlement,
                     catalog.application_target,
                     catalog.application,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
         tenant = new TenantContext(
-                tenants.create("Principal HTTP Tenant", NOW)
+                tenants.createActive("Principal HTTP Tenant", NOW)
                         .id());
         actorIdentity = identity(
                 tenant, "Principal Administrator");
@@ -620,7 +620,7 @@ class PrincipalApiIntegrationTest {
                                 "principal_already_correlated"));
 
         TenantContext other = new TenantContext(
-                tenants.create(
+                tenants.createActive(
                                 "Other Principal Tenant",
                                 NOW)
                         .id());
@@ -742,7 +742,7 @@ class PrincipalApiIntegrationTest {
                         .value("validation_failed"));
 
         TenantContext other = new TenantContext(
-                tenants.create(
+                tenants.createActive(
                                 "Cursor Other Tenant",
                                 NOW)
                         .id());
