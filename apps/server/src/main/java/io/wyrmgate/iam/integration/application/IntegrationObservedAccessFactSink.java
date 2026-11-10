@@ -24,7 +24,8 @@ public interface IntegrationObservedAccessFactSink {
 
     enum SourceKind {
         RECONCILIATION_RUN("reconciliation-run"),
-        ENTITLEMENT_OBSERVATION_MAPPING("entitlement-observation-mapping");
+        ENTITLEMENT_OBSERVATION_MAPPING("entitlement-observation-mapping"),
+        PRINCIPAL_OBSERVATION_MAPPING("principal-observation-mapping");
 
         private final String aggregateType;
 
