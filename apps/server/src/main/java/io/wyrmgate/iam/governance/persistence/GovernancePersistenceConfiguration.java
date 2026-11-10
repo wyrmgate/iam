@@ -61,7 +61,7 @@ import io.wyrmgate.iam.governance.application.ReviewQueryService;
 import io.wyrmgate.iam.governance.application.ReviewService;
 import io.wyrmgate.iam.governance.application.ReviewWorkSink;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
-import io.wyrmgate.iam.identity.application.PrincipalResolutionQuery;
+import io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQuery;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
@@ -474,10 +474,10 @@ public class GovernancePersistenceConfiguration {
     @Bean
     ObservedAccessDriftEvaluationService observedAccessDriftEvaluationService(
             IntegrationObservedAccessQuery observedAccess,
-            PrincipalResolutionQuery principalResolution,
+            PrincipalObservationReferenceQuery principalReferences,
             GovernanceObservationReporter reporter) {
         return new ObservedAccessDriftEvaluationService(
-                observedAccess, principalResolution, reporter);
+                observedAccess, principalReferences, reporter);
     }
 
     @Bean
