@@ -153,7 +153,8 @@ class AccessApiIntegrationTest {
                 identityRepository,
                 noIdentityFacts,
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
 
         var catalogRepository =
                 new JdbcCatalogRepository(jdbc);
