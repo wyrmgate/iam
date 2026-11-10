@@ -11,11 +11,11 @@ import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -36,7 +36,7 @@ class CredentialPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcScheduledWorkRepository scheduledWork;
     private static TransactionExecutor transactions;
 
@@ -88,7 +88,7 @@ class CredentialPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         scheduledWork = new JdbcScheduledWorkRepository(
                 jdbc, ids);
         transactions = new SpringTransactionExecutor(
@@ -102,11 +102,11 @@ class CredentialPersistenceIntegrationTest {
                     credential.credential_rotation,
                     credential.credential,
                     platform.scheduled_work,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
         tenant = new TenantContext(
-                tenants.create(
+                tenants.createActive(
                         "Credential test", NOW).id());
         knownPrincipals.clear();
         knownIdentities.clear();
