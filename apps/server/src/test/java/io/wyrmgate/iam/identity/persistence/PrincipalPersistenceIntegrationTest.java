@@ -62,7 +62,8 @@ class PrincipalPersistenceIntegrationTest {
                 identityRepository,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
         principalQuery = new PrincipalQueryService(principalRepository);
@@ -72,7 +73,8 @@ class PrincipalPersistenceIntegrationTest {
                 new CatalogQueryService(new JdbcCatalogRepository(jdbc)),
                 new JdbcPrincipalFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
     }
 
     @BeforeEach
