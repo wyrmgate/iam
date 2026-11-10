@@ -11,11 +11,11 @@ import io.wyrmgate.iam.catalog.domain.Role;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -31,7 +31,7 @@ class RolePersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static CatalogCommandService catalog;
     private static RoleCommandService roles;
     private static RoleExpansionQuery expansion;
@@ -41,7 +41,7 @@ class RolePersistenceIntegrationTest {
         var dataSource = SharedPostgresIntegrationDatabase.dataSource();
         jdbc = SharedPostgresIntegrationDatabase.jdbc();
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         TransactionExecutor transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
         var catalogRepository = new JdbcCatalogRepository(jdbc);
@@ -70,7 +70,7 @@ class RolePersistenceIntegrationTest {
                     catalog.application_target,
                     catalog.application,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -279,6 +279,6 @@ class RolePersistenceIntegrationTest {
 
     private TenantContext tenant(String name) {
         return new TenantContext(
-                tenants.create(name, NOW).id());
+                tenants.createActive(name, NOW).id());
     }
 }
