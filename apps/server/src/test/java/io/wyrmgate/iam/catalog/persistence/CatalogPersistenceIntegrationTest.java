@@ -16,7 +16,7 @@ import io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.tenancy.tenant.TenantContext;
+import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Set;
