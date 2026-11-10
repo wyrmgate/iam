@@ -73,7 +73,7 @@ public final class JdbcOrganizationRepository implements OrganizationRepository 
                 SELECT pg_advisory_xact_lock(
                     hashtextextended(CAST(? AS text), 1197768013))
                 """,
-                Long.class,
+                (rs, rowNum) -> Boolean.TRUE,
                 tenant.tenantId());
     }
 
