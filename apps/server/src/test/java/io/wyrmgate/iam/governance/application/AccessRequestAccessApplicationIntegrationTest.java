@@ -107,7 +107,8 @@ class AccessRequestAccessApplicationIntegrationTest {
                 identityRepository,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
         principalRepository = new JdbcPrincipalRepository(jdbc);
         identityReferences =
                 new IdentityAccessReferenceQueryService(
@@ -127,7 +128,8 @@ class AccessRequestAccessApplicationIntegrationTest {
                 new CatalogQueryService(catalogRepository),
                 new JdbcPrincipalFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
 
         assignmentRepository =
                 new JdbcAccessAssignmentRepository(jdbc);
