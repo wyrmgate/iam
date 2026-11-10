@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.identity.application;
 
 import io.wyrmgate.iam.identity.domain.Identity;
+import io.wyrmgate.iam.identity.domain.IdentityLifecycleDefinition;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
 import io.wyrmgate.iam.identity.domain.IdentityType;
@@ -179,7 +180,7 @@ public final class IdentityCommandService {
             if (current.lifecycleState() == lifecycleState) {
                 return current;
             }
-            requireLifecycleTransition(
+            IdentityLifecycleState acceptedState = IdentityLifecycleDefinition.transitionTo(
                     current.lifecycleState(),
                     lifecycleState);
             if (current.lifecycleState() == IdentityLifecycleState.ACTIVE
@@ -190,7 +191,7 @@ public final class IdentityCommandService {
             Identity updated = repository.updateLifecycle(
                     tenant,
                     identityId,
-                    lifecycleState,
+                    acceptedState,
                     expectedRevision,
                     now);
             factSink.lifecycleChanged(
@@ -201,38 +202,6 @@ public final class IdentityCommandService {
                     causationId);
             return updated;
         });
-    }
-
-    private static void requireLifecycleTransition(
-            IdentityLifecycleState from,
-            IdentityLifecycleState to) {
-        if (from == IdentityLifecycleState.DECOMMISSIONED) {
-            throw new IllegalStateException(
-                    "DECOMMISSIONED Identity is terminal");
-        }
-        boolean allowed = switch (from) {
-            case PENDING ->
-                    to == IdentityLifecycleState.ACTIVE
-                            || to == IdentityLifecycleState.INACTIVE
-                            || to == IdentityLifecycleState.DECOMMISSIONED;
-            case ACTIVE ->
-                    to == IdentityLifecycleState.SUSPENDED
-                            || to == IdentityLifecycleState.INACTIVE
-                            || to == IdentityLifecycleState.DECOMMISSIONED;
-            case SUSPENDED ->
-                    to == IdentityLifecycleState.ACTIVE
-                            || to == IdentityLifecycleState.INACTIVE
-                            || to == IdentityLifecycleState.DECOMMISSIONED;
-            case INACTIVE ->
-                    to == IdentityLifecycleState.ACTIVE
-                            || to == IdentityLifecycleState.DECOMMISSIONED;
-            case DECOMMISSIONED -> false;
-        };
-        if (!allowed) {
-            throw new IllegalArgumentException(
-                    "invalid Identity lifecycle transition "
-                            + from + " -> " + to);
-        }
     }
 
     public Identity changeDisplayName(
