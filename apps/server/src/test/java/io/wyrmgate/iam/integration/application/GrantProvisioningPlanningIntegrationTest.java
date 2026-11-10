@@ -335,6 +335,15 @@ class GrantProvisioningPlanningIntegrationTest {
                         ? List.of(active)
                         : List.of();
             }
+
+            @Override
+            public List<Result> forIdentityTarget(
+                    TenantContext tenant,
+                    UUID identityId,
+                    UUID applicationTargetId) {
+                return activeForIdentityTarget(tenant, identityId, applicationTargetId);
+            }
+
         };
     }
 
@@ -352,6 +361,15 @@ class GrantProvisioningPlanningIntegrationTest {
                     UUID applicationTargetId) {
                 return List.of();
             }
+
+            @Override
+            public List<Result> forIdentityTarget(
+                    TenantContext tenant,
+                    UUID identityId,
+                    UUID applicationTargetId) {
+                return activeForIdentityTarget(tenant, identityId, applicationTargetId);
+            }
+
         };
     }
 
