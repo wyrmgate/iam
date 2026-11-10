@@ -59,6 +59,18 @@ This check never creates a parallel deployment User/SsoUser model.
 
 `DECOMMISSIONED` is business lifecycle, not physical deletion. Any later erasure must be explicit and respect retention, legal hold, immutable Audit evidence and historical-reference requirements.
 
+## Current implementation slice
+
+The first backend slice materializes the accepted ownership boundary without exposing an unsafe partial lifecycle API:
+
+- V12 moves the stable Tenant table object from `platform.tenant` to `tenancy.tenant` and adds the canonical lifecycle constraint.
+- Existing pre-V12 Tenant rows migrate to `ACTIVE` because they already represented operating isolation realms.
+- Fresh installation creates the first Tenant as `PROVISIONING`; after first-party Administration bootstrap establishes viable Tenant/Platform Owner authority, Tenancy performs the guarded `PROVISIONING -> ACTIVE` transition before installation verification/seal.
+- Tenant transition mechanics use the shared framework-neutral lifecycle kernel, while Tenancy retains the state/action definitions, optimistic revision and business mutation.
+- Deployment/current-Tenant read composition consumes a Tenancy-owned query. The existing deployment inspection route does not transfer Tenant ownership back to Platform.
+- Suspension/decommissioning are represented in the domain command model but are not yet exposed as public operations until the downstream privilege-use/increase gating and durable decommissioning orchestration are implemented coherently.
+- `platform.tenant.TenantContext` remains a trusted runtime scope value; it is not the authoritative Tenant aggregate.
+
 ## Deferred implementation details
 
 ADR-0051 does not by itself fix:
