@@ -381,7 +381,7 @@ class IdentityPersistenceIntegrationTest {
                 failingFacts,
                 idGenerator,
                 transactions,
-                (tenant, identityId, at) -> {});
+                (requestedTenant, identityId, at) -> {});
 
         assertThatThrownBy(() -> failing.changeLifecycle(
                         tenant,
