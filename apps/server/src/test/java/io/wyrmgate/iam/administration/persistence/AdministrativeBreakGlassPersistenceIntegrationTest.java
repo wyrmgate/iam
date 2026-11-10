@@ -34,10 +34,10 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -54,7 +54,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static IdentityCommandService identityCommands;
     private static InitialAdminBootstrapService bootstrap;
     private static AdministrativeAuthorityService authority;
@@ -71,7 +71,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         transactions =
                 new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         JdbcIdentityRepository identities = new JdbcIdentityRepository(jdbc);
@@ -114,7 +114,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -530,7 +530,7 @@ class AdministrativeBreakGlassPersistenceIntegrationTest {
 
     private static TenantContext tenant(String name) {
         return new TenantContext(
-                tenants.create(name, Instant.parse("2026-10-01T09:00:00Z")).id());
+                tenants.createActive(name, Instant.parse("2026-10-01T09:00:00Z")).id());
     }
 
     private static Admin bootstrapAdmin(TenantContext tenant, Instant now) {
