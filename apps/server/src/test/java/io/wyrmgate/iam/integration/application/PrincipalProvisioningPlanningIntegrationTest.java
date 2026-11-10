@@ -14,10 +14,10 @@ import io.wyrmgate.iam.integration.persistence.JdbcPrincipalProvisioningReposito
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -36,7 +36,7 @@ class PrincipalProvisioningPlanningIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcOutboxRepository outbox;
     private static JdbcDesiredStateProjectionRepository desired;
     private static JdbcDesiredPrincipalFactSink facts;
@@ -49,7 +49,7 @@ class PrincipalProvisioningPlanningIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         outbox = new JdbcOutboxRepository(jdbc);
         desired = new JdbcDesiredStateProjectionRepository(jdbc, ids);
         facts = new JdbcDesiredPrincipalFactSink(outbox, ids);
@@ -77,7 +77,7 @@ class PrincipalProvisioningPlanningIntegrationTest {
                     access.desired_principal_state,
                     platform.connector_work_lease,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -229,7 +229,7 @@ class PrincipalProvisioningPlanningIntegrationTest {
     }
 
     private TenantContext tenant(String name) {
-        return new TenantContext(tenants.create(name, NOW).id());
+        return new TenantContext(tenants.createActive(name, NOW).id());
     }
 
     private int jobCount(TenantContext tenant) {
