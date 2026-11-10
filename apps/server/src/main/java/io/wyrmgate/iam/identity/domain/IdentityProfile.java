@@ -3,8 +3,8 @@ package io.wyrmgate.iam.identity.domain;
 /**
  * Typed profile boundary for an Identity.
  *
- * <p>The controlled v0.2 specifications require exactly one profile compatible with the
- * Identity type but do not yet define profile-specific business fields. The concrete profile
+ * <p>The controlled formal specifications through v0.8 require exactly one profile compatible
+ * with the Identity type but do not define profile-specific business fields. The concrete profile
  * records therefore intentionally carry no invented attributes.</p>
  */
 public sealed interface IdentityProfile

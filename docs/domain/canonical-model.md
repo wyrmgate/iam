@@ -32,6 +32,10 @@ Lifecycle-access policy consumes governed canonical values only through Identity
 
 Manager and ownership relationships preserve provenance. Non-human identities require accountable ownership according to policy. Ordinary subject/manager/organization/ownership relationships never cross Tenant boundaries.
 
+The first reconciled v3 backend slice persists `Organization`, `ManagerRelationship`, `OrganizationMembership` and `OwnershipRelationship` as normalized Identity-owned authoritative state in V13. Organization parentage is same-tenant and acyclic. Relationships carry explicit temporal validity, optimistic revision and closed provenance (`MANUAL` or an exact Identity-owned `SourceRecord` reference); provider-native payloads and arbitrary JSON do not become relationship authority.
+
+V13 does not invent profile-specific employee/service/workload fields that the controlled requirements have not standardized, and it does not add a generic Organization/Principal `attributes` JSON model. Existing governed canonical attributes remain the extension mechanism. Source-driven relationship extraction/mapping and public Organization/relationship control-plane endpoints require their own accepted semantic/interface contracts. ADR-0026 merge/split behavior is unchanged: the implemented correction flow automatically re-homes only current accepted source links and Principals, not these newly persisted relationship rows.
+
 ## Application catalog
 
 `Application` is a tenant-owned governable business application or capability. `ApplicationTarget` is a technical target/environment belonging to exactly one Application. A single connector may serve multiple targets through explicit Integration-owned `ConnectorBinding` objects.

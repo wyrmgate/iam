@@ -35,6 +35,8 @@ The Principal foundation is now exposed through a bounded public administration 
 
 The contract does not expose persistence entities such as canonical candidate rows, mapping tables, authority tables, outbox rows, or provider-native source payloads.
 
+The reconciled v3 backend now also persists Identity-owned Organization, manager, organization-membership and ownership relationships. Those are canonical domain state, but V13 deliberately does **not** add public CRUD endpoints for them. Their public operations, authorization scopes, idempotency fingerprints, pagination/filtering and relationship-specific error contracts remain future explicit interface work rather than being inferred from the persistence model.
+
 ## Identity representation
 
 `Identity` remains the canonical governed subject and carries:
@@ -47,7 +49,7 @@ The contract does not expose persistence entities such as canonical candidate ro
 - semantic authoritative revision;
 - created/updated timestamps.
 
-The v0.2 controlled package does not define profile-specific business fields, so the API does not invent any. The profile shape is typed by `kind` only until formal/domain requirements add concrete profile fields.
+The controlled formal package through v0.8 does not define profile-specific business fields, so the API does not invent any. The profile shape is typed by `kind` only until formal/domain requirements add concrete profile fields.
 
 Tenant is not a writable resource attribute. Tenant/isolation context is resolved from authenticated control-plane context before normal authorization.
 
