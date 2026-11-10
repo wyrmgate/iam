@@ -119,6 +119,8 @@ public final class TenantCommandService {
                 throw new StaleWriteException("tenant", tenantId, expectedRevision);
             }
 
+            Tenant next = current.transition(action, now);
+
             TenantContext context = new TenantContext(tenantId);
             if (requiresActiveOwner) {
                 continuity.assertMayBecomeActive(context, now);
@@ -126,7 +128,6 @@ public final class TenantCommandService {
                 continuity.assertMaySuspendOrDecommission(context, now);
             }
 
-            Tenant next = current.transition(action, now);
             return repository.updateLifecycle(next, expectedRevision);
         });
     }
