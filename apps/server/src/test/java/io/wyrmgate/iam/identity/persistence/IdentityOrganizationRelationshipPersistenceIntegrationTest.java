@@ -192,6 +192,7 @@ class IdentityOrganizationRelationshipPersistenceIntegrationTest {
         TenantContext first = tenant("First Tenant", now);
         TenantContext second = tenant("Second Tenant", now);
         Identity firstIdentity = identity(first, IdentityType.PERSON, "First", now);
+        Identity firstOwner = identity(first, IdentityType.PERSON, "First Owner", now.plusMillis(1));
         Identity secondIdentity = identity(second, IdentityType.PERSON, "Second", now);
 
         assertThatThrownBy(() -> relationshipCommands.assignManager(
@@ -208,12 +209,13 @@ class IdentityOrganizationRelationshipPersistenceIntegrationTest {
         assertThatThrownBy(() -> relationshipCommands.assignOwner(
                         first,
                         firstIdentity.id(),
-                        ids.nextId(),
+                        firstOwner.id(),
                         now,
                         null,
                         RelationshipProvenance.sourceRecord(UUID.randomUUID()),
                         now))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("relationship SourceRecord does not exist");
     }
 
     private static TenantContext tenant(String name, Instant now) {
