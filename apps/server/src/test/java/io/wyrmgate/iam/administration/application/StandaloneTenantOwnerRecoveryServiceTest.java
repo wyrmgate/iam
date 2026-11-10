@@ -18,7 +18,7 @@ import io.wyrmgate.iam.administration.domain.AdministrativeScope;
 import io.wyrmgate.iam.administration.domain.InitialAdminAuthenticationAnchorType;
 import io.wyrmgate.iam.administration.domain.InitialAdminBootstrap;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.tenancy.tenant.TenantContext;
+import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Optional;
