@@ -56,7 +56,8 @@ class IdentityIntegrationEventPublicationIntegrationTest {
                 identities,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
 }
 
     @BeforeEach
