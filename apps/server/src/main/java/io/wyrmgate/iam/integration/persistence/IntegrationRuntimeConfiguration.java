@@ -10,6 +10,8 @@ import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepo
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingRepository;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingService;
 import io.wyrmgate.iam.integration.application.GrantProvisioningPlannerService;
 import io.wyrmgate.iam.integration.application.GrantProvisioningPlanningProcessor;
 import io.wyrmgate.iam.integration.application.GrantProvisioningRepository;
@@ -22,6 +24,7 @@ import io.wyrmgate.iam.integration.application.PrincipalProvisioningRepository;
 import io.wyrmgate.iam.catalog.application.CatalogEntitlementReferenceQuery;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredProvisioningStateQuery;
+import io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQuery;
 import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery;
 import io.wyrmgate.iam.identity.application.PrincipalProvisioningProfileQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -126,6 +129,25 @@ public class IntegrationRuntimeConfiguration {
             TransactionExecutor transactions) {
         return new IntegrationEntitlementMappingService(
                 administration, mappings, catalog, facts, observedAccessFacts, ids, transactions);
+    }
+
+    @Bean
+    IntegrationPrincipalMappingService integrationPrincipalMappingService(
+            IntegrationAdministrationRepository administration,
+            IntegrationPrincipalMappingRepository mappings,
+            PrincipalObservationReferenceQuery principals,
+            IntegrationAdministrationFactSink facts,
+            IntegrationObservedAccessFactSink observedAccessFacts,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new IntegrationPrincipalMappingService(
+                administration,
+                mappings,
+                principals,
+                facts,
+                observedAccessFacts,
+                ids,
+                transactions);
     }
 
     @Bean
