@@ -3,7 +3,6 @@ package io.wyrmgate.iam.governance.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
@@ -61,9 +60,7 @@ public final class GovernanceObservationProcessingService {
     public ProcessingBatchResult processAvailable() {
         Instant now = clock.instant();
         List<ClaimedOutboxEvent> claimed = outbox.claimPending(
-                Set.of(
-                        IntegrationObservedAccessFactSink.OBSERVED_ACCESS_INPUT_CHANGED,
-                        PrincipalFactSink.PRINCIPAL_CORRELATED),
+                Set.of(IntegrationObservedAccessFactSink.OBSERVED_ACCESS_INPUT_CHANGED),
                 now,
                 CLAIM_LEASE,
                 BATCH_SIZE);
@@ -73,18 +70,8 @@ public final class GovernanceObservationProcessingService {
         for (ClaimedOutboxEvent item : claimed) {
             try {
                 Instant evaluatedAt = clock.instant();
-                if (PrincipalFactSink.PRINCIPAL_CORRELATED.equals(
-                        item.event().eventType())) {
-                    UUID targetId = applicationTargetId(item);
-                    for (UUID bindingId :
-                            observedAccess.activeApplicationTargetBindings(
-                                    item.tenant(), targetId)) {
-                        drift.evaluate(item.tenant(), bindingId, evaluatedAt);
-                    }
-                } else {
-                    UUID bindingId = bindingId(item);
-                    drift.evaluate(item.tenant(), bindingId, evaluatedAt);
-                }
+                UUID bindingId = bindingId(item);
+                drift.evaluate(item.tenant(), bindingId, evaluatedAt);
                 outbox.markPublished(
                         item.tenant(), item.event().eventId(), evaluatedAt);
                 processed++;
@@ -102,17 +89,6 @@ public final class GovernanceObservationProcessingService {
             }
         }
         return new ProcessingBatchResult(claimed.size(), processed, failed);
-    }
-
-    private UUID applicationTargetId(ClaimedOutboxEvent item) {
-        var event = item.event();
-        if (event.eventVersion() != 1
-                || !"principal".equals(event.aggregateType())) {
-            throw new IllegalArgumentException(
-                    "unsupported principal correlation fact");
-        }
-        return uuidPayloadField(
-                item, "applicationTargetId", "principal correlation fact");
     }
 
     private UUID bindingId(ClaimedOutboxEvent item) {
