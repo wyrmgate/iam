@@ -38,12 +38,12 @@ import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.IdempotencyConflictException;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -61,7 +61,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcIdentityRepository identities;
     private static IdentityCommandService identityCommands;
     private static AdministrativeAuthorizationService authorization;
@@ -79,7 +79,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         outbox = new JdbcOutboxRepository(jdbc);
         idempotency = new JdbcIdempotencyRepository(jdbc, ids);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
@@ -134,7 +134,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                     administration.administrative_permission,
                     platform.idempotency_record,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -413,7 +413,7 @@ class IntegrationAdminApiPersistenceIntegrationTest {
     }
 
     private TenantContext tenant(String name) {
-        return new TenantContext(tenants.create(name, Instant.now()).id());
+        return new TenantContext(tenants.createActive(name, Instant.now()).id());
     }
 
     private AuthenticatedAdministrativeActor actor(TenantContext tenant, Instant now) {
