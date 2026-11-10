@@ -21,6 +21,7 @@ public interface IntegrationObservedAccessQuery {
             UUID connectorBindingId,
             String providerEntitlementId,
             UUID mappedEntitlementId,
+            UUID mappedPrincipalId,
             Instant observedAt) {}
 
     record ObservedGrantFact(
