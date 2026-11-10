@@ -7,7 +7,7 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.RegistrationKind;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository.ClaimedWork;
-import io.wyrmgate.iam.tenancy.tenant.TenantContext;
+import io.wyrmgate.iam.platform.tenant.TenantContext;
 import io.wyrmgate.iam.tenancy.domain.Tenant;
 import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import java.nio.charset.StandardCharsets;
