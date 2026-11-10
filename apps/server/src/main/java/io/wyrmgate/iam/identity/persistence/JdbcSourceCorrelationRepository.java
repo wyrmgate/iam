@@ -333,13 +333,17 @@ public final class JdbcSourceCorrelationRepository implements SourceCorrelationR
 
     @Override
     public void lockTenantForCorrelation(TenantContext tenant) {
-        List<UUID> rows = jdbcTemplate.query(
-                "SELECT id FROM platform.tenant WHERE id = ? FOR UPDATE",
-                (rs, rowNum) -> rs.getObject("id", UUID.class),
-                tenant.tenantId());
-        if (rows.isEmpty()) {
-            throw new IllegalArgumentException("tenant does not exist");
-        }
+        /*
+         * Identity owns this no-match creation fence. Do not lock/query the Tenancy-owned
+         * Tenant aggregate merely to serialize Identity correlation work.
+         */
+        long lockKey = tenant.tenantId().getMostSignificantBits()
+                ^ tenant.tenantId().getLeastSignificantBits()
+                ^ 0x49414D434F52524CL;
+        jdbcTemplate.queryForObject(
+                "SELECT pg_advisory_xact_lock(?)",
+                (rs, rowNum) -> 1,
+                lockKey);
     }
 
     @Override
