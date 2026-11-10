@@ -22,6 +22,7 @@ import io.wyrmgate.iam.identity.domain.IdentityType;
 import io.wyrmgate.iam.identity.persistence.IdentityGovernedActorStatusQuery;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
+import io.wyrmgate.iam.identity.persistence.JdbcPrincipalRepository;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationCommandService;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationException;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository;
