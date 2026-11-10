@@ -148,6 +148,16 @@ class AccessApiIntegrationTest {
                             UUID correlationId,
                             UUID causationId) {
                     }
+
+
+            @Override
+            public void lifecycleChanged(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.IdentityLifecycleState previousState,
+                    Identity identity,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
                 };
         identities = new IdentityCommandService(
                 identityRepository,
