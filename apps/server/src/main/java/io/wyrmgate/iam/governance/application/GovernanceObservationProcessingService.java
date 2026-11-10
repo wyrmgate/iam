@@ -120,7 +120,10 @@ public final class GovernanceObservationProcessingService {
         if (event.eventVersion() != 1) {
             throw new IllegalArgumentException("unsupported observed-access fact version");
         }
-        if (!Set.of("reconciliation-run", "entitlement-observation-mapping")
+        if (!Set.of(
+                        "reconciliation-run",
+                        "entitlement-observation-mapping",
+                        "principal-observation-mapping")
                 .contains(event.aggregateType())) {
             throw new IllegalArgumentException("unsupported observed-access fact aggregate");
         }
