@@ -20,7 +20,9 @@ class PersistenceArchitectureTest {
                     "..administration.application..",
                     "..platform.id..",
                     "..platform.lifecycle..",
-                    "..platform.tenant..")
+                    "..platform.tenant..",
+                    "..tenancy.domain..",
+                    "..tenancy.application..")
             .should()
             .dependOnClassesThat()
             .resideInAnyPackage("org.springframework..", "java.sql..", "javax.sql..");
