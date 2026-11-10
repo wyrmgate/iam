@@ -34,10 +34,10 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Signature;
@@ -67,7 +67,7 @@ class GovernanceReviewApiIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcOutboxRepository outbox;
     private static JdbcIdempotencyRepository idempotency;
     private static TransactionExecutor transactions;
@@ -94,7 +94,7 @@ class GovernanceReviewApiIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         outbox = new JdbcOutboxRepository(jdbc);
         idempotency =
                 new JdbcIdempotencyRepository(jdbc, ids);
@@ -113,12 +113,12 @@ class GovernanceReviewApiIntegrationTest {
                     audit.audit_record,
                     platform.idempotency_record,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
 
         tenant = new TenantContext(
-                tenants.create(
+                tenants.createActive(
                         "Review API",
                         Instant.now()).id());
         adminId = ids.nextId();
@@ -668,7 +668,7 @@ class GovernanceReviewApiIntegrationTest {
                 .asText();
 
         TenantContext otherTenant = new TenantContext(
-                tenants.create(
+                tenants.createActive(
                         "Other tenant",
                         Instant.now()).id());
         AuthenticatedAdministrativeActor foreignAdmin =
