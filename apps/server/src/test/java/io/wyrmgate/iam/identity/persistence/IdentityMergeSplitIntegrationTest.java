@@ -67,7 +67,8 @@ class IdentityMergeSplitIntegrationTest {
         var principalFacts = new JdbcPrincipalFactSink(outbox, ids);
         var sourceFacts = new JdbcSourceCorrelationFactSink(outbox, ids);
         identities = new IdentityCommandService(
-                identityRepository, identityFacts, ids, transactions);
+                identityRepository, identityFacts, ids, transactions,
+                (tenant, identityId, at) -> {});
         sources = new SourceCorrelationService(
                 sourceRepository, identityRepository, sourceFacts, ids, transactions);
         mergeSplit = new IdentityMergeSplitService(
