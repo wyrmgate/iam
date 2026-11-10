@@ -12,11 +12,11 @@ import io.wyrmgate.iam.identity.domain.IdentityType;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -31,7 +31,7 @@ class IdentityPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator idGenerator;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcOutboxRepository outbox;
     private static JdbcIdentityRepository identities;
     private static IdentityCommandService commands;
@@ -43,7 +43,7 @@ class IdentityPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         idGenerator = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, idGenerator);
+        tenants = new TenantTestFixture(jdbc, idGenerator);
         outbox = new JdbcOutboxRepository(jdbc);
         identities = new JdbcIdentityRepository(jdbc);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
@@ -62,7 +62,7 @@ class IdentityPersistenceIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -401,7 +401,7 @@ class IdentityPersistenceIntegrationTest {
     }
 
     private static TenantContext tenant(String displayName, Instant now) {
-        return new TenantContext(tenants.create(displayName, now).id());
+        return new TenantContext(tenants.createActive(displayName, now).id());
     }
 
     private static int identityCount(TenantContext tenant) {
