@@ -14,6 +14,8 @@ import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
 import io.wyrmgate.iam.identity.application.IdentityAdministrativeContinuityGuard;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQueryService;
+import io.wyrmgate.iam.identity.application.IdentityRelationshipCommandService;
+import io.wyrmgate.iam.identity.application.IdentityRelationshipRepository;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitRepository;
 import io.wyrmgate.iam.identity.application.IdentityMergeSplitService;
@@ -21,6 +23,8 @@ import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.IdentityQueryRepository;
 import io.wyrmgate.iam.identity.application.IdentityQueryService;
 import io.wyrmgate.iam.identity.application.IdentityRepository;
+import io.wyrmgate.iam.identity.application.OrganizationCommandService;
+import io.wyrmgate.iam.identity.application.OrganizationRepository;
 import io.wyrmgate.iam.identity.application.PrincipalAdministrativeContinuityGuard;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
@@ -62,6 +66,40 @@ public class IdentityPersistenceConfiguration {
             JdbcTemplate jdbcTemplate,
             IdentityRepository identityRepository) {
         return new JdbcIdentityMergeSplitRepository(jdbcTemplate, identityRepository);
+    }
+
+    @Bean
+    OrganizationRepository organizationRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcOrganizationRepository(jdbcTemplate);
+    }
+
+    @Bean
+    IdentityRelationshipRepository identityRelationshipRepository(JdbcTemplate jdbcTemplate) {
+        return new JdbcIdentityRelationshipRepository(jdbcTemplate);
+    }
+
+    @Bean
+    OrganizationCommandService organizationCommandService(
+            OrganizationRepository organizationRepository,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new OrganizationCommandService(
+                organizationRepository, idGenerator, transactionExecutor);
+    }
+
+    @Bean
+    IdentityRelationshipCommandService identityRelationshipCommandService(
+            IdentityRepository identityRepository,
+            OrganizationRepository organizationRepository,
+            IdentityRelationshipRepository identityRelationshipRepository,
+            IdGenerator idGenerator,
+            TransactionExecutor transactionExecutor) {
+        return new IdentityRelationshipCommandService(
+                identityRepository,
+                organizationRepository,
+                identityRelationshipRepository,
+                idGenerator,
+                transactionExecutor);
     }
 
     @Bean
