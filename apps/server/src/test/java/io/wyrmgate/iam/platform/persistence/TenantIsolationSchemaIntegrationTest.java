@@ -110,7 +110,7 @@ class TenantIsolationSchemaIntegrationTest {
     }
 
     @Test
-    void tenantRootForeignKeysAreEitherTenantOwnershipOrExplicitPlatformReferences() {
+    void tenantRootForeignKeysAreEitherTenantOwnershipOrExplicitDeploymentReferences() {
         List<ForeignKeyShape> tenantRootAnchors = foreignKeys().stream()
                 .filter(fk -> fk.targetSchema().equals("tenancy") && fk.targetTable().equals("tenant"))
                 .toList();
@@ -126,6 +126,21 @@ class TenantIsolationSchemaIntegrationTest {
                 assertThat(fk.sourceColumns()).as(fk.describe()).containsExactly("tenant_id");
             }
         });
+    }
+
+    @Test
+    void tenantRootCarriesRequiredCanonicalLifecycleState() {
+        Integer nullable = jdbc.queryForObject(
+                """
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'tenancy'
+                  AND table_name = 'tenant'
+                  AND column_name = 'lifecycle_state'
+                  AND is_nullable = 'YES'
+                """,
+                Integer.class);
+        assertThat(nullable).isZero();
     }
 
     @Test
@@ -180,7 +195,7 @@ class TenantIsolationSchemaIntegrationTest {
     }
 
     private static boolean isTenantRootAnchor(ForeignKeyShape fk) {
-        return fk.targetSchema().equals("platform")
+        return fk.targetSchema().equals("tenancy")
                 && fk.targetTable().equals("tenant")
                 && fk.sourceColumns().equals(List.of("tenant_id"))
                 && fk.targetColumns().equals(List.of("id"));
