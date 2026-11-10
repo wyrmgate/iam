@@ -107,7 +107,8 @@ class PrincipalApiIntegrationTest {
                 identityRepository,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
         principalRepository =
                 new JdbcPrincipalRepository(jdbc);
         principals = new PrincipalCommandService(
@@ -117,7 +118,8 @@ class PrincipalApiIntegrationTest {
                         new JdbcCatalogRepository(jdbc)),
                 new JdbcPrincipalFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
         queries = new PrincipalQueryService(
                 principalRepository);
         idempotency = new JdbcIdempotencyRepository(
