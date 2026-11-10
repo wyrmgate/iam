@@ -21,8 +21,10 @@ The implemented permission families are:
 - `connector:read|create|update|disable`
 - `connector-binding:read|create|update|disable`
 - `connector-worker:read|create|update|disable`
+- `entitlement-observation-mapping:read|create|retire`
+- `principal-observation-mapping:read|create|retire`
 
-ADR-0011 initial-admin permissions are intentionally unchanged. Connector administration must be granted explicitly.
+ADR-0011 initial-admin permissions are intentionally unchanged. Connector and observation-mapping administration must be granted explicitly.
 
 ## ConnectorInstance
 
@@ -41,7 +43,7 @@ Secret-shaped configuration keys are rejected before persistence. Ordinary APIs/
 
 Disable is an explicit operation; arbitrary lifecycle status PATCH is not supported.
 
-Public ConnectorInstance create/update/disable, ConnectorBinding create/update/disable, ConnectorWorker create/update/disable, and EntitlementObservationMapping create/retire attempts append data-minimized ADR-0031 AuditRecord evidence after the Integration transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target Integration resource when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Connector configuration, secret references, worker issuer/subject, worker scope/permissions, provider stable IDs, Entitlement IDs, provider observations, request payloads, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Integration business outcome.
+Public ConnectorInstance create/update/disable, ConnectorBinding create/update/disable, ConnectorWorker create/update/disable, EntitlementObservationMapping create/retire, and PrincipalObservationMapping create/retire attempts append data-minimized ADR-0031 AuditRecord evidence after the Integration transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target Integration resource when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Connector configuration, secret references, worker issuer/subject, worker scope/permissions, provider stable IDs, Entitlement IDs, provider observations, request payloads, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Integration business outcome.
 
 ## ConnectorBinding
 
