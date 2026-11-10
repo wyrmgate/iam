@@ -950,6 +950,14 @@ Flyway V60 adds `access.lifecycle_access_policy_rule_expected_value`, a typed re
 
 Migration V40 adds immutable Governance-owned `governance.lifecycle_access_evaluation` and `governance.lifecycle_access_sod_conflict` evidence. Each automatic privilege-increase guard attempt records the lifecycle rule/Identity/target, active Governance PolicyVersion when available, decision/code, matched SoD rules, exact exception coverage and causal correlation metadata. These rows are evidence only and never become Access authority.
 
+### Identity Organization and relationship persistence
+
+Migration V13 adds the previously missing Identity-owned `organization`, `manager_relationship`, `organization_membership` and `ownership_relationship` tables without changing Tenant isolation semantics. Organization is tenant-local business/governance structure and references `tenancy.tenant` only as its isolation owner; parent references are same-capability composite `(tenant_id, id)` references and application commands reject hierarchy cycles.
+
+Each first-class relationship stores stable relationship ID, same-tenant subject/target references, `valid_from`, optional exclusive `valid_until`, optimistic `revision`, timestamps, and closed provenance. `MANUAL` provenance carries no source reference; `SOURCE_RECORD` provenance requires an exact same-tenant `identity.source_record` reference. There is no arbitrary relationship JSON/EAV payload, and no cross-capability database reference is introduced.
+
+V13 is an additive semantic delta under ADR-0048; the V1-V10 current-state baseline is not regenerated. The public Identity v1 HTTP contract is intentionally unchanged by this persistence slice.
+
 ### Identity merge/split persistence
 
 Migration V41 adds immutable Identity-owned identity_merge_operation and identity_split_operation evidence. Merge evidence preserves survivor/absorbed stable Identity IDs, both pre-operation revisions, moved relationship counts, reason and causal metadata; absorbed Identity IDs are unique as completed merge subjects. Split evidence preserves source/new Identity IDs, source pre-operation revision and the exact selected SourceRecord/Principal IDs in normalized immutable child tables.
