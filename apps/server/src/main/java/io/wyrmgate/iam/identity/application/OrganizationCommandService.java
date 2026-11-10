@@ -95,6 +95,7 @@ public final class OrganizationCommandService {
         requireExpectedRevision(expectedRevision);
 
         return transactions.required(() -> {
+            repository.lockHierarchyMutation(tenant);
             Organization current = requireCurrent(tenant, organizationId, expectedRevision);
             if (Objects.equals(current.parentId(), parentId)) {
                 return current;
