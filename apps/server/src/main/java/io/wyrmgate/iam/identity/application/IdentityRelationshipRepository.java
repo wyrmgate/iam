@@ -11,7 +11,8 @@ import java.util.UUID;
 /** Typed persistence port for first-class Identity relationships. */
 public interface IdentityRelationshipRepository {
 
-    boolean sourceRecordExists(TenantContext tenant, UUID sourceRecordId);
+    boolean sourceRecordAcceptedForIdentity(
+            TenantContext tenant, UUID sourceRecordId, UUID identityId);
 
     void insertManagerRelationship(TenantContext tenant, ManagerRelationship relationship);
 
