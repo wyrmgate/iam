@@ -12,10 +12,10 @@ import io.wyrmgate.iam.audit.application.AuditRecordDraft;
 import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -29,7 +29,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 class AuditRecordPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static IdGenerator ids;
     private static JdbcAuditRecordRepository repository;
     private static TransactionExecutor transactions;
@@ -40,7 +40,7 @@ class AuditRecordPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         repository = new JdbcAuditRecordRepository(jdbc);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
 }
@@ -53,7 +53,7 @@ class AuditRecordPersistenceIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -239,6 +239,6 @@ class AuditRecordPersistenceIntegrationTest {
     }
 
     private TenantContext tenant(String name, Instant now) {
-        return new TenantContext(tenants.create(name, now).id());
+        return new TenantContext(tenants.createActive(name, now).id());
     }
 }
