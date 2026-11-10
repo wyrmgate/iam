@@ -12,10 +12,10 @@ public interface IdentityLifecycleAccessQuery {
     boolean supportsPolicyScalarAttribute(
             TenantContext tenant, String canonicalKey, ScalarType type);
 
-    default boolean supportsPolicyMultiAttribute(
-            TenantContext tenant, String canonicalKey, ScalarType type) {
-        return false;
-    }
+    boolean supportsPolicyMultiAttribute(
+            TenantContext tenant,
+            String canonicalKey,
+            ScalarType type);
 
     Context currentContext(
             TenantContext tenant,
