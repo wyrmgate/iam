@@ -17,10 +17,10 @@ import io.wyrmgate.iam.audit.siem.ScheduledWorkAuditSiemEnqueuer;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcScheduledWorkRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,7 +40,7 @@ class AuditEvidenceSnapshotSiemPersistenceIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcAuditRecordRepository records;
     private static JdbcEvidenceSnapshotRepository snapshots;
     private static TransactionExecutor transactions;
@@ -53,7 +53,7 @@ class AuditEvidenceSnapshotSiemPersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         records = new JdbcAuditRecordRepository(jdbc);
         snapshots = new JdbcEvidenceSnapshotRepository(jdbc);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
@@ -73,10 +73,10 @@ class AuditEvidenceSnapshotSiemPersistenceIntegrationTest {
                     audit.audit_record,
                     platform.scheduled_work,
                     platform.idempotency_record,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
-        tenant = new TenantContext(tenants.create("Audit Evidence", NOW).id());
+        tenant = new TenantContext(tenants.createActive("Audit Evidence", NOW).id());
     }
 
     @Test
