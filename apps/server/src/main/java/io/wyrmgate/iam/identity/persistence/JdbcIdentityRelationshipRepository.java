@@ -31,6 +31,20 @@ public final class JdbcIdentityRelationshipRepository implements IdentityRelatio
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(sourceRecordId, "sourceRecordId");
         Objects.requireNonNull(identityId, "identityId");
+        List<UUID> lockedRecords = jdbcTemplate.query(
+                """
+                SELECT id
+                FROM identity.source_record
+                WHERE tenant_id = ? AND id = ?
+                FOR UPDATE
+                """,
+                (rs, rowNum) -> rs.getObject("id", UUID.class),
+                tenant.tenantId(),
+                sourceRecordId);
+        if (lockedRecords.isEmpty()) {
+            return false;
+        }
+
         Boolean result = jdbcTemplate.queryForObject(
                 """
                 SELECT EXISTS (
