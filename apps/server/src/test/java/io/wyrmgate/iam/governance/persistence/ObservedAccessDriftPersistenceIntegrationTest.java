@@ -86,7 +86,12 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                     TenantContext tenant, String factType, UUID workerId, long revision,
                     Instant occurredAt, UUID correlationId) {}
             @Override
-            public void mappingChanged(
+            public void entitlementMappingChanged(
+                    TenantContext tenant, String factType, UUID mappingId, long revision,
+                    Instant occurredAt, UUID correlationId) {}
+
+            @Override
+            public void principalMappingChanged(
                     TenantContext tenant, String factType, UUID mappingId, long revision,
                     Instant occurredAt, UUID correlationId) {}
         };
