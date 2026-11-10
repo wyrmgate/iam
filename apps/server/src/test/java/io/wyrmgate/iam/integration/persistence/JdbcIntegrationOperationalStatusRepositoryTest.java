@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.IntegrationOperationalStatusRepository.PagePosition;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
-import io.wyrmgate.iam.tenancy.tenant.TenantContext;
+import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
