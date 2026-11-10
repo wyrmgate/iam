@@ -66,6 +66,18 @@ public final class JdbcOrganizationRepository implements OrganizationRepository 
     }
 
     @Override
+    public void lockHierarchyMutation(TenantContext tenant) {
+        Objects.requireNonNull(tenant, "tenant");
+        jdbcTemplate.queryForObject(
+                """
+                SELECT pg_advisory_xact_lock(
+                    hashtextextended(CAST(? AS text), 1197768013))
+                """,
+                Long.class,
+                tenant.tenantId());
+    }
+
+    @Override
     public Organization updateMetadata(
             TenantContext tenant,
             UUID organizationId,
@@ -131,7 +143,7 @@ public final class JdbcOrganizationRepository implements OrganizationRepository 
                     SELECT id, parent_id
                     FROM identity.organization
                     WHERE tenant_id = ? AND id = ?
-                    UNION ALL
+                    UNION
                     SELECT parent.id, parent.parent_id
                     FROM identity.organization parent
                     JOIN ancestors child ON child.parent_id = parent.id
