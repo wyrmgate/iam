@@ -13,6 +13,12 @@ public interface OrganizationRepository {
 
     Optional<Organization> findById(TenantContext tenant, UUID organizationId);
 
+    /**
+     * Serializes Organization hierarchy mutations within one Tenant without locking foreign
+     * capability state. Implementations may use transaction-scoped technical locking.
+     */
+    void lockHierarchyMutation(TenantContext tenant);
+
     Organization updateMetadata(
             TenantContext tenant,
             UUID organizationId,
