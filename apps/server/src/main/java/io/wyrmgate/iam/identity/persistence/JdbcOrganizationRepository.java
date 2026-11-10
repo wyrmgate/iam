@@ -68,13 +68,13 @@ public final class JdbcOrganizationRepository implements OrganizationRepository 
     @Override
     public void lockHierarchyMutation(TenantContext tenant) {
         Objects.requireNonNull(tenant, "tenant");
+        long lockKey = tenant.tenantId().getMostSignificantBits()
+                ^ tenant.tenantId().getLeastSignificantBits()
+                ^ 0x49414D4F52474849L;
         jdbcTemplate.queryForObject(
-                """
-                SELECT pg_advisory_xact_lock(
-                    hashtextextended(CAST(? AS text), 1197768013))
-                """,
-                (rs, rowNum) -> Boolean.TRUE,
-                tenant.tenantId());
+                "SELECT pg_advisory_xact_lock(?)",
+                (rs, rowNum) -> 1,
+                lockKey);
     }
 
     @Override
