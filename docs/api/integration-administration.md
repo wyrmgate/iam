@@ -21,8 +21,10 @@ The implemented permission families are:
 - `connector:read|create|update|disable`
 - `connector-binding:read|create|update|disable`
 - `connector-worker:read|create|update|disable`
+- `entitlement-observation-mapping:read|create|retire`
+- `principal-observation-mapping:read|create|retire`
 
-ADR-0011 initial-admin permissions are intentionally unchanged. Connector administration must be granted explicitly.
+ADR-0011 initial-admin permissions are intentionally unchanged. Connector and observation-mapping administration must be granted explicitly.
 
 ## ConnectorInstance
 
@@ -41,7 +43,7 @@ Secret-shaped configuration keys are rejected before persistence. Ordinary APIs/
 
 Disable is an explicit operation; arbitrary lifecycle status PATCH is not supported.
 
-Public ConnectorInstance create/update/disable, ConnectorBinding create/update/disable, ConnectorWorker create/update/disable, and EntitlementObservationMapping create/retire attempts append data-minimized ADR-0031 AuditRecord evidence after the Integration transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target Integration resource when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Connector configuration, secret references, worker issuer/subject, worker scope/permissions, provider stable IDs, Entitlement IDs, provider observations, request payloads, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Integration business outcome.
+Public ConnectorInstance create/update/disable, ConnectorBinding create/update/disable, ConnectorWorker create/update/disable, EntitlementObservationMapping create/retire, and PrincipalObservationMapping create/retire attempts append data-minimized ADR-0031 AuditRecord evidence after the Integration transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target Integration resource when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Connector configuration, secret references, worker issuer/subject, worker scope/permissions, provider stable IDs, Entitlement IDs, provider observations, request payloads, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Integration business outcome.
 
 ## ConnectorBinding
 
@@ -126,6 +128,28 @@ Semantic default-deny permissions:
 The mapping target is validated through a Catalog-owned semantic query. Integration does not read or mutate Catalog persistence directly.
 
 Successful map/unmap commits also append a data-minimized internal `integration.observed-access-input-changed` outbox fact containing the ConnectorBinding scope and mapping aggregate reference. ENTITLEMENT/GRANT reconciliation completion emits the same internal trigger whenever completion materializes current observation state, including positive observations retained from non-COMPLETE runs. Governance leases these facts asynchronously and re-queries current normalized observed access before updating findings. This trigger is internal only and is not a public integration event.
+
+## Principal observation mappings
+
+ADR-0050 is implemented through an explicit Integration-owned provider-account correlation resource. It is the Principal-side counterpart to EntitlementObservationMapping and never transfers Principal authority out of Identity.
+
+Control-plane operations:
+
+- `POST /api/v1/connector-bindings/{bindingId}/principal-mappings`
+- `GET /api/v1/principal-observation-mappings/{id}`
+- `POST /api/v1/principal-observation-mappings/{id}:unmap`
+
+The create request supplies only a provider-native stable account identifier and an exact existing governed `principalId`. Integration requires a present observed Principal on the active APPLICATION_TARGET binding, then validates the Principal through an Identity-owned semantic query for same-Tenant/same-ApplicationTarget agreement. Username, email, display name and `Principal.nativePrincipalKey` are never fallback correlation authority.
+
+Within one ConnectorBinding, one active provider stable identifier maps to at most one Principal. Retirement is terminal and history-preserving; remapping creates a new mapping identity. Mapping create/unmap emits the existing data-minimized `integration.observed-access-input-changed` trigger so Governance re-queries current normalized observation state.
+
+Semantic default-deny permissions:
+
+- `principal-observation-mapping:read`
+- `principal-observation-mapping:create`
+- `principal-observation-mapping:retire`
+
+These operations are causal-idempotent and revision-aware. Mapping state and audit exclude provider payloads, credentials/secrets and unrelated provider attributes.
 
 ## Public operational status reads
 

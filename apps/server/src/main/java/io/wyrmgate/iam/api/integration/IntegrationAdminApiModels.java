@@ -83,6 +83,21 @@ final class IntegrationAdminApiModels {
             Instant updatedAt,
             Instant retiredAt) {}
 
+    record PrincipalMappingCreateRequest(
+            String providerStableId,
+            UUID principalId) {}
+
+    record PrincipalMappingResource(
+            UUID id,
+            UUID connectorBindingId,
+            String providerStableId,
+            UUID principalId,
+            String lifecycleState,
+            long revision,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant retiredAt) {}
+
     record WorkerCreateRequest(
             String issuer,
             String subject,

@@ -77,9 +77,20 @@ class AccessAssignmentPersistenceIntegrationTest {
                     java.util.UUID correlationId,
                     java.util.UUID causationId) {
             }
+
+
+            @Override
+            public void lifecycleChanged(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.IdentityLifecycleState previousState,
+                    Identity identity,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
         };
         identities = new IdentityCommandService(
-                identityRepository, noIdentityFacts, ids, transactions);
+                identityRepository, noIdentityFacts, ids, transactions,
+                (tenant, identityId, at) -> {});
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         catalogCommands = new CatalogCommandService(
@@ -87,15 +98,40 @@ class AccessAssignmentPersistenceIntegrationTest {
         catalogQuery = new CatalogQueryService(catalogRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
-        PrincipalFactSink noPrincipalFacts =
-                (tenant, principal, correlationId, causationId) -> { };
+        PrincipalFactSink noPrincipalFacts = new PrincipalFactSink() {
+            @Override
+            public void principalCorrelated(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.Principal principal,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
+
+            @Override
+            public void principalAccessProjectionChanged(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.Principal principal,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
+
+            @Override
+            public void principalReassigned(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.Principal principal,
+                    java.util.UUID previousIdentityId,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
+        };
         principals = new PrincipalCommandService(
                 principalRepository,
                 identityRepository,
                 catalogQuery,
                 noPrincipalFacts,
                 ids,
-                transactions);
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
 
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
         assignments = new AccessAssignmentCommandService(

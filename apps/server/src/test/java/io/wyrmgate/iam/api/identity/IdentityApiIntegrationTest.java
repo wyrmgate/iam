@@ -117,7 +117,8 @@ class IdentityApiIntegrationTest {
                 identities,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
         idempotency = new JdbcIdempotencyRepository(jdbc, ids);
         canonicalAttributes = new JdbcCanonicalAttributeRepository(jdbc, ids);
         sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);

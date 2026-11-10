@@ -30,5 +30,6 @@ public interface IntegrationObservedAccessQuery {
             String providerPrincipalId,
             String providerEntitlementId,
             UUID mappedEntitlementId,
+            UUID mappedPrincipalId,
             Instant observedAt) {}
 }

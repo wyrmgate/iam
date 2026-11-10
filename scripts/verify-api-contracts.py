@@ -372,6 +372,9 @@ def verify_integration_admin_openapi(document: dict) -> None:
         "/api/v1/connector-bindings/{bindingId}/entitlement-mappings",
         "/api/v1/entitlement-observation-mappings/{id}",
         "/api/v1/entitlement-observation-mappings/{id}:unmap",
+        "/api/v1/connector-bindings/{bindingId}/principal-mappings",
+        "/api/v1/principal-observation-mappings/{id}",
+        "/api/v1/principal-observation-mappings/{id}:unmap",
         "/api/v1/connector-workers",
         "/api/v1/connector-workers/{id}",
         "/api/v1/connector-workers/{id}:disable",
@@ -388,7 +391,8 @@ def verify_integration_admin_openapi(document: dict) -> None:
     assert secret_reference.get("writeOnly") is True
     for name in ("ConnectorResource", "ConnectorCreateRequest",
                  "ConnectorBindingResource", "EntitlementMappingCreateRequest",
-                 "EntitlementMappingResource",
+                 "EntitlementMappingResource", "PrincipalMappingCreateRequest",
+                 "PrincipalMappingResource",
                  "ConnectorWorkerResource", "WorkerPermission"):
         assert schemas[name].get("additionalProperties") is False
 

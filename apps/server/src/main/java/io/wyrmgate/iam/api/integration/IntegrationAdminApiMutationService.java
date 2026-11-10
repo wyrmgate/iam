@@ -14,6 +14,9 @@ import io.wyrmgate.iam.integration.application.IntegrationAdministrationReposito
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository.EntitlementObservationMapping;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingRepository;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingRepository.PrincipalObservationMapping;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingService;
 import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
 import io.wyrmgate.iam.audit.application.AuditRecordDraft;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
@@ -42,6 +45,8 @@ final class IntegrationAdminApiMutationService {
     private final IntegrationAdministrationRepository repository;
     private final IntegrationEntitlementMappingService mappingCommands;
     private final IntegrationEntitlementMappingRepository mappings;
+    private final IntegrationPrincipalMappingService principalMappingCommands;
+    private final IntegrationPrincipalMappingRepository principalMappings;
     private final JdbcIdempotencyRepository idempotency;
     private final TransactionExecutor transactions;
     private final SecurityAuditPort audit;
@@ -53,6 +58,8 @@ final class IntegrationAdminApiMutationService {
             IntegrationAdministrationRepository repository,
             IntegrationEntitlementMappingService mappingCommands,
             IntegrationEntitlementMappingRepository mappings,
+            IntegrationPrincipalMappingService principalMappingCommands,
+            IntegrationPrincipalMappingRepository principalMappings,
             JdbcIdempotencyRepository idempotency,
             TransactionExecutor transactions,
             SecurityAuditPort audit,
@@ -62,6 +69,8 @@ final class IntegrationAdminApiMutationService {
         this.repository = repository;
         this.mappingCommands = mappingCommands;
         this.mappings = mappings;
+        this.principalMappingCommands = principalMappingCommands;
+        this.principalMappings = principalMappings;
         this.idempotency = idempotency;
         this.transactions = transactions;
         this.audit = Objects.requireNonNull(audit, "audit");
@@ -300,6 +309,110 @@ final class IntegrationAdminApiMutationService {
                 EntitlementObservationMapping::id);
     }
 
+    PrincipalObservationMapping createPrincipalMapping(
+            AuthenticatedAdministrativeActor actor,
+            UUID connectorBindingId,
+            String providerStableId,
+            UUID principalId,
+            String key,
+            RequestFingerprint fingerprint,
+            Instant now,
+            UUID correlationId) {
+        return audited(
+                actor,
+                "principal-observation-mapping",
+                null,
+                "principal-observation-mapping:create",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
+            require(
+                    actor,
+                    AdministrativePermissions.PRINCIPAL_OBSERVATION_MAPPING_CREATE,
+                    AdministrativeResource.collection("principal-observation-mapping"),
+                    now,
+                    correlationId);
+            var r = idempotency.register(
+                    actor.tenant(),
+                    "api.principal-observation-mapping.create.v1",
+                    key,
+                    fingerprint,
+                    now,
+                    null);
+            if (r.kind() == RegistrationKind.REPLAY) {
+                return replayPrincipalMapping(actor, r, correlationId);
+            }
+            PrincipalObservationMapping value = principalMappingCommands.map(
+                    actor.tenant(),
+                    connectorBindingId,
+                    providerStableId,
+                    principalId,
+                    now,
+                    correlationId);
+            idempotency.complete(
+                    actor.tenant(),
+                    "api.principal-observation-mapping.create.v1",
+                    key,
+                    fingerprint,
+                    "principal-observation-mapping",
+                    value.id(),
+                    now);
+            return value;
+        }),
+                PrincipalObservationMapping::id);
+    }
+
+    PrincipalObservationMapping unmapPrincipal(
+            AuthenticatedAdministrativeActor actor,
+            UUID mappingId,
+            long expectedRevision,
+            String key,
+            RequestFingerprint fingerprint,
+            Instant now,
+            UUID correlationId) {
+        return audited(
+                actor,
+                "principal-observation-mapping",
+                mappingId,
+                "principal-observation-mapping:retire",
+                now,
+                correlationId,
+                () -> transactions.required(() -> {
+            require(
+                    actor,
+                    AdministrativePermissions.PRINCIPAL_OBSERVATION_MAPPING_RETIRE,
+                    new AdministrativeResource("principal-observation-mapping", mappingId),
+                    now,
+                    correlationId);
+            var r = idempotency.register(
+                    actor.tenant(),
+                    "api.principal-observation-mapping.retire.v1",
+                    key,
+                    fingerprint,
+                    now,
+                    null);
+            if (r.kind() == RegistrationKind.REPLAY) {
+                return replayPrincipalMapping(actor, r, correlationId);
+            }
+            PrincipalObservationMapping value = principalMappingCommands.unmap(
+                    actor.tenant(),
+                    mappingId,
+                    expectedRevision,
+                    now,
+                    correlationId);
+            idempotency.complete(
+                    actor.tenant(),
+                    "api.principal-observation-mapping.retire.v1",
+                    key,
+                    fingerprint,
+                    "principal-observation-mapping",
+                    value.id(),
+                    now);
+            return value;
+        }),
+                PrincipalObservationMapping::id);
+    }
+
     ConnectorWorker createWorker(
             AuthenticatedAdministrativeActor actor, WorkerExternalSubject subject,int min,int max,
             List<UUID> scope,List<WorkerPermissionSpec> permissions,
@@ -476,6 +589,16 @@ final class IntegrationAdminApiMutationService {
         return mappings.find(actor.tenant(), r.resourceId())
                 .orElseThrow(() -> new IllegalStateException(
                         "idempotent mapping result no longer exists"));
+    }
+
+    private PrincipalObservationMapping replayPrincipalMapping(
+            AuthenticatedAdministrativeActor actor,
+            JdbcIdempotencyRepository.Registration r,
+            UUID correlationId) {
+        requireCompleted(r, "principal-observation-mapping", correlationId);
+        return principalMappings.findPrincipalMapping(actor.tenant(), r.resourceId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "idempotent Principal mapping result no longer exists"));
     }
 
     private ConnectorWorker replayWorker(AuthenticatedAdministrativeActor actor,

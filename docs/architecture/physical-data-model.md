@@ -149,7 +149,8 @@ The following is the initial physical table-family contract. Additional subordin
 
 Migration V49 materializes `administration.administrative_elevation` as a distinct finite process/authority table. It stores stable beneficiary/initiator Identity IDs, one same-tenant direct authority-basis grant, target AdministrativeRole, typed scope columns, finite validity, immutable request fingerprint, optional Governance ApprovalCase/fingerprint evidence references, semantic process state/revision, activation/denial/cancellation/revocation timestamps and correlation/causation. The Governance case is deliberately not a database foreign key: cross-capability evidence is consumed through a semantic contract. Beneficiary/state and Role/state indexes support bounded authorization/process reads; time validity is still evaluated semantically rather than delegated to a cleanup scheduler.
 | `audit` | audit record, evidence snapshot, legal hold, purge operation, archive segment | Audit | Evidence/process |
-| `platform` | tenant, outbox, inbox/dedup, idempotency, scheduled delivery/work claim, projection checkpoint | Platform | Technical infrastructure |
+| `tenancy` | `tenant` | Tenancy | Authoritative deployment-owned isolation root |
+| `platform` | outbox, inbox/dedup, idempotency, scheduled delivery/work claim, projection checkpoint | Platform | Technical infrastructure |
 
 Platform infrastructure may reference a domain subject to deliver work, but it does not own the subject's lifecycle/process state.
 
@@ -617,6 +618,14 @@ Provider identity uniqueness is explicit, for example:
 ```text
 UNIQUE (tenant_id, connector_binding_id, provider_stable_id)
 ```
+
+### Principal observation mapping persistence
+
+V14 adds `integration.principal_observation_mapping` under ADR-0050. It stores one stable Integration mapping ID, Tenant, ConnectorBinding, provider-native stable account identifier, governed Principal stable ID, ACTIVE/RETIRED lifecycle, optimistic revision and timestamps. A partial unique index enforces at most one ACTIVE mapping for `(tenant_id, connector_binding_id, provider_stable_id)`.
+
+The `principal_id` column is deliberately a semantic cross-capability reference rather than a database foreign key to `identity.principal`. Integration validates the exact Principal ID and ApplicationTarget through an Identity-owned semantic query at mapping creation, and consumers revalidate current Principal semantics when the mapping is used. Provider strings never become Identity lookup authority.
+
+Retirement preserves mapping history; remapping creates a new row. Mapping changes emit a data-minimized observed-access input fact so Governance re-queries current normalized observation state rather than mutating findings in the Integration transaction.
 
 ### Reconciliation run and staging
 

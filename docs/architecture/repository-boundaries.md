@@ -8,8 +8,9 @@ A later implementation may use Java/Spring, React, a relational database and RES
 
 ## Logical capability map
 
-The current canonical capabilities are:
+The current canonical Layer-4 business capabilities are:
 
+- Tenancy
 - Identity
 - Catalog
 - Access
@@ -60,7 +61,7 @@ Physical build modules/packages are an implementation decision and must not be t
 - Provisioning realizes desired state; reconciliation independently observes provider reality.
 - Governance decisions do not directly call provider APIs.
 - Administrative authorization is a separate IAM control plane and does not use normal IAM roles/access assignments as platform administration.
-- Tenant, when enabled, is a hard isolation boundary; Organization is the business/governance hierarchy.
+- Tenant is the hard isolation boundary owned by Tenancy; Organization is tenant-local business/governance structure owned by Identity.
 
 ## Dependency direction
 

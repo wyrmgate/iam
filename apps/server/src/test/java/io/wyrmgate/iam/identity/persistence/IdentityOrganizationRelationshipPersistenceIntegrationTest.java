@@ -57,7 +57,8 @@ class IdentityOrganizationRelationshipPersistenceIntegrationTest {
                 identityRepository,
                 new JdbcIdentityFactSink(new JdbcOutboxRepository(jdbc), ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
         organizations = new JdbcOrganizationRepository(jdbc);
         relationships = new JdbcIdentityRelationshipRepository(jdbc);
         organizationCommands = new OrganizationCommandService(

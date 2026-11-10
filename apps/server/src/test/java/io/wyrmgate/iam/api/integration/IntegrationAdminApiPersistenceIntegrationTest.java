@@ -22,6 +22,7 @@ import io.wyrmgate.iam.identity.domain.IdentityType;
 import io.wyrmgate.iam.identity.persistence.IdentityGovernedActorStatusQuery;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
+import io.wyrmgate.iam.identity.persistence.JdbcPrincipalRepository;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationCommandService;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationException;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository;
@@ -85,7 +86,8 @@ class IntegrationAdminApiPersistenceIntegrationTest {
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         identities = new JdbcIdentityRepository(jdbc);
         identityCommands = new IdentityCommandService(
-                identities, new JdbcIdentityFactSink(outbox, ids), ids, transactions);
+                identities, new JdbcIdentityFactSink(outbox, ids), ids, transactions,
+                (tenant, identityId, at) -> {});
         authorization = new AdministrativeAuthorizationService(
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
@@ -104,9 +106,20 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 observedAccessFacts,
                 ids,
                 transactions);
+        var principalMappingCommands =
+                new io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingService(
+                        integration,
+                        observationMappings,
+                        new io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQueryService(
+                                new JdbcPrincipalRepository(jdbc)),
+                        factSink,
+                        observedAccessFacts,
+                        ids,
+                        transactions);
         mutations = new IntegrationAdminApiMutationService(
                 authorization, commands, integration,
                 mappingCommands, observationMappings,
+                principalMappingCommands, observationMappings,
                 idempotency, transactions,
                 new AuditCommandService(
                         new JdbcAuditRecordRepository(jdbc),
@@ -382,14 +395,25 @@ class IntegrationAdminApiPersistenceIntegrationTest {
         var commands = new IntegrationAdministrationCommandService(
                 integration, factSink, ids, transactions);
         var observationMappings = new JdbcIntegrationObservationRepository(jdbc);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
         var mappingCommands = new IntegrationEntitlementMappingService(
                 integration,
                 observationMappings,
                 new CatalogQueryService(new JdbcCatalogRepository(jdbc)),
                 factSink,
-                new JdbcIntegrationObservedAccessFactSink(outbox, ids),
+                observedAccessFacts,
                 ids,
                 transactions);
+        var principalMappingCommands =
+                new io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingService(
+                        integration,
+                        observationMappings,
+                        new io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQueryService(
+                                new JdbcPrincipalRepository(jdbc)),
+                        factSink,
+                        observedAccessFacts,
+                        ids,
+                        transactions);
         SecurityAuditPort unavailableAudit = (requestedTenant, draft) -> {
             throw new IllegalStateException("audit unavailable");
         };
@@ -399,6 +423,8 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                         commands,
                         integration,
                         mappingCommands,
+                        observationMappings,
+                        principalMappingCommands,
                         observationMappings,
                         idempotency,
                         transactions,

@@ -15,23 +15,11 @@ import java.util.UUID;
 /** Application commands for the first authoritative Identity persistence slice. */
 public final class IdentityCommandService {
 
-    private static final IdentityAdministrativeContinuityGuard ALLOW_ALL_CONTINUITY =
-            (tenant, identityId, at) -> {};
-
     private final IdentityRepository repository;
     private final IdentityFactSink factSink;
     private final IdGenerator idGenerator;
     private final TransactionExecutor transactions;
     private final IdentityAdministrativeContinuityGuard administrativeContinuityGuard;
-
-    /** Compatibility constructor for isolated tests/compositions without Administration. */
-    public IdentityCommandService(
-            IdentityRepository repository,
-            IdentityFactSink factSink,
-            IdGenerator idGenerator,
-            TransactionExecutor transactions) {
-        this(repository, factSink, idGenerator, transactions, ALLOW_ALL_CONTINUITY);
-    }
 
     public IdentityCommandService(
             IdentityRepository repository,

@@ -42,11 +42,20 @@ public final class JdbcIntegrationAdministrationFactSink
     }
 
     @Override
-    public void mappingChanged(
+    public void entitlementMappingChanged(
             TenantContext tenant, String factType, UUID mappingId, long revision,
             Instant occurredAt, UUID correlationId) {
         append(
                 tenant, factType, "entitlement-observation-mapping",
+                mappingId, revision, occurredAt, correlationId);
+    }
+
+    @Override
+    public void principalMappingChanged(
+            TenantContext tenant, String factType, UUID mappingId, long revision,
+            Instant occurredAt, UUID correlationId) {
+        append(
+                tenant, factType, "principal-observation-mapping",
                 mappingId, revision, occurredAt, correlationId);
     }
 

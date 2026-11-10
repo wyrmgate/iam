@@ -201,6 +201,13 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission ENTITLEMENT_OBSERVATION_MAPPING_RETIRE =
             new AdministrativePermission("entitlement-observation-mapping", "retire");
 
+    public static final AdministrativePermission PRINCIPAL_OBSERVATION_MAPPING_READ =
+            new AdministrativePermission("principal-observation-mapping", "read");
+    public static final AdministrativePermission PRINCIPAL_OBSERVATION_MAPPING_CREATE =
+            new AdministrativePermission("principal-observation-mapping", "create");
+    public static final AdministrativePermission PRINCIPAL_OBSERVATION_MAPPING_RETIRE =
+            new AdministrativePermission("principal-observation-mapping", "retire");
+
     /** ADR-0011 narrow bootstrap set for externally authenticated deployments. */
     public static final Set<AdministrativePermission> INITIAL_TENANT_ADMIN = Set.of(
             MANAGE_AUTHORIZATION,
@@ -300,7 +307,10 @@ public final class AdministrativePermissions {
             CONNECTOR_WORKER_DISABLE,
             ENTITLEMENT_OBSERVATION_MAPPING_READ,
             ENTITLEMENT_OBSERVATION_MAPPING_CREATE,
-            ENTITLEMENT_OBSERVATION_MAPPING_RETIRE);
+            ENTITLEMENT_OBSERVATION_MAPPING_RETIRE,
+            PRINCIPAL_OBSERVATION_MAPPING_READ,
+            PRINCIPAL_OBSERVATION_MAPPING_CREATE,
+            PRINCIPAL_OBSERVATION_MAPPING_RETIRE);
 
     private AdministrativePermissions() {
     }

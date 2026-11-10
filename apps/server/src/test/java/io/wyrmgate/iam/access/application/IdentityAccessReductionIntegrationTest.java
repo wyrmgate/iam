@@ -98,7 +98,8 @@ class IdentityAccessReductionIntegrationTest {
                 identityRepository,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
         identityReferences =
                 new IdentityAccessReferenceQueryService(
                         identityRepository,

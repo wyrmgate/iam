@@ -156,11 +156,19 @@ Audit records semantic map/retire outcomes through the existing Audit boundary; 
 
 ## Public API and persistence status
 
-ADR-0050 defines the architecture and domain semantics only. No public mapping API or persistence migration is implied by acceptance of the ADR.
+V14 implements `integration.principal_observation_mapping` as Integration-owned authoritative technical interpretation. It preserves stable mapping history, enforces one active mapping per `(tenant, ConnectorBinding, providerStableId)`, carries optimistic revision and ACTIVE -> RETIRED lifecycle, and intentionally has no database foreign key to Identity-owned Principal state.
 
-A later implementation may add explicit Integration administration operations such as map/read/unmap with typed default-deny permissions, optimistic revisions and causal idempotency. It must not expose a generic provider-object mapping CRUD surface.
+The Integration administration API exposes explicit semantic operations:
 
-Physical persistence should preserve stable history and enforce active uniqueness for `(tenant, binding, providerPrincipalStableId)` where practical. No cross-capability cascade may delete mapping provenance because a foreign Principal changes lifecycle.
+- `POST /api/v1/connector-bindings/{bindingId}/principal-mappings`;
+- `GET /api/v1/principal-observation-mappings/{id}`;
+- `POST /api/v1/principal-observation-mappings/{id}:unmap`.
+
+Creation requires a present observed Principal with the exact stable provider identifier and validates the supplied governed Principal ID through an Identity-owned semantic query for same-Tenant/same-ApplicationTarget agreement. No provider string is ever passed to Identity as correlation authority. The three operations use dedicated default-deny Administration permissions, causal idempotency for mutations and optimistic revision on retirement.
+
+Governance drift evaluation consumes only the normalized `mappedPrincipalId` supplied by Integration, then revalidates that exact stable Principal reference through Identity before treating the provider principal as resolved. The former provider-string-to-`Principal.nativePrincipalKey` shortcut is removed.
+
+No generic provider-object mapping CRUD surface exists, and no cross-capability cascade may delete mapping provenance because a foreign Principal changes lifecycle.
 
 ## Non-goals
 

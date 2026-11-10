@@ -59,7 +59,8 @@ class SourceCorrelationPersistenceIntegrationTest {
                 identities,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
         sourceCommands = new SourceCorrelationService(
                 sources,
                 identities,

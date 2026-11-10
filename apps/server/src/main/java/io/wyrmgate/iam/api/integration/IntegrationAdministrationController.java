@@ -10,6 +10,8 @@ import io.wyrmgate.iam.integration.application.IntegrationAdministrationReposito
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationRepository.WorkerPermissionSpec;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository.EntitlementObservationMapping;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingRepository;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingRepository.PrincipalObservationMapping;
 import io.wyrmgate.iam.integration.domain.WorkerCapability;
 import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -38,6 +40,7 @@ public final class IntegrationAdministrationController {
 
     private final IntegrationAdministrationRepository repository;
     private final IntegrationEntitlementMappingRepository mappings;
+    private final IntegrationPrincipalMappingRepository principalMappings;
     private final IntegrationAdminApiMutationService mutations;
     private final IdGenerator ids;
     private final ObjectMapper json;
@@ -45,11 +48,13 @@ public final class IntegrationAdministrationController {
     public IntegrationAdministrationController(
             IntegrationAdministrationRepository repository,
             IntegrationEntitlementMappingRepository mappings,
+            IntegrationPrincipalMappingRepository principalMappings,
             IntegrationAdminApiMutationService mutations,
             IdGenerator ids,
             ObjectMapper json) {
         this.repository = repository;
         this.mappings = mappings;
+        this.principalMappings = principalMappings;
         this.mutations = mutations;
         this.ids = ids;
         this.json = json;
@@ -229,6 +234,69 @@ public final class IntegrationAdministrationController {
         return ok(mapping(value),value.revision(),correlationId);
     }
 
+    @PostMapping("/connector-bindings/{bindingId}/principal-mappings")
+    ResponseEntity<IntegrationAdminApiModels.PrincipalMappingResource> createPrincipalMapping(
+            @PathVariable UUID bindingId,
+            @RequestHeader("Idempotency-Key") String idem,
+            @RequestBody IntegrationAdminApiModels.PrincipalMappingCreateRequest body,
+            HttpServletRequest request) {
+        UUID correlationId = IntegrationAdminApiRequestContext.resolve(request, ids);
+        AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
+        var value = mutations.createPrincipalMapping(
+                actor,
+                bindingId,
+                body.providerStableId(),
+                body.principalId(),
+                key(idem, correlationId),
+                fingerprint(List.of(bindingId, body)),
+                Instant.now(),
+                correlationId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .header(HttpHeaders.ETAG, etag(value.revision()))
+                .header(
+                        HttpHeaders.LOCATION,
+                        "/api/v1/principal-observation-mappings/" + value.id())
+                .header("X-Correlation-Id", correlationId.toString())
+                .body(principalMapping(value));
+    }
+
+    @GetMapping("/principal-observation-mappings/{id}")
+    ResponseEntity<IntegrationAdminApiModels.PrincipalMappingResource> getPrincipalMapping(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        UUID correlationId = IntegrationAdminApiRequestContext.resolve(request, ids);
+        AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
+        mutations.requireRead(
+                actor,
+                AdministrativePermissions.PRINCIPAL_OBSERVATION_MAPPING_READ,
+                new AdministrativeResource("principal-observation-mapping", id),
+                Instant.now(),
+                correlationId);
+        var value = principalMappings.findPrincipalMapping(actor.tenant(), id)
+                .orElseThrow(() -> IntegrationAdminApiException.notFound(correlationId));
+        return ok(principalMapping(value), value.revision(), correlationId);
+    }
+
+    @PostMapping("/principal-observation-mappings/{id}:unmap")
+    ResponseEntity<IntegrationAdminApiModels.PrincipalMappingResource> unmapPrincipal(
+            @PathVariable UUID id,
+            @RequestHeader("If-Match") String ifMatch,
+            @RequestHeader("Idempotency-Key") String idem,
+            HttpServletRequest request) {
+        UUID correlationId = IntegrationAdminApiRequestContext.resolve(request, ids);
+        AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
+        long expectedRevision = revision(ifMatch, correlationId);
+        var value = mutations.unmapPrincipal(
+                actor,
+                id,
+                expectedRevision,
+                key(idem, correlationId),
+                fingerprint(List.of(id, expectedRevision, "unmap")),
+                Instant.now(),
+                correlationId);
+        return ok(principalMapping(value), value.revision(), correlationId);
+    }
+
     @PostMapping("/connector-workers")
     ResponseEntity<IntegrationAdminApiModels.WorkerResource> createWorker(
             @RequestHeader("Idempotency-Key") String idem,
@@ -348,6 +416,20 @@ public final class IntegrationAdministrationController {
         return new IntegrationAdminApiModels.EntitlementMappingResource(
                 v.id(),v.connectorBindingId(),v.providerStableId(),v.entitlementId(),
                 v.lifecycleState(),v.revision(),v.createdAt(),v.updatedAt(),v.retiredAt());
+    }
+
+    private static IntegrationAdminApiModels.PrincipalMappingResource principalMapping(
+            PrincipalObservationMapping v) {
+        return new IntegrationAdminApiModels.PrincipalMappingResource(
+                v.id(),
+                v.connectorBindingId(),
+                v.providerStableId(),
+                v.principalId(),
+                v.lifecycleState(),
+                v.revision(),
+                v.createdAt(),
+                v.updatedAt(),
+                v.retiredAt());
     }
 
     private static IntegrationAdminApiModels.WorkerResource worker(

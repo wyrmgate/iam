@@ -11,20 +11,15 @@ import io.wyrmgate.iam.governance.application.GovernanceFindingRepository;
 import io.wyrmgate.iam.governance.application.GovernanceObservationProcessingService;
 import io.wyrmgate.iam.governance.application.GovernanceObservationReportingService;
 import io.wyrmgate.iam.governance.application.ObservedAccessDriftEvaluationService;
-import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
-import io.wyrmgate.iam.identity.application.PrincipalQueryService;
-import io.wyrmgate.iam.identity.domain.Identity;
-import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
-import io.wyrmgate.iam.identity.domain.IdentityProfile;
-import io.wyrmgate.iam.identity.domain.IdentityType;
-import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
+import io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQueryService;
 import io.wyrmgate.iam.identity.persistence.JdbcIdentityRepository;
 import io.wyrmgate.iam.identity.persistence.JdbcPrincipalFactSink;
 import io.wyrmgate.iam.identity.persistence.JdbcPrincipalRepository;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationException;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationFactSink;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingService;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingService;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationAdministrationRepository;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservationRepository;
 import io.wyrmgate.iam.integration.persistence.JdbcIntegrationObservedAccessFactSink;
@@ -53,11 +48,11 @@ class ObservedAccessDriftPersistenceIntegrationTest {
     private static TenantTestFixture tenants;
     private static TransactionExecutor transactions;
     private static IntegrationEntitlementMappingService mappingService;
+    private static IntegrationPrincipalMappingService principalMappingService;
     private static JdbcIntegrationObservationRepository observations;
     private static GovernanceFindingRepository findings;
     private static ObservedAccessDriftEvaluationService drift;
     private static GovernanceObservationProcessingService processor;
-    private static IdentityCommandService identityCommands;
     private static PrincipalCommandService principalCommands;
 
     @BeforeAll
@@ -91,7 +86,12 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                     TenantContext tenant, String factType, UUID workerId, long revision,
                     Instant occurredAt, UUID correlationId) {}
             @Override
-            public void mappingChanged(
+            public void entitlementMappingChanged(
+                    TenantContext tenant, String factType, UUID mappingId, long revision,
+                    Instant occurredAt, UUID correlationId) {}
+
+            @Override
+            public void principalMappingChanged(
                     TenantContext tenant, String factType, UUID mappingId, long revision,
                     Instant occurredAt, UUID correlationId) {}
         };
@@ -100,25 +100,29 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 observedAccessFacts, ids, transactions);
 
         var identityRepository = new JdbcIdentityRepository(jdbc);
-        identityCommands = new IdentityCommandService(
-                identityRepository,
-                new JdbcIdentityFactSink(outbox, ids),
-                ids,
-                transactions);
         var principalRepository = new JdbcPrincipalRepository(jdbc);
-        var principalQuery = new PrincipalQueryService(principalRepository);
+        var principalReferences = new PrincipalObservationReferenceQueryService(principalRepository);
         principalCommands = new PrincipalCommandService(
                 principalRepository,
                 identityRepository,
                 catalog,
                 new JdbcPrincipalFactSink(outbox, ids),
                 ids,
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
+        principalMappingService = new IntegrationPrincipalMappingService(
+                administration,
+                observations,
+                principalReferences,
+                noFacts,
+                observedAccessFacts,
+                ids,
                 transactions);
 
         findings = new JdbcGovernanceFindingRepository(jdbc);
         var reporter = new GovernanceObservationReportingService(findings, ids, transactions);
         drift = new ObservedAccessDriftEvaluationService(
-                observations, principalQuery, reporter);
+                observations, principalReferences, reporter);
         processor = new GovernanceObservationProcessingService(
                 outbox, drift, observations, objectMapper);
     }
@@ -128,6 +132,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         jdbc.execute("""
                 TRUNCATE TABLE
                     governance.finding,
+                    integration.principal_observation_mapping,
                     identity.principal,
                     identity.person_profile,
                     identity.service_profile,
@@ -136,6 +141,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                     integration.entitlement_observation_mapping,
                     integration.observed_grant,
                     integration.observed_entitlement,
+                    integration.observed_principal,
                     integration.reconciliation_grant_staging,
                     integration.reconciliation_entitlement_staging,
                     integration.reconciliation_principal_staging,
@@ -303,17 +309,25 @@ class ObservedAccessDriftPersistenceIntegrationTest {
     }
 
     @Test
-    void explicitPrincipalCorrelationResolvesUnresolvedGrantThroughDurableFact() {
+    void explicitPrincipalObservationMappingResolvesGrantWithoutNativeKeyGuessing() {
         TenantContext tenant = tenant("principal-drift");
         UUID applicationId = application(tenant, "app");
         UUID target = target(tenant, applicationId, "prod");
         UUID entitlement = entitlement(tenant, applicationId, target, "finance");
         UUID binding = binding(tenant, target);
         UUID entitlementRun = reconciliation(tenant, binding, "ENTITLEMENT");
+        UUID principalRun = reconciliation(tenant, binding, "PRINCIPAL");
         UUID grantRun = reconciliation(tenant, binding, "GRANT");
 
         observedEntitlement(tenant, binding, entitlementRun, "g-1");
-        observedGrant(tenant, binding, grantRun, "grant-1", "user-1", "g-1");
+        observedPrincipal(tenant, binding, principalRun, "provider-account-42");
+        observedGrant(
+                tenant,
+                binding,
+                grantRun,
+                "grant-1",
+                "provider-account-42",
+                "g-1");
         mappingService.map(
                 tenant, binding, "g-1", entitlement, NOW, ids.nextId());
 
@@ -323,34 +337,25 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 tenant, binding, "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL", "grant-1"))
                 .isEqualTo(1);
 
-        Identity identity = identityCommands.create(
-                tenant,
-                IdentityType.PERSON,
-                new IdentityProfile.PersonProfile(),
-                IdentityLifecycleState.ACTIVE,
-                "Resolved User",
-                NOW.plusSeconds(1),
-                ids.nextId(),
-                null);
         var principal = principalCommands.create(
                 tenant,
                 target,
-                "user-1",
+                "governed-native-key-is-different",
                 null,
-                NOW.plusSeconds(2),
+                NOW.plusSeconds(1),
                 ids.nextId(),
                 null);
 
         assertThat(processor.processAvailable().claimed()).isZero();
 
-        principalCommands.correlate(
+        var mapped = principalMappingService.map(
                 tenant,
+                binding,
+                "provider-account-42",
                 principal.id(),
-                identity.id(),
-                principal.revision(),
-                NOW.plusSeconds(3),
-                ids.nextId(),
-                null);
+                NOW.plusSeconds(2),
+                ids.nextId());
+        assertThat(mapped.principalId()).isEqualTo(principal.id());
 
         var correlated = processor.processAvailable();
         assertThat(correlated.claimed()).isEqualTo(1);
@@ -475,6 +480,26 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 """,
                 ids.nextId(), tenant.tenantId(), bindingId, providerId,
                 runId, Timestamp.from(NOW));
+    }
+
+    private void observedPrincipal(
+            TenantContext tenant,
+            UUID bindingId,
+            UUID runId,
+            String providerId) {
+        jdbc.update("""
+                INSERT INTO integration.observed_principal (
+                    id, tenant_id, connector_binding_id, provider_stable_id,
+                    provider_version, observed_state, present,
+                    last_observed_run_id, observed_at, absent_at)
+                VALUES (?, ?, ?, ?, 'v1', '{}'::jsonb, true, ?, ?, NULL)
+                """,
+                ids.nextId(),
+                tenant.tenantId(),
+                bindingId,
+                providerId,
+                runId,
+                Timestamp.from(NOW));
     }
 
     private void observedGrant(

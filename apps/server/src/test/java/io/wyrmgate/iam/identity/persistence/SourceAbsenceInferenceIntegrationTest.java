@@ -62,7 +62,8 @@ class SourceAbsenceInferenceIntegrationTest {
         sourceRepository = new JdbcSourceCorrelationRepository(jdbc, ids);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         identities = new IdentityCommandService(
-                identityRepository, new JdbcIdentityFactSink(outbox, ids), ids, transactions);
+                identityRepository, new JdbcIdentityFactSink(outbox, ids), ids, transactions,
+                (tenant, identityId, at) -> {});
         sources = new SourceCorrelationService(
                 sourceRepository,
                 identityRepository,

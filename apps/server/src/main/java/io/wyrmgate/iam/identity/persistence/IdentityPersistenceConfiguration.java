@@ -29,6 +29,8 @@ import io.wyrmgate.iam.identity.application.PrincipalAdministrativeContinuityGua
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.identity.application.PrincipalQueryService;
+import io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQuery;
+import io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQueryService;
 import io.wyrmgate.iam.identity.application.PrincipalProvisioningProfileQuery;
 import io.wyrmgate.iam.identity.application.PrincipalProvisioningProfileQueryService;
 import io.wyrmgate.iam.identity.application.PrincipalProvisioningResultProcessor;
@@ -212,6 +214,12 @@ public class IdentityPersistenceConfiguration {
     PrincipalTechnicalReferenceQuery principalTechnicalReferenceQuery(
             PrincipalRepository principalRepository) {
         return new PrincipalTechnicalReferenceQueryService(principalRepository);
+    }
+
+    @Bean
+    PrincipalObservationReferenceQuery principalObservationReferenceQuery(
+            PrincipalRepository principalRepository) {
+        return new PrincipalObservationReferenceQueryService(principalRepository);
     }
 
     @Bean

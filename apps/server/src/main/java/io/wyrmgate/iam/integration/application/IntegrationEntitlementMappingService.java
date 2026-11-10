@@ -73,7 +73,7 @@ public final class IntegrationEntitlementMappingService {
             }
             EntitlementObservationMapping created = mappings.create(
                     tenant, ids.nextId(), connectorBindingId, providerId, entitlementId, now);
-            facts.mappingChanged(
+            facts.entitlementMappingChanged(
                     tenant, "integration.entitlement-observation-mapped",
                     created.id(), created.revision(), now, correlationId);
             observedAccessFacts.inputChanged(
@@ -97,7 +97,7 @@ public final class IntegrationEntitlementMappingService {
         return transactions.required(() -> {
             EntitlementObservationMapping retired =
                     mappings.retire(tenant, mappingId, expectedRevision, now);
-            facts.mappingChanged(
+            facts.entitlementMappingChanged(
                     tenant, "integration.entitlement-observation-unmapped",
                     retired.id(), retired.revision(), now, correlationId);
             observedAccessFacts.inputChanged(

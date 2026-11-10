@@ -148,12 +148,23 @@ class AccessApiIntegrationTest {
                             UUID correlationId,
                             UUID causationId) {
                     }
+
+
+            @Override
+            public void lifecycleChanged(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.IdentityLifecycleState previousState,
+                    Identity identity,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
                 };
         identities = new IdentityCommandService(
                 identityRepository,
                 noIdentityFacts,
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
 
         var catalogRepository =
                 new JdbcCatalogRepository(jdbc);
@@ -220,6 +231,14 @@ class AccessApiIntegrationTest {
                 new IdentityLifecycleAccessQuery() {
                     @Override
                     public boolean supportsPolicyScalarAttribute(
+                            TenantContext tenant,
+                            String canonicalKey,
+                            ScalarType type) {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean supportsPolicyMultiAttribute(
                             TenantContext tenant,
                             String canonicalKey,
                             ScalarType type) {

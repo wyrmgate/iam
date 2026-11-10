@@ -99,9 +99,20 @@ class RoleEffectiveAccessIntegrationTest {
                     UUID correlationId,
                     UUID causationId) {
             }
+
+
+            @Override
+            public void lifecycleChanged(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.IdentityLifecycleState previousState,
+                    Identity identity,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
         };
         identities = new IdentityCommandService(
-                identityRepository, noIdentityFacts, ids, transactions);
+                identityRepository, noIdentityFacts, ids, transactions,
+                (tenant, identityId, at) -> {});
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         var roleRepository = new JdbcRoleRepository(jdbc);
@@ -117,8 +128,32 @@ class RoleEffectiveAccessIntegrationTest {
                 catalogRepository, roleRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
-        PrincipalFactSink noPrincipalFacts =
-                (tenant, principal, correlationId, causationId) -> { };
+        PrincipalFactSink noPrincipalFacts = new PrincipalFactSink() {
+            @Override
+            public void principalCorrelated(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.Principal principal,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
+
+            @Override
+            public void principalAccessProjectionChanged(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.Principal principal,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
+
+            @Override
+            public void principalReassigned(
+                    TenantContext tenant,
+                    io.wyrmgate.iam.identity.domain.Principal principal,
+                    java.util.UUID previousIdentityId,
+                    java.util.UUID correlationId,
+                    java.util.UUID causationId) {
+            }
+        };
         principals = new PrincipalCommandService(
                 principalRepository,
                 identityRepository,
@@ -126,7 +161,8 @@ class RoleEffectiveAccessIntegrationTest {
                         catalogRepository),
                 noPrincipalFacts,
                 ids,
-                transactions);
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
         var identityReferences = new IdentityAccessReferenceQueryService(
                 identityRepository, principalRepository);
 
