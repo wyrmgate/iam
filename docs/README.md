@@ -7,60 +7,65 @@ This directory contains the repository-local, implementation-facing documentatio
 Wyrmgate IAM uses three document classes with different purposes:
 
 1. **Repository Markdown** is the living source of truth for architecture, domain semantics, ADRs, implementation contracts, operational runbooks, migration notes, and developer documentation. It changes with code and is reviewed through pull requests.
-2. **Formal specifications** are controlled stakeholder/application deliverables maintained in the IAM `Formal Specifications` Drive folder. The current v0.8 package contains the documentation register, BRD, FRD, SRS, DDD, System Architecture & Design, Data Architecture, Security & Governance, Integration & Interface, and the Requirements Traceability Matrix. Superseded v0.7, v0.6, v0.5, v0.4 and v0.3 packages are retained under `Formal Specifications/Archive/`.
-3. **Collaborative Google Docs** are working notes only. A working note is not authoritative after its decisions have been promoted. The former Drive ADR/working-baseline collection is superseded by the repository ADRs and formal specification set.
+2. **Formal specifications** are controlled stakeholder/application deliverables maintained in the IAM `Formal Specifications` Drive folder. The current controlled v0.8 package contains the documentation register, BRD, FRD, SRS, DDD, System Architecture & Design, Data Architecture, Security & Governance, Integration & Interface, and Requirements Traceability Matrix.
+3. **Collaborative/working Drive documents and architecture images** are design/reconciliation inputs. Once their decisions are promoted into accepted ADRs/repository Markdown, the repository artifacts are the durable implementation-facing authority until the next controlled formal revision.
 
-A concept must not have competing authoritative definitions in multiple formats. Formal specifications define reviewed requirements/design baselines; repository Markdown defines the current implementable technical contract. Accepted ADRs may intentionally amend a formal specification between releases and must be folded into the next formal revision.
+A concept must not have competing authoritative definitions in multiple formats. Formal specifications define reviewed requirements/design checkpoints; repository Markdown defines the current implementable technical contract. Accepted ADRs may intentionally amend an older formal checkpoint and must be folded into the next controlled revision.
 
 ## Documentation map
 
+### Architecture
+
 - [`PROJECT_INSTRUCTIONS.md`](PROJECT_INSTRUCTIONS.md) — stable project-level instructions for AI-assisted work and fresh project sessions.
-- [`architecture/overview.md`](architecture/overview.md) — framework-neutral system architecture and capability ownership.
+- [`architecture/overview.md`](architecture/overview.md) — framework-neutral architecture and capability ownership.
+- [`architecture/layered-architecture.md`](architecture/layered-architecture.md) — reconciled Layer 1 through Layer 6 architecture, including consolidated Layer 6A–6I.
 - [`architecture/repository-boundaries.md`](architecture/repository-boundaries.md) — repository/module dependency rules and implementation boundary.
 - [`architecture/implementation-topology-and-persistence.md`](architecture/implementation-topology-and-persistence.md) — initial runtime and persistence direction.
-- [`architecture/physical-data-model.md`](architecture/physical-data-model.md) — concrete PostgreSQL-target physical persistence contract, ownership matrix, constraints, indexes, partitioning, retention and transaction rules for OD-002.
+- [`architecture/physical-data-model.md`](architecture/physical-data-model.md) — concrete PostgreSQL-target physical persistence contract and ownership/constraint/index guidance.
 - [`architecture/workflow-orchestration.md`](architecture/workflow-orchestration.md) — domain-owned workflow, timers, retries and durable orchestration boundary.
-- [`architecture/platform-authority-and-application-tenancy.md`](architecture/platform-authority-and-application-tenancy.md) — ADR-0049 deployment/tenant owner authority, viability, explicit platform application tenancy, admission and tenant-binding contract.
-- [`domain/canonical-model.md`](domain/canonical-model.md) — canonical IAM concepts, ownership of truth, observations, evidence, and projections.
-- [`domain/state-and-invariants.md`](domain/state-and-invariants.md) — lifecycle, concurrency, structural, temporal, and failure invariants.
-- [`security/administrative-authorization.md`](security/administrative-authorization.md) — IAM control-plane authorization, scoped administration, owner continuity, and ADR-0047/ADR-0049 compatibility boundaries.
-- [`security/control-plane-authentication.md`](security/control-plane-authentication.md) — external/federated and first-party authentication sources, governed actor binding, burn-once first-admin bootstrap, and ADR-0044 fresh-install security boundary.
-- [`security/identity-provider-sso.md`](security/identity-provider-sso.md) — first-party authentication, federation and SSO security boundary introduced by ADR-0042.
-- [`adr/README.md`](adr/README.md) — canonical Architecture Decision Record index through accepted ADR-0049.
-- [`api/api-conventions.md`](api/api-conventions.md) — public/internal API contract conventions.
-- [`api/event-model.md`](api/event-model.md) — domain/internal/public event contract semantics.
-- [`api/idp-sso-contracts.md`](api/idp-sso-contracts.md) — living first-party OIDC/OAuth, JWKS, governed relying-party, session, claim and secret-boundary implementation contract.
-- [`api/identity-contracts.md`](api/identity-contracts.md) — first OD-003 machine-readable Identity OpenAPI/AsyncAPI implementation slice and runtime authorization boundary.
-- [`api/credential-contracts.md`](api/credential-contracts.md) — Credential public control-plane resource/operation, secret-reference, concurrency, idempotency and cursor boundary.
-- [`api/audit-contracts.md`](api/audit-contracts.md) — AuditRecord, export/archive, legal-hold/purge, EvidenceSnapshot, integrity and SIEM contracts — bounded AuditRecord read/search plus durable asynchronous export/download, authorization, filtering and artifact boundary.
-- [`api/administration-contracts.md`](api/administration-contracts.md) — AdministrativeRole/Grant/Delegation/Elevation/BreakGlass semantic control-plane API, concurrency, idempotency, cursor, audit and assurance boundary.
-- [`api/catalog-contracts.md`](api/catalog-contracts.md) — authoritative Application/ApplicationTarget/Entitlement/Role runtime contract, revisions, retirement, pagination and provider-observation boundary.
-- [`api/access-contracts.md`](api/access-contracts.md) — authoritative AccessAssignment control-plane API and read-only EffectiveAccess projection contract.
-- [`api/governance-contracts.md`](api/governance-contracts.md) — self-service AccessRequest and reusable Approval inbox/evidence/decision API contract.
-- [`api/connector-worker-protocol.md`](api/connector-worker-protocol.md) — OD-004 remote connector-worker v1 session, leasing, fencing, result, observation, and compatibility contract.
-- [`api/integration-administration.md`](api/integration-administration.md) — governed ConnectorInstance/Binding/worker control-plane management API, permissions, revisions, idempotency and secret boundary.
-- [`engineering/console-ui-work-control.md`](engineering/console-ui-work-control.md) — repository-local coordination ledger for concurrent Console/UI branches, ownership, shared-surface locks and integration state; it does not redefine IAM architecture or contracts.
-- [`operations/fresh-install-bootstrap.md`](operations/fresh-install-bootstrap.md) — ADR-0044/0046/0049 first-install activation, interruption/resume, explicit Tenant Owner + Platform Owner establishment, irreversible seal and transition to normal username/password Console authentication.
-- [`operations/sealed-standalone-owner-recovery.md`](operations/sealed-standalone-owner-recovery.md) — ADR-0047 explicit, fail-closed one-shot recovery for the exact legacy sealed first-party bootstrap-authority state, including withdrawn-V70 compatibility for retained pre-rebaseline installations.
-- [`runbooks/platform-owner-adoption.md`](runbooks/platform-owner-adoption.md) — explicit, disabled-by-default ADR-0049 ownership adoption for exact already-sealed pre-ADR-0049 first-party installations.
-- [`operations/dev-database-reset.md`](operations/dev-database-reset.md) — ADR-0048/0049 procedure for disposable DEV database replacement/recreation using the V1-V10 capability baseline plus V11 platform-authority/shared-application delta.
-- [`operations/scim-principal-connector.md`](operations/scim-principal-connector.md) — SCIM 2.0 principal and Group provider adapter, observation/membership semantics, secret-resolution edge, reconciliation coverage and provider-error semantics.
-- [`engineering/dev-cd.md`](engineering/dev-cd.md) — current DEV deployment contract.
-- [`operations/dev-managed-activation.md`](operations/dev-managed-activation.md) — managed DEV activation checklist and recovery verification.
-- [`operations/backup-recovery.md`](operations/backup-recovery.md) — managed DEV and standalone PostgreSQL recovery boundaries plus production transition constraints.
-- [`operations/audit-export.md`](operations/audit-export.md) — durable Audit NDJSON export activation, artifact storage, retry, download and verification runbook.
-- [`operations/audit-archive.md`](operations/audit-archive.md) — immutable Audit archive-segment generation, retention-policy inputs and verification.
-- [`operations/audit-evidence-lifecycle.md`](operations/audit-evidence-lifecycle.md) — legal holds, dual-control purge, archived-read continuity and fail-closed destructive evidence controls.
-- [`operations/audit-evidence-integrity.md`](operations/audit-evidence-integrity.md) — typed material snapshots, integrity verification and EvidenceSnapshot operating checks.
-- [`operations/audit-siem.md`](operations/audit-siem.md) — signed HTTPS SIEM activation, retry/terminal semantics and receiver requirements.
-- [`operations/production-readiness.md`](operations/production-readiness.md) — ADR-0043 OD-005 SLO/RPO/RTO, failure model, provider-neutral HA/DR topology and service re-entry contract.
-- [`operations/production-recovery-drill.md`](operations/production-recovery-drill.md) — quarterly isolation-safe measured production recovery verification and evidence procedure.
-- [`operations/public-event-webhook.md`](operations/public-event-webhook.md) — signed public-event webhook activation, receiver, retry, rotation, and failure runbook.
-- [`operations/break-glass-security-notification.md`](operations/break-glass-security-notification.md) — ADR-0033 signed security-notification activation, receiver, retry/manual-remediation and secret-rotation runbook.
-- [`engineering/edge.md`](engineering/edge.md) — standalone-host Caddy reference edge.
-- [`engineering/public-demo.md`](engineering/public-demo.md) — current DEV/demo usage and standalone DEMO reference status.
-- [`engineering/observability.md`](engineering/observability.md) — vendor-neutral telemetry contract and current managed DEV posture.
-- `operations/` — deployment, backup/restore, monitoring, incident, connector, and reconciliation runbooks as those capabilities are implemented.
+- [`architecture/platform-authority-and-application-tenancy.md`](architecture/platform-authority-and-application-tenancy.md) — ADR-0049 platform/tenant owner authority and shared/internal application tenancy.
+
+### Domain
+
+- [`domain/canonical-model.md`](domain/canonical-model.md) — canonical IAM concepts, ownership of truth, observations, evidence and projections.
+- [`domain/state-and-invariants.md`](domain/state-and-invariants.md) — lifecycle, concurrency, structural, temporal and failure invariants.
+- [`domain/dynamic-schema-and-provenance.md`](domain/dynamic-schema-and-provenance.md) — governed typed extension schema, mapping and provenance.
+- [`domain/tenancy.md`](domain/tenancy.md) — ADR-0051 first-class Tenant identity/lifecycle and operation-scope contract.
+- [`domain/access-target-availability.md`](domain/access-target-availability.md) — ADR-0052 Catalog availability and AccessTargetReduction contract.
+- [`domain/principal-observation-mapping.md`](domain/principal-observation-mapping.md) — ADR-0050 Integration-owned provider-account-to-Principal technical mapping boundary.
+- [`domain/audit-evidence-scope.md`](domain/audit-evidence-scope.md) — ADR-0053 explicit TENANT/DEPLOYMENT Audit evidence ownership.
+
+### Security and API
+
+- [`security/administrative-authorization.md`](security/administrative-authorization.md) — IAM control-plane authorization, scoped administration and owner continuity.
+- [`security/control-plane-authentication.md`](security/control-plane-authentication.md) — external/federated and first-party control-plane authentication and bootstrap.
+- [`security/first-run-web-setup.md`](security/first-run-web-setup.md) — secured first-run web setup adapter.
+- [`security/identity-provider-sso.md`](security/identity-provider-sso.md) — first-party authentication, federation and SSO security boundary.
+- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0053.
+- [`api/api-conventions.md`](api/api-conventions.md) — public/internal API conventions.
+- [`api/event-model.md`](api/event-model.md) — domain/internal/public event semantics.
+- [`api/idp-sso-contracts.md`](api/idp-sso-contracts.md) — OIDC/OAuth/JWKS/session/claim/secret-boundary implementation contract.
+- [`api/identity-contracts.md`](api/identity-contracts.md) — Identity/Principal and source-policy public contracts.
+- [`api/catalog-contracts.md`](api/catalog-contracts.md) — Application/ApplicationTarget/Entitlement/Role contracts.
+- [`api/access-contracts.md`](api/access-contracts.md) — AccessAssignment and EffectiveAccess contracts.
+- [`api/governance-contracts.md`](api/governance-contracts.md) — AccessRequest/Approval/Review/Policy/Exception contracts.
+- [`api/credential-contracts.md`](api/credential-contracts.md) — Credential metadata/lifecycle/rotation contract.
+- [`api/integration-administration.md`](api/integration-administration.md) — ConnectorInstance/Binding/worker administration contract.
+- [`api/connector-worker-protocol.md`](api/connector-worker-protocol.md) — remote connector-worker v1 protocol.
+- [`api/administration-contracts.md`](api/administration-contracts.md) — AdministrativeRole/Grant/Delegation/Elevation/BreakGlass contracts.
+- [`api/audit-contracts.md`](api/audit-contracts.md) — Audit read/search/export/archive/hold/purge/evidence contracts for the implemented tenant-scoped surface.
+
+### Operations and engineering
+
+- [`operations/fresh-install-bootstrap.md`](operations/fresh-install-bootstrap.md) — first-install activation and owner establishment.
+- [`operations/sealed-standalone-owner-recovery.md`](operations/sealed-standalone-owner-recovery.md) — sealed legacy owner recovery boundary.
+- [`runbooks/platform-owner-adoption.md`](runbooks/platform-owner-adoption.md) — legacy Platform Owner adoption.
+- [`operations/dev-database-reset.md`](operations/dev-database-reset.md) — disposable DEV database rebaseline procedure.
+- [`operations/scim-principal-connector.md`](operations/scim-principal-connector.md) — SCIM provider adapter runbook.
+- [`operations/backup-recovery.md`](operations/backup-recovery.md), [`operations/production-readiness.md`](operations/production-readiness.md), [`operations/production-recovery-drill.md`](operations/production-recovery-drill.md) — recovery/production readiness.
+- [`operations/audit-export.md`](operations/audit-export.md), [`operations/audit-archive.md`](operations/audit-archive.md), [`operations/audit-evidence-lifecycle.md`](operations/audit-evidence-lifecycle.md), [`operations/audit-evidence-integrity.md`](operations/audit-evidence-integrity.md), [`operations/audit-siem.md`](operations/audit-siem.md) — Audit evidence operations.
+- [`operations/public-event-webhook.md`](operations/public-event-webhook.md) and [`operations/break-glass-security-notification.md`](operations/break-glass-security-notification.md) — signed outbound delivery runbooks.
+- [`engineering/console-ui-work-control.md`](engineering/console-ui-work-control.md), [`engineering/dev-cd.md`](engineering/dev-cd.md), [`engineering/edge.md`](engineering/edge.md), [`engineering/public-demo.md`](engineering/public-demo.md), [`engineering/observability.md`](engineering/observability.md) — implementation/operations engineering contracts.
 
 ## Authority hierarchy
 
@@ -71,20 +76,23 @@ When documentation conflicts, resolve it in this order:
 3. implementation and tests;
 4. explicitly retained historical material.
 
-A newly accepted ADR may temporarily be newer than a formal document; that is controlled specification-update debt, not a competing permanent source of truth.
+A newly accepted ADR may intentionally be newer than the controlled formal package; that is controlled specification-update debt, not a competing permanent source of truth.
 
 ## Framework-neutral architecture rule
 
-The architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, Cloudflare, Railway, Neon, OCI, Docker, or a particular build layout. Those are implementation/deployment choices. Canonical capability ownership, aggregate boundaries, state semantics, security invariants, and cross-capability contracts must remain meaningful if an implementation or deployment technology changes.
+Architecture is not defined by Java, Spring, JPA, PostgreSQL, REST, Kafka, Cloudflare, Railway, Neon, OCI, Docker or a particular build layout. Those are implementation/deployment choices. Canonical capability ownership, aggregate boundaries, state semantics, security invariants and cross-capability contracts must remain meaningful if implementation technology changes.
 
-## Current status
+## Reconciled v3 architecture status
 
-IAM v2 is pre-release and under active design. The v0.8 formal specification set is the current controlled architecture checkpoint. It carries forward v0.7, folds accepted ADR-0038 through ADR-0041 into the formal requirements/design baseline, records the former persistence checkpoint through Flyway V60, and incorporates the completed OD-003 public policy/JML control-plane contracts from PR #257. ADR-0042 broadens that checkpoint so Wyrmgate is an IAM platform with first-party IdP/SSO and IGA capabilities. ADR-0043 adds reviewed production service/recovery objectives and provider-neutral HA/DR topology. ADR-0044 adds burn-once standalone fresh-install bootstrap; ADR-0045 adds the separately secured first-run web adapter; ADR-0046 establishes the finite standalone tenant-owner authority profile; ADR-0047 adds explicit fail-closed recovery for the exact legacy sealed first-party bootstrap state; ADR-0048 establishes the clean pre-release persistence rebaseline; and ADR-0049 adds explicit deployment `PLATFORM_OWNER`, explicit tenant `TENANT_OWNER`, owner-continuity invariants, and platform-owned shared/internal Catalog application offerings with tenant bindings. ADR-0042 through ADR-0049 are accepted amendments that must be folded into the next controlled formal revision.
+The agreed v3 layered architecture reconciliation is now represented durably by the repository ADRs and living Markdown:
 
-ADR-0048 replaces the former development-era Flyway V1-V69 SQL chain with the active capability-organized current-state baseline: V1 creates the capability schemas, V2 Platform, V3 Identity, V4 Catalog, V5 Access, V6 Governance, V7 Credential, V8 Integration, V9 Administration and V10 Audit. The replacement was proven schema-equivalent before the obsolete V1-V69 SQL was removed from the repository. ADR-0049 is the first post-rebaseline semantic persistence delta at V11. Its migration is schema-only and introduces explicit owner/platform-application structures without granting authority, inferring owners, or rewriting tenant-owned Application rows. Historical withdrawn V70 remains absent and reserved; if the new sequence eventually reaches V69 it skips to V71.
+- **Layer 4 contains nine business capabilities:** Tenancy, Identity, Catalog, Access, Governance, Credential, Integration, Administration and Audit. Platform is Layer-6 technical support. Authentication/IdP/SSO is a composed service rather than another Layer-4 capability.
+- ADR-0050 defines Integration-owned `PrincipalObservationMapping` while Identity remains the sole owner of Principal authority.
+- ADR-0051 promotes Tenancy to a first-class capability owning deployment-scoped Tenant identity/lifecycle and trusted TENANT/DEPLOYMENT operation scope.
+- ADR-0052 defines Catalog target availability and Access-owned fail-safe `AccessTargetReduction` for terminal target retirement.
+- ADR-0053 defines explicit `AuditEvidenceScope = TENANT(ownerTenantId) | DEPLOYMENT` without granting platform operators implicit tenant Audit visibility.
+- [`architecture/layered-architecture.md`](architecture/layered-architecture.md) consolidates L1–L6 and Layer 6A–6I. The image-86 internal `Layer 6L` heading is treated as a labeling error; the reconciled area is 6I Runtime/Deployment/Availability/Recovery.
 
-A database carrying the pre-rebaseline Flyway history must not be pointed blindly at the reset namespace. Disposable DEV is recreated using [`operations/dev-database-reset.md`](operations/dev-database-reset.md) against V1-V11 and any legitimate later deltas. A retained historical installation requires an explicit compatibility plan. A recreated database is a fresh ADR-0044/0045/0046/0049 installation and therefore does not run ADR-0047 recovery or ADR-0049 legacy Platform Owner adoption.
+The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0053 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
 
-The v0.8 RTM records OD-001, OD-002, OD-003 and OD-004 as resolved at their accepted architecture/interface scope, with OD-005 and OD-006 open. OD-003 is resolved for the currently accepted semantic/interface surface: public Identity/Principal and source correlation/lifecycle/absence policy contracts; Catalog; Access including lifecycle-access policy; Governance request/approval/review plus ACCESS_REQUEST PolicyVersion and GovernanceException; Credential; Integration administration/worker; Administration authority-control; and Audit evidence-lifecycle surfaces are implemented. ADR-0038 adds provenance-fenced restoration of source-caused suspension, ADR-0039 exact DECIMAL/DATE/DATETIME lifecycle predicates, ADR-0040 typed one-value MULTI membership, and ADR-0041 bounded relational typed CONTAINS_ANY/CONTAINS_ALL expected sets. Exact set/subset/count/order predicates, compound expressions, relationship predicates, dynamic reviewer/manager rules, broader exception scopes, SourceSystem administration and GovernanceFinding public APIs remain future product scope unless separately accepted; they are not incomplete OD-003 criteria. Broader BR-level requirements may remain Partially Implemented where their scope exceeds OD-003.
-
-OD-005's objective decision gate is resolved by ADR-0043: 99.95% monthly eligible-request availability, bounded synchronous latency objectives, <=5-minute authoritative/evidence RPO, <=60-minute regional-disaster RTO, <=10-minute primary-zone recovery objective, multi-zone active runtime, warm cross-region DR, 35-day PITR history, independently protected recovery copies, quarterly recovery drills and 24x7 severity-based paging. OD-005 remains open until a concrete production provider environment implements those controls and measured failover/recovery evidence proves the objectives.
+OD-005 remains open until a concrete production provider environment implements the accepted ADR-0043 objectives and measured recovery/failover evidence proves them. OD-006 legacy migration/cutover remains open.
