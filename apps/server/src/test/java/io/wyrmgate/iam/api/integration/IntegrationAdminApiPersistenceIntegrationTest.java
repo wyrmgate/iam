@@ -105,9 +105,20 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                 observedAccessFacts,
                 ids,
                 transactions);
+        var principalMappingCommands =
+                new io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingService(
+                        integration,
+                        observationMappings,
+                        new io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQueryService(
+                                new JdbcPrincipalRepository(jdbc)),
+                        factSink,
+                        observedAccessFacts,
+                        ids,
+                        transactions);
         mutations = new IntegrationAdminApiMutationService(
                 authorization, commands, integration,
                 mappingCommands, observationMappings,
+                principalMappingCommands, observationMappings,
                 idempotency, transactions,
                 new AuditCommandService(
                         new JdbcAuditRecordRepository(jdbc),
@@ -383,14 +394,25 @@ class IntegrationAdminApiPersistenceIntegrationTest {
         var commands = new IntegrationAdministrationCommandService(
                 integration, factSink, ids, transactions);
         var observationMappings = new JdbcIntegrationObservationRepository(jdbc);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
         var mappingCommands = new IntegrationEntitlementMappingService(
                 integration,
                 observationMappings,
                 new CatalogQueryService(new JdbcCatalogRepository(jdbc)),
                 factSink,
-                new JdbcIntegrationObservedAccessFactSink(outbox, ids),
+                observedAccessFacts,
                 ids,
                 transactions);
+        var principalMappingCommands =
+                new io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingService(
+                        integration,
+                        observationMappings,
+                        new io.wyrmgate.iam.identity.application.PrincipalObservationReferenceQueryService(
+                                new JdbcPrincipalRepository(jdbc)),
+                        factSink,
+                        observedAccessFacts,
+                        ids,
+                        transactions);
         SecurityAuditPort unavailableAudit = (requestedTenant, draft) -> {
             throw new IllegalStateException("audit unavailable");
         };
@@ -400,6 +422,8 @@ class IntegrationAdminApiPersistenceIntegrationTest {
                         commands,
                         integration,
                         mappingCommands,
+                        observationMappings,
+                        principalMappingCommands,
                         observationMappings,
                         idempotency,
                         transactions,
