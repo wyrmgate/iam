@@ -19,8 +19,26 @@ class PersistenceArchitectureTest {
                     "..identity.application..",
                     "..administration.application..",
                     "..platform.id..",
+                    "..platform.lifecycle..",
                     "..platform.tenant..")
             .should()
             .dependOnClassesThat()
             .resideInAnyPackage("org.springframework..", "java.sql..", "javax.sql..");
+
+    @ArchTest
+    static final ArchRule lifecycleKernelDoesNotDependOnBusinessCapabilities = noClasses()
+            .that()
+            .resideInAPackage("..platform.lifecycle..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage(
+                    "..access..",
+                    "..administration..",
+                    "..audit..",
+                    "..catalog..",
+                    "..credential..",
+                    "..governance..",
+                    "..identity..",
+                    "..integration..",
+                    "..tenancy..");
 }
