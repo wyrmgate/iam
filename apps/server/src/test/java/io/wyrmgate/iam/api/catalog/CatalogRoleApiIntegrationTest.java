@@ -33,10 +33,10 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Signature;
@@ -64,7 +64,7 @@ class CatalogRoleApiIntegrationTest {
 
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcCatalogRepository catalogRepository;
     private static JdbcRoleRepository roleRepository;
     private static CatalogCommandService catalog;
@@ -84,7 +84,7 @@ class CatalogRoleApiIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         catalogRepository = new JdbcCatalogRepository(jdbc);
         roleRepository = new JdbcRoleRepository(jdbc);
         transactions = new SpringTransactionExecutor(
@@ -115,11 +115,11 @@ class CatalogRoleApiIntegrationTest {
                     catalog.application,
                     platform.outbox_event,
                     platform.idempotency_record,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
         tenant = new TenantContext(
-                tenants.create("Catalog Role API", NOW).id());
+                tenants.createActive("Catalog Role API", NOW).id());
         actor = new AuthenticatedAdministrativeActor(
                 tenant, ids.nextId());
         authorized = mockMvc(authorization(true));
