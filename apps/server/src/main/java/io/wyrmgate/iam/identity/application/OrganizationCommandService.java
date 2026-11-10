@@ -65,7 +65,7 @@ public final class OrganizationCommandService {
 
         return transactions.required(() -> {
             Organization current = requireCurrent(tenant, organizationId, expectedRevision);
-            new Organization(
+            Organization validated = new Organization(
                     current.id(),
                     name,
                     organizationType,
@@ -76,8 +76,8 @@ public final class OrganizationCommandService {
             return repository.updateMetadata(
                     tenant,
                     organizationId,
-                    name,
-                    organizationType,
+                    validated.name(),
+                    validated.organizationType(),
                     expectedRevision,
                     now);
         });
