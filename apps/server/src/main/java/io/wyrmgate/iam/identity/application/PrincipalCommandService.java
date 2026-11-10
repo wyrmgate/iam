@@ -14,9 +14,6 @@ import java.util.UUID;
 /** Identity-owned commands for the first authoritative Principal slice. */
 public final class PrincipalCommandService {
 
-    private static final PrincipalAdministrativeContinuityGuard ALLOW_ALL_CONTINUITY =
-            (tenant, principalId, identityId, at) -> {};
-
     private final PrincipalRepository principals;
     private final IdentityRepository identities;
     private final CatalogTargetReferenceQuery targets;
@@ -24,24 +21,6 @@ public final class PrincipalCommandService {
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
     private final PrincipalAdministrativeContinuityGuard administrativeContinuityGuard;
-
-    /** Compatibility constructor for isolated tests/compositions without Administration. */
-    public PrincipalCommandService(
-            PrincipalRepository principals,
-            IdentityRepository identities,
-            CatalogTargetReferenceQuery targets,
-            PrincipalFactSink facts,
-            IdGenerator ids,
-            TransactionExecutor transactions) {
-        this(
-                principals,
-                identities,
-                targets,
-                facts,
-                ids,
-                transactions,
-                ALLOW_ALL_CONTINUITY);
-    }
 
     public PrincipalCommandService(
             PrincipalRepository principals,
