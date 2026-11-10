@@ -17,10 +17,10 @@ import io.wyrmgate.iam.integration.domain.WorkerExternalSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
-import io.wyrmgate.iam.platform.persistence.JdbcTenantRepository;
+import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
 import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
-import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.tenant.TenantContext;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,7 +39,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-09-21T06:00:00Z");
     private static JdbcTemplate jdbc;
     private static IdGenerator ids;
-    private static JdbcTenantRepository tenants;
+    private static TenantTestFixture tenants;
     private static JdbcIntegrationRuntimeRepository repository;
     private static TransactionExecutor transactions;
     private static ObjectMapper json;
@@ -50,7 +50,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
         var dataSource = io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase.dataSource();
         jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
-        tenants = new JdbcTenantRepository(jdbc, ids);
+        tenants = new TenantTestFixture(jdbc, ids);
         json = new ObjectMapper().findAndRegisterModules();
         var outbox = new JdbcOutboxRepository(jdbc);
         var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
@@ -88,7 +88,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
                     platform.idempotency_record,
                     platform.inbox_message,
                     platform.outbox_event,
-                    platform.tenant
+                    tenancy.tenant
                 CASCADE
                 """);
     }
@@ -623,7 +623,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     private TenantContext tenant(String name) {
-        return new TenantContext(tenants.create(name, NOW).id());
+        return new TenantContext(tenants.createActive(name, NOW).id());
     }
 
     private UUID connector(
