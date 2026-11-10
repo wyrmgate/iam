@@ -225,6 +225,9 @@ AdministrativeBreakGlassOperation is distinct from ordinary elevation and GLOBAL
 - Principal belongs to at most one Identity.
 - Credential belongs to exactly one Principal.
 - Organization primary hierarchy is acyclic.
+- Organization parentage and manager/organization/ownership relationships are tenant-local; same-capability composite references prevent cross-Tenant linkage.
+- Manager/organization/ownership relationships are first-class temporal authoritative records with explicit `validFrom` / optional `validUntil`; ending a relationship may shorten but never silently extend its existing validity.
+- Mutable Organization and relationship records use optimistic revision semantics. Relationship provenance is closed and typed: `MANUAL` carries no source reference; `SOURCE_RECORD` carries one exact same-tenant Identity-owned SourceRecord reference.
 - ApplicationTarget belongs to exactly one Application.
 - Entitlement belongs to one Application and optionally one compatible Target.
 - APPLICATION Role belongs to one Application; BUSINESS Role may span applications.
