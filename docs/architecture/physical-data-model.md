@@ -618,6 +618,14 @@ Provider identity uniqueness is explicit, for example:
 UNIQUE (tenant_id, connector_binding_id, provider_stable_id)
 ```
 
+### Principal observation mapping persistence
+
+V14 adds `integration.principal_observation_mapping` under ADR-0050. It stores one stable Integration mapping ID, Tenant, ConnectorBinding, provider-native stable account identifier, governed Principal stable ID, ACTIVE/RETIRED lifecycle, optimistic revision and timestamps. A partial unique index enforces at most one ACTIVE mapping for `(tenant_id, connector_binding_id, provider_stable_id)`.
+
+The `principal_id` column is deliberately a semantic cross-capability reference rather than a database foreign key to `identity.principal`. Integration validates the exact Principal ID and ApplicationTarget through an Identity-owned semantic query at mapping creation, and consumers revalidate current Principal semantics when the mapping is used. Provider strings never become Identity lookup authority.
+
+Retirement preserves mapping history; remapping creates a new row. Mapping changes emit a data-minimized observed-access input fact so Governance re-queries current normalized observation state rather than mutating findings in the Integration transaction.
+
 ### Reconciliation run and staging
 
 `integration.reconciliation_run` stores separately:
