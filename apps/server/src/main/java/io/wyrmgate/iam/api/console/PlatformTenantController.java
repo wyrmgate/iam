@@ -3,7 +3,7 @@ package io.wyrmgate.iam.api.console;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.application.PlatformOwnerAuthorityQuery;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
-import io.wyrmgate.iam.platform.tenant.PlatformTenantOverviewQuery;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
@@ -25,12 +25,12 @@ public final class PlatformTenantController {
     private static final int MAX_LIMIT = 100;
 
     private final PlatformOwnerAuthorityQuery platformOwners;
-    private final PlatformTenantOverviewQuery tenants;
+    private final TenantOverviewQuery tenants;
     private final PlatformTenantCursorCodec cursors;
 
     public PlatformTenantController(
             PlatformOwnerAuthorityQuery platformOwners,
-            PlatformTenantOverviewQuery tenants,
+            TenantOverviewQuery tenants,
             PlatformTenantCursorCodec cursors) {
         this.platformOwners = platformOwners;
         this.tenants = tenants;
@@ -54,15 +54,15 @@ public final class PlatformTenantController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid continuation cursor.");
         }
 
-        List<PlatformTenantOverviewQuery.TenantSummary> rows = tenants.listAfter(
+        List<TenantOverviewQuery.TenantSummary> rows = tenants.listAfter(
                 position == null ? null : position.createdAt(),
                 position == null ? null : position.id(),
                 limit + 1);
         boolean hasMore = rows.size() > limit;
-        List<PlatformTenantOverviewQuery.TenantSummary> visible = hasMore ? rows.subList(0, limit) : rows;
+        List<TenantOverviewQuery.TenantSummary> visible = hasMore ? rows.subList(0, limit) : rows;
         String nextCursor = null;
         if (hasMore && !visible.isEmpty()) {
-            PlatformTenantOverviewQuery.TenantSummary last = visible.get(visible.size() - 1);
+            TenantOverviewQuery.TenantSummary last = visible.get(visible.size() - 1);
             nextCursor = cursors.encode(new PlatformTenantCursorCodec.Position(last.createdAt(), last.id()));
         }
 
@@ -79,7 +79,7 @@ public final class PlatformTenantController {
             HttpServletRequest request,
             @PathVariable UUID tenantId) {
         requirePlatformOwner(request);
-        PlatformTenantOverviewQuery.TenantSummary tenant = tenants.find(tenantId)
+        TenantOverviewQuery.TenantSummary tenant = tenants.find(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant was not found."));
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
@@ -93,16 +93,23 @@ public final class PlatformTenantController {
         }
     }
 
-    private static TenantResource resource(PlatformTenantOverviewQuery.TenantSummary tenant) {
+    private static TenantResource resource(TenantOverviewQuery.TenantSummary tenant) {
         return new TenantResource(
                 tenant.id(),
                 tenant.displayName(),
+                tenant.lifecycleState(),
                 tenant.revision(),
                 tenant.createdAt(),
                 tenant.updatedAt());
     }
 
-    public record TenantResource(UUID id, String displayName, long revision, Instant createdAt, Instant updatedAt) {}
+    public record TenantResource(
+            UUID id,
+            String displayName,
+            io.wyrmgate.iam.tenancy.domain.TenantLifecycleState lifecycleState,
+            long revision,
+            Instant createdAt,
+            Instant updatedAt) {}
     public record TenantPageResource(List<TenantResource> items, String nextCursor) {
         public TenantPageResource {
             items = List.copyOf(items);
