@@ -4,6 +4,8 @@ import io.wyrmgate.iam.integration.application.IntegrationAdministrationExceptio
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository;
 import io.wyrmgate.iam.integration.application.IntegrationEntitlementMappingRepository.EntitlementObservationMapping;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessQuery;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingRepository;
+import io.wyrmgate.iam.integration.application.IntegrationPrincipalMappingRepository.PrincipalObservationMapping;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.Timestamp;
@@ -15,7 +17,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 public final class JdbcIntegrationObservationRepository
-        implements IntegrationEntitlementMappingRepository, IntegrationObservedAccessQuery {
+        implements IntegrationEntitlementMappingRepository,
+                IntegrationPrincipalMappingRepository,
+                IntegrationObservedAccessQuery {
 
     private final JdbcTemplate jdbc;
 
@@ -43,7 +47,7 @@ public final class JdbcIntegrationObservationRepository
                        lifecycle_state, revision, created_at, updated_at, retired_at
                 FROM integration.entitlement_observation_mapping
                 WHERE tenant_id = ? AND id = ?
-                """, (rs,row) -> mapping(rs), tenant.tenantId(), mappingId)
+                """, (rs,row) -> entitlementMapping(rs), tenant.tenantId(), mappingId)
                 .stream().findFirst();
     }
 
@@ -56,7 +60,7 @@ public final class JdbcIntegrationObservationRepository
                 FROM integration.entitlement_observation_mapping
                 WHERE tenant_id = ? AND connector_binding_id = ?
                   AND provider_stable_id = ? AND lifecycle_state = 'ACTIVE'
-                """, (rs,row) -> mapping(rs),
+                """, (rs,row) -> entitlementMapping(rs),
                 tenant.tenantId(), connectorBindingId, providerStableId)
                 .stream().findFirst();
     }
@@ -112,6 +116,125 @@ public final class JdbcIntegrationObservationRepository
     }
 
     @Override
+    public boolean hasPresentObservedPrincipal(
+            TenantContext tenant,
+            UUID connectorBindingId,
+            String providerStableId) {
+        Integer count = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM integration.observed_principal
+                WHERE tenant_id = ? AND connector_binding_id = ?
+                  AND provider_stable_id = ? AND present
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                connectorBindingId,
+                providerStableId);
+        return count != null && count > 0;
+    }
+
+    @Override
+    public Optional<PrincipalObservationMapping> findPrincipalMapping(
+            TenantContext tenant,
+            UUID mappingId) {
+        return jdbc.query("""
+                SELECT id, connector_binding_id, provider_stable_id, principal_id,
+                       lifecycle_state, revision, created_at, updated_at, retired_at
+                FROM integration.principal_observation_mapping
+                WHERE tenant_id = ? AND id = ?
+                """,
+                (rs,row) -> principalMapping(rs),
+                tenant.tenantId(),
+                mappingId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public Optional<PrincipalObservationMapping> findActivePrincipalMappingByProvider(
+            TenantContext tenant,
+            UUID connectorBindingId,
+            String providerStableId) {
+        return jdbc.query("""
+                SELECT id, connector_binding_id, provider_stable_id, principal_id,
+                       lifecycle_state, revision, created_at, updated_at, retired_at
+                FROM integration.principal_observation_mapping
+                WHERE tenant_id = ? AND connector_binding_id = ?
+                  AND provider_stable_id = ? AND lifecycle_state = 'ACTIVE'
+                """,
+                (rs,row) -> principalMapping(rs),
+                tenant.tenantId(),
+                connectorBindingId,
+                providerStableId)
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    public PrincipalObservationMapping createPrincipalMapping(
+            TenantContext tenant,
+            UUID id,
+            UUID connectorBindingId,
+            String providerStableId,
+            UUID principalId,
+            Instant now) {
+        try {
+            jdbc.update("""
+                    INSERT INTO integration.principal_observation_mapping (
+                        id, tenant_id, connector_binding_id, provider_stable_id,
+                        principal_id, lifecycle_state, revision,
+                        created_at, updated_at, retired_at)
+                    VALUES (?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?, NULL)
+                    """,
+                    id,
+                    tenant.tenantId(),
+                    connectorBindingId,
+                    providerStableId,
+                    principalId,
+                    Timestamp.from(now),
+                    Timestamp.from(now));
+        } catch (DataIntegrityViolationException duplicate) {
+            throw new IntegrationAdministrationException(
+                    "principal_mapping_conflict",
+                    "The provider account is already actively mapped for this binding.");
+        }
+        return findPrincipalMapping(tenant, id).orElseThrow();
+    }
+
+    @Override
+    public PrincipalObservationMapping retirePrincipalMapping(
+            TenantContext tenant,
+            UUID id,
+            long expectedRevision,
+            Instant now) {
+        int affected = jdbc.update("""
+                UPDATE integration.principal_observation_mapping
+                SET lifecycle_state = 'RETIRED',
+                    revision = revision + 1,
+                    updated_at = ?,
+                    retired_at = ?
+                WHERE tenant_id = ? AND id = ?
+                  AND revision = ? AND lifecycle_state = 'ACTIVE'
+                """,
+                Timestamp.from(now),
+                Timestamp.from(now),
+                tenant.tenantId(),
+                id,
+                expectedRevision);
+        if (affected != 1) {
+            if (findPrincipalMapping(tenant, id).isEmpty()) {
+                throw new IntegrationAdministrationException(
+                        "not_found", "The Principal observation mapping was not found.");
+            }
+            throw new StaleWriteException(
+                    "principal-observation-mapping",
+                    id,
+                    expectedRevision);
+        }
+        return findPrincipalMapping(tenant, id).orElseThrow();
+    }
+
+    @Override
     public List<ObservedEntitlementFact> currentEntitlements(
             TenantContext tenant, UUID connectorBindingId) {
         return jdbc.query("""
@@ -138,25 +261,36 @@ public final class JdbcIntegrationObservationRepository
         return jdbc.query("""
                 SELECT g.connector_binding_id, b.target_id, g.provider_stable_id,
                        g.principal_provider_id, g.entitlement_provider_id,
-                       m.entitlement_id, g.observed_at
+                       em.entitlement_id, pm.principal_id, g.observed_at
                 FROM integration.observed_grant g
                 JOIN integration.connector_binding b
                   ON b.tenant_id = g.tenant_id
                  AND b.id = g.connector_binding_id
                  AND b.target_kind = 'APPLICATION_TARGET'
-                LEFT JOIN integration.entitlement_observation_mapping m
-                  ON m.tenant_id = g.tenant_id
-                 AND m.connector_binding_id = g.connector_binding_id
-                 AND m.provider_stable_id = g.entitlement_provider_id
-                 AND m.lifecycle_state = 'ACTIVE'
+                LEFT JOIN integration.entitlement_observation_mapping em
+                  ON em.tenant_id = g.tenant_id
+                 AND em.connector_binding_id = g.connector_binding_id
+                 AND em.provider_stable_id = g.entitlement_provider_id
+                 AND em.lifecycle_state = 'ACTIVE'
+                LEFT JOIN integration.principal_observation_mapping pm
+                  ON pm.tenant_id = g.tenant_id
+                 AND pm.connector_binding_id = g.connector_binding_id
+                 AND pm.provider_stable_id = g.principal_provider_id
+                 AND pm.lifecycle_state = 'ACTIVE'
                 WHERE g.tenant_id = ? AND g.connector_binding_id = ? AND g.present
                 ORDER BY g.provider_stable_id
                 """,
                 (rs,row) -> new ObservedGrantFact(
-                        rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
-                        rs.getString(3), rs.getString(4), rs.getString(5),
-                        rs.getObject(6, UUID.class), rs.getTimestamp(7).toInstant()),
-                tenant.tenantId(), connectorBindingId);
+                        rs.getObject(1, UUID.class),
+                        rs.getObject(2, UUID.class),
+                        rs.getString(3),
+                        rs.getString(4),
+                        rs.getString(5),
+                        rs.getObject(6, UUID.class),
+                        rs.getObject(7, UUID.class),
+                        rs.getTimestamp(8).toInstant()),
+                tenant.tenantId(),
+                connectorBindingId);
     }
 
     @Override
@@ -175,14 +309,29 @@ public final class JdbcIntegrationObservationRepository
                 tenant.tenantId(), applicationTargetId);
     }
 
-    private static EntitlementObservationMapping mapping(java.sql.ResultSet rs)
-            throws java.sql.SQLException {
+    private static EntitlementObservationMapping entitlementMapping(
+            java.sql.ResultSet rs) throws java.sql.SQLException {
         Timestamp retired = rs.getTimestamp("retired_at");
         return new EntitlementObservationMapping(
                 rs.getObject("id", UUID.class),
                 rs.getObject("connector_binding_id", UUID.class),
                 rs.getString("provider_stable_id"),
                 rs.getObject("entitlement_id", UUID.class),
+                rs.getString("lifecycle_state"),
+                rs.getLong("revision"),
+                rs.getTimestamp("created_at").toInstant(),
+                rs.getTimestamp("updated_at").toInstant(),
+                retired == null ? null : retired.toInstant());
+    }
+
+    private static PrincipalObservationMapping principalMapping(
+            java.sql.ResultSet rs) throws java.sql.SQLException {
+        Timestamp retired = rs.getTimestamp("retired_at");
+        return new PrincipalObservationMapping(
+                rs.getObject("id", UUID.class),
+                rs.getObject("connector_binding_id", UUID.class),
+                rs.getString("provider_stable_id"),
+                rs.getObject("principal_id", UUID.class),
                 rs.getString("lifecycle_state"),
                 rs.getLong("revision"),
                 rs.getTimestamp("created_at").toInstant(),
