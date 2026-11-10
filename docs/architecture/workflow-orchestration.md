@@ -17,6 +17,18 @@ The initial IAM v2 implementation should not depend on a generic BPMN/workflow e
 
 A generic workflow engine may be added later as an adapter for selected operational process definitions, but canonical business state remains in domain-owned aggregates/process records.
 
+## Reusable lifecycle transition kernel
+
+Shared Java lifecycle mechanics may be implemented as a small framework-neutral Platform utility, but reuse stops at transition mechanics. The kernel may validate that a typed current-state/action transition is defined, invoke capability-supplied typed guards and return the accepted transition. It must not mutate aggregates, own business state, persist lifecycle rows, schedule work, publish facts or interpret IAM business meaning.
+
+Each owning capability defines its own typed states, semantic actions, transition context, guards, invariants and persistence. Public/internal application contracts remain semantic operations such as activate, suspend, revoke or begin-decommissioning; callers do not receive a generic set-status operation.
+
+The shared kernel must not introduce a universal lifecycle entity/table, stringly typed states/actions, arbitrary JSON transition context or workflow definitions. Capability-specific guard failures remain capability-specific. Applying and persisting an accepted transition remains inside the owning capability transaction under its ordinary optimistic-revision and idempotency rules.
+
+Explicit lifecycle state also remains separate from semantic effectiveness. Time validity, current dependency state and other capability rules may make authority ineffective before a delayed scheduler materializes a stored state transition. The lifecycle kernel therefore does not replace capability-specific effectiveness evaluation.
+
+Adoption is incremental. Existing state machines should move to the kernel only when behavior and invariants remain unchanged; the abstraction is not a reason to normalize materially different domain processes into one model.
+
 ## Orchestration ownership
 
 | Process | Owning capability | Durable authoritative/process objects |
