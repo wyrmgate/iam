@@ -56,7 +56,7 @@ public final class IdentityRelationshipCommandService {
         return transactions.required(() -> {
             requireIdentity(tenant, subjectIdentityId);
             requireIdentity(tenant, managerIdentityId);
-            requireProvenance(tenant, provenance);
+            requireProvenance(tenant, subjectIdentityId, provenance);
             relationships.insertManagerRelationship(tenant, desired);
             return relationships.findManagerRelationship(tenant, desired.id())
                     .orElseThrow(() -> new IllegalStateException(
@@ -87,7 +87,7 @@ public final class IdentityRelationshipCommandService {
             if (organizations.findById(tenant, organizationId).isEmpty()) {
                 throw new IllegalArgumentException("Organization does not exist");
             }
-            requireProvenance(tenant, provenance);
+            requireProvenance(tenant, subjectIdentityId, provenance);
             relationships.insertOrganizationMembership(tenant, desired);
             return relationships.findOrganizationMembership(tenant, desired.id())
                     .orElseThrow(() -> new IllegalStateException(
@@ -116,7 +116,7 @@ public final class IdentityRelationshipCommandService {
         return transactions.required(() -> {
             requireIdentity(tenant, subjectIdentityId);
             requireIdentity(tenant, ownerIdentityId);
-            requireProvenance(tenant, provenance);
+            requireProvenance(tenant, subjectIdentityId, provenance);
             relationships.insertOwnershipRelationship(tenant, desired);
             return relationships.findOwnershipRelationship(tenant, desired.id())
                     .orElseThrow(() -> new IllegalStateException(
@@ -183,11 +183,16 @@ public final class IdentityRelationshipCommandService {
         }
     }
 
-    private void requireProvenance(TenantContext tenant, RelationshipProvenance provenance) {
+    private void requireProvenance(
+            TenantContext tenant,
+            UUID subjectIdentityId,
+            RelationshipProvenance provenance) {
         Objects.requireNonNull(provenance, "provenance");
         if (provenance.kind() == RelationshipProvenanceKind.SOURCE_RECORD
-                && !relationships.sourceRecordExists(tenant, provenance.sourceRecordId())) {
-            throw new IllegalArgumentException("relationship SourceRecord does not exist");
+                && !relationships.sourceRecordAcceptedForIdentity(
+                        tenant, provenance.sourceRecordId(), subjectIdentityId)) {
+            throw new IllegalArgumentException(
+                    "relationship SourceRecord is not currently accepted for the subject Identity");
         }
     }
 
