@@ -85,7 +85,8 @@ class IntegrationAdminApiPersistenceIntegrationTest {
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
         identities = new JdbcIdentityRepository(jdbc);
         identityCommands = new IdentityCommandService(
-                identities, new JdbcIdentityFactSink(outbox, ids), ids, transactions);
+                identities, new JdbcIdentityFactSink(outbox, ids), ids, transactions,
+                (tenant, identityId, at) -> {});
         authorization = new AdministrativeAuthorizationService(
                 new JdbcAdministrativeAuthorizationRepository(jdbc),
                 new IdentityGovernedActorStatusQuery(identities));
