@@ -10,7 +10,6 @@ import io.wyrmgate.iam.identity.application.IdentityCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalCommandException;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalQueryService;
-import io.wyrmgate.iam.identity.application.PrincipalResolutionQuery;
 import io.wyrmgate.iam.identity.domain.Identity;
 import io.wyrmgate.iam.identity.domain.IdentityLifecycleState;
 import io.wyrmgate.iam.identity.domain.IdentityProfile;
@@ -106,8 +105,10 @@ class PrincipalPersistenceIntegrationTest {
 
         assertThat(principal.identityId()).isNull();
         assertThat(principal.revision()).isEqualTo(1);
-        assertThat(principalQuery.resolve(tenant, target, "provider-user-123"))
-                .isEqualTo(PrincipalResolutionQuery.Resolution.uncorrelated(principal.id()));
+        assertThat(principalQuery.findById(tenant, principal.id()))
+                .get()
+                .extracting(value -> value.identityId())
+                .isNull();
 
         Identity identity = identity(tenant, "Ada");
         var correlated = principals.correlate(
@@ -116,9 +117,10 @@ class PrincipalPersistenceIntegrationTest {
 
         assertThat(correlated.identityId()).isEqualTo(identity.id());
         assertThat(correlated.revision()).isEqualTo(2);
-        assertThat(principalQuery.resolve(tenant, target, "provider-user-123"))
-                .isEqualTo(PrincipalResolutionQuery.Resolution.resolved(
-                        principal.id(), identity.id()));
+        assertThat(principalQuery.findById(tenant, principal.id()))
+                .get()
+                .extracting(value -> value.identityId())
+                .isEqualTo(identity.id());
 
         String payload = jdbc.queryForObject("""
                 SELECT payload::text
@@ -185,8 +187,7 @@ class PrincipalPersistenceIntegrationTest {
                 .isInstanceOf(PrincipalCommandException.class)
                 .hasMessageContaining("retired");
 
-        assertThat(principalQuery.resolve(other, target, "native-1").status())
-                .isEqualTo(PrincipalResolutionQuery.Status.NOT_FOUND);
+        assertThat(principalQuery.findById(other, principal.id())).isEmpty();
         assertThat(correlated.identityId()).isEqualTo(ownerIdentity.id());
     }
 
