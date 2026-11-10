@@ -127,6 +127,28 @@ The mapping target is validated through a Catalog-owned semantic query. Integrat
 
 Successful map/unmap commits also append a data-minimized internal `integration.observed-access-input-changed` outbox fact containing the ConnectorBinding scope and mapping aggregate reference. ENTITLEMENT/GRANT reconciliation completion emits the same internal trigger whenever completion materializes current observation state, including positive observations retained from non-COMPLETE runs. Governance leases these facts asynchronously and re-queries current normalized observed access before updating findings. This trigger is internal only and is not a public integration event.
 
+## Principal observation mappings
+
+ADR-0050 is implemented through an explicit Integration-owned provider-account correlation resource. It is the Principal-side counterpart to EntitlementObservationMapping and never transfers Principal authority out of Identity.
+
+Control-plane operations:
+
+- `POST /api/v1/connector-bindings/{bindingId}/principal-mappings`
+- `GET /api/v1/principal-observation-mappings/{id}`
+- `POST /api/v1/principal-observation-mappings/{id}:unmap`
+
+The create request supplies only a provider-native stable account identifier and an exact existing governed `principalId`. Integration requires a present observed Principal on the active APPLICATION_TARGET binding, then validates the Principal through an Identity-owned semantic query for same-Tenant/same-ApplicationTarget agreement. Username, email, display name and `Principal.nativePrincipalKey` are never fallback correlation authority.
+
+Within one ConnectorBinding, one active provider stable identifier maps to at most one Principal. Retirement is terminal and history-preserving; remapping creates a new mapping identity. Mapping create/unmap emits the existing data-minimized `integration.observed-access-input-changed` trigger so Governance re-queries current normalized observation state.
+
+Semantic default-deny permissions:
+
+- `principal-observation-mapping:read`
+- `principal-observation-mapping:create`
+- `principal-observation-mapping:retire`
+
+These operations are causal-idempotent and revision-aware. Mapping state and audit exclude provider payloads, credentials/secrets and unrelated provider attributes.
+
 ## Public operational status reads
 
 Issue #266 adds a separate read-only public projection for operator diagnosis of existing Integration-owned process state. The companion machine-readable contract is `apps/server/src/main/resources/contracts/openapi/integration-operations-v1.json`.
