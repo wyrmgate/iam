@@ -88,7 +88,8 @@ class EffectiveAccessProcessingIntegrationTest {
             }
         };
         identities = new IdentityCommandService(
-                identityRepository, noIdentityFacts, ids, transactions);
+                identityRepository, noIdentityFacts, ids, transactions,
+                (tenant, identityId, at) -> {});
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         catalogCommands = new CatalogCommandService(
@@ -104,7 +105,8 @@ class EffectiveAccessProcessingIntegrationTest {
                 catalogQuery,
                 noPrincipalFacts,
                 ids,
-                transactions);
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
 
         outbox = new JdbcOutboxRepository(jdbc);
         scheduledWork = new JdbcScheduledWorkRepository(jdbc, ids);
