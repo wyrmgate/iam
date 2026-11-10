@@ -80,7 +80,8 @@ class AdministrativeAuthorityManagementPersistenceIntegrationTest {
                 identities,
                 new JdbcIdentityFactSink(outbox, ids),
                 ids,
-                transactions);
+                transactions,
+                (tenant, identityId, at) -> {});
 }
 
     @BeforeEach
