@@ -101,7 +101,8 @@ class RoleEffectiveAccessIntegrationTest {
             }
         };
         identities = new IdentityCommandService(
-                identityRepository, noIdentityFacts, ids, transactions);
+                identityRepository, noIdentityFacts, ids, transactions,
+                (tenant, identityId, at) -> {});
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         var roleRepository = new JdbcRoleRepository(jdbc);
@@ -126,7 +127,8 @@ class RoleEffectiveAccessIntegrationTest {
                         catalogRepository),
                 noPrincipalFacts,
                 ids,
-                transactions);
+                transactions,
+                (tenant, principalId, identityId, at) -> {});
         var identityReferences = new IdentityAccessReferenceQueryService(
                 identityRepository, principalRepository);
 
