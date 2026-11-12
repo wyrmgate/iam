@@ -410,12 +410,11 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         jdbc.update("""
                 INSERT INTO catalog.entitlement (
                     id, tenant_id, application_id, application_target_id,
-                    code, native_key, entitlement_type, lifecycle_state,
-                    revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, 'GROUP', 'ACTIVE', 1, ?, ?)
+                    code, lifecycle_state, revision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?)
                 """,
                 id, tenant.tenantId(), applicationId, targetId,
-                code, code, Timestamp.from(NOW), Timestamp.from(NOW));
+                code, Timestamp.from(NOW), Timestamp.from(NOW));
         return id;
     }
 
