@@ -262,7 +262,10 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
         var semantic = new EffectiveAccessQueryService(
                 effective,
                 alwaysEligibleIdentity(),
-                new EffectiveAccessSemanticSupport(assignments, availability));
+                new EffectiveAccessSemanticSupport(
+                        assignments,
+                        availability,
+                        new RoleExpansionQueryService(catalogRepository, roleRepository)));
         assertThat(semantic.find(
                 tenant, identityId, entitlement.id(), "ANY", NOW)).isPresent();
 
