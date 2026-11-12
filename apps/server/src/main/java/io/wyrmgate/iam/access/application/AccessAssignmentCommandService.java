@@ -2,6 +2,8 @@ package io.wyrmgate.iam.access.application;
 
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
+import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery;
+import io.wyrmgate.iam.catalog.domain.CatalogAccessTargetKind;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -17,6 +19,7 @@ public final class AccessAssignmentCommandService {
     private final AccessAssignmentRepository assignments;
     private final IdentityAccessReferenceQuery identityReferences;
     private final CatalogAccessReferenceQuery catalogReferences;
+    private final CatalogAccessTargetAvailabilityQuery catalogAvailability;
     private final RoleExpansionQuery roleExpansion;
     private final AccessAssignmentFactSink facts;
     private final AccessAssignmentBoundaryScheduler boundaries;
@@ -27,26 +30,7 @@ public final class AccessAssignmentCommandService {
             AccessAssignmentRepository assignments,
             IdentityAccessReferenceQuery identityReferences,
             CatalogAccessReferenceQuery catalogReferences,
-            AccessAssignmentFactSink facts,
-            AccessAssignmentBoundaryScheduler boundaries,
-            IdGenerator ids,
-            TransactionExecutor transactions) {
-        this(
-                assignments,
-                identityReferences,
-                catalogReferences,
-                (tenant, roleId) -> RoleExpansionQuery.Result.unavailable(
-                        RoleExpansionQuery.Status.NOT_FOUND, roleId),
-                facts,
-                boundaries,
-                ids,
-                transactions);
-    }
-
-    public AccessAssignmentCommandService(
-            AccessAssignmentRepository assignments,
-            IdentityAccessReferenceQuery identityReferences,
-            CatalogAccessReferenceQuery catalogReferences,
+            CatalogAccessTargetAvailabilityQuery catalogAvailability,
             RoleExpansionQuery roleExpansion,
             AccessAssignmentFactSink facts,
             AccessAssignmentBoundaryScheduler boundaries,
@@ -57,6 +41,8 @@ public final class AccessAssignmentCommandService {
                 identityReferences, "identityReferences");
         this.catalogReferences = Objects.requireNonNull(
                 catalogReferences, "catalogReferences");
+        this.catalogAvailability = Objects.requireNonNull(
+                catalogAvailability, "catalogAvailability");
         this.roleExpansion = Objects.requireNonNull(
                 roleExpansion, "roleExpansion");
         this.facts = Objects.requireNonNull(facts, "facts");
@@ -160,6 +146,19 @@ public final class AccessAssignmentCommandService {
 
         requireAccessEligibleIdentity(
                 tenant, identityId);
+
+        var entitlementAvailability = catalogAvailability.currentAvailability(
+                        tenant, CatalogAccessTargetKind.ENTITLEMENT, entitlementId)
+                .orElseThrow(() -> new AccessAssignmentCommandException(
+                        "entitlement_not_found",
+                        "The requested Entitlement was not found."));
+        if (!entitlementAvailability.assignable()) {
+            throw new AccessAssignmentCommandException(
+                    entitlementAvailability.terminal()
+                            ? "entitlement_unavailable_terminal"
+                            : "entitlement_unavailable_temporary",
+                    "The requested Entitlement is not currently assignable.");
+        }
 
         var entitlement = catalogReferences.resolveActiveEntitlement(
                 tenant, entitlementId);
@@ -357,6 +356,19 @@ public final class AccessAssignmentCommandService {
 
         requireAccessEligibleIdentity(
                 tenant, identityId);
+
+        var roleAvailability = catalogAvailability.currentAvailability(
+                        tenant, CatalogAccessTargetKind.ROLE, roleId)
+                .orElseThrow(() -> new AccessAssignmentCommandException(
+                        "role_not_found",
+                        "The requested Role was not found."));
+        if (!roleAvailability.assignable()) {
+            throw new AccessAssignmentCommandException(
+                    roleAvailability.terminal()
+                            ? "role_unavailable_terminal"
+                            : "role_unavailable_temporary",
+                    "The requested Role is not currently assignable.");
+        }
 
         var expansion = roleExpansion.expandCurrent(tenant, roleId);
         if (expansion.status() != RoleExpansionQuery.Status.AVAILABLE
