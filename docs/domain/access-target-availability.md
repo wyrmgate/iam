@@ -76,7 +76,9 @@ V15 implements this decision without introducing a new public Catalog resource:
 - AccessAssignment creation requires `ASSIGNABLE` before authority is created.
 - EffectiveAccess reads and semantic queries revalidate every supporting AccessAssignment against current Catalog availability, so stale projection rows cannot preserve authority after retirement or during temporary Role invalidity.
 - Catalog retirement starts/reuses `CatalogAvailabilityPropagation`, a Catalog-owned durable bounded process. Application/ApplicationTarget retirement is never expanded into an unbounded synchronous transaction.
+- RoleVersion activation uses the same bounded Catalog propagation mechanics for the changed Role and active BUSINESS-role dependents; activation never enumerates an unbounded parent set in the authoritative transaction.
 - Propagation emits minimized `catalog.access-target-availability-changed` triggers for affected Role/Entitlement targets and bounded `catalog.role-expansion-changed` triggers for affected Role expansions.
+- EffectiveAccess support revalidation checks the current Role expansion for role-derived support, so a superseded RoleVersion cannot keep an entitlement effective while projection repair is pending.
 - Access consumes only the target-availability trigger, re-reads the current decision and creates/reuses `AccessTargetReduction` only when the exact material cause still matches a terminal decision.
 - `AccessTargetReduction` pages exact non-terminal assignments by deterministic `(createdAt,id)` continuation and uses the ordinary Access termination command for CANCELLED/EXPIRED/REVOKED semantics.
 
