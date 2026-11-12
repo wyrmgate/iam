@@ -40,7 +40,7 @@ V13 does not invent profile-specific employee/service/workload fields that the c
 
 `Application` is a tenant-owned governable business application or capability. `ApplicationTarget` is a technical target/environment belonging to exactly one Application. A single connector may serve multiple targets through explicit Integration-owned `ConnectorBinding` objects.
 
-`Entitlement` is the smallest governable technical access unit. It belongs to one Application and optionally one compatible ApplicationTarget.
+`Entitlement` is the smallest governable technical access unit. Under ADR-0054 it belongs to exactly one Application and exactly one compatible ApplicationTarget; targetless Entitlements are not part of the current canonical model. Provider-native access identifiers remain Integration-owned observation/mapping provenance rather than Entitlement fields.
 
 IAM roles are business Catalog constructs:
 
@@ -51,7 +51,7 @@ Role composition is versioned through immutable `RoleVersion` objects. Initial c
 
 ADR-0049 adds deployment-owned `PlatformApplicationOffering`, typed admission state and `PlatformApplicationBinding` without turning tenant-owned Applications into cross-Tenant objects.
 
-ADR-0052 adds Catalog semantic access-target availability: `ASSIGNABLE`, `TEMPORARILY_UNAVAILABLE`, or `TERMINALLY_UNAVAILABLE`. Terminal target unavailability is Catalog truth; it never authorizes Catalog to mutate AccessAssignment.
+ADR-0052 adds Catalog semantic access-target availability: `ASSIGNABLE`, `TEMPORARILY_UNAVAILABLE`, or `TERMINALLY_UNAVAILABLE`. Terminal target unavailability is Catalog truth; it never authorizes Catalog to mutate AccessAssignment. ADR-0054 tightens the Catalog contract so every Entitlement has an exact ApplicationTarget and RoleVersion uses only `DRAFT -> READY -> ACTIVE -> SUPERSEDED` in the current runtime.
 
 ## Access intent and realization
 
