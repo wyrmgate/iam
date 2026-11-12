@@ -208,9 +208,14 @@ public final class RoleCommandService {
             validatePersistedVersion(tenant, role, version, true);
             RoleVersion activated = roles.activate(
                     tenant, roleVersionId, expectedRevision, now);
-            UUID correlationId = ids.nextId();
-            publishRoleAndParents(
-                    tenant, role, now, correlationId, activated.id());
+            availabilityPropagation.start(
+                    tenant,
+                    CatalogAvailabilityCauseKind.ROLE_VERSION,
+                    activated.id(),
+                    activated.revision(),
+                    now,
+                    null,
+                    null);
             return activated;
         });
     }
@@ -234,33 +239,6 @@ public final class RoleCommandService {
                     null);
             return retired;
         });
-    }
-
-    private void publishRoleAndParents(
-            TenantContext tenant,
-            Role role,
-            Instant now,
-            UUID correlationId,
-            UUID causationId) {
-        facts.changed(
-                tenant,
-                role.id(),
-                role.revision(),
-                now,
-                correlationId,
-                causationId);
-        if (role.type() != Role.RoleType.APPLICATION) return;
-        for (UUID parentId : roles.findActiveBusinessParents(
-                tenant, role.id())) {
-            roles.findRole(tenant, parentId).ifPresent(parent ->
-                    facts.changed(
-                            tenant,
-                            parent.id(),
-                            parent.revision(),
-                            now,
-                            correlationId,
-                            causationId));
-        }
     }
 
     private Role requireActiveRole(TenantContext tenant, UUID roleId) {
