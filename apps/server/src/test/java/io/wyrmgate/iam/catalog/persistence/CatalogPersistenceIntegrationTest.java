@@ -96,12 +96,46 @@ class CatalogPersistenceIntegrationTest {
         assertThatThrownBy(() -> jdbc.update("""
                         INSERT INTO catalog.entitlement (
                             id, tenant_id, application_id, application_target_id,
-                            code, native_key, entitlement_type, lifecycle_state,
-                            revision, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, 'bad-direct', NULL, 'GROUP', 'ACTIVE', 1, ?, ?)
+                            code, lifecycle_state, revision, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, 'bad-direct', 'ACTIVE', 1, ?, ?)
                         """,
                         ids.nextId(), first.tenantId(), otherApp.id(), target.id(),
                         Timestamp.from(NOW), Timestamp.from(NOW)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void entitlementSchemaRequiresTargetAndContainsNoProviderNativeTaxonomyColumns() {
+        Integer nullableTargetColumns = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'catalog'
+                  AND table_name = 'entitlement'
+                  AND column_name = 'application_target_id'
+                  AND is_nullable = 'YES'
+                """, Integer.class);
+        assertThat(nullableTargetColumns).isZero();
+
+        Integer removedColumns = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'catalog'
+                  AND table_name = 'entitlement'
+                  AND column_name IN ('native_key', 'entitlement_type')
+                """, Integer.class);
+        assertThat(removedColumns).isZero();
+
+        TenantContext tenant = tenant("target-required");
+        var app = commands.createApplication(tenant, "finance", "Finance", NOW);
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO catalog.entitlement (
+                    id, tenant_id, application_id, application_target_id,
+                    code, lifecycle_state, revision, created_at, updated_at)
+                VALUES (?, ?, ?, NULL, 'invalid', 'ACTIVE', 1, ?, ?)
+                """,
+                ids.nextId(), tenant.tenantId(), app.id(),
+                Timestamp.from(NOW), Timestamp.from(NOW)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
