@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Starts/reuses one Catalog-owned durable propagation for a committed retirement cause. */
+/** Starts/reuses one Catalog-owned durable propagation for a committed material Catalog change. */
 public final class CatalogAvailabilityPropagationStarter {
 
     private final CatalogAvailabilityPropagationRepository propagations;
