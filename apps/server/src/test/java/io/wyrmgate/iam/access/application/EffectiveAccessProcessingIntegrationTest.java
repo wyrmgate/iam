@@ -103,7 +103,11 @@ class EffectiveAccessProcessingIntegrationTest {
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         catalogCommands = new CatalogCommandService(
-                catalogRepository, ids, transactions);
+                catalogRepository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         catalogQuery = new CatalogQueryService(catalogRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
