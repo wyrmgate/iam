@@ -230,6 +230,45 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
     }
 
     @Override
+    public List<AccessAssignment> findTargetReductionPage(
+            TenantContext tenant,
+            AccessAssignment.TargetKind targetKind,
+            UUID targetId,
+            Instant snapshotAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        if (limit < 1 || limit > 500) {
+            throw new IllegalArgumentException(
+                    "target reduction page limit must be between 1 and 500");
+        }
+        String targetColumn = targetKind == AccessAssignment.TargetKind.ROLE
+                ? "role_id"
+                : "entitlement_id";
+        String pagePredicate = afterCreatedAt == null || afterId == null
+                ? ""
+                : " AND (created_at, id) > (?, ?)";
+        String sql = baseSelect()
+                + " WHERE tenant_id = ? AND target_kind = ? AND "
+                + targetColumn
+                + " = ? AND created_at <= ?"
+                + " AND lifecycle_state IN ('ACTIVE','SUSPENDED','SCHEDULED')"
+                + pagePredicate
+                + " ORDER BY created_at, id LIMIT ?";
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        args.add(tenant.tenantId());
+        args.add(targetKind.name());
+        args.add(targetId);
+        args.add(Timestamp.from(snapshotAt));
+        if (!pagePredicate.isEmpty()) {
+            args.add(Timestamp.from(afterCreatedAt));
+            args.add(afterId);
+        }
+        args.add(limit);
+        return jdbc.query(sql, (rs, row) -> assignment(rs), args.toArray());
+    }
+
+    @Override
     public AccessAssignment updateLifecycle(
             TenantContext tenant, UUID assignmentId, AccessAssignment.LifecycleState lifecycleState,
             long expectedRevision, Instant now) {
