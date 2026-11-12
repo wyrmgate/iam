@@ -95,10 +95,10 @@ class RolePersistenceIntegrationTest {
                 tenant, app.id(), "prod", NOW);
         var e1 = catalog.createEntitlement(
                 tenant, app.id(), target.id(),
-                "read", "read", "GROUP", NOW);
+                "read", NOW);
         var e2 = catalog.createEntitlement(
                 tenant, app.id(), target.id(),
-                "write", "write", "GROUP", NOW);
+                "write", NOW);
 
         Role role = roles.createRole(
                 tenant,
@@ -169,10 +169,10 @@ class RolePersistenceIntegrationTest {
                 tenant, app.id(), "prod", NOW);
         var firstEntitlement = catalog.createEntitlement(
                 tenant, app.id(), target.id(),
-                "first", "first", "GROUP", NOW);
+                "first", NOW);
         var secondEntitlement = catalog.createEntitlement(
                 tenant, app.id(), target.id(),
-                "second", "second", "GROUP", NOW);
+                "second", NOW);
 
         Role applicationRole = roles.createRole(
                 tenant,
@@ -252,10 +252,7 @@ class RolePersistenceIntegrationTest {
                 tenant,
                 appTwo.id(),
                 targetTwo.id(),
-                "foreign",
-                "foreign",
-                "GROUP",
-                NOW);
+                "foreign", NOW);
 
         Role role = roles.createRole(
                 tenant,
