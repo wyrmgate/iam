@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.catalog.application;
 
+import io.wyrmgate.iam.catalog.domain.CatalogAvailabilityCauseKind;
 import io.wyrmgate.iam.catalog.domain.CatalogLifecycleState;
 import io.wyrmgate.iam.catalog.domain.Entitlement;
 import io.wyrmgate.iam.catalog.domain.Role;
@@ -24,6 +25,7 @@ public final class RoleCommandService {
     private final CatalogRepository catalog;
     private final RoleRepository roles;
     private final RoleExpansionFactSink facts;
+    private final CatalogAvailabilityPropagationStarter availabilityPropagation;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
@@ -31,11 +33,14 @@ public final class RoleCommandService {
             CatalogRepository catalog,
             RoleRepository roles,
             RoleExpansionFactSink facts,
+            CatalogAvailabilityPropagationStarter availabilityPropagation,
             IdGenerator ids,
             TransactionExecutor transactions) {
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.roles = Objects.requireNonNull(roles, "roles");
         this.facts = Objects.requireNonNull(facts, "facts");
+        this.availabilityPropagation = Objects.requireNonNull(
+                availabilityPropagation, "availabilityPropagation");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -216,30 +221,17 @@ public final class RoleCommandService {
             long expectedRevision,
             Instant now) {
         return transactions.required(() -> {
-            Role current = requireActiveRole(tenant, roleId);
-            List<UUID> parents = current.type() == Role.RoleType.APPLICATION
-                    ? roles.findActiveBusinessParents(tenant, current.id())
-                    : List.of();
+            requireActiveRole(tenant, roleId);
             Role retired = roles.retireRole(
                     tenant, roleId, expectedRevision, now);
-            UUID correlationId = ids.nextId();
-            facts.changed(
+            availabilityPropagation.start(
                     tenant,
+                    CatalogAvailabilityCauseKind.ROLE,
                     retired.id(),
                     retired.revision(),
                     now,
-                    correlationId,
+                    null,
                     null);
-            for (UUID parentId : parents) {
-                roles.findRole(tenant, parentId).ifPresent(parent ->
-                        facts.changed(
-                                tenant,
-                                parent.id(),
-                                parent.revision(),
-                                now,
-                                correlationId,
-                                retired.id()));
-            }
             return retired;
         });
     }
