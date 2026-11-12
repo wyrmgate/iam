@@ -199,8 +199,8 @@ public final class JdbcCatalogRepository implements CatalogRepository {
             TenantContext tenant, UUID applicationId, PagePosition after, int limit) {
         if (after == null) {
             return jdbc.query("""
-                    SELECT id, application_id, application_target_id, code, native_key,
-                           entitlement_type, lifecycle_state, revision, created_at, updated_at
+                    SELECT id, application_id, application_target_id, code,
+                           lifecycle_state, revision, created_at, updated_at
                     FROM catalog.entitlement
                     WHERE tenant_id = ? AND application_id = ?
                     ORDER BY created_at, id
