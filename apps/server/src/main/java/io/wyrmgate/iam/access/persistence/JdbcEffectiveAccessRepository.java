@@ -474,6 +474,38 @@ public final class JdbcEffectiveAccessRepository
     }
 
     @Override
+    public List<UUID> currentSupportingAssignmentIds(
+            TenantContext tenant,
+            UUID identityId,
+            UUID entitlementId,
+            Instant at) {
+        return jdbc.query("""
+                SELECT DISTINCT s.access_assignment_id
+                FROM access.effective_access ea
+                JOIN access.effective_access_support s
+                  ON s.tenant_id = ea.tenant_id
+                 AND s.effective_access_id = ea.id
+                JOIN access.access_assignment a
+                  ON a.tenant_id = s.tenant_id
+                 AND a.id = s.access_assignment_id
+                WHERE ea.tenant_id = ?
+                  AND ea.identity_id = ?
+                  AND ea.entitlement_id = ?
+                  AND a.lifecycle_state NOT IN (
+                      'SUSPENDED', 'REVOKED', 'EXPIRED', 'CANCELLED')
+                  AND (a.valid_from IS NULL OR a.valid_from <= ?)
+                  AND (a.valid_until IS NULL OR a.valid_until > ?)
+                ORDER BY s.access_assignment_id
+                """,
+                (rs, row) -> rs.getObject("access_assignment_id", UUID.class),
+                tenant.tenantId(),
+                identityId,
+                entitlementId,
+                Timestamp.from(at),
+                Timestamp.from(at));
+    }
+
+    @Override
     public List<EffectiveAccess> findCurrentPage(
             TenantContext tenant,
             UUID identityId,
