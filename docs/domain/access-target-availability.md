@@ -67,6 +67,21 @@ Access projection/desired-state absence drives Integration remove/disable work. 
 
 Provider cleanup failure remains fulfillment/observation drift and may produce Governance findings. It cannot restore Access authority.
 
+## Implemented backend contract
+
+V15 implements this decision without introducing a new public Catalog resource:
+
+- `CatalogAccessTargetAvailabilityQuery` returns an optional decision for a known Role or Entitlement. Missing targets remain a separate not-found condition rather than a fourth availability state.
+- Entitlement decisions include owning Application and referenced ApplicationTarget lifecycle. APPLICATION Role decisions include owning Application lifecycle. BUSINESS Role terminality remains independent of Applications, while invalid current expansion is temporary unavailability.
+- AccessAssignment creation requires `ASSIGNABLE` before authority is created.
+- EffectiveAccess reads and semantic queries revalidate every supporting AccessAssignment against current Catalog availability, so stale projection rows cannot preserve authority after retirement or during temporary Role invalidity.
+- Catalog retirement starts/reuses `CatalogAvailabilityPropagation`, a Catalog-owned durable bounded process. Application/ApplicationTarget retirement is never expanded into an unbounded synchronous transaction.
+- Propagation emits minimized `catalog.access-target-availability-changed` triggers for affected Role/Entitlement targets and bounded `catalog.role-expansion-changed` triggers for affected Role expansions.
+- Access consumes only the target-availability trigger, re-reads the current decision and creates/reuses `AccessTargetReduction` only when the exact material cause still matches a terminal decision.
+- `AccessTargetReduction` pages exact non-terminal assignments by deterministic `(createdAt,id)` continuation and uses the ordinary Access termination command for CANCELLED/EXPIRED/REVOKED semantics.
+
+The two durable process tables are `catalog.access_target_availability_propagation` and `access.access_target_reduction`. They are process state owned by their respective capabilities; Platform outbox/scheduler mechanics remain delivery infrastructure only.
+
 ## Interface boundary
 
-The architecture requires a typed current-state Catalog availability query and a minimized change trigger/fact. Exact internal schema names, public endpoints and physical persistence are implementation contracts and may evolve without changing this ownership model.
+The architecture requires a typed current-state Catalog availability query and minimized internal change triggers/facts. No public target-availability CRUD or status-mutation endpoint is introduced. Exact physical names may evolve without changing the ownership model.
