@@ -16,7 +16,7 @@ The canonical Layer-4 business capabilities are:
 
 - **Tenancy** — deployment-owned Tenant identity/lifecycle and trusted tenant/deployment operation-scope boundary.
 - **Identity** — canonical Identity, typed profiles, organizations/relationships, SourceSystem/SourceRecord/IdentityLink, Principal, lifecycle and merge/split.
-- **Catalog** — Application, ApplicationTarget, Entitlement, Role/RoleVersion, governed SSO relying-party registration and deployment-owned platform application offerings/bindings.
+- **Catalog** — Application, ApplicationTarget, target-scoped Entitlement, Role/RoleVersion, governed SSO relying-party registration and deployment-owned platform application offerings/bindings.
 - **Access** — AccessAssignment authority plus EffectiveAccess and desired technical-state projections, IdentityAccessReduction and AccessTargetReduction.
 - **Governance** — requests, approvals, reviews, Policy/PolicyVersion, SoD/risk evaluation, GovernanceException and GovernanceFinding.
 - **Credential** — durable credential/authenticator governance, lifecycle, secret-reference boundary and rotation intent/process.

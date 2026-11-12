@@ -73,7 +73,7 @@ The canonical v3 Layer-4 capabilities are:
 
 1. **Tenancy** - deployment-owned Tenant identity and lifecycle; hard isolation/customer realm.
 2. **Identity** - governed subjects, typed profiles, Organizations/relationships, source/canonical semantics, Principals and Identity lifecycle.
-3. **Catalog** - Applications, ApplicationTargets, Entitlements, Roles/RoleVersions, SSO relying-party registration and deployment-owned platform application offerings/bindings.
+3. **Catalog** - Applications, ApplicationTargets, target-scoped Entitlements, Roles/RoleVersions, SSO relying-party registration and deployment-owned platform application offerings/bindings.
 4. **Access** - AccessAssignment business intent, EffectiveAccess and desired technical-state projections, lifecycle reduction and terminal-target reduction.
 5. **Governance** - requests, approvals, reviews, policies, risk/SoD, exceptions and findings.
 6. **Credential** - Principal-bound credential/authenticator metadata, lifecycle and rotation process state.
@@ -88,6 +88,7 @@ Only the owning capability mutates its authoritative state. Cross-capability col
 - Tenancy is a first-class capability under ADR-0051; Platform no longer owns Tenant business lifecycle.
 - Authentication/IdP/SSO remains composed rather than becoming a Layer-4 capability.
 - Catalog exposes semantic target availability; terminal target retirement drives Access-owned `AccessTargetReduction` under ADR-0052.
+- Catalog Entitlements are structurally scoped to exactly one ApplicationTarget under ADR-0054; provider-native entitlement identifiers remain Integration observation/mapping provenance.
 - Integration owns `PrincipalObservationMapping` technical interpretation under ADR-0050 while Identity remains sole owner of `Principal` authority.
 - Audit uses explicit `AuditEvidenceScope = TENANT(ownerTenantId) | DEPLOYMENT` under ADR-0053.
 

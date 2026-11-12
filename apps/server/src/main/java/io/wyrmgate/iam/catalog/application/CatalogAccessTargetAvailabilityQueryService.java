@@ -79,16 +79,6 @@ public final class CatalogAccessTargetAvailabilityQueryService
                     application.revision()));
         }
 
-        if (entitlement.applicationTargetId() == null) {
-            return Optional.of(decision(
-                    CatalogAccessTargetKind.ENTITLEMENT,
-                    entitlement.id(),
-                    CatalogAccessTargetAvailability.Status.TEMPORARILY_UNAVAILABLE,
-                    CatalogAvailabilityCauseKind.ENTITLEMENT,
-                    entitlement.id(),
-                    entitlement.revision()));
-        }
-
         var target = catalog.findTarget(
                 tenant, entitlement.applicationTargetId()).orElse(null);
         if (target == null) {

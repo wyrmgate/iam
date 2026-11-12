@@ -174,7 +174,7 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
         var app = catalog.createApplication(tenant, "finance", "Finance", NOW);
         var target = catalog.createTarget(tenant, app.id(), "prod", NOW);
         var entitlement = catalog.createEntitlement(
-                tenant, app.id(), target.id(), "report", "report", "GROUP", NOW);
+                tenant, app.id(), target.id(), "report", NOW);
 
         Role applicationRole = roles.createRole(
                 tenant,

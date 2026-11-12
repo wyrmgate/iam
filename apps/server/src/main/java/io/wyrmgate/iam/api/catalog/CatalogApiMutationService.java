@@ -226,8 +226,6 @@ final class CatalogApiMutationService {
             UUID applicationId,
             UUID targetId,
             String code,
-            String nativeKey,
-            String type,
             String key,
             RequestFingerprint fingerprint,
             Instant now,
@@ -249,7 +247,7 @@ final class CatalogApiMutationService {
                 return replayEntitlement(actor, registration, correlationId);
             }
             Entitlement created = commands.createEntitlement(
-                    actor.tenant(), applicationId, targetId, code, nativeKey, type, now);
+                    actor.tenant(), applicationId, targetId, code, now);
             complete(actor, "api.catalog.entitlement.create.v1", key, fingerprint,
                     "entitlement", created.id(), now);
             return created;

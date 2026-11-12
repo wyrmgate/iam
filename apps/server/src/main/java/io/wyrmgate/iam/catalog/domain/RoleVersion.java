@@ -35,11 +35,8 @@ public record RoleVersion(
 
     public enum State {
         DRAFT,
-        VALIDATING,
         READY,
         ACTIVE,
-        SUPERSEDED,
-        REJECTED,
-        CANCELLED
+        SUPERSEDED
     }
 }

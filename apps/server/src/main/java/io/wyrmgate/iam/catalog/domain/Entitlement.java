@@ -10,8 +10,6 @@ public record Entitlement(
         UUID applicationId,
         UUID applicationTargetId,
         String code,
-        String nativeKey,
-        String entitlementType,
         CatalogLifecycleState lifecycleState,
         long revision,
         Instant createdAt,
@@ -20,9 +18,8 @@ public record Entitlement(
     public Entitlement {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(applicationId, "applicationId");
+        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
         code = requireText(code, "code", 256);
-        nativeKey = optionalText(nativeKey, "nativeKey", 1024);
-        entitlementType = requireText(entitlementType, "entitlementType", 64);
         Objects.requireNonNull(lifecycleState, "lifecycleState");
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
@@ -39,8 +36,4 @@ public record Entitlement(
         return normalized;
     }
 
-    private static String optionalText(String value, String name, int max) {
-        if (value == null) return null;
-        return requireText(value, name, max);
-    }
 }

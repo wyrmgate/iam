@@ -69,9 +69,6 @@ public final class CatalogQueryService implements CatalogEntitlementReferenceQue
                 .isEmpty()) {
             return CatalogAccessReferenceQuery.EntitlementReference.retired();
         }
-        if (entitlement.applicationTargetId() == null) {
-            return CatalogAccessReferenceQuery.EntitlementReference.untargeted();
-        }
         Optional<ApplicationTarget> target =
                 repository.findTarget(tenant, entitlement.applicationTargetId());
         if (target.isEmpty()

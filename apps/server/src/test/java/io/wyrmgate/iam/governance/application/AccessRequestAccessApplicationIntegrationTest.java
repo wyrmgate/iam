@@ -496,14 +496,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                 application.id(),
                 "prod",
                 NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant,
-                application.id(),
-                target.id(),
-                "read-" + suffix,
-                "Read",
-                "GROUP",
-                NOW);
+        var entitlement = catalog.createEntitlement(tenant, application.id(), target.id(), "read-" + suffix, NOW);
         return new TargetEntitlement(
                 target.id(), entitlement.id());
     }

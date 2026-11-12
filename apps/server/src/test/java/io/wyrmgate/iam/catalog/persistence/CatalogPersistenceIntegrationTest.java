@@ -80,7 +80,7 @@ class CatalogPersistenceIntegrationTest {
         var otherApp = commands.createApplication(first, "hr", "HR", NOW);
         var target = commands.createTarget(first, app.id(), "prod", NOW);
         var entitlement = commands.createEntitlement(
-                first, app.id(), target.id(), "finance-read", "group-77", "GROUP", NOW);
+                first, app.id(), target.id(), "finance-read", NOW);
 
         assertThat(queries.findApplication(first, app.id())).contains(app);
         assertThat(queries.findApplication(second, app.id())).isEmpty();
@@ -89,19 +89,53 @@ class CatalogPersistenceIntegrationTest {
 
         assertThatThrownBy(() -> commands.createEntitlement(
                         first, otherApp.id(), target.id(),
-                        "bad", null, "GROUP", NOW))
+                        "bad", NOW))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("another application");
 
         assertThatThrownBy(() -> jdbc.update("""
                         INSERT INTO catalog.entitlement (
                             id, tenant_id, application_id, application_target_id,
-                            code, native_key, entitlement_type, lifecycle_state,
-                            revision, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, 'bad-direct', NULL, 'GROUP', 'ACTIVE', 1, ?, ?)
+                            code, lifecycle_state, revision, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, 'bad-direct', 'ACTIVE', 1, ?, ?)
                         """,
                         ids.nextId(), first.tenantId(), otherApp.id(), target.id(),
                         Timestamp.from(NOW), Timestamp.from(NOW)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void entitlementSchemaRequiresTargetAndContainsNoProviderNativeTaxonomyColumns() {
+        Integer nullableTargetColumns = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'catalog'
+                  AND table_name = 'entitlement'
+                  AND column_name = 'application_target_id'
+                  AND is_nullable = 'YES'
+                """, Integer.class);
+        assertThat(nullableTargetColumns).isZero();
+
+        Integer removedColumns = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM information_schema.columns
+                WHERE table_schema = 'catalog'
+                  AND table_name = 'entitlement'
+                  AND column_name IN ('native_key', 'entitlement_type')
+                """, Integer.class);
+        assertThat(removedColumns).isZero();
+
+        TenantContext tenant = tenant("target-required");
+        var app = commands.createApplication(tenant, "finance", "Finance", NOW);
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO catalog.entitlement (
+                    id, tenant_id, application_id, application_target_id,
+                    code, lifecycle_state, revision, created_at, updated_at)
+                VALUES (?, ?, ?, NULL, 'invalid', 'ACTIVE', 1, ?, ?)
+                """,
+                ids.nextId(), tenant.tenantId(), app.id(),
+                Timestamp.from(NOW), Timestamp.from(NOW)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -111,7 +145,7 @@ class CatalogPersistenceIntegrationTest {
         var app = commands.createApplication(tenant, "erp", "ERP", NOW);
         var target = commands.createTarget(tenant, app.id(), "prod", NOW);
         var entitlement = commands.createEntitlement(
-                tenant, app.id(), target.id(), "read", null, "GROUP", NOW);
+                tenant, app.id(), target.id(), "read", NOW);
 
         var retired = commands.retireApplication(
                 tenant, app.id(), app.revision(), NOW.plusSeconds(1));

@@ -6,7 +6,7 @@ This is the living implementation-facing contract for ADR-0052. It separates Cat
 
 ## Ownership
 
-Catalog owns whether a Role or Entitlement is currently assignable/available as a governed target.
+Catalog owns whether a Role or Entitlement is currently assignable/available as a governed target. Under ADR-0054 every Entitlement has exactly one ApplicationTarget; null-target Entitlements are not a current-state shape.
 
 Access owns `AccessAssignment`, `EffectiveAccess`, desired technical-state projections and `AccessTargetReduction`.
 
@@ -26,7 +26,7 @@ The result includes stable target identity and the material Catalog cause resour
 
 ### Terminal conditions
 
-- Entitlement: terminal when the Entitlement, its owning Application, or its referenced ApplicationTarget is retired.
+- Entitlement: terminal when the Entitlement, its owning Application, or its exact ApplicationTarget is retired.
 - APPLICATION Role: terminal when the Role itself or its owning Application is retired.
 - BUSINESS Role: terminal only when that Role itself is retired.
 
@@ -69,7 +69,7 @@ Provider cleanup failure remains fulfillment/observation drift and may produce G
 
 ## Implemented backend contract
 
-V15 implements this decision without introducing a new public Catalog resource:
+V15 implements this decision without introducing a new public Catalog resource. V16/ADR-0054 removes the former null-target Entitlement shape, so Entitlement availability no longer needs a targetless temporary-unavailability branch:
 
 - `CatalogAccessTargetAvailabilityQuery` returns an optional decision for a known Role or Entitlement. Missing targets remain a separate not-found condition rather than a fourth availability state.
 - Entitlement decisions include owning Application and referenced ApplicationTarget lifecycle. APPLICATION Role decisions include owning Application lifecycle. BUSINESS Role terminality remains independent of Applications, while invalid current expansion is temporary unavailability.

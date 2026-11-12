@@ -447,14 +447,7 @@ class EffectiveAccessProcessingIntegrationTest {
                 tenant, code, code, NOW);
         var target = catalogCommands.createTarget(
                 tenant, application.id(), "prod", NOW);
-        var entitlement = catalogCommands.createEntitlement(
-                tenant,
-                application.id(),
-                target.id(),
-                "standard",
-                "standard",
-                "GROUP",
-                NOW);
+        var entitlement = catalogCommands.createEntitlement(tenant, application.id(), target.id(), "standard", NOW);
         return new CatalogFixture(target, entitlement);
     }
 

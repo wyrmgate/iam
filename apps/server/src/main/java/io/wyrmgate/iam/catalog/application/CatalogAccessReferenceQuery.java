@@ -33,9 +33,6 @@ public interface CatalogAccessReferenceQuery {
             return new EntitlementReference(Status.RETIRED, null);
         }
 
-        public static EntitlementReference untargeted() {
-            return new EntitlementReference(Status.UNTARGETED, null);
-        }
 
         public static EntitlementReference targetRetired() {
             return new EntitlementReference(Status.TARGET_RETIRED, null);
@@ -46,7 +43,6 @@ public interface CatalogAccessReferenceQuery {
         VALID,
         NOT_FOUND,
         RETIRED,
-        UNTARGETED,
         TARGET_RETIRED
     }
 }

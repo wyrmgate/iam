@@ -321,10 +321,6 @@ public final class RoleCommandService {
                     throw new IllegalArgumentException(
                             "role entitlement application is retired");
                 }
-                if (entitlement.applicationTargetId() == null) {
-                    throw new IllegalArgumentException(
-                            "role entitlement must be target-scoped");
-                }
                 var target = catalog.findTarget(
                                 tenant, entitlement.applicationTargetId())
                         .orElseThrow(() -> new IllegalArgumentException(

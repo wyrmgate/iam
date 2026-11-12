@@ -9,7 +9,7 @@ test('Catalog workspace makes Application hierarchy and governed parent scope ex
     /Select an Application in Targets or Entitlements/,
     /Application Targets/,
     /belonging to exactly one governed Application/,
-    /An Entitlement may optionally be scoped to a compatible ApplicationTarget/,
+    /Every Entitlement is scoped to exactly one compatible ApplicationTarget/,
     /Known \$\{config\.label\} ID/,
     /server authorization still decides access/,
     /apiRequest<CatalogPage<CatalogParent>>\(withCursor\(config\.path/,
@@ -48,9 +48,12 @@ test('Catalog refinement keeps provider observation and authority boundaries vis
   assertSourceContains(
     catalog,
     /provider observations never become Catalog authority implicitly/,
-    /provider discovery remains observation, not Catalog maintenance/,
+    /provider discovery and provider-native identifiers remain Integration-owned observation\/mapping data/,
     /The browser does not infer authority from this selection/,
     /arbitrary JSON and in-place member patching are not supported/,
+    /Provider-native identifiers are mapped by Integration/,
+    /Required\. The Target must belong to this Application and remain active/,
+    /columns: \['code', 'applicationTargetId', 'lifecycleState', 'revision'\]/,
   );
   assertSourceExcludes(
     catalog,
@@ -59,5 +62,6 @@ test('Catalog refinement keeps provider observation and authority boundaries vis
     /VITE_.*BACKEND|BACKEND_ORIGIN/,
     /@mui\//,
     /\/observed-entitlements|\/observed-grants/,
+    /nativeKey|entitlementType/,
   );
 });

@@ -25,27 +25,43 @@ final class JdbcCatalogAccessTargetSearchQuery implements CatalogAccessTargetSea
         String pattern = "%" + escapeLike(normalized.toLowerCase()) + "%";
         return switch (kind) {
             case ROLE -> jdbc.query("""
-                    SELECT id, name, code, type
-                    FROM catalog.role
-                    WHERE tenant_id = ? AND lifecycle_state = 'ACTIVE'
-                      AND (LOWER(name) LIKE ? ESCAPE '\\' OR LOWER(code) LIKE ? ESCAPE '\\')
-                    ORDER BY LOWER(name), code, id
+                    SELECT r.id, r.name, r.code, r.role_type
+                    FROM catalog.role r
+                    LEFT JOIN catalog.application a
+                      ON a.tenant_id = r.tenant_id
+                     AND a.id = r.application_id
+                    WHERE r.tenant_id = ?
+                      AND r.lifecycle_state = 'ACTIVE'
+                      AND (r.role_type = 'BUSINESS' OR a.lifecycle_state = 'ACTIVE')
+                      AND (LOWER(r.name) LIKE ? ESCAPE '\\'
+                           OR LOWER(r.code) LIKE ? ESCAPE '\\')
+                    ORDER BY LOWER(r.name), r.code, r.id
                     LIMIT ?
                     """, (rs,row) -> new Result(
                             rs.getObject("id", java.util.UUID.class), Kind.ROLE,
-                            rs.getString("name"), rs.getString("code"), rs.getString("type")),
+                            rs.getString("name"), rs.getString("code"), rs.getString("role_type")),
                     tenant.tenantId(), pattern, pattern, limit);
             case ENTITLEMENT -> jdbc.query("""
-                    SELECT id, code, native_key, entitlement_type
-                    FROM catalog.entitlement
-                    WHERE tenant_id = ? AND lifecycle_state = 'ACTIVE'
-                      AND (LOWER(code) LIKE ? ESCAPE '\\'
-                           OR LOWER(COALESCE(native_key, '')) LIKE ? ESCAPE '\\')
-                    ORDER BY LOWER(code), id
+                    SELECT e.id, e.code, t.code AS target_code
+                    FROM catalog.entitlement e
+                    JOIN catalog.application a
+                      ON a.tenant_id = e.tenant_id
+                     AND a.id = e.application_id
+                     AND a.lifecycle_state = 'ACTIVE'
+                    JOIN catalog.application_target t
+                      ON t.tenant_id = e.tenant_id
+                     AND t.id = e.application_target_id
+                     AND t.application_id = e.application_id
+                     AND t.lifecycle_state = 'ACTIVE'
+                    WHERE e.tenant_id = ?
+                      AND e.lifecycle_state = 'ACTIVE'
+                      AND (LOWER(e.code) LIKE ? ESCAPE '\\'
+                           OR LOWER(t.code) LIKE ? ESCAPE '\\')
+                    ORDER BY LOWER(e.code), t.code, e.id
                     LIMIT ?
                     """, (rs,row) -> new Result(
                             rs.getObject("id", java.util.UUID.class), Kind.ENTITLEMENT,
-                            rs.getString("code"), rs.getString("code"), rs.getString("entitlement_type")),
+                            rs.getString("code"), rs.getString("code"), rs.getString("target_code")),
                     tenant.tenantId(), pattern, pattern, limit);
         };
     }

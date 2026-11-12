@@ -138,14 +138,7 @@ class CatalogRoleApiIntegrationTest {
                 tenant, "erp", "ERP", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant,
-                app.id(),
-                target.id(),
-                "finance-read",
-                "finance-read",
-                "GROUP",
-                NOW);
+        var entitlement = catalog.createEntitlement(tenant, app.id(), target.id(), "finance-read", NOW);
 
         String roleLocation = authorized.perform(
                         post("/api/v1/roles")
@@ -369,12 +362,8 @@ class CatalogRoleApiIntegrationTest {
                 tenant, "erp", "ERP", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var first = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "read", "read", "GROUP", NOW);
-        var second = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "write", "write", "GROUP", NOW);
+        var first = catalog.createEntitlement(tenant, app.id(), target.id(), "read", NOW);
+        var second = catalog.createEntitlement(tenant, app.id(), target.id(), "write", NOW);
 
         UUID roleId = createApplicationRole(app.id());
         UUID v1 = createVersion(roleId, first.id(), "v1-create");
@@ -466,9 +455,7 @@ class CatalogRoleApiIntegrationTest {
                 tenant, "erp", "ERP", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "read", "read", "GROUP", NOW);
+        var entitlement = catalog.createEntitlement(tenant, app.id(), target.id(), "read", NOW);
 
         UUID firstRole = createApplicationRole(app.id());
         createVersion(firstRole, entitlement.id(), "first-v1");

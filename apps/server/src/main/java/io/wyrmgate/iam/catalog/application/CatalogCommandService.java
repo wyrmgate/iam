@@ -183,8 +183,6 @@ public final class CatalogCommandService {
             UUID applicationId,
             UUID applicationTargetId,
             String code,
-            String nativeKey,
-            String entitlementType,
             Instant now) {
         return transactions.required(() -> {
             Application application = repository.findApplication(tenant, applicationId)
@@ -192,19 +190,18 @@ public final class CatalogCommandService {
             if (application.lifecycleState() != CatalogLifecycleState.ACTIVE) {
                 throw new IllegalArgumentException("application is retired");
             }
-            if (applicationTargetId != null) {
-                ApplicationTarget target = repository.findTarget(tenant, applicationTargetId)
-                        .orElseThrow(() -> new IllegalArgumentException("application target does not exist"));
-                if (!target.applicationId().equals(applicationId)) {
-                    throw new IllegalArgumentException("application target belongs to another application");
-                }
-                if (target.lifecycleState() != CatalogLifecycleState.ACTIVE) {
-                    throw new IllegalArgumentException("application target is retired");
-                }
+            Objects.requireNonNull(applicationTargetId, "applicationTargetId");
+            ApplicationTarget target = repository.findTarget(tenant, applicationTargetId)
+                    .orElseThrow(() -> new IllegalArgumentException("application target does not exist"));
+            if (!target.applicationId().equals(applicationId)) {
+                throw new IllegalArgumentException("application target belongs to another application");
+            }
+            if (target.lifecycleState() != CatalogLifecycleState.ACTIVE) {
+                throw new IllegalArgumentException("application target is retired");
             }
             Entitlement entitlement = new Entitlement(
-                    ids.nextId(), applicationId, applicationTargetId, code, nativeKey,
-                    entitlementType, CatalogLifecycleState.ACTIVE, 1, now, now);
+                    ids.nextId(), applicationId, applicationTargetId, code,
+                    CatalogLifecycleState.ACTIVE, 1, now, now);
             repository.insertEntitlement(tenant, entitlement);
             return entitlement;
         });

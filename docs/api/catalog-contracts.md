@@ -6,12 +6,12 @@ The Catalog runtime now implements authoritative:
 
 - `Application`;
 - `ApplicationTarget`;
-- `Entitlement`;
+- target-scoped `Entitlement`;
 - internal/runtime `Role` and `RoleVersion` composition.
 
 The checked-in public Catalog HTTP contract now exposes Application/ApplicationTarget/Entitlement plus governed Role/RoleVersion management. Access consumes Role composition through the framework-neutral `RoleExpansionQuery` and current assignability through the internal `CatalogAccessTargetAvailabilityQuery`; the public management API never becomes an Access projection shortcut.
 
-ADR-0052/V15 adds no new public Catalog endpoint. Retirement effects are owner-local semantic facts and internal durable processing: Catalog remains authoritative for target availability, while Access alone terminates AccessAssignment authority. Automatic provider observation adoption, AccessAssignment authority, EffectiveAccess ownership, and provider-side grant execution remain outside Catalog. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
+ADR-0052/V15 adds no new public Catalog endpoint. ADR-0054/V16 tightens Entitlement creation so `applicationTargetId` is required and removes provider-native/untyped `nativeKey` and `entitlementType` from Catalog authority. Retirement effects are owner-local semantic facts and internal durable processing: Catalog remains authoritative for target availability, while Access alone terminates AccessAssignment authority. Automatic provider observation adoption, AccessAssignment authority, EffectiveAccess ownership, and provider-side grant execution remain outside Catalog. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
 
 Machine-readable contract:
 
@@ -28,6 +28,7 @@ An Entitlement has a stable IAM ID. A SCIM Group/provider object ID is provider-
 ## Role runtime boundary
 
 - Role is either BUSINESS or APPLICATION.
+- RoleVersion lifecycle in the current runtime is `DRAFT -> READY -> ACTIVE -> SUPERSEDED`; failed validation leaves DRAFT unchanged.
 - APPLICATION Role belongs to exactly one active Application.
 - APPLICATION RoleVersion contains only active target-scoped Entitlements from that Application.
 - BUSINESS RoleVersion contains target-scoped Entitlements and/or APPLICATION Roles; BUSINESS -> BUSINESS and APPLICATION -> Role are not supported.
@@ -93,8 +94,8 @@ Catalog target never grants authority to assign it.
 
 - ApplicationTarget belongs to exactly one Application.
 - Entitlement belongs to exactly one Application.
-- Entitlement may optionally reference one ApplicationTarget.
-- If a target is referenced, the target must belong to the same Application.
+- Entitlement references exactly one ApplicationTarget.
+- The ApplicationTarget must belong to the same Application as the Entitlement.
 - tenant isolation applies to every Catalog row/reference.
 - Application code is tenant-unique.
 - ApplicationTarget code is unique within its Application.
@@ -126,10 +127,11 @@ ApplicationTarget:
 
 Entitlement:
 
-- `applicationId`, optional `applicationTargetId`, `code`, `nativeKey`, and `entitlementType` are creation-time fields in this slice;
+- `applicationId`, required `applicationTargetId`, and `code` are creation-time fields in this slice;
+- the target must be active and belong to the same Application;
 - lifecycle changes through explicit `retire`.
 
-Provider discovery is not an entitlement-maintenance operation.
+Provider discovery and provider-native identifiers are not Entitlement-maintenance fields. Integration owns provider observation and `EntitlementObservationMapping`.
 
 ## HTTP resources
 
@@ -187,7 +189,7 @@ Continuation cursors use the platform signing boundary and are:
 - time-bounded.
 
 The bounded access-target lookup is not cursor paged; it is deliberately capped at 20
-results and callers refine the search string rather than enumerating the tenant Catalog.
+results and callers refine the search string rather than enumerating the tenant Catalog. Entitlement search uses governed Catalog code and ApplicationTarget presentation, not provider-native identifiers.
 
 A target-list cursor cannot be replayed as an entitlement-list cursor or against another Application.
 
@@ -216,4 +218,4 @@ The initial semantic permissions are:
 
 Administrative Authorization remains default-deny and independent from governed IAM Roles/Entitlements.
 
-Public Application create/rename/retire, ApplicationTarget create/retire, and Entitlement create/retire attempts append data-minimized ADR-0031 AuditRecord evidence after the Catalog transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target resource when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Catalog codes/names, entitlement native keys/types, request payloads, provider observations/mappings, Access state, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Catalog business outcome.
+Public Application create/rename/retire, ApplicationTarget create/retire, and Entitlement create/retire attempts append data-minimized ADR-0031 AuditRecord evidence after the Catalog transaction commits or rolls back. Audit retains only the governed actor, exact semantic action, target resource when known, normalized SUCCESS/DENIED/FAILURE outcome, occurrence time, and request correlation ID. Catalog codes/names, request payloads, provider observations/mappings, Access state, and exception detail are excluded. Audit persistence failure is logged operationally and never rewrites the Catalog business outcome.

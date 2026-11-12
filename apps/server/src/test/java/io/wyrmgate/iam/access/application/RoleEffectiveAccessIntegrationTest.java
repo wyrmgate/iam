@@ -246,20 +246,14 @@ class RoleEffectiveAccessIntegrationTest {
                 tenant, "one", "One", NOW);
         var targetOne = catalog.createTarget(
                 tenant, appOne.id(), "prod", NOW);
-        var e1 = catalog.createEntitlement(
-                tenant, appOne.id(), targetOne.id(),
-                "one-read", "one-read", "GROUP", NOW);
-        var e1Next = catalog.createEntitlement(
-                tenant, appOne.id(), targetOne.id(),
-                "one-write", "one-write", "GROUP", NOW);
+        var e1 = catalog.createEntitlement(tenant, appOne.id(), targetOne.id(), "one-read", NOW);
+        var e1Next = catalog.createEntitlement(tenant, appOne.id(), targetOne.id(), "one-write", NOW);
 
         var appTwo = catalog.createApplication(
                 tenant, "two", "Two", NOW);
         var targetTwo = catalog.createTarget(
                 tenant, appTwo.id(), "prod", NOW);
-        var e2 = catalog.createEntitlement(
-                tenant, appTwo.id(), targetTwo.id(),
-                "two-read", "two-read", "GROUP", NOW);
+        var e2 = catalog.createEntitlement(tenant, appTwo.id(), targetTwo.id(), "two-read", NOW);
 
         Role applicationRole = roles.createRole(
                 tenant,
@@ -385,9 +379,7 @@ class RoleEffectiveAccessIntegrationTest {
                 tenant, "app", "App", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "read", "read", "GROUP", NOW);
+        var entitlement = catalog.createEntitlement(tenant, app.id(), target.id(), "read", NOW);
         Role applicationRole = roles.createRole(
                 tenant,
                 Role.RoleType.APPLICATION,
@@ -426,9 +418,7 @@ class RoleEffectiveAccessIntegrationTest {
                 tenant, "other", "Other", NOW);
         var secondTarget = catalog.createTarget(
                 tenant, secondApp.id(), "prod", NOW);
-        var secondEntitlement = catalog.createEntitlement(
-                tenant, secondApp.id(), secondTarget.id(),
-                "read", "read", "GROUP", NOW);
+        var secondEntitlement = catalog.createEntitlement(tenant, secondApp.id(), secondTarget.id(), "read", NOW);
         Role businessRole = roles.createRole(
                 tenant,
                 Role.RoleType.BUSINESS,
