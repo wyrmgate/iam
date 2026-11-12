@@ -65,7 +65,10 @@ public final class EffectiveAccessReadService {
                             tenant, value.id(), at)
                     .stream()
                     .filter(support -> semanticSupport.contributes(
-                            tenant, support.accessAssignmentId(), at))
+                            tenant,
+                            support.accessAssignmentId(),
+                            value.entitlementId(),
+                            at))
                     .toList();
             if (!supports.isEmpty()) {
                 semantic.add(withSupportCount(
@@ -98,6 +101,7 @@ public final class EffectiveAccessReadService {
                                     .filter(support -> semanticSupport.contributes(
                                             tenant,
                                             support.accessAssignmentId(),
+                                            value.entitlementId(),
                                             at))
                                     .toList();
                     if (supports.isEmpty()) {
