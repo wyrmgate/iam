@@ -427,7 +427,7 @@ class AccessAssignmentPersistenceIntegrationTest {
                 null,
                 NOW.plusSeconds(2)))
                 .isInstanceOf(AccessAssignmentCommandException.class)
-                .hasMessageContaining("retired ApplicationTarget");
+                .hasMessageContaining("not currently assignable");
 
         var active = catalog(tenant, "validity", "prod");
         assertThatThrownBy(() -> assignments.createEntitlementAssignment(
