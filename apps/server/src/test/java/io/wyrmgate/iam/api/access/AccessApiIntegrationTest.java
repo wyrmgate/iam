@@ -194,6 +194,9 @@ class AccessApiIntegrationTest {
                         principalRepository);
         CatalogQueryService catalogQueries =
                 new CatalogQueryService(catalogRepository);
+        var catalogAvailability =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
+                        catalogRepository, roleRepository);
 
         assignmentRepository =
                 new JdbcAccessAssignmentRepository(jdbc);
@@ -204,6 +207,7 @@ class AccessApiIntegrationTest {
                         assignmentRepository,
                         identityReferences,
                         catalogQueries,
+                        catalogAvailability,
                         expansion,
                         new JdbcAccessAssignmentFactSink(
                                 outbox, ids),
@@ -214,9 +218,14 @@ class AccessApiIntegrationTest {
         assignmentQueries =
                 new AccessAssignmentQueryService(
                         assignmentRepository);
+        var semanticSupport =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
+                        assignmentRepository, catalogAvailability);
         effectiveReads =
                 new EffectiveAccessReadService(
-                        effectiveRepository);
+                        effectiveRepository,
+                        identityReferences,
+                        semanticSupport);
 
         var desiredRepository =
                 new JdbcDesiredStateProjectionRepository(
@@ -224,7 +233,9 @@ class AccessApiIntegrationTest {
         desiredDerivation =
                 new DesiredStateDerivationService(
                         new EffectiveAccessQueryService(
-                                effectiveRepository),
+                                effectiveRepository,
+                                identityReferences,
+                                semanticSupport),
                         desiredRepository,
                         catalogQueries,
                         identityReferences,
