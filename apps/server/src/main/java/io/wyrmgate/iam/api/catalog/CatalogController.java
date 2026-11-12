@@ -291,19 +291,15 @@ public class CatalogController {
             HttpServletRequest request) {
         UUID correlationId = CatalogApiRequestContext.resolveCorrelationId(request, ids);
         String key = validateIdempotencyKey(idempotencyKey, correlationId);
-        Map<String,Object> parsed = allowed(
-                body,
-                Set.of("applicationTargetId","code","nativeKey","entitlementType"),
-                Set.of("code","entitlementType"),
-                correlationId);
-        UUID targetId = optionalUuid(parsed.get("applicationTargetId"), "applicationTargetId", correlationId);
+        Map<String,Object> parsed = exact(
+                body, Set.of("applicationTargetId","code"), correlationId);
+        UUID targetId = requireUuid(
+                parsed.get("applicationTargetId"), "applicationTargetId", correlationId);
         String code = requireText(parsed, "code", 256, correlationId);
-        String nativeKey = optionalText(parsed, "nativeKey", 1024, correlationId);
-        String type = requireText(parsed, "entitlementType", 64, correlationId);
         AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
         Entitlement created = mutations.createEntitlement(
-                actor, applicationId, targetId, code, nativeKey, type, key,
-                fingerprint("entitlement:create", applicationId, targetId, code, nativeKey, type),
+                actor, applicationId, targetId, code, key,
+                fingerprint("entitlement:create", applicationId, targetId, code),
                 Instant.now(), correlationId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .header(HttpHeaders.ETAG, etag(created.revision()))
@@ -503,20 +499,19 @@ public class CatalogController {
         return text.trim();
     }
 
-    private static UUID optionalUuid(
+    private static UUID requireUuid(
             Object value,
             String field,
             UUID correlationId) {
-        if (value == null) return null;
         if (!(value instanceof String text)) {
             throw CatalogApiException.validation(
-                    correlationId, field, "invalid_uuid", field + " must be a UUID string or null.");
+                    correlationId, field, "invalid_uuid", field + " must be a UUID string.");
         }
         try {
             return UUID.fromString(text);
         } catch (IllegalArgumentException invalid) {
             throw CatalogApiException.validation(
-                    correlationId, field, "invalid_uuid", field + " must be a UUID string or null.");
+                    correlationId, field, "invalid_uuid", field + " must be a UUID string.");
         }
     }
 
@@ -548,8 +543,7 @@ public class CatalogController {
     private static EntitlementResource resource(Entitlement value) {
         return new EntitlementResource(
                 value.id(), value.applicationId(), value.applicationTargetId(),
-                value.code(), value.nativeKey(), value.entitlementType(),
-                value.lifecycleState().name(), value.revision(),
+                value.code(), value.lifecycleState().name(), value.revision(),
                 value.createdAt(), value.updatedAt());
     }
 }
