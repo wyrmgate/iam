@@ -43,8 +43,9 @@ class RolePersistenceIntegrationTest {
 
     @BeforeAll
     static void setUpDatabase() {
+        SharedPostgresIntegrationDatabase.reset();
         var dataSource = SharedPostgresIntegrationDatabase.dataSource();
-        jdbc = SharedPostgresIntegrationDatabase.jdbc();
+        jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new TenantTestFixture(jdbc, ids);
         TransactionExecutor transactions = new SpringTransactionExecutor(
