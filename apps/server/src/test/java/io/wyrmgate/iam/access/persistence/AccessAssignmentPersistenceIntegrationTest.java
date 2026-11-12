@@ -410,7 +410,7 @@ class AccessAssignmentPersistenceIntegrationTest {
                 null,
                 NOW))
                 .isInstanceOf(AccessAssignmentCommandException.class)
-                .hasMessageContaining("target-scoped");
+                .hasMessageContaining("not currently assignable");
 
         var targeted = catalog(tenant, "retired-target", "prod");
         catalogCommands.retireTarget(
