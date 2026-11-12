@@ -110,6 +110,7 @@ class LifecycleAccessReconciliationIntegrationTest {
                 assignments,
                 identityReferences,
                 catalog,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.alwaysAssignable(),
                 roles,
                 new JdbcAccessAssignmentFactSink(outbox, ids),
                 new JdbcAccessAssignmentBoundaryScheduler(
