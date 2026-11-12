@@ -80,7 +80,7 @@ class CatalogPersistenceIntegrationTest {
         var otherApp = commands.createApplication(first, "hr", "HR", NOW);
         var target = commands.createTarget(first, app.id(), "prod", NOW);
         var entitlement = commands.createEntitlement(
-                first, app.id(), target.id(), "finance-read", "group-77", "GROUP", NOW);
+                first, app.id(), target.id(), "finance-read", NOW);
 
         assertThat(queries.findApplication(first, app.id())).contains(app);
         assertThat(queries.findApplication(second, app.id())).isEmpty();
@@ -89,7 +89,7 @@ class CatalogPersistenceIntegrationTest {
 
         assertThatThrownBy(() -> commands.createEntitlement(
                         first, otherApp.id(), target.id(),
-                        "bad", null, "GROUP", NOW))
+                        "bad", NOW))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("another application");
 
@@ -111,7 +111,7 @@ class CatalogPersistenceIntegrationTest {
         var app = commands.createApplication(tenant, "erp", "ERP", NOW);
         var target = commands.createTarget(tenant, app.id(), "prod", NOW);
         var entitlement = commands.createEntitlement(
-                tenant, app.id(), target.id(), "read", null, "GROUP", NOW);
+                tenant, app.id(), target.id(), "read", NOW);
 
         var retired = commands.retireApplication(
                 tenant, app.id(), app.revision(), NOW.plusSeconds(1));
