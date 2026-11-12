@@ -16,8 +16,8 @@ public record Application(
 
     public Application {
         Objects.requireNonNull(id, "id");
-        code = requireText(code, "code", 128);
-        name = requireText(name, "name", 512);
+        code = normalizeCode(code);
+        name = normalizeName(name);
         Objects.requireNonNull(lifecycleState, "lifecycleState");
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
@@ -25,6 +25,14 @@ public record Application(
         if (updatedAt.isBefore(createdAt)) {
             throw new IllegalArgumentException("updatedAt must not be before createdAt");
         }
+    }
+
+    public static String normalizeCode(String value) {
+        return requireText(value, "code", 128);
+    }
+
+    public static String normalizeName(String value) {
+        return requireText(value, "name", 512);
     }
 
     private static String requireText(String value, String name, int max) {
