@@ -41,7 +41,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`security/control-plane-authentication.md`](security/control-plane-authentication.md) — external/federated and first-party control-plane authentication and bootstrap.
 - [`security/first-run-web-setup.md`](security/first-run-web-setup.md) — secured first-run web setup adapter.
 - [`security/identity-provider-sso.md`](security/identity-provider-sso.md) — first-party authentication, federation and SSO security boundary.
-- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0053.
+- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0054.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event semantics.
 - [`api/idp-sso-contracts.md`](api/idp-sso-contracts.md) — OIDC/OAuth/JWKS/session/claim/secret-boundary implementation contract.
@@ -91,9 +91,10 @@ The agreed v3 layered architecture reconciliation is now represented durably by 
 - ADR-0051 promotes Tenancy to a first-class capability owning deployment-scoped Tenant identity/lifecycle and trusted TENANT/DEPLOYMENT operation scope. The first backend implementation is V12: the stable Tenant root moves from `platform.tenant` to `tenancy.tenant`, existing operational Tenants migrate to `ACTIVE`, and fresh installation creates `PROVISIONING` then activates only after Administration confirms viable owner authority.
 - ADR-0052 defines Catalog target availability and Access-owned fail-safe `AccessTargetReduction` for terminal target retirement. V15 implements the typed three-state availability query, bounded Catalog retirement and RoleVersion expansion propagation, immediate EffectiveAccess semantic/support revalidation, and Access-owned durable reduction without cross-capability mutation.
 - ADR-0053 defines explicit `AuditEvidenceScope = TENANT(ownerTenantId) | DEPLOYMENT` without granting platform operators implicit tenant Audit visibility.
+- ADR-0054 tightens Catalog Entitlement semantics: every Entitlement now references exactly one ApplicationTarget, provider-native identifiers remain Integration mapping/observation provenance, and the current RoleVersion lifecycle is `DRAFT -> READY -> ACTIVE -> SUPERSEDED`. V16 implements the persistence contraction.
 - The first reconciled Identity backend migration is V13: Identity lifecycle transition mechanics reuse the framework-neutral lifecycle kernel while Identity retains its state/action graph, and the previously documented Organization/manager/membership/ownership model is now persisted as tenant-safe normalized authoritative state with temporal validity, typed provenance and optimistic revision. Public relationship APIs and source-driven relationship extraction remain separate future contracts.
 - [`architecture/layered-architecture.md`](architecture/layered-architecture.md) consolidates L1–L6 and Layer 6A–6I. The image-86 internal `Layer 6L` heading is treated as a labeling error; the reconciled area is 6I Runtime/Deployment/Availability/Recovery.
 
-The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0053 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
+The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0054 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
 
 OD-005 remains open until a concrete production provider environment implements the accepted ADR-0043 objectives and measured recovery/failover evidence proves them. OD-006 legacy migration/cutover remains open.
