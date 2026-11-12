@@ -133,7 +133,6 @@ public final class AccessTargetReductionProcessingService {
                 item.tenant(),
                 reduction.targetKind(),
                 reduction.targetId(),
-                reduction.snapshotAt(),
                 reduction.afterCreatedAt(),
                 reduction.afterAssignmentId(),
                 PAGE_SIZE + 1);
