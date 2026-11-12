@@ -97,6 +97,7 @@ public final class RoleCommandService {
                     "RoleVersion must contain at least one member");
         }
         Role role = requireActiveRole(tenant, roleId);
+        requireRoleParentAvailable(tenant, role);
         requireUniqueMembers(members);
         validateMembers(tenant, role, members, false);
 
@@ -176,6 +177,7 @@ public final class RoleCommandService {
                         "only DRAFT RoleVersion can become READY");
             }
             Role role = requireActiveRole(tenant, version.roleId());
+            requireRoleParentAvailable(tenant, role);
             validatePersistedVersion(tenant, role, version, true);
             if (version.revision() != expectedRevision) {
                 throw new io.wyrmgate.iam.platform.persistence.StaleWriteException(
@@ -205,6 +207,7 @@ public final class RoleCommandService {
                         "catalog-role-version", roleVersionId, expectedRevision);
             }
             Role role = requireActiveRole(tenant, version.roleId());
+            requireRoleParentAvailable(tenant, role);
             validatePersistedVersion(tenant, role, version, true);
             RoleVersion activated = roles.activate(
                     tenant, roleVersionId, expectedRevision, now);
@@ -239,6 +242,21 @@ public final class RoleCommandService {
                     null);
             return retired;
         });
+    }
+
+    private void requireRoleParentAvailable(
+            TenantContext tenant,
+            Role role) {
+        if (role.type() != Role.RoleType.APPLICATION) {
+            return;
+        }
+        if (catalog.findApplication(tenant, role.applicationId())
+                .filter(application -> application.lifecycleState()
+                        == CatalogLifecycleState.ACTIVE)
+                .isEmpty()) {
+            throw new IllegalArgumentException(
+                    "APPLICATION Role application is retired");
+        }
     }
 
     private Role requireActiveRole(TenantContext tenant, UUID roleId) {
@@ -296,6 +314,13 @@ public final class RoleCommandService {
                     throw new IllegalArgumentException(
                             "role entitlement is retired");
                 }
+                if (catalog.findApplication(tenant, entitlement.applicationId())
+                        .filter(application -> application.lifecycleState()
+                                == CatalogLifecycleState.ACTIVE)
+                        .isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "role entitlement application is retired");
+                }
                 if (entitlement.applicationTargetId() == null) {
                     throw new IllegalArgumentException(
                             "role entitlement must be target-scoped");
@@ -329,6 +354,7 @@ public final class RoleCommandService {
                 throw new IllegalArgumentException(
                         "BUSINESS Role may contain only APPLICATION Roles");
             }
+            requireRoleParentAvailable(tenant, child);
             if (child.lifecycleState() != CatalogLifecycleState.ACTIVE) {
                 throw new IllegalArgumentException(
                         "member APPLICATION Role is retired");
