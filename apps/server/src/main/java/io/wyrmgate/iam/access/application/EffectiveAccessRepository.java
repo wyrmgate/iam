@@ -49,6 +49,12 @@ public interface EffectiveAccessRepository {
             UUID effectiveAccessId,
             Instant at);
 
+    List<UUID> currentSupportingAssignmentIds(
+            TenantContext tenant,
+            UUID identityId,
+            UUID entitlementId,
+            Instant at);
+
     List<EffectiveAccess> findCurrentPage(
             TenantContext tenant,
             UUID identityId,
