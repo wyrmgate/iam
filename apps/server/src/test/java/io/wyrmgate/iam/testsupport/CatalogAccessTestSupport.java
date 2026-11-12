@@ -60,7 +60,9 @@ public final class CatalogAccessTestSupport {
 
     public static EffectiveAccessSemanticSupport semanticSupport(
             AccessAssignmentRepository assignments,
-            CatalogAccessTargetAvailabilityQuery availability) {
-        return new EffectiveAccessSemanticSupport(assignments, availability);
+            CatalogAccessTargetAvailabilityQuery availability,
+            io.wyrmgate.iam.catalog.application.RoleExpansionQuery roleExpansion) {
+        return new EffectiveAccessSemanticSupport(
+                assignments, availability, roleExpansion);
     }
 }
