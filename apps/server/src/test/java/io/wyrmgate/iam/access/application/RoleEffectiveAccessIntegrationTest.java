@@ -336,6 +336,18 @@ class RoleEffectiveAccessIntegrationTest {
                         e1Next.id())),
                 NOW.plusSeconds(10));
 
+        // Current Role expansion is authoritative immediately. The materialized
+        // EffectiveAccess rows still describe the old path until propagation runs.
+        assertThat(effectiveQuery.find(
+                tenant, identity.id(), e1.id(), "ANY",
+                NOW.plusSeconds(12))).isEmpty();
+        assertThat(effectiveQuery.find(
+                tenant, identity.id(), e1Next.id(), "ANY",
+                NOW.plusSeconds(12))).isEmpty();
+        assertThat(effectiveQuery.find(
+                tenant, identity.id(), e2.id(), "ANY",
+                NOW.plusSeconds(12))).isPresent();
+
         drainCatalogPropagation();
         processor(NOW.plusSeconds(13)).processAvailable();
 
