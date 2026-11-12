@@ -52,9 +52,10 @@ The active Flyway sequence at the ADR-0049 checkpoint is:
 12. `V12__tenancy_capability.sql`
 13. `V13__identity_organization_relationships.sql`
 14. `V14__principal_observation_mapping.sql`
-15. any legitimate later semantic migrations.
+15. `V15__catalog_access_target_availability_reduction.sql`
+16. any legitimate later semantic migrations.
 
-V1-V10 are the ADR-0048 capability baseline. V11 is schema-only: it adds explicit ADR-0049 platform/tenant-owner and platform-application structures but grants no authority, infers no owner and rewrites no tenant-owned Application row. V12 moves the existing Tenant table object from `platform` to `tenancy`, preserves stable IDs/foreign-key references, marks existing operational Tenants `ACTIVE`, and adds the ADR-0051 lifecycle constraint; fresh-install code creates new Tenants as `PROVISIONING`. V13 adds Identity-owned tenant-local Organization hierarchy plus first-class temporal manager, Organization-membership and ownership relationship tables with typed provenance and revision fencing. V14 implements ADR-0050 Integration-owned PrincipalObservationMapping without a cross-capability Principal foreign key.
+V1-V10 are the ADR-0048 capability baseline. V11 is schema-only: it adds explicit ADR-0049 platform/tenant-owner and platform-application structures but grants no authority, infers no owner and rewrites no tenant-owned Application row. V12 moves the existing Tenant table object from `platform` to `tenancy`, preserves stable IDs/foreign-key references, marks existing operational Tenants `ACTIVE`, and adds the ADR-0051 lifecycle constraint; fresh-install code creates new Tenants as `PROVISIONING`. V13 adds Identity-owned tenant-local Organization hierarchy plus first-class temporal manager, Organization-membership and ownership relationship tables with typed provenance and revision fencing. V14 implements ADR-0050 Integration-owned PrincipalObservationMapping without a cross-capability Principal foreign key. V15 implements ADR-0052 with Catalog-owned bounded access-target availability propagation and Access-owned durable target reduction; it does not add cross-capability persistence mutation or provider execution inside authoritative transactions.
 
 The former V1-V69 development migrations are no longer present in the repository or runtime migration location. Do not restore/copy them into a fresh deployment. Historical withdrawn V70 remains absent and reserved.
 
@@ -63,7 +64,7 @@ A database carrying the old V1-V69 Flyway history must not be switched in place 
 Verify before bootstrap:
 
 1. Flyway/application startup succeeds on the empty database;
-2. `flyway_schema_history` contains the capability baseline V1-V10 followed by V11 through V14 and only legitimate later migrations;
+2. `flyway_schema_history` contains the capability baseline V1-V10 followed by V11 through V15 and only legitimate later migrations;
 3. no failed or unresolved migration exists;
 4. schemas `tenancy`, `platform`, `identity`, `catalog`, `access`, `governance`, `credential`, `integration`, `administration` and `audit` exist;
 5. ADR-0049 platform-owned tables exist while ordinary tenant-owned capability tables still satisfy the tenant-isolation verifier; and
