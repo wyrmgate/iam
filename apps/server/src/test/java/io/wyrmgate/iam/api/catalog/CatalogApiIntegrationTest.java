@@ -172,14 +172,12 @@ class CatalogApiIntegrationTest {
                                 .content("""
                                         {
                                           "applicationTargetId":"%s",
-                                          "code":"finance-read",
-                                          "nativeKey":"scim-group-77",
-                                          "entitlementType":"GROUP"
+                                          "code":"finance-read"
                                         }
                                         """.formatted(targetId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.applicationTargetId").value(targetId.toString()))
-                .andExpect(jsonPath("$.nativeKey").value("scim-group-77"))
+                .andExpect(jsonPath("$.code").value("finance-read"))
                 .andReturn().getResponse().getHeader("Location");
         UUID entitlementId = UUID.fromString(
                 entitlementLocation.substring(entitlementLocation.lastIndexOf('/') + 1));
