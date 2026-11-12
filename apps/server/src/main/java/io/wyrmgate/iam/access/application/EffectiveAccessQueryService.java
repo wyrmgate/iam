@@ -12,18 +12,18 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
 
     private final EffectiveAccessRepository repository;
     private final IdentityAccessReferenceQuery identities;
-
-    public EffectiveAccessQueryService(
-            EffectiveAccessRepository repository) {
-        this(repository, null);
-    }
+    private final EffectiveAccessSemanticSupport semanticSupport;
 
     public EffectiveAccessQueryService(
             EffectiveAccessRepository repository,
-            IdentityAccessReferenceQuery identities) {
+            IdentityAccessReferenceQuery identities,
+            EffectiveAccessSemanticSupport semanticSupport) {
         this.repository = Objects.requireNonNull(
                 repository, "repository");
-        this.identities = identities;
+        this.identities = Objects.requireNonNull(
+                identities, "identities");
+        this.semanticSupport = Objects.requireNonNull(
+                semanticSupport, "semanticSupport");
     }
 
     @Override
@@ -39,8 +39,20 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
         if (!accessEligible(tenant, identityId)) {
             return Set.of();
         }
-        return Set.copyOf(repository.findCurrentEntitlementIds(
-                tenant, identityId, entitlementIds, at));
+        Set<UUID> projected = repository.findCurrentEntitlementIds(
+                tenant, identityId, entitlementIds, at);
+        java.util.LinkedHashSet<UUID> semantic = new java.util.LinkedHashSet<>();
+        for (UUID entitlementId : projected) {
+            boolean supported = repository.currentSupportingAssignmentIds(
+                            tenant, identityId, entitlementId, at)
+                    .stream()
+                    .anyMatch(assignmentId -> semanticSupport.contributes(
+                            tenant, assignmentId, at));
+            if (supported) {
+                semantic.add(entitlementId);
+            }
+        }
+        return Set.copyOf(semantic);
     }
 
     @Override
@@ -58,7 +70,11 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
                         tenant, identityId, entitlementId, principalConstraintKey, at)
                 .flatMap(effective -> {
                     var supports = repository.currentSupportingAssignmentIds(
-                            tenant, effective.id(), at);
+                                    tenant, effective.id(), at)
+                            .stream()
+                            .filter(assignmentId -> semanticSupport.contributes(
+                                    tenant, assignmentId, at))
+                            .toList();
                     if (supports.isEmpty()) return Optional.empty();
                     var semantic = new io.wyrmgate.iam.access.domain.EffectiveAccess(
                             effective.id(),
@@ -75,9 +91,6 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
     private boolean accessEligible(
             TenantContext tenant,
             UUID identityId) {
-        if (identities == null) {
-            return true;
-        }
         return identities.accessStatus(
                         tenant, identityId)
                 .status()
