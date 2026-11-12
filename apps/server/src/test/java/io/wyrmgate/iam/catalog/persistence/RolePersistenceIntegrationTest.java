@@ -35,6 +35,8 @@ class RolePersistenceIntegrationTest {
     private static CatalogCommandService catalog;
     private static RoleCommandService roles;
     private static RoleExpansionQuery expansion;
+    private static io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationService
+            availabilityPropagation;
 
     @BeforeAll
     static void setUpDatabase() {
@@ -63,6 +65,9 @@ class RolePersistenceIntegrationTest {
                 transactions);
         expansion = new RoleExpansionQueryService(
                 catalogRepository, roleRepository);
+        availabilityPropagation =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationService(
+                        jdbc, ids, transactions);
     }
 
     @BeforeEach
@@ -213,6 +218,7 @@ class RolePersistenceIntegrationTest {
                 List.of(RoleCommandService.MemberSpec.entitlement(
                         secondEntitlement.id())),
                 NOW.plusSeconds(8));
+        drainAvailabilityPropagation();
 
         var second = expansion.expandCurrent(
                 tenant, businessRole.id());
@@ -269,6 +275,16 @@ class RolePersistenceIntegrationTest {
                 .hasMessageContaining("another Application");
 
         assertThat(targetOne.id()).isNotNull();
+    }
+
+    private void drainAvailabilityPropagation() {
+        for (int i = 0; i < 20; i++) {
+            var batch = availabilityPropagation.processAvailable();
+            if (batch.claimed() == 0) {
+                return;
+            }
+        }
+        throw new AssertionError("Catalog availability propagation did not drain");
     }
 
     private io.wyrmgate.iam.catalog.domain.RoleVersion activate(
