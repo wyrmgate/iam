@@ -52,16 +52,15 @@ Canonical candidates are applicable only while their SourceRecord has a current 
 
 ## Role and policy versions
 
-Recommended lifecycle:
+RoleVersion lifecycle in the current Catalog runtime is:
 
 ```text
-DRAFT → VALIDATING → READY → ACTIVE → SUPERSEDED
-           ↘ REJECTED   ↘ CANCELLED
+DRAFT → READY → ACTIVE → SUPERSEDED
 ```
 
-An active usable Role/Policy has exactly one active version. Superseded content is never mutated or reactivated; a rollback publishes a new version.
+Validation is the explicit revision-guarded DRAFT -> READY operation. Failed validation leaves the RoleVersion in DRAFT; the current model has no synthetic VALIDATING, REJECTED or CANCELLED states. Activation atomically makes the selected READY version ACTIVE and supersedes the prior ACTIVE version. Superseded content is never mutated or reactivated; rollback creates a new RoleVersion. PolicyVersion retains its own Governance-owned lifecycle semantics.
 
-The first Role runtime slice keeps the accepted shallow graph explicit. An APPLICATION Role belongs to one Application and its RoleVersion contains only active target-scoped Entitlements from that same active Application. Creating, validating or activating new APPLICATION RoleVersion meaning requires the owning Application to remain ACTIVE. A BUSINESS Role may contain active target-scoped Entitlements and APPLICATION Roles, but not BUSINESS Roles; new/activated membership also requires each referenced Entitlement/Application Role to remain under an ACTIVE owning Application. BUSINESS expansion resolves each member APPLICATION Role through that child's current ACTIVE RoleVersion at expansion time, so a child version activation can change the effective expansion of an otherwise unchanged BUSINESS Role. Catalog emits semantic expansion-change facts for the changed Role and currently active BUSINESS parents through bounded durable propagation rather than unbounded authoritative-transaction fan-out.
+The first Role runtime slice keeps the accepted shallow graph explicit. An APPLICATION Role belongs to one Application and its RoleVersion contains only active target-scoped Entitlements from that same active Application. ADR-0054 makes target scope structural: every Entitlement references exactly one ApplicationTarget from its Application. Creating, validating or activating new APPLICATION RoleVersion meaning requires the owning Application to remain ACTIVE. A BUSINESS Role may contain active target-scoped Entitlements and APPLICATION Roles, but not BUSINESS Roles; new/activated membership also requires each referenced Entitlement/Application Role to remain under an ACTIVE owning Application. BUSINESS expansion resolves each member APPLICATION Role through that child's current ACTIVE RoleVersion at expansion time, so a child version activation can change the effective expansion of an otherwise unchanged BUSINESS Role. Catalog emits semantic expansion-change facts for the changed Role and currently active BUSINESS parents through bounded durable propagation rather than unbounded authoritative-transaction fan-out.
 
 RoleVersion membership is immutable after activation and after supersession. RoleVersion lifecycle is an authoritative concurrency boundary with its own positive revision: validation and activation are revision-guarded, and superseding the prior ACTIVE version advances that prior version's revision as part of the same activation transaction. Activation revalidates current member state and atomically supersedes the prior ACTIVE version so there is at most one ACTIVE RoleVersion per Role. A Role with no valid current expansion is not assignable for new access and contributes no role-derived EffectiveAccess until the expansion becomes valid again.
 
