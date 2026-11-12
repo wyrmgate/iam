@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** Bounded, replay-safe propagation of Catalog retirement effects to semantic triggers. */
+/** Bounded, replay-safe propagation of material Catalog availability/expansion changes. */
 public final class CatalogAvailabilityPropagationService {
 
     private static final Duration CLAIM_LEASE = Duration.ofSeconds(30);
