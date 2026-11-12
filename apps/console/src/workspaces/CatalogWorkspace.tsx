@@ -270,23 +270,19 @@ function ScopedCatalog({ kind }: { kind: ScopedKind }) {
           const spec: Spec = {
             eyebrow: 'Catalog · Application hierarchy',
             title: 'Entitlements',
-            description: 'Governed technical access for the selected Application. An Entitlement may optionally be scoped to a compatible ApplicationTarget; provider discovery remains observation, not Catalog maintenance.',
+            description: 'Governed technical access for the selected Application. Every Entitlement is scoped to exactly one compatible ApplicationTarget; provider discovery and provider-native identifiers remain Integration-owned observation/mapping data.',
             list: list(`${V1_ROOT}/applications/${encodeURIComponent(active)}/entitlements`),
             detail: (id) => `${V1_ROOT}/entitlements/${encodeURIComponent(id)}`,
-            columns: ['code', 'applicationTargetId', 'entitlementType', 'lifecycleState'],
+            columns: ['code', 'applicationTargetId', 'lifecycleState', 'revision'],
             create: {
               path: `${V1_ROOT}/applications/${encodeURIComponent(active)}/entitlements`,
               fields: [
-                { name: 'applicationTargetId', label: 'Application Target ID', help: 'Optional. When present, the server requires the Target to belong to this Application.' },
-                { name: 'code', label: 'Entitlement code', required: true, help: 'Stable within the selected Application.' },
-                { name: 'nativeKey', label: 'Native key', help: 'Creation-time Catalog metadata; provider observations remain Integration-owned.' },
-                { name: 'entitlementType', label: 'Entitlement type', required: true },
+                { name: 'applicationTargetId', label: 'Application Target ID', required: true, help: 'Required. The Target must belong to this Application and remain active.' },
+                { name: 'code', label: 'Entitlement code', required: true, help: 'Stable within the selected Application. Provider-native identifiers are mapped by Integration.' },
               ],
               body: (values) => ({
-                applicationTargetId: nullable(values.applicationTargetId),
+                applicationTargetId: values.applicationTargetId,
                 code: values.code,
-                nativeKey: nullable(values.nativeKey),
-                entitlementType: values.entitlementType,
               }),
             },
             actions: [{ label: 'Retire entitlement', path: (id) => `${V1_ROOT}/entitlements/${encodeURIComponent(id)}/retire`, destructive: true }],
