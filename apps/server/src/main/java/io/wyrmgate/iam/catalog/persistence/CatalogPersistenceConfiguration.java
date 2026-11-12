@@ -1,5 +1,6 @@
-import com.fasterxml.jackson.databind.ObjectMapper;
 package io.wyrmgate.iam.catalog.persistence;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.wyrmgate.iam.administration.application.PlatformOwnerAuthorityQuery;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityFactSink;
