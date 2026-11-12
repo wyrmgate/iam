@@ -66,7 +66,6 @@ public interface AccessAssignmentRepository {
             TenantContext tenant,
             AccessAssignment.TargetKind targetKind,
             UUID targetId,
-            Instant snapshotAt,
             Instant afterCreatedAt,
             UUID afterId,
             int limit);
