@@ -181,7 +181,7 @@ public final class JdbcCatalogAvailabilityPropagationRepository
             case APPLICATION -> "application_id = ?";
             case APPLICATION_TARGET -> "application_target_id = ?";
             case ENTITLEMENT -> "id = ?";
-            case ROLE -> "FALSE";
+            case ROLE, ROLE_VERSION -> "FALSE";
         };
         return jdbc.query(
                 """
@@ -203,7 +203,7 @@ public final class JdbcCatalogAvailabilityPropagationRepository
         String condition = switch (propagation.causeKind()) {
             case APPLICATION -> "role_type = 'APPLICATION' AND application_id = ?";
             case ROLE -> "id = ?";
-            case APPLICATION_TARGET, ENTITLEMENT -> "FALSE";
+            case APPLICATION_TARGET, ENTITLEMENT, ROLE_VERSION -> "FALSE";
         };
         return jdbc.query(
                 """
@@ -365,6 +365,42 @@ public final class JdbcCatalogAvailabilityPropagationRepository
                     """.formatted(checkpoint),
                     (rs, rowNum) -> resource(rs),
                     roleArgs(tenant, propagation, limit, 2));
+            case ROLE_VERSION -> jdbc.query(
+                    """
+                    SELECT r.id, r.revision, r.created_at
+                    FROM catalog.role r
+                    JOIN catalog.role_version source_version
+                      ON source_version.tenant_id = r.tenant_id
+                     AND source_version.id = ?
+                    JOIN catalog.role source_role
+                      ON source_role.tenant_id = source_version.tenant_id
+                     AND source_role.id = source_version.role_id
+                    WHERE r.tenant_id = ?
+                      AND (
+                          r.id = source_role.id
+                          OR (
+                              source_role.role_type = 'APPLICATION'
+                              AND r.lifecycle_state = 'ACTIVE'
+                              AND r.role_type = 'BUSINESS'
+                              AND EXISTS (
+                                  SELECT 1
+                                  FROM catalog.role_version rv
+                                  JOIN catalog.role_version_member m
+                                    ON m.tenant_id = rv.tenant_id
+                                   AND m.role_version_id = rv.id
+                                  WHERE rv.tenant_id = r.tenant_id
+                                    AND rv.role_id = r.id
+                                    AND rv.state = 'ACTIVE'
+                                    AND m.member_kind = 'APPLICATION_ROLE'
+                                    AND m.member_role_id = source_role.id
+                              )
+                          )
+                      ) %s
+                    ORDER BY r.created_at, r.id
+                    LIMIT ?
+                    """.formatted(checkpoint),
+                    (rs, rowNum) -> resource(rs),
+                    roleVersionArgs(tenant, propagation, limit));
         };
     }
 
@@ -381,6 +417,18 @@ public final class JdbcCatalogAvailabilityPropagationRepository
                 args.add(propagation.causeId());
             }
         }
+        appendCheckpoint(args, propagation);
+        args.add(limit);
+        return args.toArray();
+    }
+
+    private Object[] roleVersionArgs(
+            TenantContext tenant,
+            CatalogAvailabilityPropagation propagation,
+            int limit) {
+        java.util.ArrayList<Object> args = new java.util.ArrayList<>();
+        args.add(propagation.causeId());
+        args.add(tenant.tenantId());
         appendCheckpoint(args, propagation);
         args.add(limit);
         return args.toArray();
