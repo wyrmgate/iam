@@ -13,7 +13,6 @@ public record AccessTargetReduction(
         UUID sourceCauseId,
         long sourceCauseRevision,
         State state,
-        Instant snapshotAt,
         Instant afterCreatedAt,
         UUID afterAssignmentId,
         long processedAssignmentCount,
@@ -29,7 +28,6 @@ public record AccessTargetReduction(
         Objects.requireNonNull(sourceCauseKind, "sourceCauseKind");
         Objects.requireNonNull(sourceCauseId, "sourceCauseId");
         Objects.requireNonNull(state, "state");
-        Objects.requireNonNull(snapshotAt, "snapshotAt");
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
         if (sourceCauseRevision < 1 || revision < 1) {
