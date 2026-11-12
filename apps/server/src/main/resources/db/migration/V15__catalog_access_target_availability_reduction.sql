@@ -57,7 +57,6 @@ CREATE TABLE access.access_target_reduction (
     source_cause_id uuid NOT NULL,
     source_cause_revision bigint NOT NULL,
     lifecycle_state character varying(16) NOT NULL,
-    snapshot_at timestamp with time zone NOT NULL,
     after_created_at timestamp with time zone,
     after_assignment_id uuid,
     processed_assignment_count bigint DEFAULT 0 NOT NULL,
