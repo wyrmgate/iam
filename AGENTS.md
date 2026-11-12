@@ -43,6 +43,7 @@ Do not ask the user to restate decisions that are available in these canonical s
 - Identity is the governed subject; Principal is the technical representation/account; Credential belongs to Principal.
 - AccessAssignment is authoritative business access intent; EffectiveAccess and desired provider state are derived projections.
 - Catalog owns target availability; terminal target retirement causes immediate semantic Access suppression and Access-owned durable reduction, never Catalog mutation of AccessAssignment.
+- Catalog Entitlements are scoped to exactly one ApplicationTarget; provider-native entitlement identifiers belong to Integration observation/mapping provenance, not Catalog authority.
 - Integration may own typed provider-observation mappings, including PrincipalObservationMapping, but never Principal authority.
 - Audit evidence ownership is explicit TENANT or DEPLOYMENT scope; platform authority never implies unrestricted tenant Audit visibility.
 - Partial import/reconciliation never implies destructive absence.
