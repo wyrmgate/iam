@@ -234,7 +234,6 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
             TenantContext tenant,
             AccessAssignment.TargetKind targetKind,
             UUID targetId,
-            Instant snapshotAt,
             Instant afterCreatedAt,
             UUID afterId,
             int limit) {
@@ -251,7 +250,7 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
         String sql = baseSelect()
                 + " WHERE tenant_id = ? AND target_kind = ? AND "
                 + targetColumn
-                + " = ? AND created_at <= ?"
+                + " = ?"
                 + " AND lifecycle_state IN ('ACTIVE','SUSPENDED','SCHEDULED')"
                 + pagePredicate
                 + " ORDER BY created_at, id LIMIT ?";
@@ -259,7 +258,6 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
         args.add(tenant.tenantId());
         args.add(targetKind.name());
         args.add(targetId);
-        args.add(Timestamp.from(snapshotAt));
         if (!pagePredicate.isEmpty()) {
             args.add(Timestamp.from(afterCreatedAt));
             args.add(afterId);
