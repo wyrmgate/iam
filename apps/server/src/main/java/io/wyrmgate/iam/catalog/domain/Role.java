@@ -22,8 +22,8 @@ public record Role(
         Objects.requireNonNull(lifecycleState, "lifecycleState");
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
-        if (code == null || code.isBlank()) throw new IllegalArgumentException("code must not be blank");
-        if (name == null || name.isBlank()) throw new IllegalArgumentException("name must not be blank");
+        code = normalizeCode(code);
+        name = normalizeName(name);
         if (type == RoleType.APPLICATION) {
             Objects.requireNonNull(applicationId, "applicationId");
         } else if (applicationId != null) {
@@ -31,6 +31,25 @@ public record Role(
         }
         if (revision < 1) throw new IllegalArgumentException("revision must be positive");
         if (updatedAt.isBefore(createdAt)) throw new IllegalArgumentException("updatedAt must not be before createdAt");
+    }
+
+    public static String normalizeCode(String value) {
+        return requireText(value, "code", 128);
+    }
+
+    public static String normalizeName(String value) {
+        return requireText(value, "name", 512);
+    }
+
+    private static String requireText(String value, String name, int max) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " must not be blank");
+        }
+        String normalized = value.trim();
+        if (normalized.length() > max) {
+            throw new IllegalArgumentException(name + " exceeds maximum length");
+        }
+        return normalized;
     }
 
     public enum RoleType {
