@@ -58,7 +58,7 @@ Reasons:
 
 The application ID-generation port owns generation. Database UUID generation is not required for domain records. The canonical contract remains **opaque stable ID**; consumers must not infer business creation time, chronology or authorization semantics from UUID bits. Persisted timestamps and revisions are authoritative for those meanings.
 
-Business identifiers such as employee number, username, application code, entitlement native key and provider display name remain scoped natural/business keys and never replace the stable ID.
+Business identifiers such as employee number, username, application code and provider display name remain scoped natural/business keys and never replace the stable ID. Provider-native entitlement identifiers are Integration observation/mapping provenance rather than Catalog Entitlement identity.
 
 ## 3. Tenant isolation
 
@@ -231,15 +231,13 @@ catalog.entitlement
 - id uuid PRIMARY KEY
 - tenant_id uuid NOT NULL
 - application_id uuid NOT NULL
-- application_target_id uuid NULL
+- application_target_id uuid NOT NULL
 - code varchar(256) NOT NULL
-- native_key varchar(1024) NULL
-- entitlement_type varchar(64) NOT NULL
 - lifecycle_state varchar(24) NOT NULL
 - revision bigint NOT NULL
 - UNIQUE (tenant_id, id)
 - UNIQUE (tenant_id, application_id, code)
-- same-capability composite FKs to application/target
+- same-capability composite FKs enforce that target and Entitlement belong to the same Application
 ```
 
 ```text
@@ -260,6 +258,8 @@ catalog.role_version
 Activated/superseded RoleVersion content is immutable. The current ADR-0048 baseline V4 implements `catalog.role`, `catalog.role_version` and `catalog.role_version_member`, including a partial unique index that permits at most one ACTIVE version per Role and database triggers that reject activated/superseded content mutation. `catalog.role_version_member` normalizes composition and uses a typed `member_kind` plus mutually exclusive `member_role_id` / `member_entitlement_id`. The current executable graph is intentionally shallow: BUSINESS -> APPLICATION Role / Entitlement and APPLICATION Role -> Entitlement. Graph/type/current-member validation remains a Catalog domain invariant rather than an ORM cascade.
 
 V15 adds `catalog.access_target_availability_propagation` for bounded Catalog-owned propagation of material Application/ApplicationTarget/Entitlement/Role retirement causes and RoleVersion expansion changes, plus `access.access_target_reduction` for bounded Access-owned authoritative reduction. RoleVersion activation is therefore not an unbounded synchronous parent fan-out. Neither table introduces a cross-capability foreign key to the other capability's target/assignment state; collaboration is through typed semantic queries and data-minimized outbox facts.
+
+V16/ADR-0054 makes `catalog.entitlement.application_target_id` mandatory, removes the non-authoritative `native_key` and free-form `entitlement_type` columns, and narrows RoleVersion state to `DRAFT|READY|ACTIVE|SUPERSEDED`. The migration refuses retained null-target Entitlements or removed RoleVersion states rather than guessing a migration meaning.
 
 ### Access
 
