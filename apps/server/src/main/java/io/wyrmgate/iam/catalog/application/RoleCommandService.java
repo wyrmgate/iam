@@ -114,7 +114,7 @@ public final class RoleCommandService {
                 canonicalText.getBytes(StandardCharsets.UTF_8)).value();
 
         return transactions.required(() -> {
-            long versionNumber = roles.nextVersionNumber(tenant, roleId);
+            long versionNumber = roles.allocateNextVersionNumber(tenant, roleId);
             RoleVersion version = new RoleVersion(
                     ids.nextId(),
                     roleId,
