@@ -32,11 +32,11 @@ public final class JdbcAccessTargetReductionRepository
                 INSERT INTO access.access_target_reduction (
                     id, tenant_id, target_kind, target_id,
                     source_cause_kind, source_cause_id, source_cause_revision,
-                    lifecycle_state, snapshot_at,
+                    lifecycle_state,
                     after_created_at, after_assignment_id,
                     processed_assignment_count, revision,
                     created_at, updated_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (
                     tenant_id, target_kind, target_id,
                     source_cause_kind, source_cause_id, source_cause_revision)
@@ -50,7 +50,6 @@ public final class JdbcAccessTargetReductionRepository
                 reduction.sourceCauseId(),
                 reduction.sourceCauseRevision(),
                 reduction.state().name(),
-                Timestamp.from(reduction.snapshotAt()),
                 timestamp(reduction.afterCreatedAt()),
                 reduction.afterAssignmentId(),
                 reduction.processedAssignmentCount(),
@@ -157,7 +156,7 @@ public final class JdbcAccessTargetReductionRepository
         return """
                 SELECT id, target_kind, target_id,
                        source_cause_kind, source_cause_id, source_cause_revision,
-                       lifecycle_state, snapshot_at,
+                       lifecycle_state,
                        after_created_at, after_assignment_id,
                        processed_assignment_count, revision,
                        created_at, updated_at, completed_at
@@ -176,7 +175,6 @@ public final class JdbcAccessTargetReductionRepository
                 rs.getObject("source_cause_id", UUID.class),
                 rs.getLong("source_cause_revision"),
                 AccessTargetReduction.State.valueOf(rs.getString("lifecycle_state")),
-                rs.getTimestamp("snapshot_at").toInstant(),
                 after == null ? null : after.toInstant(),
                 rs.getObject("after_assignment_id", UUID.class),
                 rs.getLong("processed_assignment_count"),
