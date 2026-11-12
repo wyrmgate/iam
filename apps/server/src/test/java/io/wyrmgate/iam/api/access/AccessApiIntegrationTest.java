@@ -170,11 +170,17 @@ class AccessApiIntegrationTest {
                 new JdbcCatalogRepository(jdbc);
         var roleRepository = new JdbcRoleRepository(jdbc);
         catalog = new CatalogCommandService(
-                catalogRepository, ids, transactions);
+                catalogRepository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         roles = new RoleCommandService(
                 catalogRepository,
                 roleRepository,
                 new JdbcRoleExpansionFactSink(outbox, ids),
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
                 ids,
                 transactions);
         expansion = new RoleExpansionQueryService(
