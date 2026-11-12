@@ -182,7 +182,7 @@ class RoleEffectiveAccessIntegrationTest {
                 effectiveRepository,
                 identityReferences,
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
-                        assignmentRepository, catalogAvailability));
+                        assignmentRepository, catalogAvailability, expansion));
         desiredDerivation = new DesiredStateDerivationService(
                 effectiveQuery,
                 desiredRepository,
