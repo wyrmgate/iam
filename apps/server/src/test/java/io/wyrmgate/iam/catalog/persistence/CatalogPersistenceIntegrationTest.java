@@ -48,7 +48,12 @@ class CatalogPersistenceIntegrationTest {
         repository = new JdbcCatalogRepository(jdbc);
         TransactionExecutor transactions =
                 new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
-        commands = new CatalogCommandService(repository, ids, transactions);
+        commands = new CatalogCommandService(
+                repository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         queries = new CatalogQueryService(repository);
         ssoClients = new SsoClientRegistrationService(
                 repository, new JdbcSsoClientRegistrationRepository(jdbc), ids, transactions);
