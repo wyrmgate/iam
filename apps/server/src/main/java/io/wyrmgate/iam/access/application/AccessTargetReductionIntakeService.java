@@ -142,7 +142,6 @@ public final class AccessTargetReductionIntakeService {
                 causeId,
                 causeRevision,
                 AccessTargetReduction.State.RUNNING,
-                event.occurredAt(),
                 null,
                 null,
                 0,
