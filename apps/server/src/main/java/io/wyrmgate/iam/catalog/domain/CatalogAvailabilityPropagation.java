@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Catalog-owned durable bounded propagation of one material retirement cause. */
+/** Catalog-owned durable bounded propagation of one material availability/expansion cause. */
 public record CatalogAvailabilityPropagation(
         UUID id,
         CatalogAvailabilityCauseKind causeKind,
