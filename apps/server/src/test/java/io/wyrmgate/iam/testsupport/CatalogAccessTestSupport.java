@@ -4,6 +4,7 @@ import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
 import io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQueryService;
+import io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationService;
 import io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationStarter;
 import io.wyrmgate.iam.catalog.application.CatalogRepository;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQueryService;
@@ -34,6 +35,25 @@ public final class CatalogAccessTestSupport {
                 new JdbcCatalogAvailabilityPropagationWorkSink(
                         new JdbcOutboxRepository(jdbc), ids),
                 ids,
+                transactions);
+    }
+
+    public static CatalogAvailabilityPropagationService propagationService(
+            JdbcTemplate jdbc,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        var outbox = new JdbcOutboxRepository(jdbc);
+        var repository = new JdbcCatalogAvailabilityPropagationRepository(jdbc);
+        var work = new JdbcCatalogAvailabilityPropagationWorkSink(outbox, ids);
+        return new CatalogAvailabilityPropagationService(
+                outbox,
+                repository,
+                new io.wyrmgate.iam.catalog.persistence
+                        .JdbcCatalogAccessTargetAvailabilityFactSink(
+                                outbox, ids, new com.fasterxml.jackson.databind.ObjectMapper()),
+                new io.wyrmgate.iam.catalog.persistence.JdbcRoleExpansionFactSink(
+                        outbox, ids),
+                work,
                 transactions);
     }
 
