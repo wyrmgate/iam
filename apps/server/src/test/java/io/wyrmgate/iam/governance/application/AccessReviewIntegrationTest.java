@@ -140,6 +140,13 @@ class AccessReviewIntegrationTest {
                                 io.wyrmgate.iam.catalog.application
                                         .CatalogAccessReferenceQuery
                                         .EntitlementReference.notFound(),
+                        io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.alwaysAssignable(),
+                        (requestedTenant, roleId) ->
+                                io.wyrmgate.iam.catalog.application.RoleExpansionQuery.Result
+                                        .unavailable(
+                                                io.wyrmgate.iam.catalog.application
+                                                        .RoleExpansionQuery.Status.NOT_FOUND,
+                                                roleId),
                         (requestedTenant, assignment) -> { },
                         (requestedTenant, assignment, now) -> { },
                         ids,
