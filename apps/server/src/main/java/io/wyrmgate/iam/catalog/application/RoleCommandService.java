@@ -152,13 +152,11 @@ public final class RoleCommandService {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(roleId, "roleId");
         Objects.requireNonNull(now, "now");
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("name must not be blank");
-        }
+        String normalizedName = Role.normalizeName(name);
         return transactions.required(() -> {
             requireActiveRole(tenant, roleId);
             return roles.updateRoleName(
-                    tenant, roleId, name, expectedRevision, now);
+                    tenant, roleId, normalizedName, expectedRevision, now);
         });
     }
 
