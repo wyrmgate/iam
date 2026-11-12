@@ -20,7 +20,7 @@ CREATE TABLE catalog.access_target_availability_propagation (
     CONSTRAINT catalog_availability_propagation_source_uq
         UNIQUE (tenant_id, cause_kind, cause_id, cause_revision),
     CONSTRAINT catalog_availability_propagation_cause_ck
-        CHECK (cause_kind IN ('APPLICATION','APPLICATION_TARGET','ENTITLEMENT','ROLE')),
+        CHECK (cause_kind IN ('APPLICATION','APPLICATION_TARGET','ENTITLEMENT','ROLE','ROLE_VERSION')),
     CONSTRAINT catalog_availability_propagation_cause_revision_ck
         CHECK (cause_revision > 0),
     CONSTRAINT catalog_availability_propagation_phase_ck
