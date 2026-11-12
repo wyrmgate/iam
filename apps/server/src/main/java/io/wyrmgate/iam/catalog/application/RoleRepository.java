@@ -28,7 +28,11 @@ public interface RoleRepository {
 
     Role retireRole(TenantContext tenant, UUID roleId, long expectedRevision, Instant now);
 
-    long nextVersionNumber(TenantContext tenant, UUID roleId);
+    /**
+     * Allocates the next monotonically increasing version number while serializing
+     * concurrent allocation for the same active Role inside the caller's transaction.
+     */
+    long allocateNextVersionNumber(TenantContext tenant, UUID roleId);
 
     void insertVersion(
             TenantContext tenant,
