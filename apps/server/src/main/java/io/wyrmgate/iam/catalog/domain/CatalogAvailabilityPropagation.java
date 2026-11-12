@@ -50,7 +50,8 @@ public record CatalogAvailabilityPropagation(
     }
 
     public enum Phase {
-        TARGETS,
+        ENTITLEMENTS,
+        ROLES,
         ROLE_EXPANSIONS
     }
 
