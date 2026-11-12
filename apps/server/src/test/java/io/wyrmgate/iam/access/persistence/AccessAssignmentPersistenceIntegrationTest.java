@@ -374,24 +374,15 @@ class AccessAssignmentPersistenceIntegrationTest {
     }
 
     @Test
-    void rejectsMissingIdentityUntargetedEntitlementRetiredTargetAndEndedValidity() {
+    void rejectsMissingIdentityRetiredTargetAndEndedValidity() {
         TenantContext tenant = tenant("invalid");
         Identity identity = identity(tenant, "Invalid");
-        var application = catalogCommands.createApplication(
-                tenant, "untargeted", "untargeted", NOW);
-        var untargeted = catalogCommands.createEntitlement(
-                tenant,
-                application.id(),
-                null,
-                "global",
-                "global",
-                "GROUP",
-                NOW);
+        var missingIdentityTarget = catalog(tenant, "missing-identity", "prod");
 
         assertThatThrownBy(() -> assignments.createEntitlementAssignment(
                 tenant,
                 ids.nextId(),
-                untargeted.id(),
+                missingIdentityTarget.entitlement().id(),
                 AccessAssignment.PrincipalConstraintKind.ANY,
                 null,
                 null,
@@ -399,18 +390,6 @@ class AccessAssignmentPersistenceIntegrationTest {
                 NOW))
                 .isInstanceOf(AccessAssignmentCommandException.class)
                 .hasMessageContaining("Identity was not found");
-
-        assertThatThrownBy(() -> assignments.createEntitlementAssignment(
-                tenant,
-                identity.id(),
-                untargeted.id(),
-                AccessAssignment.PrincipalConstraintKind.ANY,
-                null,
-                null,
-                null,
-                NOW))
-                .isInstanceOf(AccessAssignmentCommandException.class)
-                .hasMessageContaining("not currently assignable");
 
         var targeted = catalog(tenant, "retired-target", "prod");
         catalogCommands.retireTarget(
@@ -470,8 +449,6 @@ class AccessAssignmentPersistenceIntegrationTest {
                 application.id(),
                 target.id(),
                 "standard",
-                "standard",
-                "GROUP",
                 NOW);
         return new CatalogFixture(application, target, entitlement);
     }
