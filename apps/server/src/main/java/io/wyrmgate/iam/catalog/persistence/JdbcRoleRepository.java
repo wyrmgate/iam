@@ -123,7 +123,7 @@ public final class JdbcRoleRepository implements RoleRepository {
     }
 
     @Override
-    public long nextVersionNumber(TenantContext tenant, UUID roleId) {
+    public long allocateNextVersionNumber(TenantContext tenant, UUID roleId) {
         List<UUID> locked = jdbc.query("""
                 SELECT id
                 FROM catalog.role
