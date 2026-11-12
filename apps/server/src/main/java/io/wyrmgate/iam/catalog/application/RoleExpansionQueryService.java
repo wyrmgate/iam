@@ -71,7 +71,11 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
             if (child == null
                     || child.type() != Role.RoleType.APPLICATION
                     || child.lifecycleState()
-                            != CatalogLifecycleState.ACTIVE) {
+                            != CatalogLifecycleState.ACTIVE
+                    || catalog.findApplication(tenant, child.applicationId())
+                            .filter(application -> application.lifecycleState()
+                                    == CatalogLifecycleState.ACTIVE)
+                            .isEmpty()) {
                 return Result.unavailable(Status.INVALID, roleId);
             }
             RoleVersion childVersion = roles.findActiveVersion(
@@ -109,7 +113,11 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
         if (entitlement == null
                 || entitlement.lifecycleState()
                         != CatalogLifecycleState.ACTIVE
-                || entitlement.applicationTargetId() == null) {
+                || entitlement.applicationTargetId() == null
+                || catalog.findApplication(tenant, entitlement.applicationId())
+                        .filter(application -> application.lifecycleState()
+                                == CatalogLifecycleState.ACTIVE)
+                        .isEmpty()) {
             return null;
         }
         var target = catalog.findTarget(
