@@ -1,5 +1,5 @@
 -- ADR-0052 Catalog target availability propagation and Access-owned target reduction.
--- Catalog owns retirement meaning/propagation. Access alone mutates AccessAssignment authority.
+-- Catalog owns availability/expansion meaning and propagation. Access alone mutates AccessAssignment authority.
 
 CREATE TABLE catalog.access_target_availability_propagation (
     id uuid PRIMARY KEY,
@@ -46,7 +46,7 @@ CREATE INDEX catalog_availability_propagation_running_idx
        (tenant_id, lifecycle_state, updated_at, id);
 
 COMMENT ON TABLE catalog.access_target_availability_propagation IS
-    'Catalog-owned bounded propagation of one material retirement cause to target-availability and role-expansion triggers.';
+    'Catalog-owned bounded propagation of one material availability/expansion cause to target-availability and role-expansion triggers.';
 
 CREATE TABLE access.access_target_reduction (
     id uuid PRIMARY KEY,
