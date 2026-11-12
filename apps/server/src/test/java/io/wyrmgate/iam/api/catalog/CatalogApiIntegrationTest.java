@@ -77,7 +77,12 @@ class CatalogApiIntegrationTest {
         repository = new JdbcCatalogRepository(jdbc);
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
-        commands = new CatalogCommandService(repository, ids, transactions);
+        commands = new CatalogCommandService(
+                repository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         queries = new CatalogQueryService(repository);
         idempotency = new JdbcIdempotencyRepository(jdbc, ids);
 }
