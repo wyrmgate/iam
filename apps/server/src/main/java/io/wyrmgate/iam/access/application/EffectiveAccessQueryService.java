@@ -47,7 +47,7 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
                             tenant, identityId, entitlementId, at)
                     .stream()
                     .anyMatch(assignmentId -> semanticSupport.contributes(
-                            tenant, assignmentId, at));
+                            tenant, assignmentId, entitlementId, at));
             if (supported) {
                 semantic.add(entitlementId);
             }
@@ -73,7 +73,10 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
                                     tenant, effective.id(), at)
                             .stream()
                             .filter(assignmentId -> semanticSupport.contributes(
-                                    tenant, assignmentId, at))
+                                    tenant,
+                                    assignmentId,
+                                    effective.entitlementId(),
+                                    at))
                             .toList();
                     if (supports.isEmpty()) return Optional.empty();
                     var semantic = new io.wyrmgate.iam.access.domain.EffectiveAccess(
