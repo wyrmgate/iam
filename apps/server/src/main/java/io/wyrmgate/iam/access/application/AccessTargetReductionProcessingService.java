@@ -164,7 +164,6 @@ public final class AccessTargetReductionProcessingService {
                 return null;
             }
 
-            int terminated = 0;
             for (AccessAssignment snapshot : selected) {
                 AccessAssignment latest = assignments.findById(
                                 item.tenant(), snapshot.id())
@@ -177,7 +176,6 @@ public final class AccessTargetReductionProcessingService {
                         latest.id(),
                         latest.revision(),
                         now);
-                terminated++;
             }
 
             Instant afterCreatedAt = selected.isEmpty()
@@ -191,7 +189,7 @@ public final class AccessTargetReductionProcessingService {
                     current.id(),
                     afterCreatedAt,
                     afterAssignmentId,
-                    terminated,
+                    selected.size(),
                     !hasMore,
                     current.revision(),
                     now);
