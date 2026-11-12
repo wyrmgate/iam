@@ -132,6 +132,9 @@ class RoleEffectiveAccessIntegrationTest {
                 transactions);
         expansion = new RoleExpansionQueryService(
                 catalogRepository, roleRepository);
+        var catalogAvailability =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
+                        catalogRepository, roleRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
         PrincipalFactSink noPrincipalFacts = new PrincipalFactSink() {
@@ -175,7 +178,11 @@ class RoleEffectiveAccessIntegrationTest {
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
         effectiveRepository = new JdbcEffectiveAccessRepository(jdbc, ids);
         desiredRepository = new JdbcDesiredStateProjectionRepository(jdbc, ids);
-        effectiveQuery = new EffectiveAccessQueryService(effectiveRepository);
+        effectiveQuery = new EffectiveAccessQueryService(
+                effectiveRepository,
+                identityReferences,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
+                        assignmentRepository, catalogAvailability));
         desiredDerivation = new DesiredStateDerivationService(
                 effectiveQuery,
                 desiredRepository,
@@ -189,6 +196,7 @@ class RoleEffectiveAccessIntegrationTest {
                 identityReferences,
                 new io.wyrmgate.iam.catalog.application.CatalogQueryService(
                         catalogRepository),
+                catalogAvailability,
                 expansion,
                 new JdbcAccessAssignmentFactSink(outbox, ids),
                 new JdbcAccessAssignmentBoundaryScheduler(scheduledWork),
