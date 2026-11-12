@@ -248,6 +248,64 @@ class CatalogApiIntegrationTest {
     }
 
     @Test
+    void entitlementCreateRejectsMissingTargetAndRemovedProviderFields() throws Exception {
+        String appLocation = authorized.perform(post("/api/v1/applications")
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "idem-entitlement-contract-app")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"catalog-contract\",\"name\":\"Catalog Contract\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getHeader("Location");
+        UUID appId = UUID.fromString(appLocation.substring(appLocation.lastIndexOf('/') + 1));
+
+        authorized.perform(post("/api/v1/applications/{id}/entitlements", appId)
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "idem-entitlement-no-target")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"missing-target\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_failed"));
+
+        String targetLocation = authorized.perform(post("/api/v1/applications/{id}/targets", appId)
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "idem-entitlement-contract-target")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"prod\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getHeader("Location");
+        UUID targetId = UUID.fromString(
+                targetLocation.substring(targetLocation.lastIndexOf('/') + 1));
+
+        authorized.perform(post("/api/v1/applications/{id}/entitlements", appId)
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "idem-entitlement-provider-field")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "applicationTargetId":"%s",
+                                  "code":"provider-shaped",
+                                  "nativeKey":"group-123"
+                                }
+                                """.formatted(targetId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_failed"));
+
+        authorized.perform(post("/api/v1/applications/{id}/entitlements", appId)
+                        .requestAttr(ACTOR_ATTRIBUTE, actor)
+                        .header("Idempotency-Key", "idem-entitlement-type-field")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "applicationTargetId":"%s",
+                                  "code":"typed-provider-shaped",
+                                  "entitlementType":"GROUP"
+                                }
+                                """.formatted(targetId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("validation_failed"));
+    }
+
+    @Test
     void staleRevisionIdempotencyConflictAndCursorContextAreRejected() throws Exception {
         String location = authorized.perform(post("/api/v1/applications")
                         .requestAttr(ACTOR_ATTRIBUTE, actor)
