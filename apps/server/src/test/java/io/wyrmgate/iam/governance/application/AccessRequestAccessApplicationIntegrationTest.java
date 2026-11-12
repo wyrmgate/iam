@@ -117,7 +117,11 @@ class AccessRequestAccessApplicationIntegrationTest {
 
         catalogRepository = new JdbcCatalogRepository(jdbc);
         catalog = new CatalogCommandService(
-                catalogRepository, ids, transactions);
+                catalogRepository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         roleExpansion = new RoleExpansionQueryService(
                 catalogRepository,
                 new JdbcRoleRepository(jdbc));
