@@ -107,6 +107,7 @@ A layer is not automatically a package, Maven module, process, microservice, sch
 - First-class relationships such as manager, organization, ownership and role composition must not be modeled as arbitrary extension attributes.
 - AccessAssignment represents authoritative business access intent. EffectiveAccess and desired technical state are derived projections.
 - Catalog owns governed access-target availability. Terminal target retirement immediately suppresses affected semantic EffectiveAccess and drives Access-owned durable `AccessTargetReduction`; Catalog never edits AccessAssignment.
+- Catalog Entitlements are scoped to exactly one ApplicationTarget; provider-native entitlement identifiers remain Integration observation/mapping provenance rather than Catalog authority.
 - Integration may own typed provider-observation interpretation such as EntitlementObservationMapping and PrincipalObservationMapping, but Identity remains the sole owner of Principal authority and observation never silently becomes business authority.
 - Audit evidence has explicit ownership scope: `TENANT(ownerTenantId)` or `DEPLOYMENT`. Platform authority does not imply unrestricted tenant Audit visibility.
 - OAuth/OIDC scopes and token claims are curated protocol projections and never become Wyrmgate AdministrativePermission automatically.
