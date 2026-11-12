@@ -68,6 +68,8 @@ class RoleEffectiveAccessIntegrationTest {
     private static JdbcDesiredStateProjectionRepository desiredRepository;
     private static AccessAssignmentCommandService assignments;
     private static DesiredStateDerivationService desiredDerivation;
+    private static io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationService
+            catalogPropagation;
     private static EffectiveAccessQuery effectiveQuery;
 
     @BeforeAll
@@ -132,6 +134,9 @@ class RoleEffectiveAccessIntegrationTest {
                 transactions);
         expansion = new RoleExpansionQueryService(
                 catalogRepository, roleRepository);
+        catalogPropagation =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationService(
+                        jdbc, ids, transactions);
         var catalogAvailability =
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
                         catalogRepository, roleRepository);
@@ -331,6 +336,7 @@ class RoleEffectiveAccessIntegrationTest {
                         e1Next.id())),
                 NOW.plusSeconds(10));
 
+        drainCatalogPropagation();
         processor(NOW.plusSeconds(13)).processAvailable();
 
         assertThat(effectiveQuery.find(
@@ -439,6 +445,16 @@ class RoleEffectiveAccessIntegrationTest {
                 NOW.plusSeconds(10)))
                 .isInstanceOf(AccessAssignmentCommandException.class)
                 .hasMessageContaining("exactly one ApplicationTarget");
+    }
+
+    private void drainCatalogPropagation() {
+        for (int i = 0; i < 20; i++) {
+            var batch = catalogPropagation.processAvailable();
+            if (batch.claimed() == 0) {
+                return;
+            }
+        }
+        throw new AssertionError("Catalog propagation did not drain");
     }
 
     private EffectiveAccessProcessingService processor(Instant at) {
