@@ -2,6 +2,10 @@ package io.wyrmgate.iam.access.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessAssignmentBoundaryScheduler;
+import io.wyrmgate.iam.access.application.AccessTargetReductionIntakeService;
+import io.wyrmgate.iam.access.application.AccessTargetReductionProcessingService;
+import io.wyrmgate.iam.access.application.AccessTargetReductionRepository;
+import io.wyrmgate.iam.access.application.AccessTargetReductionWorkSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
@@ -19,6 +23,7 @@ import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
+import io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionIntakeService;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionProcessingService;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionRepository;
@@ -37,6 +42,7 @@ import io.wyrmgate.iam.access.application.DesiredStateDerivationService;
 import io.wyrmgate.iam.access.application.DesiredStateProcessingService;
 import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
+import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.IdentityLifecycleAccessQuery;
@@ -67,6 +73,7 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentRepository repository,
             IdentityAccessReferenceQuery identityReferences,
             CatalogAccessReferenceQuery catalogReferences,
+            CatalogAccessTargetAvailabilityQuery catalogAvailability,
             RoleExpansionQuery roleExpansion,
             AccessAssignmentFactSink facts,
             AccessAssignmentBoundaryScheduler boundaries,
@@ -76,6 +83,7 @@ public class AccessPersistenceConfiguration {
                 repository,
                 identityReferences,
                 catalogReferences,
+                catalogAvailability,
                 roleExpansion,
                 facts,
                 boundaries,
@@ -228,6 +236,77 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
+    AccessTargetReductionRepository accessTargetReductionRepository(
+            JdbcTemplate jdbcTemplate) {
+        return new JdbcAccessTargetReductionRepository(jdbcTemplate);
+    }
+
+    @Bean
+    AccessTargetReductionWorkSink accessTargetReductionWorkSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator idGenerator) {
+        return new JdbcAccessTargetReductionWorkSink(
+                outboxRepository, idGenerator);
+    }
+
+    @Bean
+    AccessTargetReductionIntakeService accessTargetReductionIntakeService(
+            JdbcOutboxRepository outboxRepository,
+            AccessTargetReductionRepository reductions,
+            AccessTargetReductionWorkSink work,
+            CatalogAccessTargetAvailabilityQuery catalog,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            ObjectMapper objectMapper) {
+        return new AccessTargetReductionIntakeService(
+                outboxRepository,
+                reductions,
+                work,
+                catalog,
+                ids,
+                transactions,
+                objectMapper);
+    }
+
+    @Bean
+    AccessTargetReductionIntakeScheduler accessTargetReductionIntakeScheduler(
+            AccessTargetReductionIntakeService service) {
+        return new AccessTargetReductionIntakeScheduler(service);
+    }
+
+    @Bean
+    AccessTargetReductionProcessingService accessTargetReductionProcessingService(
+            JdbcOutboxRepository outboxRepository,
+            AccessTargetReductionRepository reductions,
+            AccessAssignmentRepository assignments,
+            AccessAssignmentCommandService commands,
+            CatalogAccessTargetAvailabilityQuery catalog,
+            AccessTargetReductionWorkSink work,
+            TransactionExecutor transactions) {
+        return new AccessTargetReductionProcessingService(
+                outboxRepository,
+                reductions,
+                assignments,
+                commands,
+                catalog,
+                work,
+                transactions);
+    }
+
+    @Bean
+    AccessTargetReductionProcessingScheduler accessTargetReductionProcessingScheduler(
+            AccessTargetReductionProcessingService service) {
+        return new AccessTargetReductionProcessingScheduler(service);
+    }
+
+    @Bean
+    EffectiveAccessSemanticSupport effectiveAccessSemanticSupport(
+            AccessAssignmentRepository assignments,
+            CatalogAccessTargetAvailabilityQuery catalog) {
+        return new EffectiveAccessSemanticSupport(assignments, catalog);
+    }
+
+    @Bean
     EffectiveAccessRepository effectiveAccessRepository(
             JdbcTemplate jdbcTemplate,
             IdGenerator idGenerator) {
@@ -237,17 +316,19 @@ public class AccessPersistenceConfiguration {
     @Bean
     EffectiveAccessQuery effectiveAccessQuery(
             EffectiveAccessRepository repository,
-            IdentityAccessReferenceQuery identities) {
+            IdentityAccessReferenceQuery identities,
+            EffectiveAccessSemanticSupport semanticSupport) {
         return new EffectiveAccessQueryService(
-                repository, identities);
+                repository, identities, semanticSupport);
     }
 
     @Bean
     EffectiveAccessReadService effectiveAccessReadService(
             EffectiveAccessRepository repository,
-            IdentityAccessReferenceQuery identities) {
+            IdentityAccessReferenceQuery identities,
+            EffectiveAccessSemanticSupport semanticSupport) {
         return new EffectiveAccessReadService(
-                repository, identities);
+                repository, identities, semanticSupport);
     }
 
     @Bean
