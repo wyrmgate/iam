@@ -31,6 +31,13 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
         if (role.lifecycleState() != CatalogLifecycleState.ACTIVE) {
             return Result.unavailable(Status.RETIRED, roleId);
         }
+        if (role.type() == Role.RoleType.APPLICATION
+                && catalog.findApplication(tenant, role.applicationId())
+                        .filter(application -> application.lifecycleState()
+                                == CatalogLifecycleState.ACTIVE)
+                        .isEmpty()) {
+            return Result.unavailable(Status.INVALID, roleId);
+        }
         RoleVersion version = roles.findActiveVersion(
                         tenant, roleId)
                 .orElse(null);
