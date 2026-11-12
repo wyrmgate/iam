@@ -2,6 +2,7 @@ package io.wyrmgate.iam.access.application;
 
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery;
+import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.catalog.domain.CatalogAccessTargetKind;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
@@ -15,17 +16,21 @@ public final class EffectiveAccessSemanticSupport {
 
     private final AccessAssignmentRepository assignments;
     private final CatalogAccessTargetAvailabilityQuery catalog;
+    private final RoleExpansionQuery roleExpansion;
 
     public EffectiveAccessSemanticSupport(
             AccessAssignmentRepository assignments,
-            CatalogAccessTargetAvailabilityQuery catalog) {
+            CatalogAccessTargetAvailabilityQuery catalog,
+            RoleExpansionQuery roleExpansion) {
         this.assignments = Objects.requireNonNull(assignments, "assignments");
         this.catalog = Objects.requireNonNull(catalog, "catalog");
+        this.roleExpansion = Objects.requireNonNull(roleExpansion, "roleExpansion");
     }
 
     public boolean contributes(
             TenantContext tenant,
             UUID assignmentId,
+            UUID entitlementId,
             Instant at) {
         AccessAssignment assignment = assignments.findById(
                         tenant, assignmentId)
@@ -40,8 +45,20 @@ public final class EffectiveAccessSemanticSupport {
                 == AccessAssignment.TargetKind.ROLE
                 ? assignment.roleId()
                 : assignment.entitlementId();
-        return catalog.currentAvailability(tenant, targetKind, targetId)
+        boolean assignable = catalog.currentAvailability(
+                        tenant, targetKind, targetId)
                 .map(decision -> decision.assignable())
                 .orElse(false);
+        if (!assignable) {
+            return false;
+        }
+        if (assignment.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT) {
+            return assignment.entitlementId().equals(entitlementId);
+        }
+        RoleExpansionQuery.Result current = roleExpansion.expandCurrent(
+                tenant, assignment.roleId());
+        return current.status() == RoleExpansionQuery.Status.AVAILABLE
+                && current.paths().stream()
+                        .anyMatch(path -> path.entitlementId().equals(entitlementId));
     }
 }
