@@ -80,9 +80,10 @@ public final class CatalogCommandService {
             String name,
             long expectedRevision,
             Instant now) {
+        String normalizedName = Application.normalizeName(name);
         return transactions.required(() ->
                 repository.updateApplicationName(
-                        tenant, applicationId, name, expectedRevision, now));
+                        tenant, applicationId, normalizedName, expectedRevision, now));
     }
 
     public Application retireApplication(
