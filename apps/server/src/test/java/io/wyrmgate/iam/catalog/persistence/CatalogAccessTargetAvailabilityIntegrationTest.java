@@ -216,7 +216,7 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
                 null,
                 entitlement.id(),
                 AccessAssignment.LifecycleState.SCHEDULED,
-                NOW.plusSeconds(3600),
+                NOW.plusSeconds(86400),
                 null);
         AccessAssignment ended = assignment(
                 identityId,
