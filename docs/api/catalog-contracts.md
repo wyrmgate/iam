@@ -9,7 +9,9 @@ The Catalog runtime now implements authoritative:
 - `Entitlement`;
 - internal/runtime `Role` and `RoleVersion` composition.
 
-The checked-in public Catalog HTTP contract now exposes Application/ApplicationTarget/Entitlement plus governed Role/RoleVersion management. Access still consumes Role composition only through the framework-neutral `RoleExpansionQuery`; the public management API never becomes an Access projection shortcut. Automatic provider observation adoption, AccessAssignment authority, EffectiveAccess ownership, and provider-side grant execution remain outside Catalog. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
+The checked-in public Catalog HTTP contract now exposes Application/ApplicationTarget/Entitlement plus governed Role/RoleVersion management. Access consumes Role composition through the framework-neutral `RoleExpansionQuery` and current assignability through the internal `CatalogAccessTargetAvailabilityQuery`; the public management API never becomes an Access projection shortcut.
+
+ADR-0052/V15 adds no new public Catalog endpoint. Retirement effects are owner-local semantic facts and internal durable processing: Catalog remains authoritative for target availability, while Access alone terminates AccessAssignment authority. Automatic provider observation adoption, AccessAssignment authority, EffectiveAccess ownership, and provider-side grant execution remain outside Catalog. Integration may explicitly map a provider entitlement observation to an existing Catalog Entitlement through the ADR-0015 semantic validation boundary.
 
 Machine-readable contract:
 
