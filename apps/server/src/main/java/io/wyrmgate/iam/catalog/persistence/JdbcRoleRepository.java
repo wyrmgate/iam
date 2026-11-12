@@ -124,6 +124,20 @@ public final class JdbcRoleRepository implements RoleRepository {
 
     @Override
     public long nextVersionNumber(TenantContext tenant, UUID roleId) {
+        List<UUID> locked = jdbc.query("""
+                SELECT id
+                FROM catalog.role
+                WHERE tenant_id = ?
+                  AND id = ?
+                  AND lifecycle_state = 'ACTIVE'
+                FOR UPDATE
+                """,
+                (rs, row) -> rs.getObject("id", UUID.class),
+                tenant.tenantId(), roleId);
+        if (locked.isEmpty()) {
+            throw new IllegalArgumentException("active role does not exist");
+        }
+
         Long current = jdbc.queryForObject("""
                 SELECT max(version_number)
                 FROM catalog.role_version
