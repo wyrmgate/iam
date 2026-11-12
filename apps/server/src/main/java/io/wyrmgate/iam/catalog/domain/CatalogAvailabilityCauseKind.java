@@ -5,5 +5,6 @@ public enum CatalogAvailabilityCauseKind {
     APPLICATION,
     APPLICATION_TARGET,
     ENTITLEMENT,
-    ROLE
+    ROLE,
+    ROLE_VERSION
 }
