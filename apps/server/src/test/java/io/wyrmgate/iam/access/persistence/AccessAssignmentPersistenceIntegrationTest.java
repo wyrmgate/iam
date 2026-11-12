@@ -138,11 +138,21 @@ class AccessAssignmentPersistenceIntegrationTest {
                 (tenant, principalId, identityId, at) -> {});
 
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
+        var roleRepository =
+                new io.wyrmgate.iam.catalog.persistence.JdbcRoleRepository(jdbc);
+        var roleExpansion =
+                new io.wyrmgate.iam.catalog.application.RoleExpansionQueryService(
+                        catalogRepository, roleRepository);
+        var catalogAvailability =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
+                        catalogRepository, roleRepository);
         assignments = new AccessAssignmentCommandService(
                 assignmentRepository,
                 new IdentityAccessReferenceQueryService(
                         identityRepository, principalRepository),
                 catalogQuery,
+                catalogAvailability,
+                roleExpansion,
                 (tenant, assignment) -> { },
                 (tenant, assignment, now) -> { },
                 ids,
