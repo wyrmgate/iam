@@ -1209,34 +1209,18 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "code",
-          "entitlementType"
+          "applicationTargetId",
+          "code"
         ],
         "properties": {
           "applicationTargetId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": "string",
             "format": "uuid"
           },
           "code": {
             "type": "string",
             "minLength": 1,
             "maxLength": 256
-          },
-          "nativeKey": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "minLength": 1,
-            "maxLength": 1024
-          },
-          "entitlementType": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
           }
         }
       },
@@ -1329,8 +1313,8 @@
         "required": [
           "id",
           "applicationId",
+          "applicationTargetId",
           "code",
-          "entitlementType",
           "lifecycleState",
           "revision",
           "createdAt",
@@ -1346,22 +1330,10 @@
             "format": "uuid"
           },
           "applicationTargetId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": "string",
             "format": "uuid"
           },
           "code": {
-            "type": "string"
-          },
-          "nativeKey": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "entitlementType": {
             "type": "string"
           },
           "lifecycleState": {
@@ -1498,12 +1470,9 @@
         "type": "string",
         "enum": [
           "DRAFT",
-          "VALIDATING",
           "READY",
           "ACTIVE",
-          "SUPERSEDED",
-          "REJECTED",
-          "CANCELLED"
+          "SUPERSEDED"
         ]
       },
       "CreateRoleRequest": {
