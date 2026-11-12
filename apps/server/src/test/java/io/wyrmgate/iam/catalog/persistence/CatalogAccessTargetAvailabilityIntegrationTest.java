@@ -293,9 +293,9 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
                         tenant,
                         identityId,
                         entitlement.id(),
+                        AccessAssignment.PrincipalConstraintKind.ANY,
                         null,
                         null,
-                        AccessAssignment.ProvenanceKind.MANUAL,
                         null,
                         NOW.plusSeconds(11)))
                 .isInstanceOf(io.wyrmgate.iam.access.application.AccessAssignmentCommandException.class)
