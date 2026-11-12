@@ -80,6 +80,7 @@ public final class CatalogAvailabilityPropagationStarter {
             case APPLICATION, APPLICATION_TARGET, ENTITLEMENT ->
                     CatalogAvailabilityPropagation.Phase.ENTITLEMENTS;
             case ROLE -> CatalogAvailabilityPropagation.Phase.ROLES;
+            case ROLE_VERSION -> CatalogAvailabilityPropagation.Phase.ROLE_EXPANSIONS;
         };
     }
 }
