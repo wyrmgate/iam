@@ -304,6 +304,14 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
                 .isInstanceOf(io.wyrmgate.iam.access.application.AccessAssignmentCommandException.class)
                 .hasMessageContaining("not currently assignable");
 
+        assertThatThrownBy(() -> roles.createDraftVersion(
+                        tenant,
+                        applicationRole.id(),
+                        List.of(RoleCommandService.MemberSpec.entitlement(entitlement.id())),
+                        NOW.plusSeconds(12)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("application is retired");
+
         drainCatalogPropagation();
         drainReductionIntake();
         drainReductions();
