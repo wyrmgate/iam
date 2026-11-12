@@ -17,8 +17,8 @@ final class CatalogApiModels {
 
     record EntitlementResource(
             UUID id, UUID applicationId, UUID applicationTargetId,
-            String code, String nativeKey, String entitlementType,
-            String lifecycleState, long revision, Instant createdAt, Instant updatedAt) {}
+            String code, String lifecycleState, long revision,
+            Instant createdAt, Instant updatedAt) {}
 
     record ApplicationPage(List<ApplicationResource> items, String nextCursor) {}
     record ApplicationTargetPage(List<ApplicationTargetResource> items, String nextCursor) {}
