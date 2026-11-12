@@ -19,6 +19,9 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,8 +43,9 @@ class RolePersistenceIntegrationTest {
 
     @BeforeAll
     static void setUpDatabase() {
+        SharedPostgresIntegrationDatabase.reset();
         var dataSource = SharedPostgresIntegrationDatabase.dataSource();
-        jdbc = SharedPostgresIntegrationDatabase.jdbc();
+        jdbc = new JdbcTemplate(dataSource);
         ids = new UuidV7Generator();
         tenants = new TenantTestFixture(jdbc, ids);
         TransactionExecutor transactions = new SpringTransactionExecutor(
@@ -235,6 +239,98 @@ class RolePersistenceIntegrationTest {
                   AND event_type = 'catalog.role-expansion-changed'
                 """, UUID.class, tenant.tenantId()))
                 .contains(applicationRole.id(), businessRole.id());
+    }
+
+    @Test
+    void roleTextInvariantsApplyToCreateAndRename() {
+        TenantContext tenant = tenant("role-text");
+
+        Role role = roles.createRole(
+                tenant,
+                Role.RoleType.BUSINESS,
+                null,
+                "  employee  ",
+                "  Employee Access  ",
+                NOW);
+
+        assertThat(role.code()).isEqualTo("employee");
+        assertThat(role.name()).isEqualTo("Employee Access");
+
+        Role renamed = roles.renameRole(
+                tenant, role.id(), "  Workforce Access  ",
+                role.revision(), NOW.plusSeconds(1));
+        assertThat(renamed.name()).isEqualTo("Workforce Access");
+
+        assertThatThrownBy(() -> roles.createRole(
+                        tenant,
+                        Role.RoleType.BUSINESS,
+                        null,
+                        "x".repeat(129),
+                        "Too Long",
+                        NOW.plusSeconds(2)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maximum length");
+
+        assertThatThrownBy(() -> roles.renameRole(
+                        tenant, role.id(), "x".repeat(513),
+                        renamed.revision(), NOW.plusSeconds(3)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maximum length");
+    }
+
+    @Test
+    void concurrentDraftCreationAllocatesDistinctMonotonicVersionNumbers()
+            throws Exception {
+        TenantContext tenant = tenant("concurrent-version");
+        var app = catalog.createApplication(
+                tenant, "app", "App", NOW);
+        var target = catalog.createTarget(
+                tenant, app.id(), "prod", NOW);
+        var entitlement = catalog.createEntitlement(
+                tenant, app.id(), target.id(), "read", NOW);
+        Role role = roles.createRole(
+                tenant,
+                Role.RoleType.APPLICATION,
+                app.id(),
+                "users",
+                "Users",
+                NOW);
+
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return roles.createDraftVersion(
+                        tenant,
+                        role.id(),
+                        List.of(RoleCommandService.MemberSpec.entitlement(
+                                entitlement.id())),
+                        NOW.plusSeconds(1)).versionNumber();
+            });
+            var second = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return roles.createDraftVersion(
+                        tenant,
+                        role.id(),
+                        List.of(RoleCommandService.MemberSpec.entitlement(
+                                entitlement.id())),
+                        NOW.plusSeconds(1)).versionNumber();
+            });
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(List.of(
+                    first.get(10, TimeUnit.SECONDS),
+                    second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(1L, 2L);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test

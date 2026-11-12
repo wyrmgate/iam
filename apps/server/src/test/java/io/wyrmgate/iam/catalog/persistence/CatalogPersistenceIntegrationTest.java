@@ -140,6 +140,26 @@ class CatalogPersistenceIntegrationTest {
     }
 
     @Test
+    void entitlementPaginationUsesOnlyCurrentV16ColumnsOnEveryPage() {
+        TenantContext tenant = tenant("entitlement-pagination");
+        var app = commands.createApplication(tenant, "finance", "Finance", NOW);
+        var target = commands.createTarget(tenant, app.id(), "prod", NOW);
+        var first = commands.createEntitlement(
+                tenant, app.id(), target.id(), "first", NOW.plusSeconds(1));
+        var second = commands.createEntitlement(
+                tenant, app.id(), target.id(), "second", NOW.plusSeconds(2));
+
+        var firstPage = queries.listEntitlements(tenant, app.id(), null, 1);
+        assertThat(firstPage.items()).containsExactly(first);
+        assertThat(firstPage.nextPosition()).isNotNull();
+
+        var secondPage = queries.listEntitlements(
+                tenant, app.id(), firstPage.nextPosition(), 1);
+        assertThat(secondPage.items()).containsExactly(second);
+        assertThat(secondPage.nextPosition()).isNull();
+    }
+
+    @Test
     void retirementIsTerminalReadableAndDoesNotCascade() {
         TenantContext tenant = tenant("retirement");
         var app = commands.createApplication(tenant, "erp", "ERP", NOW);
@@ -180,12 +200,17 @@ class CatalogPersistenceIntegrationTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
 
         var renamed = commands.renameApplication(
-                tenant, app.id(), "ERP v2", 1, NOW.plusSeconds(2));
+                tenant, app.id(), "  ERP v2  ", 1, NOW.plusSeconds(2));
         assertThat(renamed.revision()).isEqualTo(2);
         assertThat(renamed.name()).isEqualTo("ERP v2");
 
         assertThatThrownBy(() -> commands.renameApplication(
-                        tenant, app.id(), "Stale", 1, NOW.plusSeconds(3)))
+                        tenant, app.id(), "x".repeat(513), 2, NOW.plusSeconds(3)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maximum length");
+
+        assertThatThrownBy(() -> commands.renameApplication(
+                        tenant, app.id(), "Stale", 1, NOW.plusSeconds(4)))
                 .isInstanceOf(StaleWriteException.class);
     }
 

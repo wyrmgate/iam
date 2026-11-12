@@ -114,7 +114,7 @@ public final class RoleCommandService {
                 canonicalText.getBytes(StandardCharsets.UTF_8)).value();
 
         return transactions.required(() -> {
-            long versionNumber = roles.nextVersionNumber(tenant, roleId);
+            long versionNumber = roles.allocateNextVersionNumber(tenant, roleId);
             RoleVersion version = new RoleVersion(
                     ids.nextId(),
                     roleId,
@@ -152,13 +152,11 @@ public final class RoleCommandService {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(roleId, "roleId");
         Objects.requireNonNull(now, "now");
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("name must not be blank");
-        }
+        String normalizedName = Role.normalizeName(name);
         return transactions.required(() -> {
             requireActiveRole(tenant, roleId);
             return roles.updateRoleName(
-                    tenant, roleId, name, expectedRevision, now);
+                    tenant, roleId, normalizedName, expectedRevision, now);
         });
     }
 
