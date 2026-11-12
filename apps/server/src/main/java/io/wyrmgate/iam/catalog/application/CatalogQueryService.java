@@ -38,8 +38,15 @@ public final class CatalogQueryService implements CatalogEntitlementReferenceQue
             TenantContext tenant, UUID applicationTargetId) {
         Optional<ApplicationTarget> value = repository.findTarget(tenant, applicationTargetId);
         if (value.isEmpty()) return CatalogTargetReferenceQuery.Validation.NOT_FOUND;
-        return value.get().lifecycleState()
-                == io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE
+        ApplicationTarget target = value.get();
+        if (target.lifecycleState()
+                != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
+            return CatalogTargetReferenceQuery.Validation.RETIRED;
+        }
+        return repository.findApplication(tenant, target.applicationId())
+                .filter(application -> application.lifecycleState()
+                        == io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE)
+                .isPresent()
                 ? CatalogTargetReferenceQuery.Validation.VALID
                 : CatalogTargetReferenceQuery.Validation.RETIRED;
     }
@@ -54,6 +61,12 @@ public final class CatalogQueryService implements CatalogEntitlementReferenceQue
         Entitlement entitlement = value.get();
         if (entitlement.lifecycleState()
                 != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
+            return CatalogAccessReferenceQuery.EntitlementReference.retired();
+        }
+        if (repository.findApplication(tenant, entitlement.applicationId())
+                .filter(application -> application.lifecycleState()
+                        == io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE)
+                .isEmpty()) {
             return CatalogAccessReferenceQuery.EntitlementReference.retired();
         }
         if (entitlement.applicationTargetId() == null) {
@@ -80,9 +93,21 @@ public final class CatalogQueryService implements CatalogEntitlementReferenceQue
                 != io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE) {
             return CatalogEntitlementReferenceQuery.Validation.RETIRED;
         }
-        return applicationTargetId.equals(entitlement.applicationTargetId())
+        if (!applicationTargetId.equals(entitlement.applicationTargetId())) {
+            return CatalogEntitlementReferenceQuery.Validation.TARGET_MISMATCH;
+        }
+        if (repository.findApplication(tenant, entitlement.applicationId())
+                .filter(application -> application.lifecycleState()
+                        == io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE)
+                .isEmpty()) {
+            return CatalogEntitlementReferenceQuery.Validation.RETIRED;
+        }
+        return repository.findTarget(tenant, applicationTargetId)
+                .filter(target -> target.lifecycleState()
+                        == io.wyrmgate.iam.catalog.domain.CatalogLifecycleState.ACTIVE)
+                .isPresent()
                 ? CatalogEntitlementReferenceQuery.Validation.VALID
-                : CatalogEntitlementReferenceQuery.Validation.TARGET_MISMATCH;
+                : CatalogEntitlementReferenceQuery.Validation.RETIRED;
     }
 
     public ApplicationPage listApplications(TenantContext tenant, PagePosition after, int limit) {

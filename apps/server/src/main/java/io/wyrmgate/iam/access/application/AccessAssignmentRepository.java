@@ -62,6 +62,14 @@ public interface AccessAssignmentRepository {
             TenantContext tenant, UUID identityId, Instant snapshotAt,
             Instant afterCreatedAt, UUID afterId, int limit) { return List.of(); }
 
+    List<AccessAssignment> findTargetReductionPage(
+            TenantContext tenant,
+            AccessAssignment.TargetKind targetKind,
+            UUID targetId,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit);
+
     AccessAssignment updateLifecycle(
             TenantContext tenant,
             UUID assignmentId,

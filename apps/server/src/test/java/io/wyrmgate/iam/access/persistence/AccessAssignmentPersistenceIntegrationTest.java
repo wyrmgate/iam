@@ -94,7 +94,11 @@ class AccessAssignmentPersistenceIntegrationTest {
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         catalogCommands = new CatalogCommandService(
-                catalogRepository, ids, transactions);
+                catalogRepository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         catalogQuery = new CatalogQueryService(catalogRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
@@ -134,11 +138,21 @@ class AccessAssignmentPersistenceIntegrationTest {
                 (tenant, principalId, identityId, at) -> {});
 
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
+        var roleRepository =
+                new io.wyrmgate.iam.catalog.persistence.JdbcRoleRepository(jdbc);
+        var roleExpansion =
+                new io.wyrmgate.iam.catalog.application.RoleExpansionQueryService(
+                        catalogRepository, roleRepository);
+        var catalogAvailability =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
+                        catalogRepository, roleRepository);
         assignments = new AccessAssignmentCommandService(
                 assignmentRepository,
                 new IdentityAccessReferenceQueryService(
                         identityRepository, principalRepository),
                 catalogQuery,
+                catalogAvailability,
+                roleExpansion,
                 (tenant, assignment) -> { },
                 (tenant, assignment, now) -> { },
                 ids,
@@ -396,7 +410,7 @@ class AccessAssignmentPersistenceIntegrationTest {
                 null,
                 NOW))
                 .isInstanceOf(AccessAssignmentCommandException.class)
-                .hasMessageContaining("target-scoped");
+                .hasMessageContaining("not currently assignable");
 
         var targeted = catalog(tenant, "retired-target", "prod");
         catalogCommands.retireTarget(
@@ -413,7 +427,7 @@ class AccessAssignmentPersistenceIntegrationTest {
                 null,
                 NOW.plusSeconds(2)))
                 .isInstanceOf(AccessAssignmentCommandException.class)
-                .hasMessageContaining("retired ApplicationTarget");
+                .hasMessageContaining("not currently assignable");
 
         var active = catalog(tenant, "validity", "prod");
         assertThatThrownBy(() -> assignments.createEntitlementAssignment(

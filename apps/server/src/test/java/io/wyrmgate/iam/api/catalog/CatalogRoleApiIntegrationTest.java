@@ -90,12 +90,18 @@ class CatalogRoleApiIntegrationTest {
         transactions = new SpringTransactionExecutor(
                 new DataSourceTransactionManager(dataSource));
         catalog = new CatalogCommandService(
-                catalogRepository, ids, transactions);
+                catalogRepository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         roles = new RoleCommandService(
                 catalogRepository,
                 roleRepository,
                 new JdbcRoleExpansionFactSink(
                         new JdbcOutboxRepository(jdbc), ids),
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
                 ids,
                 transactions);
         queries = new RoleQueryService(roleRepository);

@@ -1,7 +1,16 @@
 package io.wyrmgate.iam.catalog.persistence;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.wyrmgate.iam.administration.application.PlatformOwnerAuthorityQuery;
+import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityFactSink;
+import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery;
+import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQueryService;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetSearchQuery;
+import io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationRepository;
+import io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationService;
+import io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationStarter;
+import io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationWorkSink;
 import io.wyrmgate.iam.catalog.application.CatalogCommandService;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.application.CatalogRepository;
@@ -93,6 +102,39 @@ public class CatalogPersistenceConfiguration {
     }
 
     @Bean
+    CatalogAccessTargetAvailabilityFactSink catalogAccessTargetAvailabilityFactSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator ids,
+            ObjectMapper objectMapper) {
+        return new JdbcCatalogAccessTargetAvailabilityFactSink(
+                outboxRepository, ids, objectMapper);
+    }
+
+    @Bean
+    CatalogAvailabilityPropagationRepository catalogAvailabilityPropagationRepository(
+            JdbcTemplate jdbc) {
+        return new JdbcCatalogAvailabilityPropagationRepository(jdbc);
+    }
+
+    @Bean
+    CatalogAvailabilityPropagationWorkSink catalogAvailabilityPropagationWorkSink(
+            JdbcOutboxRepository outboxRepository,
+            IdGenerator ids) {
+        return new JdbcCatalogAvailabilityPropagationWorkSink(
+                outboxRepository, ids);
+    }
+
+    @Bean
+    CatalogAvailabilityPropagationStarter catalogAvailabilityPropagationStarter(
+            CatalogAvailabilityPropagationRepository repository,
+            CatalogAvailabilityPropagationWorkSink work,
+            IdGenerator ids,
+            TransactionExecutor transactions) {
+        return new CatalogAvailabilityPropagationStarter(
+                repository, work, ids, transactions);
+    }
+
+    @Bean
     RoleQueryService roleQueryService(RoleRepository roleRepository) {
         return new RoleQueryService(roleRepository);
     }
@@ -106,16 +148,50 @@ public class CatalogPersistenceConfiguration {
     }
 
     @Bean
+    CatalogAccessTargetAvailabilityQuery catalogAccessTargetAvailabilityQuery(
+            CatalogRepository catalogRepository,
+            RoleRepository roleRepository,
+            RoleExpansionQuery roleExpansionQuery) {
+        return new CatalogAccessTargetAvailabilityQueryService(
+                catalogRepository, roleRepository, roleExpansionQuery);
+    }
+
+    @Bean
+    CatalogAvailabilityPropagationService catalogAvailabilityPropagationService(
+            JdbcOutboxRepository outboxRepository,
+            CatalogAvailabilityPropagationRepository propagationRepository,
+            CatalogAccessTargetAvailabilityFactSink availabilityFacts,
+            RoleExpansionFactSink roleFacts,
+            CatalogAvailabilityPropagationWorkSink work,
+            TransactionExecutor transactions) {
+        return new CatalogAvailabilityPropagationService(
+                outboxRepository,
+                propagationRepository,
+                availabilityFacts,
+                roleFacts,
+                work,
+                transactions);
+    }
+
+    @Bean
+    CatalogAvailabilityPropagationScheduler catalogAvailabilityPropagationScheduler(
+            CatalogAvailabilityPropagationService service) {
+        return new CatalogAvailabilityPropagationScheduler(service);
+    }
+
+    @Bean
     RoleCommandService roleCommandService(
             CatalogRepository catalogRepository,
             RoleRepository roleRepository,
             RoleExpansionFactSink roleExpansionFactSink,
+            CatalogAvailabilityPropagationStarter availabilityPropagation,
             IdGenerator ids,
             TransactionExecutor transactions) {
         return new RoleCommandService(
                 catalogRepository,
                 roleRepository,
                 roleExpansionFactSink,
+                availabilityPropagation,
                 ids,
                 transactions);
     }
@@ -123,9 +199,11 @@ public class CatalogPersistenceConfiguration {
     @Bean
     CatalogCommandService catalogCommandService(
             CatalogRepository repository,
+            CatalogAvailabilityPropagationStarter availabilityPropagation,
             IdGenerator ids,
             TransactionExecutor transactions) {
-        return new CatalogCommandService(repository, ids, transactions);
+        return new CatalogCommandService(
+                repository, availabilityPropagation, ids, transactions);
     }
 
     @Bean

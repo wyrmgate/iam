@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.catalog.application;
 
+import io.wyrmgate.iam.catalog.domain.CatalogAvailabilityCauseKind;
 import io.wyrmgate.iam.catalog.domain.CatalogLifecycleState;
 import io.wyrmgate.iam.catalog.domain.Entitlement;
 import io.wyrmgate.iam.catalog.domain.Role;
@@ -24,6 +25,7 @@ public final class RoleCommandService {
     private final CatalogRepository catalog;
     private final RoleRepository roles;
     private final RoleExpansionFactSink facts;
+    private final CatalogAvailabilityPropagationStarter availabilityPropagation;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
@@ -31,11 +33,14 @@ public final class RoleCommandService {
             CatalogRepository catalog,
             RoleRepository roles,
             RoleExpansionFactSink facts,
+            CatalogAvailabilityPropagationStarter availabilityPropagation,
             IdGenerator ids,
             TransactionExecutor transactions) {
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.roles = Objects.requireNonNull(roles, "roles");
         this.facts = Objects.requireNonNull(facts, "facts");
+        this.availabilityPropagation = Objects.requireNonNull(
+                availabilityPropagation, "availabilityPropagation");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -92,6 +97,7 @@ public final class RoleCommandService {
                     "RoleVersion must contain at least one member");
         }
         Role role = requireActiveRole(tenant, roleId);
+        requireRoleParentAvailable(tenant, role);
         requireUniqueMembers(members);
         validateMembers(tenant, role, members, false);
 
@@ -171,6 +177,7 @@ public final class RoleCommandService {
                         "only DRAFT RoleVersion can become READY");
             }
             Role role = requireActiveRole(tenant, version.roleId());
+            requireRoleParentAvailable(tenant, role);
             validatePersistedVersion(tenant, role, version, true);
             if (version.revision() != expectedRevision) {
                 throw new io.wyrmgate.iam.platform.persistence.StaleWriteException(
@@ -200,12 +207,18 @@ public final class RoleCommandService {
                         "catalog-role-version", roleVersionId, expectedRevision);
             }
             Role role = requireActiveRole(tenant, version.roleId());
+            requireRoleParentAvailable(tenant, role);
             validatePersistedVersion(tenant, role, version, true);
             RoleVersion activated = roles.activate(
                     tenant, roleVersionId, expectedRevision, now);
-            UUID correlationId = ids.nextId();
-            publishRoleAndParents(
-                    tenant, role, now, correlationId, activated.id());
+            availabilityPropagation.start(
+                    tenant,
+                    CatalogAvailabilityCauseKind.ROLE_VERSION,
+                    activated.id(),
+                    activated.revision(),
+                    now,
+                    null,
+                    null);
             return activated;
         });
     }
@@ -216,58 +229,33 @@ public final class RoleCommandService {
             long expectedRevision,
             Instant now) {
         return transactions.required(() -> {
-            Role current = requireActiveRole(tenant, roleId);
-            List<UUID> parents = current.type() == Role.RoleType.APPLICATION
-                    ? roles.findActiveBusinessParents(tenant, current.id())
-                    : List.of();
+            requireActiveRole(tenant, roleId);
             Role retired = roles.retireRole(
                     tenant, roleId, expectedRevision, now);
-            UUID correlationId = ids.nextId();
-            facts.changed(
+            availabilityPropagation.start(
                     tenant,
+                    CatalogAvailabilityCauseKind.ROLE,
                     retired.id(),
                     retired.revision(),
                     now,
-                    correlationId,
+                    null,
                     null);
-            for (UUID parentId : parents) {
-                roles.findRole(tenant, parentId).ifPresent(parent ->
-                        facts.changed(
-                                tenant,
-                                parent.id(),
-                                parent.revision(),
-                                now,
-                                correlationId,
-                                retired.id()));
-            }
             return retired;
         });
     }
 
-    private void publishRoleAndParents(
+    private void requireRoleParentAvailable(
             TenantContext tenant,
-            Role role,
-            Instant now,
-            UUID correlationId,
-            UUID causationId) {
-        facts.changed(
-                tenant,
-                role.id(),
-                role.revision(),
-                now,
-                correlationId,
-                causationId);
-        if (role.type() != Role.RoleType.APPLICATION) return;
-        for (UUID parentId : roles.findActiveBusinessParents(
-                tenant, role.id())) {
-            roles.findRole(tenant, parentId).ifPresent(parent ->
-                    facts.changed(
-                            tenant,
-                            parent.id(),
-                            parent.revision(),
-                            now,
-                            correlationId,
-                            causationId));
+            Role role) {
+        if (role.type() != Role.RoleType.APPLICATION) {
+            return;
+        }
+        if (catalog.findApplication(tenant, role.applicationId())
+                .filter(application -> application.lifecycleState()
+                        == CatalogLifecycleState.ACTIVE)
+                .isEmpty()) {
+            throw new IllegalArgumentException(
+                    "APPLICATION Role application is retired");
         }
     }
 
@@ -326,6 +314,13 @@ public final class RoleCommandService {
                     throw new IllegalArgumentException(
                             "role entitlement is retired");
                 }
+                if (catalog.findApplication(tenant, entitlement.applicationId())
+                        .filter(application -> application.lifecycleState()
+                                == CatalogLifecycleState.ACTIVE)
+                        .isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "role entitlement application is retired");
+                }
                 if (entitlement.applicationTargetId() == null) {
                     throw new IllegalArgumentException(
                             "role entitlement must be target-scoped");
@@ -359,6 +354,7 @@ public final class RoleCommandService {
                 throw new IllegalArgumentException(
                         "BUSINESS Role may contain only APPLICATION Roles");
             }
+            requireRoleParentAvailable(tenant, child);
             if (child.lifecycleState() != CatalogLifecycleState.ACTIVE) {
                 throw new IllegalArgumentException(
                         "member APPLICATION Role is retired");

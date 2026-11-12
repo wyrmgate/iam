@@ -117,10 +117,18 @@ class AccessRequestAccessApplicationIntegrationTest {
 
         catalogRepository = new JdbcCatalogRepository(jdbc);
         catalog = new CatalogCommandService(
-                catalogRepository, ids, transactions);
+                catalogRepository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
+        var roleRepository = new JdbcRoleRepository(jdbc);
         roleExpansion = new RoleExpansionQueryService(
                 catalogRepository,
-                new JdbcRoleRepository(jdbc));
+                roleRepository);
+        var catalogAvailability =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
+                        catalogRepository, roleRepository);
 
         principals = new PrincipalCommandService(
                 principalRepository,
@@ -144,6 +152,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                         identityReferences,
                         new CatalogQueryService(
                                 catalogRepository),
+                        catalogAvailability,
                         roleExpansion,
                         facts,
                         boundaries,

@@ -68,6 +68,8 @@ class RoleEffectiveAccessIntegrationTest {
     private static JdbcDesiredStateProjectionRepository desiredRepository;
     private static AccessAssignmentCommandService assignments;
     private static DesiredStateDerivationService desiredDerivation;
+    private static io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationService
+            catalogPropagation;
     private static EffectiveAccessQuery effectiveQuery;
 
     @BeforeAll
@@ -117,15 +119,27 @@ class RoleEffectiveAccessIntegrationTest {
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         var roleRepository = new JdbcRoleRepository(jdbc);
         catalog = new CatalogCommandService(
-                catalogRepository, ids, transactions);
+                catalogRepository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         roles = new RoleCommandService(
                 catalogRepository,
                 roleRepository,
                 new JdbcRoleExpansionFactSink(outbox, ids),
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
                 ids,
                 transactions);
         expansion = new RoleExpansionQueryService(
                 catalogRepository, roleRepository);
+        catalogPropagation =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationService(
+                        jdbc, ids, transactions);
+        var catalogAvailability =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
+                        catalogRepository, roleRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
         PrincipalFactSink noPrincipalFacts = new PrincipalFactSink() {
@@ -169,7 +183,11 @@ class RoleEffectiveAccessIntegrationTest {
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
         effectiveRepository = new JdbcEffectiveAccessRepository(jdbc, ids);
         desiredRepository = new JdbcDesiredStateProjectionRepository(jdbc, ids);
-        effectiveQuery = new EffectiveAccessQueryService(effectiveRepository);
+        effectiveQuery = new EffectiveAccessQueryService(
+                effectiveRepository,
+                identityReferences,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
+                        assignmentRepository, catalogAvailability, expansion));
         desiredDerivation = new DesiredStateDerivationService(
                 effectiveQuery,
                 desiredRepository,
@@ -183,6 +201,7 @@ class RoleEffectiveAccessIntegrationTest {
                 identityReferences,
                 new io.wyrmgate.iam.catalog.application.CatalogQueryService(
                         catalogRepository),
+                catalogAvailability,
                 expansion,
                 new JdbcAccessAssignmentFactSink(outbox, ids),
                 new JdbcAccessAssignmentBoundaryScheduler(scheduledWork),
@@ -317,6 +336,19 @@ class RoleEffectiveAccessIntegrationTest {
                         e1Next.id())),
                 NOW.plusSeconds(10));
 
+        // Current Role expansion is authoritative immediately. The materialized
+        // EffectiveAccess rows still describe the old path until propagation runs.
+        assertThat(effectiveQuery.find(
+                tenant, identity.id(), e1.id(), "ANY",
+                NOW.plusSeconds(12))).isEmpty();
+        assertThat(effectiveQuery.find(
+                tenant, identity.id(), e1Next.id(), "ANY",
+                NOW.plusSeconds(12))).isEmpty();
+        assertThat(effectiveQuery.find(
+                tenant, identity.id(), e2.id(), "ANY",
+                NOW.plusSeconds(12))).isPresent();
+
+        drainCatalogPropagation();
         processor(NOW.plusSeconds(13)).processAvailable();
 
         assertThat(effectiveQuery.find(
@@ -425,6 +457,16 @@ class RoleEffectiveAccessIntegrationTest {
                 NOW.plusSeconds(10)))
                 .isInstanceOf(AccessAssignmentCommandException.class)
                 .hasMessageContaining("exactly one ApplicationTarget");
+    }
+
+    private void drainCatalogPropagation() {
+        for (int i = 0; i < 20; i++) {
+            var batch = catalogPropagation.processAvailable();
+            if (batch.claimed() == 0) {
+                return;
+            }
+        }
+        throw new AssertionError("Catalog propagation did not drain");
     }
 
     private EffectiveAccessProcessingService processor(Instant at) {

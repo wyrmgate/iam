@@ -17,18 +17,18 @@ public final class EffectiveAccessReadService {
 
     private final EffectiveAccessRepository repository;
     private final IdentityAccessReferenceQuery identities;
-
-    public EffectiveAccessReadService(
-            EffectiveAccessRepository repository) {
-        this(repository, null);
-    }
+    private final EffectiveAccessSemanticSupport semanticSupport;
 
     public EffectiveAccessReadService(
             EffectiveAccessRepository repository,
-            IdentityAccessReferenceQuery identities) {
+            IdentityAccessReferenceQuery identities,
+            EffectiveAccessSemanticSupport semanticSupport) {
         this.repository = Objects.requireNonNull(
                 repository, "repository");
-        this.identities = identities;
+        this.identities = Objects.requireNonNull(
+                identities, "identities");
+        this.semanticSupport = Objects.requireNonNull(
+                semanticSupport, "semanticSupport");
     }
 
     public EffectivePage list(
@@ -62,7 +62,14 @@ public final class EffectiveAccessReadService {
                 continue;
             }
             var supports = repository.currentSupportEvidence(
-                    tenant, value.id(), at);
+                            tenant, value.id(), at)
+                    .stream()
+                    .filter(support -> semanticSupport.contributes(
+                            tenant,
+                            support.accessAssignmentId(),
+                            value.entitlementId(),
+                            at))
+                    .toList();
             if (!supports.isEmpty()) {
                 semantic.add(withSupportCount(
                         value, supports.size()));
@@ -87,9 +94,16 @@ public final class EffectiveAccessReadService {
                 .flatMap(value -> {
                     var supports =
                             repository.currentSupportEvidence(
-                                    tenant,
-                                    effectiveAccessId,
-                                    at);
+                                            tenant,
+                                            effectiveAccessId,
+                                            at)
+                                    .stream()
+                                    .filter(support -> semanticSupport.contributes(
+                                            tenant,
+                                            support.accessAssignmentId(),
+                                            value.entitlementId(),
+                                            at))
+                                    .toList();
                     if (supports.isEmpty()) {
                         return Optional.empty();
                     }
@@ -103,9 +117,6 @@ public final class EffectiveAccessReadService {
     private boolean accessEligible(
             TenantContext tenant,
             UUID identityId) {
-        if (identities == null) {
-            return true;
-        }
         return identities.accessStatus(
                         tenant, identityId)
                 .status()

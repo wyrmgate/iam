@@ -2,6 +2,7 @@ package io.wyrmgate.iam.catalog.application;
 
 import io.wyrmgate.iam.catalog.domain.Application;
 import io.wyrmgate.iam.catalog.domain.ApplicationTarget;
+import io.wyrmgate.iam.catalog.domain.CatalogAvailabilityCauseKind;
 import io.wyrmgate.iam.catalog.domain.CatalogLifecycleState;
 import io.wyrmgate.iam.catalog.domain.Entitlement;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -14,14 +15,18 @@ import java.util.UUID;
 public final class CatalogCommandService {
 
     private final CatalogRepository repository;
+    private final CatalogAvailabilityPropagationStarter availabilityPropagation;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
     public CatalogCommandService(
             CatalogRepository repository,
+            CatalogAvailabilityPropagationStarter availabilityPropagation,
             IdGenerator ids,
             TransactionExecutor transactions) {
         this.repository = Objects.requireNonNull(repository, "repository");
+        this.availabilityPropagation = Objects.requireNonNull(
+                availabilityPropagation, "availabilityPropagation");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -85,9 +90,19 @@ public final class CatalogCommandService {
             UUID applicationId,
             long expectedRevision,
             Instant now) {
-        return transactions.required(() ->
-                repository.retireApplication(
-                        tenant, applicationId, expectedRevision, now));
+        return transactions.required(() -> {
+            Application retired = repository.retireApplication(
+                    tenant, applicationId, expectedRevision, now);
+            availabilityPropagation.start(
+                    tenant,
+                    CatalogAvailabilityCauseKind.APPLICATION,
+                    retired.id(),
+                    retired.revision(),
+                    now,
+                    null,
+                    null);
+            return retired;
+        });
     }
 
     public ApplicationTarget createTarget(
@@ -148,9 +163,19 @@ public final class CatalogCommandService {
             UUID targetId,
             long expectedRevision,
             Instant now) {
-        return transactions.required(() ->
-                repository.retireTarget(
-                        tenant, targetId, expectedRevision, now));
+        return transactions.required(() -> {
+            ApplicationTarget retired = repository.retireTarget(
+                    tenant, targetId, expectedRevision, now);
+            availabilityPropagation.start(
+                    tenant,
+                    CatalogAvailabilityCauseKind.APPLICATION_TARGET,
+                    retired.id(),
+                    retired.revision(),
+                    now,
+                    null,
+                    null);
+            return retired;
+        });
     }
 
     public Entitlement createEntitlement(
@@ -190,8 +215,18 @@ public final class CatalogCommandService {
             UUID entitlementId,
             long expectedRevision,
             Instant now) {
-        return transactions.required(() ->
-                repository.retireEntitlement(
-                        tenant, entitlementId, expectedRevision, now));
+        return transactions.required(() -> {
+            Entitlement retired = repository.retireEntitlement(
+                    tenant, entitlementId, expectedRevision, now);
+            availabilityPropagation.start(
+                    tenant,
+                    CatalogAvailabilityCauseKind.ENTITLEMENT,
+                    retired.id(),
+                    retired.revision(),
+                    now,
+                    null,
+                    null);
+            return retired;
+        });
     }
 }

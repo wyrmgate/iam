@@ -134,8 +134,9 @@ The following is the initial physical table-family contract. Additional subordin
 | `identity` | `source_record`, source-import staging, canonical attribute candidate | Identity | Observation/candidate |
 | `identity` | canonical attribute state and override | Identity | Authoritative resolved state |
 | `catalog` | `application`, `application_target`, `entitlement`, `role`, `role_version`, role composition | Catalog | Authoritative |
+| `catalog` | `access_target_availability_propagation` | Catalog | Authoritative/process |
 | `access` | `access_assignment` | Access | Authoritative |
-| `access` | `identity_access_reduction` | Access | Authoritative/process |
+| `access` | `identity_access_reduction`, `access_target_reduction` | Access | Authoritative/process |
 | `access` | `effective_access`, support/path, `desired_principal_state`, `desired_grant_state`, `assignment_fulfillment` | Access | Projection |
 | `governance` | request/item/plan, review campaign/item/remediation, policy/version, exception, finding | Governance | Authoritative/process |
 | `governance` | approval/review decision, policy/risk/SoD evaluation result | Governance | Evidence/result |
@@ -194,7 +195,7 @@ identity.principal
 
 `application_target_id` is normally not a database FK because it crosses capability ownership. Identity validates the relevant Catalog fact through a semantic contract when changing authoritative Principal state.
 
-The first runtime implementation of this contract is migration V18. New Principals are created only through Identity-owned commands after semantic validation that the ApplicationTarget is active. A Principal may be created with `identity_id = NULL` and later correlated once to an existing same-tenant Identity using optimistic revision semantics; ordinary correlation does not silently reassign an already correlated Principal. Provider `ObservedPrincipal` rows remain Integration observation and do not automatically insert `identity.principal`. Foreign capabilities resolve current Principal ownership through the semantic `PrincipalResolutionQuery`, not by reading this table.
+The first runtime implementation of this contract is migration V18. New Principals are created only through Identity-owned commands after semantic validation that the ApplicationTarget is active. A Principal may be created with `identity_id = NULL` and later correlated once to an existing same-tenant Identity using optimistic revision semantics; ordinary correlation does not silently reassign an already correlated Principal. Provider `ObservedPrincipal` rows remain Integration observation and do not automatically insert `identity.principal`. Foreign capabilities resolve current Principal references through narrow Identity-owned semantic queries. Provider-account correlation is resolved by Integration-owned `PrincipalObservationMapping` under ADR-0050; provider strings are never fallback Principal authority.
 
 ### Catalog
 
@@ -256,7 +257,9 @@ catalog.role_version
 - UNIQUE (tenant_id, role_id, version_number)
 ```
 
-Activated/superseded RoleVersion content is immutable. Migration V23 implements `catalog.role`, `catalog.role_version` and `catalog.role_version_member`, including a partial unique index that permits at most one ACTIVE version per Role and database triggers that reject activated/superseded content mutation. Migration V25 adds the positive optimistic `revision` column used by the public validation/activation concurrency contract; validation and activation increment the selected version revision, and automatic supersession increments the previously active version revision. `catalog.role_version_member` normalizes composition and uses a typed `member_kind` plus mutually exclusive `member_role_id` / `member_entitlement_id`. The first runtime graph is intentionally shallow: BUSINESS -> APPLICATION Role / Entitlement and APPLICATION Role -> Entitlement. Graph/type/current-member validation remains a Catalog domain invariant rather than an ORM cascade.
+Activated/superseded RoleVersion content is immutable. The current ADR-0048 baseline V4 implements `catalog.role`, `catalog.role_version` and `catalog.role_version_member`, including a partial unique index that permits at most one ACTIVE version per Role and database triggers that reject activated/superseded content mutation. `catalog.role_version_member` normalizes composition and uses a typed `member_kind` plus mutually exclusive `member_role_id` / `member_entitlement_id`. The current executable graph is intentionally shallow: BUSINESS -> APPLICATION Role / Entitlement and APPLICATION Role -> Entitlement. Graph/type/current-member validation remains a Catalog domain invariant rather than an ORM cascade.
+
+V15 adds `catalog.access_target_availability_propagation` for bounded Catalog-owned propagation of material Application/ApplicationTarget/Entitlement/Role retirement causes and RoleVersion expansion changes, plus `access.access_target_reduction` for bounded Access-owned authoritative reduction. RoleVersion activation is therefore not an unbounded synchronous parent fan-out. Neither table introduces a cross-capability foreign key to the other capability's target/assignment state; collaboration is through typed semantic queries and data-minimized outbox facts.
 
 ### Access
 

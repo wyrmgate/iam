@@ -102,8 +102,20 @@ class EffectiveAccessProcessingIntegrationTest {
                 (tenant, identityId, at) -> {});
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
+        var roleRepository =
+                new io.wyrmgate.iam.catalog.persistence.JdbcRoleRepository(jdbc);
+        var roleExpansion =
+                new io.wyrmgate.iam.catalog.application.RoleExpansionQueryService(
+                        catalogRepository, roleRepository);
+        var catalogAvailability =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
+                        catalogRepository, roleRepository);
         catalogCommands = new CatalogCommandService(
-                catalogRepository, ids, transactions);
+                catalogRepository,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationStarter(
+                        jdbc, ids, transactions),
+                ids,
+                transactions);
         catalogQuery = new CatalogQueryService(catalogRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
@@ -154,11 +166,17 @@ class EffectiveAccessProcessingIntegrationTest {
                 assignmentRepository,
                 identityReferences,
                 catalogQuery,
+                catalogAvailability,
+                roleExpansion,
                 new JdbcAccessAssignmentFactSink(outbox, ids),
                 new JdbcAccessAssignmentBoundaryScheduler(scheduledWork),
                 ids,
                 transactions);
-        effectiveQuery = new EffectiveAccessQueryService(effectiveRepository);
+        effectiveQuery = new EffectiveAccessQueryService(
+                effectiveRepository,
+                identityReferences,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
+                        assignmentRepository, catalogAvailability));
         desiredDerivation = new DesiredStateDerivationService(
                 effectiveQuery,
                 desiredRepository,

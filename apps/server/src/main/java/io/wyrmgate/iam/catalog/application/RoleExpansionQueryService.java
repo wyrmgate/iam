@@ -31,6 +31,13 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
         if (role.lifecycleState() != CatalogLifecycleState.ACTIVE) {
             return Result.unavailable(Status.RETIRED, roleId);
         }
+        if (role.type() == Role.RoleType.APPLICATION
+                && catalog.findApplication(tenant, role.applicationId())
+                        .filter(application -> application.lifecycleState()
+                                == CatalogLifecycleState.ACTIVE)
+                        .isEmpty()) {
+            return Result.unavailable(Status.INVALID, roleId);
+        }
         RoleVersion version = roles.findActiveVersion(
                         tenant, roleId)
                 .orElse(null);
@@ -64,7 +71,11 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
             if (child == null
                     || child.type() != Role.RoleType.APPLICATION
                     || child.lifecycleState()
-                            != CatalogLifecycleState.ACTIVE) {
+                            != CatalogLifecycleState.ACTIVE
+                    || catalog.findApplication(tenant, child.applicationId())
+                            .filter(application -> application.lifecycleState()
+                                    == CatalogLifecycleState.ACTIVE)
+                            .isEmpty()) {
                 return Result.unavailable(Status.INVALID, roleId);
             }
             RoleVersion childVersion = roles.findActiveVersion(
@@ -102,7 +113,11 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
         if (entitlement == null
                 || entitlement.lifecycleState()
                         != CatalogLifecycleState.ACTIVE
-                || entitlement.applicationTargetId() == null) {
+                || entitlement.applicationTargetId() == null
+                || catalog.findApplication(tenant, entitlement.applicationId())
+                        .filter(application -> application.lifecycleState()
+                                == CatalogLifecycleState.ACTIVE)
+                        .isEmpty()) {
             return null;
         }
         var target = catalog.findTarget(

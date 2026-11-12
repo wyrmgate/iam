@@ -114,6 +114,13 @@ class IdentityAccessReductionIntegrationTest {
                                 io.wyrmgate.iam.catalog.application
                                         .CatalogAccessReferenceQuery
                                         .EntitlementReference.notFound(),
+                        io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.alwaysAssignable(),
+                        (requestedTenant, roleId) ->
+                                io.wyrmgate.iam.catalog.application.RoleExpansionQuery.Result
+                                        .unavailable(
+                                                io.wyrmgate.iam.catalog.application
+                                                        .RoleExpansionQuery.Status.NOT_FOUND,
+                                                roleId),
                         new JdbcAccessAssignmentFactSink(
                                 outbox, ids),
                         (requestedTenant, assignment, now) -> { },
@@ -151,8 +158,13 @@ class IdentityAccessReductionIntegrationTest {
                 "ANY",
                 "direct",
                 NOW.minusSeconds(5));
+        var availability =
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.alwaysAssignable();
         var query = new EffectiveAccessQueryService(
-                effective, identityReferences);
+                effective,
+                identityReferences,
+                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
+                        assignments, availability));
 
         assertThat(query.find(
                 tenant,
