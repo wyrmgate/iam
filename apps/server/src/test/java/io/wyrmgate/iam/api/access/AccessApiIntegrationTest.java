@@ -220,7 +220,7 @@ class AccessApiIntegrationTest {
                         assignmentRepository);
         var semanticSupport =
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
-                        assignmentRepository, catalogAvailability);
+                        assignmentRepository, catalogAvailability, expansion);
         effectiveReads =
                 new EffectiveAccessReadService(
                         effectiveRepository,
