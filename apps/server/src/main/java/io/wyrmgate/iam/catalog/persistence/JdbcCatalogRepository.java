@@ -173,22 +173,21 @@ public final class JdbcCatalogRepository implements CatalogRepository {
         jdbc.update("""
                 INSERT INTO catalog.entitlement (
                     id, tenant_id, application_id, application_target_id,
-                    code, native_key, entitlement_type, lifecycle_state,
-                    revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    code, lifecycle_state, revision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 entitlement.id(), tenant.tenantId(), entitlement.applicationId(),
-                entitlement.applicationTargetId(), entitlement.code(), entitlement.nativeKey(),
-                entitlement.entitlementType(), entitlement.lifecycleState().name(),
-                entitlement.revision(), Timestamp.from(entitlement.createdAt()),
+                entitlement.applicationTargetId(), entitlement.code(),
+                entitlement.lifecycleState().name(), entitlement.revision(),
+                Timestamp.from(entitlement.createdAt()),
                 Timestamp.from(entitlement.updatedAt()));
     }
 
     @Override
     public Optional<Entitlement> findEntitlement(TenantContext tenant, UUID entitlementId) {
         return jdbc.query("""
-                SELECT id, application_id, application_target_id, code, native_key,
-                       entitlement_type, lifecycle_state, revision, created_at, updated_at
+                SELECT id, application_id, application_target_id, code,
+                       lifecycle_state, revision, created_at, updated_at
                 FROM catalog.entitlement
                 WHERE tenant_id = ? AND id = ?
                 """, (rs,row) -> entitlement(rs), tenant.tenantId(), entitlementId)
@@ -209,8 +208,8 @@ public final class JdbcCatalogRepository implements CatalogRepository {
                     """, (rs,row) -> entitlement(rs), tenant.tenantId(), applicationId, limit);
         }
         return jdbc.query("""
-                SELECT id, application_id, application_target_id, code, native_key,
-                       entitlement_type, lifecycle_state, revision, created_at, updated_at
+                SELECT id, application_id, application_target_id, code,
+                       lifecycle_state, revision, created_at, updated_at
                 FROM catalog.entitlement
                 WHERE tenant_id = ? AND application_id = ?
                   AND (created_at, id) > (?, ?)
@@ -261,8 +260,6 @@ public final class JdbcCatalogRepository implements CatalogRepository {
                 rs.getObject("application_id", UUID.class),
                 rs.getObject("application_target_id", UUID.class),
                 rs.getString("code"),
-                rs.getString("native_key"),
-                rs.getString("entitlement_type"),
                 CatalogLifecycleState.valueOf(rs.getString("lifecycle_state")),
                 rs.getLong("revision"),
                 rs.getTimestamp("created_at").toInstant(),
