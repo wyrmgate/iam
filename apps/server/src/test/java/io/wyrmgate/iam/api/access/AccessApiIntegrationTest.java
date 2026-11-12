@@ -325,14 +325,7 @@ class AccessApiIntegrationTest {
                 tenant, "policy-app", "Policy App", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant,
-                app.id(),
-                target.id(),
-                "member",
-                "Member",
-                "GROUP",
-                NOW);
+        var entitlement = catalog.createEntitlement(tenant, app.id(), target.id(), "member", NOW);
 
         UUID ruleOne = ids.nextId();
         String firstBody = """
@@ -434,14 +427,7 @@ class AccessApiIntegrationTest {
                 tenant, "app", "App", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant,
-                app.id(),
-                target.id(),
-                "read",
-                "Read",
-                "GROUP",
-                NOW);
+        var entitlement = catalog.createEntitlement(tenant, app.id(), target.id(), "read", NOW);
 
         String location = authorized.perform(
                         post("/api/v1/access-assignments")
@@ -705,12 +691,8 @@ class AccessApiIntegrationTest {
                 tenant, "app", "App", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var first = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "first", "First", "GROUP", NOW);
-        var second = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "second", "Second", "GROUP", NOW);
+        var first = catalog.createEntitlement(tenant, app.id(), target.id(), "first", NOW);
+        var second = catalog.createEntitlement(tenant, app.id(), target.id(), "second", NOW);
 
         Role role = roles.createRole(
                 tenant,
@@ -817,9 +799,7 @@ class AccessApiIntegrationTest {
                 tenant, "app", "App", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "read", "Read", "GROUP", NOW);
+        var entitlement = catalog.createEntitlement(tenant, app.id(), target.id(), "read", NOW);
 
         String location = authorized.perform(
                         post("/api/v1/access-assignments")
@@ -916,9 +896,7 @@ class AccessApiIntegrationTest {
                 tenant, "denied-app", "Denied App", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "denied-read", "Denied Read", "GROUP", NOW);
+        var entitlement = catalog.createEntitlement(tenant, app.id(), target.id(), "denied-read", NOW);
         MockMvc denied = mockMvc(authorization(false));
         UUID correlationId = ids.nextId();
 
@@ -977,9 +955,7 @@ class AccessApiIntegrationTest {
                 tenant, "audit-app", "Audit App", NOW);
         var target = catalog.createTarget(
                 tenant, app.id(), "prod", NOW);
-        var entitlement = catalog.createEntitlement(
-                tenant, app.id(), target.id(),
-                "audit-read", "Audit Read", "GROUP", NOW);
+        var entitlement = catalog.createEntitlement(tenant, app.id(), target.id(), "audit-read", NOW);
         SecurityAuditPort unavailableAudit =
                 (requestedTenant, draft) -> {
                     throw new IllegalStateException(
