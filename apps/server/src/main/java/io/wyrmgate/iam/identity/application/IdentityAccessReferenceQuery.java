@@ -21,11 +21,12 @@ public interface IdentityAccessReferenceQuery {
     record IdentityAccessStatus(
             AccessStatus status,
             String lifecycleState,
-            long revision) {
+            long revision,
+            long accessEligibilityEpoch) {
         public IdentityAccessStatus {
             Objects.requireNonNull(status, "status");
             if (status == AccessStatus.NOT_FOUND) {
-                if (lifecycleState != null || revision != 0) {
+                if (lifecycleState != null || revision != 0 || accessEligibilityEpoch != 0) {
                     throw new IllegalArgumentException(
                             "NOT_FOUND access status must not carry lifecycle/revision");
                 }
@@ -34,34 +35,50 @@ public interface IdentityAccessReferenceQuery {
                     throw new IllegalArgumentException(
                             "identity access status requires lifecycleState");
                 }
-                if (revision < 0) {
+                if (revision < 1 || accessEligibilityEpoch < 1) {
                     throw new IllegalArgumentException(
-                            "revision must not be negative");
+                            "revision/accessEligibilityEpoch must be positive");
                 }
             }
         }
 
         public static IdentityAccessStatus notFound() {
             return new IdentityAccessStatus(
-                    AccessStatus.NOT_FOUND, null, 0);
+                    AccessStatus.NOT_FOUND, null, 0, 0);
+        }
+
+        public static IdentityAccessStatus eligible(
+                String lifecycleState,
+                long revision,
+                long accessEligibilityEpoch) {
+            return new IdentityAccessStatus(
+                    AccessStatus.ACCESS_ELIGIBLE,
+                    lifecycleState,
+                    revision,
+                    accessEligibilityEpoch);
         }
 
         public static IdentityAccessStatus eligible(
                 String lifecycleState,
                 long revision) {
+            return eligible(lifecycleState, revision, 1);
+        }
+
+        public static IdentityAccessStatus ineligible(
+                String lifecycleState,
+                long revision,
+                long accessEligibilityEpoch) {
             return new IdentityAccessStatus(
-                    AccessStatus.ACCESS_ELIGIBLE,
+                    AccessStatus.ACCESS_INELIGIBLE,
                     lifecycleState,
-                    revision);
+                    revision,
+                    accessEligibilityEpoch);
         }
 
         public static IdentityAccessStatus ineligible(
                 String lifecycleState,
                 long revision) {
-            return new IdentityAccessStatus(
-                    AccessStatus.ACCESS_INELIGIBLE,
-                    lifecycleState,
-                    revision);
+            return ineligible(lifecycleState, revision, 1);
         }
     }
 
