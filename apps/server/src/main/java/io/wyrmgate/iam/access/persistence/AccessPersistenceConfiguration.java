@@ -356,6 +356,7 @@ public class AccessPersistenceConfiguration {
             EffectiveAccessRepository effectiveAccessRepository,
             RoleExpansionQuery roleExpansion,
             DesiredStateDerivationService desiredStateDerivationService,
+            EffectiveAccessSemanticSupport semanticSupport,
             TerminalCatalogAssignmentRepairService terminalCatalogRepair) {
         return new EffectiveAccessProcessingService(
                 outboxRepository,
@@ -364,6 +365,7 @@ public class AccessPersistenceConfiguration {
                 effectiveAccessRepository,
                 roleExpansion,
                 desiredStateDerivationService,
+                semanticSupport,
                 terminalCatalogRepair);
     }
 
