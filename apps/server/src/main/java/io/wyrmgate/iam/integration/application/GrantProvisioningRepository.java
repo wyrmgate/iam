@@ -32,6 +32,14 @@ public interface GrantProvisioningRepository {
             TenantContext tenant,
             UUID desiredGrantId);
 
+    default List<TechnicalGrantTarget> priorSuccessfulTechnicalAddTargets(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            UUID principalId) {
+        return List.of();
+    }
+
     boolean createPlan(
             TenantContext tenant,
             String planKey,
