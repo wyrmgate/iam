@@ -61,6 +61,9 @@ class RoleEffectiveAccessIntegrationTest {
     private static CatalogCommandService catalog;
     private static RoleCommandService roles;
     private static RoleExpansionQueryService expansion;
+    private static io.wyrmgate.iam.catalog.application.CatalogQueryService catalogQuery;
+    private static io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery catalogAvailability;
+    private static IdentityAccessReferenceQueryService identityReferences;
     private static JdbcOutboxRepository outbox;
     private static JdbcScheduledWorkRepository scheduledWork;
     private static JdbcAccessAssignmentRepository assignmentRepository;
@@ -137,9 +140,12 @@ class RoleEffectiveAccessIntegrationTest {
         catalogPropagation =
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationService(
                         jdbc, ids, transactions);
-        var catalogAvailability =
+        catalogAvailability =
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
                         catalogRepository, roleRepository);
+        catalogQuery =
+                new io.wyrmgate.iam.catalog.application.CatalogQueryService(
+                        catalogRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
         PrincipalFactSink noPrincipalFacts = new PrincipalFactSink() {
@@ -177,7 +183,7 @@ class RoleEffectiveAccessIntegrationTest {
                 ids,
                 transactions,
                 (tenant, principalId, identityId, at) -> {});
-        var identityReferences = new IdentityAccessReferenceQueryService(
+        identityReferences = new IdentityAccessReferenceQueryService(
                 identityRepository, principalRepository);
 
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
@@ -186,21 +192,23 @@ class RoleEffectiveAccessIntegrationTest {
         effectiveQuery = new EffectiveAccessQueryService(
                 effectiveRepository,
                 identityReferences,
-                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
-                        assignmentRepository, catalogAvailability, expansion));
+                new EffectiveAccessSemanticSupport(
+                        assignmentRepository,
+                        identityReferences,
+                        catalogQuery,
+                        catalogAvailability,
+                        expansion));
         desiredDerivation = new DesiredStateDerivationService(
                 effectiveQuery,
                 desiredRepository,
-                new io.wyrmgate.iam.catalog.application.CatalogQueryService(
-                        catalogRepository),
+                catalogQuery,
                 identityReferences,
                 (tenant, state) -> { },
                 transactions);
         assignments = new AccessAssignmentCommandService(
                 assignmentRepository,
                 identityReferences,
-                new io.wyrmgate.iam.catalog.application.CatalogQueryService(
-                        catalogRepository),
+                catalogQuery,
                 catalogAvailability,
                 expansion,
                 new JdbcAccessAssignmentFactSink(outbox, ids),
