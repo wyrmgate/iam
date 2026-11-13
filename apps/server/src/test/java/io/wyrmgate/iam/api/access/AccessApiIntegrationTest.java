@@ -248,6 +248,7 @@ class AccessApiIntegrationTest {
                         catalogQueries,
                         identityReferences,
                         (tenant, state) -> { },
+                        (tenant, state) -> { },
                         transactions);
 
         lifecyclePolicyRepository =
@@ -1136,7 +1137,11 @@ class AccessApiIntegrationTest {
                 assignmentRepository,
                 effectiveRepository,
                 expansion,
-                desiredDerivation);
+                desiredDerivation,
+                new TerminalCatalogAssignmentRepairService(
+                        assignmentRepository,
+                        catalogAvailability,
+                        assignmentCommands));
     }
 
     private Identity identity(String displayName) {
