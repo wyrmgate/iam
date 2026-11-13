@@ -75,7 +75,11 @@ which governed Principal an observed grant belongs to.
 
 When the same DesiredGrantState moves from one governed Principal to another, Integration checks
 coalesced demand before removing the old Principal's technical grant because another semantic cause
-may still require it.
+may still require it. If an ANY desired cause remains PRESENT but loses safe unique Principal
+resolution, Integration never guesses a replacement Principal. Safely known prior realization for
+that cause is reduced when no other current desired cause requires the old governed technical
+tuple; if there is no prior realization to reduce, the unresolved privilege increase remains
+retryable.
 
 When the governed Principal remains the same but the current connector/provider mapping changes,
 the old technical route may be removed after the replacement ADD is planned according to the
