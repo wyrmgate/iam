@@ -382,6 +382,75 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
                 .isEqualTo(AccessAssignment.LifecycleState.REVOKED);
     }
 
+    @Test
+    void targetReductionPagesRestartsAndFencesSupersededTerminalCause() {
+        TenantContext tenant = tenant("paged-target-reduction");
+        var app = catalog.createApplication(tenant, "paged-app", "Paged", NOW);
+        var target = catalog.createTarget(tenant, app.id(), "prod", NOW);
+        var entitlement = catalog.createEntitlement(
+                tenant, app.id(), target.id(), "member", NOW);
+        UUID identityId = ids.nextId();
+        for (int i = 0; i < 205; i++) {
+            assignments.insert(tenant, assignment(
+                    identityId, AccessAssignment.TargetKind.ENTITLEMENT,
+                    null, entitlement.id(), AccessAssignment.LifecycleState.ACTIVE,
+                    NOW.minusSeconds(1), null));
+        }
+
+        catalog.retireTarget(tenant, target.id(), target.revision(), NOW.plusSeconds(1));
+        drainCatalogPropagation();
+        drainReductionIntake();
+        UUID oldReductionId = jdbc.queryForObject("""
+                SELECT id FROM access.access_target_reduction
+                WHERE tenant_id = ? AND target_id = ? AND source_cause_kind = 'APPLICATION_TARGET'
+                """, UUID.class, tenant.tenantId(), entitlement.id());
+        var reductionRepository = new JdbcAccessTargetReductionRepository(jdbc);
+        var reductionWork = new JdbcAccessTargetReductionWorkSink(outbox, ids);
+        // Use a new processor instance for each page; progress is durable.
+        var clock = Clock.fixed(NOW.plusSeconds(10), ZoneOffset.UTC);
+        new AccessTargetReductionProcessingService(outbox, reductionRepository,
+                assignments, assignmentCommands, availability, reductionWork,
+                transactions, clock).processAvailable();
+        var first = reductionRepository.findById(tenant, oldReductionId).orElseThrow();
+        assertThat(first.state()).isEqualTo(
+                io.wyrmgate.iam.access.domain.AccessTargetReduction.State.RUNNING);
+        assertThat(first.processedAssignmentCount()).isEqualTo(200);
+        assertThat(first.afterAssignmentId()).isNotNull();
+
+        // Application retirement supersedes the exact target-retirement cause.
+        catalog.retireApplication(tenant, app.id(), app.revision(), NOW.plusSeconds(2));
+        drainCatalogPropagation();
+        drainReductionIntake();
+        UUID newReductionId = jdbc.queryForObject("""
+                SELECT id FROM access.access_target_reduction
+                WHERE tenant_id = ? AND target_id = ? AND source_cause_kind = 'APPLICATION'
+                """, UUID.class, tenant.tenantId(), entitlement.id());
+
+        // Replayed stale work must not terminate against the superseded cause.
+        reductionWork.requested(tenant, first, ids.nextId(), null);
+        for (int i = 0; i < 4; i++) {
+            new AccessTargetReductionProcessingService(outbox, reductionRepository,
+                    assignments, assignmentCommands, availability, reductionWork,
+                    transactions, clock).processAvailable();
+        }
+        var oldCompleted = reductionRepository.findById(tenant, oldReductionId).orElseThrow();
+        var newCompleted = reductionRepository.findById(tenant, newReductionId).orElseThrow();
+        assertThat(oldCompleted.state()).isEqualTo(
+                io.wyrmgate.iam.access.domain.AccessTargetReduction.State.COMPLETED);
+        assertThat(oldCompleted.processedAssignmentCount()).isEqualTo(200);
+        assertThat(newCompleted.state()).isEqualTo(
+                io.wyrmgate.iam.access.domain.AccessTargetReduction.State.COMPLETED);
+        assertThat(newCompleted.processedAssignmentCount()).isEqualTo(5);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM access.access_assignment
+                WHERE tenant_id = ? AND entitlement_id = ? AND lifecycle_state = 'REVOKED'
+                """, Integer.class, tenant.tenantId(), entitlement.id())).isEqualTo(205);
+        reductionWork.requested(tenant, newCompleted, ids.nextId(), null);
+        drainReductions();
+        assertThat(reductionRepository.findById(tenant, newReductionId).orElseThrow())
+                .isEqualTo(newCompleted);
+    }
+
     private static void drainCatalogPropagation() {
         for (int i = 0; i < 20; i++) {
             var batch = propagation.processAvailable();
