@@ -20,6 +20,7 @@ import io.wyrmgate.iam.access.application.AccessReviewRemediationRepository;
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
 import io.wyrmgate.iam.access.application.RoleExpansionProjectionRefreshService;
+import io.wyrmgate.iam.access.application.TerminalCatalogAssignmentRepairService;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
@@ -313,6 +314,15 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
+    TerminalCatalogAssignmentRepairService terminalCatalogAssignmentRepairService(
+            AccessAssignmentRepository assignments,
+            CatalogAccessTargetAvailabilityQuery catalogAvailability,
+            AccessAssignmentCommandService commands) {
+        return new TerminalCatalogAssignmentRepairService(
+                assignments, catalogAvailability, commands);
+    }
+
+    @Bean
     EffectiveAccessRepository effectiveAccessRepository(
             JdbcTemplate jdbcTemplate,
             IdGenerator idGenerator) {
@@ -345,14 +355,16 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentRepository assignmentRepository,
             EffectiveAccessRepository effectiveAccessRepository,
             RoleExpansionQuery roleExpansion,
-            DesiredStateDerivationService desiredStateDerivationService) {
+            DesiredStateDerivationService desiredStateDerivationService,
+            TerminalCatalogAssignmentRepairService terminalCatalogRepair) {
         return new EffectiveAccessProcessingService(
                 outboxRepository,
                 scheduledWorkRepository,
                 assignmentRepository,
                 effectiveAccessRepository,
                 roleExpansion,
-                desiredStateDerivationService);
+                desiredStateDerivationService,
+                terminalCatalogRepair);
     }
 
     @Bean
