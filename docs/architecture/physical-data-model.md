@@ -1016,3 +1016,9 @@ cause. Integration provisioning task evidence now carries data-minimized governe
 and `entitlementId` values in its validated task payload in addition to provider-native execution
 identifiers. These stable IDs support cause-independent technical cleanup evidence; current removal
 permission is still supplied by the Access desired-state semantic query.
+
+Flyway V18 adds the Identity/Access eligibility-epoch fence and bounded Principal-refresh indexes.
+It seeds pre-existing Identity and Access rows with epoch 1 using constant defaults and then drops
+the AccessAssignment default so future writes must supply the captured epoch explicitly; no
+unbounded row-by-row eligibility backfill is performed. Flyway V19 adds partial indexes for current
+technical-grant demand and successful governed ADD evidence used by ADR-0056 coalesced cleanup.
