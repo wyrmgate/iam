@@ -254,7 +254,17 @@ public final class GrantProvisioningPlannerService {
             TenantContext tenant,
             DesiredGrantState grant,
             GrantProvisioningRepository.TechnicalGrantTarget target) {
-        if (target.principalId() != null) return target;
+        if (target.principalId() != null) {
+            var current = principals.resolve(
+                    tenant, target.principalId());
+            if (current.status()
+                            == PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE
+                    || !grant.applicationTargetId().equals(
+                            current.applicationTargetId())) {
+                return null;
+            }
+            return target;
+        }
 
         var candidates = principals.forIdentityTarget(
                         tenant,
