@@ -458,6 +458,118 @@ class RoleEffectiveAccessIntegrationTest {
     }
 
     @Test
+    void specificRoleStopsContributingWhenCurrentExpansionBecomesMultiTarget() {
+        TenantContext tenant = tenant("specific-role-change");
+        Identity identity = identity(tenant, "Specific Expansion User");
+
+        var appOne = catalog.createApplication(
+                tenant, "specific-one", "Specific One", NOW);
+        var targetOne = catalog.createTarget(
+                tenant, appOne.id(), "prod", NOW);
+        var entitlementOne = catalog.createEntitlement(
+                tenant, appOne.id(), targetOne.id(), "read", NOW);
+        Role applicationRole = roles.createRole(
+                tenant,
+                Role.RoleType.APPLICATION,
+                appOne.id(),
+                "specific-app-role",
+                "Specific App Role",
+                NOW);
+        activate(
+                tenant,
+                applicationRole.id(),
+                List.of(RoleCommandService.MemberSpec.entitlement(
+                        entitlementOne.id())),
+                NOW.plusSeconds(1));
+
+        Role businessRole = roles.createRole(
+                tenant,
+                Role.RoleType.BUSINESS,
+                null,
+                "specific-business-role",
+                "Specific Business Role",
+                NOW.plusSeconds(4));
+        activate(
+                tenant,
+                businessRole.id(),
+                List.of(RoleCommandService.MemberSpec.applicationRole(
+                        applicationRole.id())),
+                NOW.plusSeconds(5));
+
+        var principal = principals.create(
+                tenant,
+                targetOne.id(),
+                "specific-expansion-user",
+                identity.id(),
+                NOW.plusSeconds(8),
+                ids.nextId(),
+                null);
+
+        AccessAssignment assignment = assignments.createRoleAssignment(
+                tenant,
+                identity.id(),
+                businessRole.id(),
+                AccessAssignment.PrincipalConstraintKind.SPECIFIC,
+                principal.id(),
+                null,
+                null,
+                NOW.plusSeconds(9));
+        process(NOW.plusSeconds(10));
+
+        String constraint = "SPECIFIC:" + principal.id();
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                entitlementOne.id(),
+                constraint,
+                NOW.plusSeconds(10))).isPresent();
+
+        var appTwo = catalog.createApplication(
+                tenant, "specific-two", "Specific Two", NOW.plusSeconds(11));
+        var targetTwo = catalog.createTarget(
+                tenant, appTwo.id(), "prod", NOW.plusSeconds(11));
+        var entitlementTwo = catalog.createEntitlement(
+                tenant, appTwo.id(), targetTwo.id(), "read", NOW.plusSeconds(11));
+
+        activate(
+                tenant,
+                businessRole.id(),
+                List.of(
+                        RoleCommandService.MemberSpec.applicationRole(
+                                applicationRole.id()),
+                        RoleCommandService.MemberSpec.entitlement(
+                                entitlementTwo.id())),
+                NOW.plusSeconds(12));
+
+        // Current Catalog meaning is authoritative immediately: stale materialized
+        // support for the old single-target expansion cannot preserve SPECIFIC access.
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                entitlementOne.id(),
+                constraint,
+                NOW.plusSeconds(15))).isEmpty();
+
+        drainCatalogPropagation();
+        process(NOW.plusSeconds(16));
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                entitlementOne.id(),
+                constraint,
+                NOW.plusSeconds(16))).isEmpty();
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                entitlementTwo.id(),
+                constraint,
+                NOW.plusSeconds(16))).isEmpty();
+
+        assertThat(assignmentRepository.findById(
+                tenant, assignment.id())).isPresent();
+    }
+
+    @Test
     void roleRefreshPagesNonTerminalAssignmentsAndResumesFromDurableContinuation() {
         TenantContext tenant = tenant("role-refresh-pages");
         Identity identity = identity(tenant, "Paged Role User");
