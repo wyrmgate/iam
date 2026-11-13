@@ -103,8 +103,7 @@ public final class GrantProvisioningPlannerService {
 
         for (var rawOld : uniqueTargets(provisioning.priorSuccessfulAddTargets(
                 tenant, grant.id()))) {
-            var old = resolvePrincipalId(
-                    tenant, grant, rawOld);
+            var old = requireGovernedPrincipal(rawOld);
             if (old == null) return null;
             if (sameTechnicalTarget(old, addTarget)) {
                 continue;
@@ -153,8 +152,7 @@ public final class GrantProvisioningPlannerService {
         // grant originally realized by another cause.
         for (var rawPrior : provisioning.priorSuccessfulAddTargets(
                 tenant, grant.id())) {
-            var prior = resolvePrincipalId(
-                    tenant, grant, rawPrior);
+            var prior = requireGovernedPrincipal(rawPrior);
             if (prior == null) return null;
             targets.put(targetKey(prior), prior);
         }
@@ -225,8 +223,7 @@ public final class GrantProvisioningPlannerService {
                 new LinkedHashMap<>();
         for (var rawPrior : provisioning.priorSuccessfulAddTargets(
                 tenant, grant.id())) {
-            var prior = resolvePrincipalId(
-                    tenant, grant, rawPrior);
+            var prior = requireGovernedPrincipal(rawPrior);
             if (prior == null) return null;
             targets.put(targetKey(prior), prior);
         }
@@ -261,29 +258,9 @@ public final class GrantProvisioningPlannerService {
         return removals.isEmpty() ? null : List.copyOf(removals);
     }
 
-    private GrantProvisioningRepository.TechnicalGrantTarget resolvePrincipalId(
-            TenantContext tenant,
-            DesiredGrantState grant,
+    private static GrantProvisioningRepository.TechnicalGrantTarget requireGovernedPrincipal(
             GrantProvisioningRepository.TechnicalGrantTarget target) {
-        // A non-null ID here came from immutable successful task evidence or
-        // from an observed mapping that the caller revalidated before lookup.
-        if (target.principalId() != null) return target;
-
-        var candidates = principals.forIdentityTarget(
-                        tenant,
-                        grant.identityId(),
-                        grant.applicationTargetId())
-                .stream()
-                .filter(candidate ->
-                        candidate.status()
-                                != PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE)
-                .filter(candidate ->
-                        target.providerPrincipalId().equals(
-                                candidate.nativePrincipalKey()))
-                .toList();
-        if (candidates.size() != 1) return null;
-        return target.withPrincipalId(
-                candidates.getFirst().principalId());
+        return target.principalId() == null ? null : target;
     }
 
     private static List<GrantProvisioningRepository.TechnicalGrantTarget> uniqueTargets(
