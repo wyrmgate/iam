@@ -25,3 +25,31 @@ ALTER TABLE access.access_assignment
 CREATE INDEX access_assignment_identity_epoch_idx
     ON access.access_assignment (tenant_id, identity_id, identity_access_epoch, created_at, id)
     WHERE lifecycle_state IN ('ACTIVE','SUSPENDED','SCHEDULED');
+
+
+-- Principal-change desired-state repair is bounded and restartable. Keep each branch
+-- indexable independently so large tenants do not require an unbounded sort/scan.
+CREATE INDEX access_desired_grant_specific_refresh_idx
+    ON access.desired_grant_state (
+        tenant_id,
+        application_target_id,
+        principal_constraint_key,
+        id);
+
+CREATE INDEX access_desired_grant_any_refresh_idx
+    ON access.desired_grant_state (
+        tenant_id,
+        application_target_id,
+        identity_id,
+        id)
+    WHERE principal_constraint_key = 'ANY'
+      AND desired_state = 'PRESENT';
+
+CREATE INDEX access_desired_grant_technical_demand_idx
+    ON access.desired_grant_state (
+        tenant_id,
+        application_target_id,
+        entitlement_id,
+        principal_id)
+    WHERE desired_state = 'PRESENT'
+      AND principal_id IS NOT NULL;
