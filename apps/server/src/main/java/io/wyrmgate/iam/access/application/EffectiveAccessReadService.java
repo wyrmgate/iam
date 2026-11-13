@@ -39,18 +39,6 @@ public final class EffectiveAccessReadService {
                 supportQuery, "supportQuery");
     }
 
-    /** Compatibility constructor retained for focused tests with small support sets. */
-    public EffectiveAccessReadService(
-            EffectiveAccessRepository repository,
-            IdentityAccessReferenceQuery identities,
-            EffectiveAccessSemanticSupport semanticSupport) {
-        this(
-                repository,
-                identities,
-                semanticSupport,
-                new RepositorySupportQuery(repository));
-    }
-
     public EffectivePage list(
             TenantContext tenant,
             UUID identityId,
@@ -234,49 +222,4 @@ public final class EffectiveAccessReadService {
             List<EffectiveSupport> items,
             EffectiveSupportPosition nextPosition) {}
 
-    private static final class RepositorySupportQuery
-            implements EffectiveAccessSupportQuery {
-        private final EffectiveAccessRepository repository;
-
-        private RepositorySupportQuery(
-                EffectiveAccessRepository repository) {
-            this.repository = repository;
-        }
-
-        @Override
-        public List<EffectiveSupport> page(
-                TenantContext tenant,
-                UUID effectiveAccessId,
-                EffectiveSupportPosition after,
-                int limit,
-                Instant at) {
-            List<EffectiveSupport> values =
-                    repository.currentSupportEvidence(
-                            tenant, effectiveAccessId, at);
-            return values.stream()
-                    .filter(value -> after == null
-                            || compare(position(value), after) > 0)
-                    .limit(limit)
-                    .toList();
-        }
-
-        @Override
-        public int countCurrent(
-                TenantContext tenant,
-                UUID effectiveAccessId,
-                Instant at) {
-            return repository.currentSupportEvidence(
-                    tenant, effectiveAccessId, at).size();
-        }
-
-        private static int compare(
-                EffectiveSupportPosition left,
-                EffectiveSupportPosition right) {
-            int byAssignment = left.accessAssignmentId()
-                    .compareTo(right.accessAssignmentId());
-            return byAssignment != 0
-                    ? byAssignment
-                    : left.pathHash().compareTo(right.pathHash());
-        }
-    }
 }
