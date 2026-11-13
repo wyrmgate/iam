@@ -121,6 +121,7 @@ public final class IdentityLifecycleAccessQueryService implements IdentityLifecy
                 Status.AVAILABLE,
                 identity.lifecycleState().name(),
                 identity.revision(),
+                identity.accessEligibilityEpoch(),
                 values,
                 multiValues);
     }
