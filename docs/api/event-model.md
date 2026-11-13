@@ -73,3 +73,17 @@ If publication is not enabled, internal facts remain durable and unclaimed. If p
 ## Authority rule
 
 Events do not bypass capability ownership. In particular, observed provider events cannot directly create governed AccessAssignments; they may create observations/findings that lead to an explicit governance decision/command.
+
+
+### Access projection refresh work
+
+The existing Access intake paths for Identity eligibility changes and Principal projection-input
+facts emit internal `access.identity-assignment-refresh-page-requested` and
+`access.principal-assignment-refresh-page-requested` messages respectively. These carry a fixed
+snapshot timestamp and optional complete `afterCreatedAt + afterAssignmentId` checkpoint.
+Each page atomically emits bounded `access.assignment-projection-refresh-requested` work
+and its continuation. Principal intake also starts the existing desired-principal refresh chain
+independently, so one chain's retry cannot block the other. Assignment projection changes
+atomically emit `access.desired-grant-refresh-requested` with the assignment ID/revision and
+touched Entitlement ID. All work propagates correlation/causation and re-reads current
+semantic state; unavailable evaluation retries. These are not public integration events.
