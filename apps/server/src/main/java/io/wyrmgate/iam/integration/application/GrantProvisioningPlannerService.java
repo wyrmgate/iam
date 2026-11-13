@@ -74,7 +74,9 @@ public final class GrantProvisioningPlannerService {
     private List<GrantProvisioningRepository.TaskSpec> presentTasks(
             TenantContext tenant,
             DesiredGrantState grant) {
-        if (grant.principalId() == null) return null;
+        if (grant.principalId() == null) {
+            return unresolvedPresentTasks(tenant, grant);
+        }
 
         var principal = principals.resolve(tenant, grant.principalId());
         if (principal.status() != PrincipalTechnicalReferenceQuery.Status.ACTIVE
@@ -145,20 +147,28 @@ public final class GrantProvisioningPlannerService {
         LinkedHashMap<String,GrantProvisioningRepository.TechnicalGrantTarget> targets =
                 new LinkedHashMap<>();
 
-        List<GrantProvisioningRepository.TechnicalGrantTarget> priorEvidence =
-                grant.principalId() == null
-                        ? provisioning.priorSuccessfulAddTargets(
-                                tenant, grant.id())
-                        : provisioning.priorSuccessfulTechnicalAddTargets(
-                                tenant,
-                                grant.applicationTargetId(),
-                                grant.entitlementId(),
-                                grant.principalId());
-        for (var rawPrior : priorEvidence) {
+        // Always retain same-cause execution evidence for pre-upgrade and
+        // out-of-order cases. When the last governed Principal is known, add
+        // cause-independent evidence so a final disappearing cause can clean a
+        // grant originally realized by another cause.
+        for (var rawPrior : provisioning.priorSuccessfulAddTargets(
+                tenant, grant.id())) {
             var prior = resolvePrincipalId(
                     tenant, grant, rawPrior);
             if (prior == null) return null;
             targets.put(targetKey(prior), prior);
+        }
+        if (grant.principalId() != null) {
+            for (var rawPrior : provisioning.priorSuccessfulTechnicalAddTargets(
+                    tenant,
+                    grant.applicationTargetId(),
+                    grant.entitlementId(),
+                    grant.principalId())) {
+                var prior = resolvePrincipalId(
+                        tenant, grant, rawPrior);
+                if (prior == null) return null;
+                targets.put(targetKey(prior), prior);
+            }
         }
 
         // Observation can supplement execution evidence only when this
@@ -178,6 +188,41 @@ public final class GrantProvisioningPlannerService {
                 new ArrayList<>();
         for (var target : targets.values()) {
             if (target.principalId() == null) return null;
+            var demand = desired.technicalGrantDemand(
+                    tenant,
+                    grant.applicationTargetId(),
+                    grant.entitlementId(),
+                    target.principalId());
+            if (demand
+                    == DesiredProvisioningStateQuery.TechnicalGrantDemand.UNAVAILABLE) {
+                return null;
+            }
+            if (demand
+                    == DesiredProvisioningStateQuery.TechnicalGrantDemand.REQUIRED) {
+                continue;
+            }
+            removals.add(task(
+                    grant, target, "REMOVE_GRANT", null));
+        }
+        return List.copyOf(removals);
+    }
+
+    private List<GrantProvisioningRepository.TaskSpec> unresolvedPresentTasks(
+            TenantContext tenant,
+            DesiredGrantState grant) {
+        LinkedHashMap<String,GrantProvisioningRepository.TechnicalGrantTarget> targets =
+                new LinkedHashMap<>();
+        for (var rawPrior : provisioning.priorSuccessfulAddTargets(
+                tenant, grant.id())) {
+            var prior = resolvePrincipalId(
+                    tenant, grant, rawPrior);
+            if (prior == null) return null;
+            targets.put(targetKey(prior), prior);
+        }
+
+        List<GrantProvisioningRepository.TaskSpec> removals =
+                new ArrayList<>();
+        for (var target : targets.values()) {
             var demand = desired.technicalGrantDemand(
                     tenant,
                     grant.applicationTargetId(),
