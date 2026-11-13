@@ -67,7 +67,8 @@ public final class JdbcGrantProvisioningRepository
                         rs.getInt(3),
                         rs.getString(4),
                         rs.getString(5),
-                        providerPrincipalId),
+                        providerPrincipalId,
+                        null),
                 entitlementId,
                 tenant.tenantId(),
                 applicationTargetId);
