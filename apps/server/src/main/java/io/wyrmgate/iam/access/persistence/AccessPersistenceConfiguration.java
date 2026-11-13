@@ -421,9 +421,17 @@ public class AccessPersistenceConfiguration {
     DesiredStateProcessingService desiredStateProcessingService(
             JdbcOutboxRepository outboxRepository,
             IdentityAccessReferenceQuery identityReferences,
-            DesiredStateDerivationService derivationService) {
+            DesiredStateDerivationService derivationService,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            ObjectMapper objectMapper) {
         return new DesiredStateProcessingService(
-                outboxRepository, identityReferences, derivationService);
+                outboxRepository,
+                identityReferences,
+                derivationService,
+                ids,
+                transactions,
+                objectMapper);
     }
 
     @Bean
