@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.platform.id.IdGenerator;
-import io.wyrmgate.iam.platform.id.UuidV7Generator;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
 import io.wyrmgate.iam.platform.persistence.OutboxEvent;
@@ -17,7 +16,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Supplier;
 
 /**
  * Bounded Access-owned desired-state repair for Identity-owned Principal changes.
@@ -58,24 +56,6 @@ public final class DesiredStateProcessingService {
                 ids,
                 transactions,
                 json,
-                Clock.systemUTC());
-    }
-
-    /**
-     * Compatibility constructor for focused unit composition. Production wiring supplies
-     * the shared transaction executor and ID generator explicitly.
-     */
-    public DesiredStateProcessingService(
-            JdbcOutboxRepository outbox,
-            IdentityAccessReferenceQuery identityReferences,
-            DesiredStateDerivationService derivation) {
-        this(
-                outbox,
-                identityReferences,
-                derivation,
-                new UuidV7Generator(),
-                new DirectTransactionExecutor(),
-                new ObjectMapper(),
                 Clock.systemUTC());
     }
 
@@ -330,11 +310,4 @@ public final class DesiredStateProcessingService {
         }
     }
 
-    private static final class DirectTransactionExecutor
-            implements TransactionExecutor {
-        @Override
-        public <T> T required(Supplier<T> work) {
-            return work.get();
-        }
-    }
 }
