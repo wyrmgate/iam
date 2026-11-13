@@ -268,6 +268,7 @@ access.access_assignment
 - id uuid PRIMARY KEY
 - tenant_id uuid NOT NULL
 - identity_id uuid NOT NULL                 -- cross-capability stable ID
+- identity_access_epoch bigint NOT NULL CHECK (identity_access_epoch > 0)
 - target_kind varchar(16) NOT NULL CHECK (target_kind IN ('ROLE','ENTITLEMENT'))
 - role_id uuid NULL
 - entitlement_id uuid NULL
@@ -287,7 +288,7 @@ access.access_assignment
 - CHECK valid_until IS NULL OR valid_from IS NULL OR valid_until > valid_from
 ```
 
-Identity, Role, Entitlement and Principal references are cross-capability stable IDs. Access uses semantic queries to validate material current facts when an assignment mutation requires them; the references never authorize direct foreign repository mutation.
+Identity, Role, Entitlement and Principal references are cross-capability stable IDs. Access uses semantic queries to validate material current facts when an assignment mutation requires them; the references never authorize direct foreign repository mutation. ADR-0055 adds Identity-owned access-eligibility epoch fencing; epoch mismatch suppresses semantic contribution and does not create a cross-capability foreign key.
 
 The first runtime implementation of this authoritative contract is migration V19. The initial command surface creates Entitlement-target assignments only because canonical Role/RoleVersion runtime is not yet implemented; the relational shape retains both target kinds for the later Role slice. Public/manual provenance is typed as `MANUAL` with no provenance reference. V27 adds internal `REQUEST_ITEM` provenance whose reference is the originating Governance RequestItem ID, unique per tenant, while retaining no cross-capability foreign key. Principal constraints are `ANY` or `SPECIFIC`. A SPECIFIC Principal must resolve through Identity semantics to the same Identity and the Entitlement's active ApplicationTarget. Creation materializes `SCHEDULED` when `valid_from` is future and otherwise `ACTIVE`; semantic effectiveness is still evaluated directly from lifecycle plus the validity window, so scheduler delay cannot extend expired authority or delay a reached valid-from instant. The first termination command materializes `CANCELLED`, `REVOKED` or `EXPIRED` with optimistic revision. EffectiveAccess, desired-state derivation and fulfillment remain separate later projections.
 
