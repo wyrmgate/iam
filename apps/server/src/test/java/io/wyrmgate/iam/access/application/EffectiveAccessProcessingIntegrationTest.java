@@ -571,10 +571,13 @@ class EffectiveAccessProcessingIntegrationTest {
                 effectiveRepository,
                 roleExpansion,
                 desiredDerivation,
+                new EffectiveAccessSemanticSupport(assignmentRepository, identityReferences,
+                        catalogQuery, catalogAvailability, roleExpansion),
                 new TerminalCatalogAssignmentRepairService(
                         assignmentRepository,
                         catalogAvailability,
                         assignments),
+                ids, transactions, new com.fasterxml.jackson.databind.ObjectMapper(),
                 Clock.fixed(at, ZoneOffset.UTC));
     }
 
