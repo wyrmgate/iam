@@ -166,3 +166,12 @@ SIEM delivery is a separate outbound technical transport of data-minimized Audit
 ### Access dependency fencing
 
 AccessAssignment remains Access-owned authority, but admission records the current Identity access-eligibility epoch defined by ADR-0055. EffectiveAccess is semantically present only when the Identity is currently eligible in that same epoch and current target/Principal compatibility rules hold. The epoch is a foreign semantic reference value, not duplicated Identity authority.
+
+
+### Desired-state cause and technical demand
+
+DesiredGrantState preserves the semantic Access cause, including its principal-constraint key.
+Multiple DesiredGrantState rows may resolve to one technical grant. ADR-0056 defines the derived
+technical-demand question across those rows; it does not introduce another authoritative grant
+object. Integration execution evidence is reusable for cleanup only after Access reports that no
+current desired cause requires the governed Principal + Entitlement tuple.
