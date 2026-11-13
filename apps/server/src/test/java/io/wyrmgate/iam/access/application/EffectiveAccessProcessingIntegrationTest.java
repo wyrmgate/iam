@@ -189,6 +189,7 @@ class EffectiveAccessProcessingIntegrationTest {
                 catalogQuery,
                 identityReferences,
                 (tenant, state) -> { },
+                (tenant, state) -> { },
                 transactions);
     }
 
