@@ -12,6 +12,18 @@ public interface DesiredProvisioningStateQuery {
 
     PrincipalResult desiredPrincipal(TenantContext tenant, UUID desiredPrincipalId);
 
+    TechnicalGrantDemand technicalGrantDemand(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            UUID principalId);
+
+    enum TechnicalGrantDemand {
+        REQUIRED,
+        NOT_REQUIRED,
+        UNAVAILABLE
+    }
+
     enum Status {
         CURRENT,
         ABSENT,
