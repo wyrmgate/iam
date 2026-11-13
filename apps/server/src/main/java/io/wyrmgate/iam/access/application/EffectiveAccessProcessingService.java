@@ -34,6 +34,7 @@ public final class EffectiveAccessProcessingService {
     private final EffectiveAccessRepository effectiveAccess;
     private final RoleExpansionQuery roleExpansion;
     private final DesiredStateDerivationService desiredState;
+    private final TerminalCatalogAssignmentRepairService terminalCatalogRepair;
     private final Clock clock;
 
     public EffectiveAccessProcessingService(
@@ -96,12 +97,52 @@ public final class EffectiveAccessProcessingService {
             RoleExpansionQuery roleExpansion,
             DesiredStateDerivationService desiredState,
             Clock clock) {
+        this(
+                outbox,
+                scheduledWork,
+                assignments,
+                effectiveAccess,
+                roleExpansion,
+                desiredState,
+                null,
+                clock);
+    }
+
+    public EffectiveAccessProcessingService(
+            JdbcOutboxRepository outbox,
+            JdbcScheduledWorkRepository scheduledWork,
+            AccessAssignmentRepository assignments,
+            EffectiveAccessRepository effectiveAccess,
+            RoleExpansionQuery roleExpansion,
+            DesiredStateDerivationService desiredState,
+            TerminalCatalogAssignmentRepairService terminalCatalogRepair) {
+        this(
+                outbox,
+                scheduledWork,
+                assignments,
+                effectiveAccess,
+                roleExpansion,
+                desiredState,
+                terminalCatalogRepair,
+                Clock.systemUTC());
+    }
+
+    EffectiveAccessProcessingService(
+            JdbcOutboxRepository outbox,
+            JdbcScheduledWorkRepository scheduledWork,
+            AccessAssignmentRepository assignments,
+            EffectiveAccessRepository effectiveAccess,
+            RoleExpansionQuery roleExpansion,
+            DesiredStateDerivationService desiredState,
+            TerminalCatalogAssignmentRepairService terminalCatalogRepair,
+            Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.scheduledWork = Objects.requireNonNull(scheduledWork, "scheduledWork");
         this.assignments = Objects.requireNonNull(assignments, "assignments");
         this.effectiveAccess = Objects.requireNonNull(effectiveAccess, "effectiveAccess");
         this.roleExpansion = Objects.requireNonNull(roleExpansion, "roleExpansion");
         this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
+        this.terminalCatalogRepair = terminalCatalogRepair;
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -196,10 +237,13 @@ public final class EffectiveAccessProcessingService {
             TenantContext tenant,
             UUID assignmentId,
             Instant at) {
-        AccessAssignment assignment = assignments.findById(
-                        tenant, assignmentId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "AccessAssignment projection input does not exist"));
+        AccessAssignment assignment = terminalCatalogRepair == null
+                ? assignments.findById(
+                                tenant, assignmentId)
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "AccessAssignment projection input does not exist"))
+                : terminalCatalogRepair.repairIfTerminal(
+                        tenant, assignmentId, at);
 
         String constraintKey = principalConstraintKey(assignment);
         if (assignment.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT) {
