@@ -49,11 +49,33 @@ public interface EffectiveAccessRepository {
             UUID effectiveAccessId,
             Instant at);
 
+    default List<UUID> currentSupportingAssignmentIds(
+            TenantContext tenant,
+            UUID effectiveAccessId,
+            Instant at,
+            int limit) {
+        if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+        return currentSupportingAssignmentIds(tenant, effectiveAccessId, at)
+                .stream().limit(limit).toList();
+    }
+
     List<UUID> currentSupportingAssignmentIds(
             TenantContext tenant,
             UUID identityId,
             UUID entitlementId,
             Instant at);
+
+    default List<UUID> currentSupportingAssignmentIds(
+            TenantContext tenant,
+            UUID identityId,
+            UUID entitlementId,
+            Instant at,
+            int limit) {
+        if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+        return currentSupportingAssignmentIds(
+                        tenant, identityId, entitlementId, at)
+                .stream().limit(limit).toList();
+    }
 
     List<EffectiveAccess> findCurrentPage(
             TenantContext tenant,
