@@ -214,8 +214,51 @@ public final class JdbcDesiredStateProjectionRepository
         Objects.requireNonNull(principalId, "principalId");
         Objects.requireNonNull(applicationTargetId, "applicationTargetId");
         if (limit < 1 || limit > 201) {
-            throw new IllegalArgumentException("principal refresh limit must be between 1 and 201");
+            throw new IllegalArgumentException(
+                    "principal refresh limit must be between 1 and 201");
         }
+
+        java.util.ArrayList<DesiredGrantState> candidates =
+                new java.util.ArrayList<>(
+                        limit * 3);
+        candidates.addAll(findPrincipalRefreshSpecific(
+                tenant,
+                principalId,
+                applicationTargetId,
+                afterId,
+                limit));
+
+        if (currentIdentityId != null) {
+            candidates.addAll(findPrincipalRefreshAny(
+                    tenant,
+                    currentIdentityId,
+                    applicationTargetId,
+                    afterId,
+                    limit));
+        }
+        if (previousIdentityId != null
+                && !previousIdentityId.equals(currentIdentityId)) {
+            candidates.addAll(findPrincipalRefreshAny(
+                    tenant,
+                    previousIdentityId,
+                    applicationTargetId,
+                    afterId,
+                    limit));
+        }
+
+        return candidates.stream()
+                .sorted(java.util.Comparator.comparing(
+                        DesiredGrantState::id))
+                .limit(limit)
+                .toList();
+    }
+
+    private List<DesiredGrantState> findPrincipalRefreshSpecific(
+            TenantContext tenant,
+            UUID principalId,
+            UUID applicationTargetId,
+            UUID afterId,
+            int limit) {
         String after = afterId == null ? "" : " AND id > ?";
         String sql = """
                 SELECT id, identity_id, application_target_id, entitlement_id,
@@ -224,24 +267,50 @@ public final class JdbcDesiredStateProjectionRepository
                 FROM access.desired_grant_state
                 WHERE tenant_id = ?
                   AND application_target_id = ?
-                  AND (
-                      principal_constraint_key = ?
-                      OR (
-                          principal_constraint_key = 'ANY'
-                          AND desired_state = 'PRESENT'
-                          AND (identity_id = ? OR identity_id = ?)
-                      )
-                  )
+                  AND principal_constraint_key = ?
                 """ + after + " ORDER BY id LIMIT ?";
-        java.util.ArrayList<Object> args = new java.util.ArrayList<>();
+        java.util.ArrayList<Object> args =
+                new java.util.ArrayList<>();
         args.add(tenant.tenantId());
         args.add(applicationTargetId);
         args.add("SPECIFIC:" + principalId);
-        args.add(currentIdentityId);
-        args.add(previousIdentityId);
         if (afterId != null) args.add(afterId);
         args.add(limit);
-        return jdbc.query(sql, (rs,row) -> grant(rs), args.toArray());
+        return jdbc.query(
+                sql,
+                (rs,row) -> grant(rs),
+                args.toArray());
+    }
+
+    private List<DesiredGrantState> findPrincipalRefreshAny(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId,
+            UUID afterId,
+            int limit) {
+        String after = afterId == null ? "" : " AND id > ?";
+        String sql = """
+                SELECT id, identity_id, application_target_id, entitlement_id,
+                       principal_constraint_key, principal_id, desired_state,
+                       desired_revision, source_generation, computed_at
+                FROM access.desired_grant_state
+                WHERE tenant_id = ?
+                  AND application_target_id = ?
+                  AND identity_id = ?
+                  AND principal_constraint_key = 'ANY'
+                  AND desired_state = 'PRESENT'
+                """ + after + " ORDER BY id LIMIT ?";
+        java.util.ArrayList<Object> args =
+                new java.util.ArrayList<>();
+        args.add(tenant.tenantId());
+        args.add(applicationTargetId);
+        args.add(identityId);
+        if (afterId != null) args.add(afterId);
+        args.add(limit);
+        return jdbc.query(
+                sql,
+                (rs,row) -> grant(rs),
+                args.toArray());
     }
 
     @Override
