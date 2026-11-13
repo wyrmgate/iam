@@ -145,15 +145,23 @@ public final class GrantProvisioningPlannerService {
         LinkedHashMap<String,GrantProvisioningRepository.TechnicalGrantTarget> targets =
                 new LinkedHashMap<>();
 
-        for (var rawPrior : provisioning.priorSuccessfulAddTargets(
-                tenant, grant.id())) {
+        List<GrantProvisioningRepository.TechnicalGrantTarget> priorEvidence =
+                grant.principalId() == null
+                        ? provisioning.priorSuccessfulAddTargets(
+                                tenant, grant.id())
+                        : provisioning.priorSuccessfulTechnicalAddTargets(
+                                tenant,
+                                grant.applicationTargetId(),
+                                grant.entitlementId(),
+                                grant.principalId());
+        for (var rawPrior : priorEvidence) {
             var prior = resolvePrincipalId(
                     tenant, grant, rawPrior);
             if (prior == null) return null;
             targets.put(targetKey(prior), prior);
         }
 
-        // Observation can supplement missing execution evidence only when this
+        // Observation can supplement execution evidence only when this
         // desired cause still carries the exact governed Principal it last
         // resolved to. Provider strings are never used to guess that Principal.
         if (grant.principalId() != null) {
@@ -239,6 +247,9 @@ public final class GrantProvisioningPlannerService {
         payload.put(
                 "providerPrincipalId",
                 target.providerPrincipalId());
+        payload.put(
+                "entitlementId",
+                grant.entitlementId().toString());
         if (target.principalId() != null) {
             payload.put(
                     "principalId",
