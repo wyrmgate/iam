@@ -298,8 +298,15 @@ class EffectiveAccessProcessingIntegrationTest {
                 NOW.plusSeconds(1),
                 ids.nextId(),
                 null);
-        desiredDerivation.reconcileAnyForPrincipalChange(
-                tenant, identity.id(), catalog.target().id(), NOW.plusSeconds(1));
+        desiredDerivation.reconcilePrincipalChangePage(
+                tenant,
+                principal.id(),
+                catalog.target().id(),
+                identity.id(),
+                null,
+                null,
+                200,
+                NOW.plusSeconds(1));
 
         var resolved = desiredRepository.findGrantTuple(
                 tenant, identity.id(), catalog.entitlement().id(), "ANY")
@@ -307,7 +314,7 @@ class EffectiveAccessProcessingIntegrationTest {
         assertThat(resolved.principalId()).isEqualTo(principal.id());
         assertThat(resolved.desiredRevision()).isEqualTo(first.desiredRevision() + 1);
 
-        principals.create(
+        var secondPrincipal = principals.create(
                 tenant,
                 catalog.target().id(),
                 "desired-user-2",
@@ -315,8 +322,15 @@ class EffectiveAccessProcessingIntegrationTest {
                 NOW.plusSeconds(2),
                 ids.nextId(),
                 null);
-        desiredDerivation.reconcileAnyForPrincipalChange(
-                tenant, identity.id(), catalog.target().id(), NOW.plusSeconds(2));
+        desiredDerivation.reconcilePrincipalChangePage(
+                tenant,
+                secondPrincipal.id(),
+                catalog.target().id(),
+                identity.id(),
+                null,
+                null,
+                200,
+                NOW.plusSeconds(2));
 
         var ambiguous = desiredRepository.findGrantTuple(
                 tenant, identity.id(), catalog.entitlement().id(), "ANY")
