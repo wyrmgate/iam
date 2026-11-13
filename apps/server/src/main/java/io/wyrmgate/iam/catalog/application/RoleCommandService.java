@@ -4,6 +4,7 @@ import io.wyrmgate.iam.catalog.domain.CatalogAvailabilityCauseKind;
 import io.wyrmgate.iam.catalog.domain.CatalogLifecycleState;
 import io.wyrmgate.iam.catalog.domain.Entitlement;
 import io.wyrmgate.iam.catalog.domain.Role;
+import io.wyrmgate.iam.catalog.domain.RoleCardinality;
 import io.wyrmgate.iam.catalog.domain.RoleVersion;
 import io.wyrmgate.iam.catalog.domain.RoleVersionMember;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -92,10 +93,7 @@ public final class RoleCommandService {
         Objects.requireNonNull(roleId, "roleId");
         Objects.requireNonNull(members, "members");
         Objects.requireNonNull(now, "now");
-        if (members.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "RoleVersion must contain at least one member");
-        }
+        RoleCardinality.requireDirectMembers(members.size());
         Role role = requireActiveRole(tenant, roleId);
         requireRoleParentAvailable(tenant, role);
         requireUniqueMembers(members);
@@ -267,7 +265,7 @@ public final class RoleCommandService {
         return role;
     }
 
-    private void validatePersistedVersion(
+    private int validatePersistedVersion(
             TenantContext tenant,
             Role role,
             RoleVersion version,
@@ -280,20 +278,18 @@ public final class RoleCommandService {
                                 ? member.memberRoleId()
                                 : member.memberEntitlementId()))
                 .toList();
-        validateMembers(
+        return validateMembers(
                 tenant, role, members, requireCurrentChildVersion);
     }
 
-    private void validateMembers(
+    private int validateMembers(
             TenantContext tenant,
             Role role,
             List<MemberSpec> members,
             boolean requireCurrentChildVersion) {
-        if (members.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "RoleVersion must contain at least one member");
-        }
+        RoleCardinality.requireDirectMembers(members.size());
         requireUniqueMembers(members);
+        int expandedPaths = 0;
         for (MemberSpec member : members) {
             if (role.type() == Role.RoleType.APPLICATION
                     && member.kind()
@@ -334,6 +330,7 @@ public final class RoleCommandService {
                     throw new IllegalArgumentException(
                             "APPLICATION Role entitlement belongs to another Application");
                 }
+                RoleCardinality.requireExpandedPaths(++expandedPaths);
                 continue;
             }
 
@@ -358,10 +355,12 @@ public final class RoleCommandService {
                                 tenant, child.id())
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "member APPLICATION Role has no active version"));
-                validatePersistedVersion(
+                expandedPaths += validatePersistedVersion(
                         tenant, child, childVersion, false);
+                RoleCardinality.requireExpandedPaths(expandedPaths);
             }
         }
+        return expandedPaths;
     }
 
     private static void requireUniqueMembers(List<MemberSpec> members) {

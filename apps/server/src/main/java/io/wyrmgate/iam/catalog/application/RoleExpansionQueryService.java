@@ -2,6 +2,7 @@ package io.wyrmgate.iam.catalog.application;
 
 import io.wyrmgate.iam.catalog.domain.CatalogLifecycleState;
 import io.wyrmgate.iam.catalog.domain.Role;
+import io.wyrmgate.iam.catalog.domain.RoleCardinality;
 import io.wyrmgate.iam.catalog.domain.RoleVersion;
 import io.wyrmgate.iam.catalog.domain.RoleVersionMember;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -47,8 +48,11 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
         }
 
         List<EntitlementPath> paths = new ArrayList<>();
-        for (RoleVersionMember member : roles.findMembers(
-                tenant, version.id())) {
+        var members = roles.findMembers(tenant, version.id());
+        if (members.isEmpty() || members.size() > RoleCardinality.MAX_DIRECT_MEMBERS) {
+            return Result.unavailable(Status.INVALID, roleId);
+        }
+        for (RoleVersionMember member : members) {
             if (member.kind()
                     == RoleVersionMember.MemberKind.ENTITLEMENT) {
                 var path = entitlementPath(
@@ -56,6 +60,9 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
                         member.memberEntitlementId(),
                         List.of(version.id()));
                 if (path == null) {
+                    return Result.unavailable(Status.INVALID, roleId);
+                }
+                if (paths.size() == RoleCardinality.MAX_EXPANDED_PATHS) {
                     return Result.unavailable(Status.INVALID, roleId);
                 }
                 paths.add(path);
@@ -84,8 +91,12 @@ public final class RoleExpansionQueryService implements RoleExpansionQuery {
             if (childVersion == null) {
                 return Result.unavailable(Status.INVALID, roleId);
             }
-            for (RoleVersionMember childMember : roles.findMembers(
-                    tenant, childVersion.id())) {
+            var childMembers = roles.findMembers(tenant, childVersion.id());
+            if (childMembers.isEmpty() || childMembers.size() > RoleCardinality.MAX_DIRECT_MEMBERS
+                    || childMembers.size() > RoleCardinality.MAX_EXPANDED_PATHS - paths.size()) {
+                return Result.unavailable(Status.INVALID, roleId);
+            }
+            for (RoleVersionMember childMember : childMembers) {
                 if (childMember.kind()
                         != RoleVersionMember.MemberKind.ENTITLEMENT) {
                     return Result.unavailable(Status.INVALID, roleId);

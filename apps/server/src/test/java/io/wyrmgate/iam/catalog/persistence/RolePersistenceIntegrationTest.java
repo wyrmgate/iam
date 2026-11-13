@@ -370,6 +370,44 @@ class RolePersistenceIntegrationTest {
         assertThat(targetOne.id()).isNotNull();
     }
 
+    @Test
+    void expandedCardinalityCountsPathsAndChildChangesCanSuppressAndRestoreParent() {
+        TenantContext tenant = tenant("role-bound");
+        var app = catalog.createApplication(tenant, "bound", "Bound", NOW);
+        var target = catalog.createTarget(tenant, app.id(), "prod", NOW);
+        var members = new java.util.ArrayList<RoleCommandService.MemberSpec>();
+        for (int i = 0; i < 501; i++) {
+            var e = catalog.createEntitlement(tenant, app.id(), target.id(), "e-" + i, NOW);
+            members.add(RoleCommandService.MemberSpec.entitlement(e.id()));
+        }
+        var a = roles.createRole(tenant, Role.RoleType.APPLICATION, app.id(), "a", "A", NOW);
+        var b = roles.createRole(tenant, Role.RoleType.APPLICATION, app.id(), "b", "B", NOW);
+        var parent = roles.createRole(tenant, Role.RoleType.BUSINESS, null, "p", "Parent", NOW);
+        var parentMembers = List.of(RoleCommandService.MemberSpec.applicationRole(a.id()),
+                RoleCommandService.MemberSpec.applicationRole(b.id()));
+        assertThatThrownBy(() -> roles.createDraftVersion(tenant, parent.id(),
+                java.util.Collections.nCopies(1001, members.getFirst()), NOW))
+                .hasMessageContaining("1,000 direct members");
+        activate(tenant, a.id(), members.subList(0, 500), NOW.plusSeconds(1));
+        activate(tenant, b.id(), members.subList(0, 500), NOW.plusSeconds(4));
+        activate(tenant, parent.id(), parentMembers, NOW.plusSeconds(7));
+        assertThat(expansion.expandCurrent(tenant, parent.id()).paths()).hasSize(1000);
+
+        var pending = roles.createDraftVersion(tenant, parent.id(), parentMembers, NOW.plusSeconds(10));
+        roles.markReady(tenant, pending.id(), 1, NOW.plusSeconds(11));
+        activate(tenant, b.id(), members, NOW.plusSeconds(12));
+        assertThat(expansion.expandCurrent(tenant, parent.id()).status())
+                .isEqualTo(RoleExpansionQuery.Status.INVALID);
+        assertThat(expansion.expandCurrent(tenant, parent.id()).paths()).isEmpty();
+        assertThatThrownBy(() -> roles.activate(tenant, pending.id(), 2, NOW.plusSeconds(15)))
+                .hasMessageContaining("1,000 expanded entitlement paths");
+        var draft = roles.createDraftVersion(tenant, parent.id(), parentMembers, NOW.plusSeconds(16));
+        assertThatThrownBy(() -> roles.markReady(tenant, draft.id(), 1, NOW.plusSeconds(17)))
+                .hasMessageContaining("1,000 expanded entitlement paths");
+        activate(tenant, b.id(), members.subList(0, 500), NOW.plusSeconds(18));
+        assertThat(expansion.expandCurrent(tenant, parent.id()).paths()).hasSize(1000);
+    }
+
     private void drainAvailabilityPropagation() {
         for (int i = 0; i < 20; i++) {
             var batch = availabilityPropagation.processAvailable();

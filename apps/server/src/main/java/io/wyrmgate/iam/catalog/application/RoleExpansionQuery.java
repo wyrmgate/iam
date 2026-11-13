@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.catalog.application;
 
+import io.wyrmgate.iam.catalog.domain.RoleCardinality;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.util.List;
 import java.util.Objects;
@@ -24,6 +25,7 @@ public interface RoleExpansionQuery {
             paths = paths == null ? List.of() : List.copyOf(paths);
             if (status == Status.AVAILABLE) {
                 Objects.requireNonNull(roleId, "roleId");
+                RoleCardinality.requireExpandedPaths(paths.size());
             } else if (!paths.isEmpty()) {
                 throw new IllegalArgumentException("unavailable expansion must not carry paths");
             }
