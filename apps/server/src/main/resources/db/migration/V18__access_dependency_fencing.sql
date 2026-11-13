@@ -42,12 +42,3 @@ CREATE INDEX access_desired_grant_any_refresh_idx
         id)
     WHERE principal_constraint_key = 'ANY'
       AND desired_state = 'PRESENT';
-
-CREATE INDEX access_desired_grant_technical_demand_idx
-    ON access.desired_grant_state (
-        tenant_id,
-        application_target_id,
-        entitlement_id,
-        principal_id)
-    WHERE desired_state = 'PRESENT'
-      AND principal_id IS NOT NULL;
