@@ -6,17 +6,15 @@ ALTER TABLE identity.identity
     ADD CONSTRAINT identity_access_eligibility_epoch_ck
     CHECK (access_eligibility_epoch > 0);
 
+-- The Identity epoch is introduced as 1 for every pre-existing Identity above.
+-- PostgreSQL can therefore seed the Access fence with the same constant without an
+-- unbounded table rewrite/backfill transaction. Drop the default afterwards so all
+-- future application writes must supply the captured Identity epoch explicitly.
 ALTER TABLE access.access_assignment
-    ADD COLUMN identity_access_epoch bigint;
-
-UPDATE access.access_assignment a
-SET identity_access_epoch = i.access_eligibility_epoch
-FROM identity.identity i
-WHERE i.tenant_id = a.tenant_id
-  AND i.id = a.identity_id;
+    ADD COLUMN identity_access_epoch bigint NOT NULL DEFAULT 1;
 
 ALTER TABLE access.access_assignment
-    ALTER COLUMN identity_access_epoch SET NOT NULL;
+    ALTER COLUMN identity_access_epoch DROP DEFAULT;
 
 ALTER TABLE access.access_assignment
     ADD CONSTRAINT access_assignment_identity_access_epoch_ck
