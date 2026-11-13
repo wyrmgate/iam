@@ -206,7 +206,7 @@ public final class DesiredStateDerivationService {
                 .ifPresent(state -> principalFacts.revalidate(tenant, state));
     }
 
-    public record PrincipalRefreshPageResult/(
+    public record PrincipalRefreshPageResult(
             int processed,
             boolean hasMore,
             UUID nextAfterId) {
