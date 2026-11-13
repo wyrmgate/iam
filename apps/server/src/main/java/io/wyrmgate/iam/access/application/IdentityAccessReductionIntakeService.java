@@ -7,6 +7,7 @@ import io.wyrmgate.iam.access.domain.IdentityAccessReduction;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
+import io.wyrmgate.iam.platform.persistence.OutboxEvent;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import java.time.Clock;
 import java.time.Duration;
@@ -82,11 +83,13 @@ public final class IdentityAccessReductionIntakeService {
         int failed = 0;
         for (ClaimedOutboxEvent item : claimed) {
             try {
-                consume(item, clock.instant());
-                outbox.markPublished(
-                        item.tenant(),
-                        item.event().eventId(),
-                        clock.instant());
+                transactions.required(() -> {
+                    Instant at = clock.instant();
+                    if (outbox.markPublished(item.tenant(), item.event().eventId(), at)) {
+                        consume(item, at);
+                    }
+                    return null;
+                });
                 processed++;
             } catch (IllegalArgumentException invalid) {
                 outbox.markTerminalFailure(
@@ -133,6 +136,14 @@ public final class IdentityAccessReductionIntakeService {
             throw new IllegalArgumentException(
                     "Identity access-eligibility fact payload is incomplete");
         }
+
+        // Both eligibility-boundary directions can invalidate an older epoch.
+        outbox.append(item.tenant(), new OutboxEvent(
+                ids.nextId(), RoleExpansionProjectionRefreshService.IDENTITY_PAGE_REQUESTED,
+                1, "identity", event.aggregateId(), event.aggregateRevision(),
+                now, event.correlationId() == null ? event.eventId() : event.correlationId(),
+                event.eventId(),
+                json.createObjectNode().put("snapshotAt", now.toString()).toString()), now);
 
         if (eligibleNode.booleanValue()) {
             return;
