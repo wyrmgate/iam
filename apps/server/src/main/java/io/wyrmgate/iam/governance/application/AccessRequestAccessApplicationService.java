@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.governance.application;
 
+import io.wyrmgate.iam.access.application.AccessAssignmentCommandException;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.ItemState;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.PrincipalConstraintKind;
@@ -33,6 +34,29 @@ public final class AccessRequestAccessApplicationService {
             "request_item_authorized_fact_invalid";
     private static final String APPLICATION_FAILED =
             "request_item_access_application_failed";
+
+    private static final Set<String> TERMINAL_EXPIRED_CODES = Set.of(
+            "validity_already_ended",
+            "access_assignment_expired");
+
+    private static final Set<String> TERMINAL_CANCELLED_CODES = Set.of(
+            "identity_not_found",
+            "identity_not_access_eligible",
+            "entitlement_not_found",
+            "entitlement_retired",
+            "application_target_retired",
+            "entitlement_unavailable_terminal",
+            "role_not_found",
+            "role_unavailable_terminal",
+            "specific_principal_required",
+            "specific_principal_not_allowed",
+            "principal_not_found",
+            "principal_uncorrelated",
+            "principal_identity_mismatch",
+            "principal_target_mismatch",
+            "specific_role_target_ambiguous",
+            "invalid_validity_window",
+            "request_item_access_intent_conflict");
 
     private final JdbcOutboxRepository outbox;
     private final AccessRequestRepository requests;
@@ -133,24 +157,38 @@ public final class AccessRequestAccessApplicationService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "AccessRequest does not exist"));
 
-        AccessIntentCommand.Result application = access.applyRequestedAccess(
-                claimed.tenant(),
-                new AccessIntentCommand.RequestedAccess(
-                        item.id(),
-                        request.beneficiaryIdentityId(),
-                        item.targetKind() == TargetKind.ROLE
-                                ? AccessIntentCommand.TargetKind.ROLE
-                                : AccessIntentCommand.TargetKind.ENTITLEMENT,
-                        item.roleId(),
-                        item.entitlementId(),
-                        item.principalConstraintKind()
-                                == PrincipalConstraintKind.ANY
-                                ? AccessIntentCommand.PrincipalConstraintKind.ANY
-                                : AccessIntentCommand.PrincipalConstraintKind.SPECIFIC,
-                        item.specificPrincipalId(),
-                        item.validFrom(),
-                        item.validUntil()),
-                now);
+        AccessIntentCommand.Result application;
+        try {
+            application = access.applyRequestedAccess(
+                    claimed.tenant(),
+                    new AccessIntentCommand.RequestedAccess(
+                            item.id(),
+                            request.beneficiaryIdentityId(),
+                            item.targetKind() == TargetKind.ROLE
+                                    ? AccessIntentCommand.TargetKind.ROLE
+                                    : AccessIntentCommand.TargetKind.ENTITLEMENT,
+                            item.roleId(),
+                            item.entitlementId(),
+                            item.principalConstraintKind()
+                                    == PrincipalConstraintKind.ANY
+                                    ? AccessIntentCommand.PrincipalConstraintKind.ANY
+                                    : AccessIntentCommand.PrincipalConstraintKind.SPECIFIC,
+                            item.specificPrincipalId(),
+                            item.validFrom(),
+                            item.validUntil()),
+                    now);
+        } catch (AccessAssignmentCommandException rejected) {
+            ItemState terminal = terminalState(rejected.code());
+            if (terminal == null) {
+                throw rejected;
+            }
+            recordTerminalApplicationOutcome(
+                    claimed,
+                    item,
+                    terminal,
+                    now);
+            return;
+        }
 
         transactions.required(() -> {
             RequestItem current = requests.findItem(
@@ -175,6 +213,42 @@ public final class AccessRequestAccessApplicationService {
                     ItemState.APPLIED,
                     current.approvalCaseId(),
                     application.accessAssignmentId(),
+                    current.evaluationCode(),
+                    current.revision(),
+                    now);
+        });
+    }
+
+    private ItemState terminalState(String code) {
+        if (TERMINAL_EXPIRED_CODES.contains(code)) {
+            return ItemState.EXPIRED;
+        }
+        if (TERMINAL_CANCELLED_CODES.contains(code)) {
+            return ItemState.CANCELLED;
+        }
+        return null;
+    }
+
+    private void recordTerminalApplicationOutcome(
+            ClaimedOutboxEvent claimed,
+            RequestItem item,
+            ItemState terminalState,
+            Instant now) {
+        transactions.required(() -> {
+            RequestItem current = requests.findItem(
+                            claimed.tenant(),
+                            item.id())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "RequestItem disappeared during terminal access application"));
+            if (current.state() != ItemState.AUTHORIZED) {
+                return current;
+            }
+            return requests.updateItemState(
+                    claimed.tenant(),
+                    current.id(),
+                    terminalState,
+                    current.approvalCaseId(),
+                    null,
                     current.evaluationCode(),
                     current.revision(),
                     now);
