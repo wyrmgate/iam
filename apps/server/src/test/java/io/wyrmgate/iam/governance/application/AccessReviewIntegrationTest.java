@@ -64,7 +64,7 @@ class AccessReviewIntegrationTest {
                         TenantContext tenant,
                         UUID identityId) {
                     return identityExists(tenant, identityId)
-                            ? IdentityAccessStatus.eligible("ACTIVE", 1)
+                            ? IdentityAccessStatus.eligible("ACTIVE", 1, 1)
                             : IdentityAccessStatus.notFound();
                 }
 
@@ -549,6 +549,7 @@ class AccessReviewIntegrationTest {
                 new AccessAssignment(
                         ids.nextId(),
                         identityId,
+                        1,
                         AccessAssignment.TargetKind.ENTITLEMENT,
                         null,
                         ids.nextId(),
