@@ -1,7 +1,6 @@
 package io.wyrmgate.iam.access.application;
 
 import io.wyrmgate.iam.access.domain.AccessAssignment;
-import io.wyrmgate.iam.catalog.application.RoleExpansionFactSink;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
@@ -117,7 +116,7 @@ public final class EffectiveAccessProcessingService {
         List<ClaimedOutboxEvent> claimed = outbox.claimPending(
                 Set.of(
                         AccessAssignmentFactSink.PROJECTION_INPUT_CHANGED,
-                        RoleExpansionFactSink.ROLE_EXPANSION_CHANGED),
+                        RoleExpansionProjectionRefreshService.ASSIGNMENT_REFRESH_REQUESTED),
                 now,
                 CLAIM_LEASE,
                 BATCH_SIZE);
@@ -130,8 +129,9 @@ public final class EffectiveAccessProcessingService {
                     throw new IllegalArgumentException(
                             "unsupported EffectiveAccess projection fact");
                 }
-                if (AccessAssignmentFactSink.PROJECTION_INPUT_CHANGED.equals(
-                        event.eventType())) {
+                if (AccessAssignmentFactSink.PROJECTION_INPUT_CHANGED.equals(event.eventType())
+                        || RoleExpansionProjectionRefreshService.ASSIGNMENT_REFRESH_REQUESTED
+                                .equals(event.eventType())) {
                     if (!"access-assignment".equals(event.aggregateType())) {
                         throw new IllegalArgumentException(
                                 "invalid AccessAssignment projection fact");
@@ -140,19 +140,6 @@ public final class EffectiveAccessProcessingService {
                             item.tenant(),
                             event.aggregateId(),
                             clock.instant());
-                } else if (RoleExpansionFactSink.ROLE_EXPANSION_CHANGED.equals(
-                        event.eventType())) {
-                    if (!"role".equals(event.aggregateType())) {
-                        throw new IllegalArgumentException(
-                                "invalid Role expansion fact");
-                    }
-                    for (AccessAssignment assignment : assignments.findByRoleId(
-                            item.tenant(), event.aggregateId())) {
-                        reconcile(
-                                item.tenant(),
-                                assignment.id(),
-                                clock.instant());
-                    }
                 } else {
                     throw new IllegalArgumentException(
                             "unsupported EffectiveAccess projection fact");

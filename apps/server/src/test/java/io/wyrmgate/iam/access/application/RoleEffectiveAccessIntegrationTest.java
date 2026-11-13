@@ -294,7 +294,7 @@ class RoleEffectiveAccessIntegrationTest {
                 null,
                 NOW.plusSeconds(8));
 
-        processor(NOW.plusSeconds(9)).processAvailable();
+        process(NOW.plusSeconds(9));
 
         assertThat(effectiveQuery.find(
                 tenant, identity.id(), e1.id(), "ANY",
@@ -343,7 +343,7 @@ class RoleEffectiveAccessIntegrationTest {
                 NOW.plusSeconds(12))).isPresent();
 
         drainCatalogPropagation();
-        processor(NOW.plusSeconds(13)).processAvailable();
+        process(NOW.plusSeconds(13));
 
         assertThat(effectiveQuery.find(
                 tenant, identity.id(), e1.id(), "ANY",
@@ -360,7 +360,7 @@ class RoleEffectiveAccessIntegrationTest {
                 assignment.id(),
                 assignment.revision(),
                 NOW.plusSeconds(14));
-        processor(NOW.plusSeconds(14)).processAvailable();
+        process(NOW.plusSeconds(14));
 
         assertThat(effectiveQuery.find(
                 tenant, identity.id(), e1Next.id(), "ANY",
@@ -447,6 +447,80 @@ class RoleEffectiveAccessIntegrationTest {
                 NOW.plusSeconds(10)))
                 .isInstanceOf(AccessAssignmentCommandException.class)
                 .hasMessageContaining("exactly one ApplicationTarget");
+    }
+
+    @Test
+    void roleRefreshPagesNonTerminalAssignmentsAndResumesFromDurableContinuation() {
+        TenantContext tenant = tenant("role-refresh-pages");
+        Identity identity = identity(tenant, "Paged Role User");
+        var app = catalog.createApplication(tenant, "paged", "Paged", NOW);
+        var target = catalog.createTarget(tenant, app.id(), "prod", NOW);
+        var entitlement = catalog.createEntitlement(
+                tenant, app.id(), target.id(), "read", NOW);
+        Role role = roles.createRole(
+                tenant, Role.RoleType.APPLICATION, app.id(), "readers", "Readers", NOW);
+        activate(tenant, role.id(),
+                List.of(RoleCommandService.MemberSpec.entitlement(entitlement.id())),
+                NOW.plusSeconds(1));
+        drainCatalogPropagation();
+        for (int i = 0; i < 10; i++) {
+            if (refresh(NOW.plusSeconds(4)).processAvailable().claimed() == 0) break;
+        }
+
+        Instant createdAt = NOW.plusSeconds(5);
+        for (int i = 0; i < 105; i++) {
+            assignmentRepository.insert(tenant, new AccessAssignment(
+                    ids.nextId(), identity.id(), AccessAssignment.TargetKind.ROLE,
+                    role.id(), null, AccessAssignment.PrincipalConstraintKind.ANY, null,
+                    AccessAssignment.ProvenanceKind.MANUAL, null,
+                    AccessAssignment.LifecycleState.ACTIVE, null, null, 1,
+                    createdAt, createdAt));
+        }
+        assignmentRepository.insert(tenant, new AccessAssignment(
+                ids.nextId(), identity.id(), AccessAssignment.TargetKind.ROLE,
+                role.id(), null, AccessAssignment.PrincipalConstraintKind.ANY, null,
+                AccessAssignment.ProvenanceKind.MANUAL, null,
+                AccessAssignment.LifecycleState.REVOKED, null, null, 1,
+                createdAt, createdAt));
+
+        Instant at = NOW.plusSeconds(10);
+        new JdbcRoleExpansionFactSink(outbox, ids).changed(
+                tenant, role.id(), role.revision(), at, ids.nextId(), null);
+        assertThat(refresh(at).processAvailable().processed()).isEqualTo(1);
+        assertThat(workCount(tenant, RoleExpansionProjectionRefreshService.ASSIGNMENT_REFRESH_REQUESTED))
+                .isEqualTo(100);
+        assertThat(workCount(tenant, RoleExpansionProjectionRefreshService.PAGE_REQUESTED))
+                .isEqualTo(1);
+
+        // A new processor instance resumes the committed continuation.
+        assertThat(refresh(at.plusSeconds(1)).processAvailable().processed()).isEqualTo(1);
+        assertThat(workCount(tenant, RoleExpansionProjectionRefreshService.ASSIGNMENT_REFRESH_REQUESTED))
+                .isEqualTo(105);
+        assertThat(refresh(at.plusSeconds(2)).processAvailable().claimed()).isZero();
+
+        processor(at.plusSeconds(2)).processAvailable();
+        processor(at.plusSeconds(2)).processAvailable();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM access.effective_access_support WHERE tenant_id = ?
+                """, Integer.class, tenant.tenantId())).isEqualTo(105);
+    }
+
+    private int workCount(TenantContext tenant, String eventType) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM platform.outbox_event WHERE tenant_id = ? AND event_type = ?
+                """, Integer.class, tenant.tenantId(), eventType);
+    }
+
+    private void process(Instant at) {
+        refresh(at).processAvailable();
+        processor(at).processAvailable();
+    }
+
+    private RoleExpansionProjectionRefreshService refresh(Instant at) {
+        return new RoleExpansionProjectionRefreshService(
+                outbox, assignmentRepository, ids, transactions,
+                new com.fasterxml.jackson.databind.ObjectMapper(),
+                Clock.fixed(at, ZoneOffset.UTC));
     }
 
     private void drainCatalogPropagation() {
