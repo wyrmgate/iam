@@ -175,6 +175,14 @@ public final class GrantProvisioningPlannerService {
         // desired cause still carries the exact governed Principal it last
         // resolved to. Provider strings are never used to guess that Principal.
         if (grant.principalId() != null) {
+            var mappedPrincipal = principals.resolve(
+                    tenant, grant.principalId());
+            if (mappedPrincipal.status()
+                            == PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE
+                    || !grant.applicationTargetId().equals(
+                            mappedPrincipal.applicationTargetId())) {
+                return null;
+            }
             for (var observed : provisioning.observedRemoveTargetsByPrincipalIds(
                     tenant,
                     grant.applicationTargetId(),
@@ -254,17 +262,9 @@ public final class GrantProvisioningPlannerService {
             TenantContext tenant,
             DesiredGrantState grant,
             GrantProvisioningRepository.TechnicalGrantTarget target) {
-        if (target.principalId() != null) {
-            var current = principals.resolve(
-                    tenant, target.principalId());
-            if (current.status()
-                            == PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE
-                    || !grant.applicationTargetId().equals(
-                            current.applicationTargetId())) {
-                return null;
-            }
-            return target;
-        }
+        // A non-null ID here came from immutable successful task evidence or
+        // from an observed mapping that the caller revalidated before lookup.
+        if (target.principalId() != null) return target;
 
         var candidates = principals.forIdentityTarget(
                         tenant,
