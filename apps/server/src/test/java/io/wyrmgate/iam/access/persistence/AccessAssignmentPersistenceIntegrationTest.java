@@ -289,6 +289,58 @@ class AccessAssignmentPersistenceIntegrationTest {
     }
 
     @Test
+    void suspendedAssignmentCannotResumeAcrossIdentityEligibilityEpoch() {
+        TenantContext tenant = tenant("stale-resume");
+        Identity identity = identity(tenant, "Stale Resume User");
+        var catalog = catalog(tenant, "stale-resume-app", "prod");
+
+        AccessAssignment active = assignments.createEntitlementAssignment(
+                tenant,
+                identity.id(),
+                catalog.entitlement().id(),
+                AccessAssignment.PrincipalConstraintKind.ANY,
+                null,
+                null,
+                null,
+                NOW);
+        AccessAssignment suspendedAssignment = assignments.suspend(
+                tenant,
+                active.id(),
+                active.revision(),
+                NOW.plusSeconds(1));
+
+        Identity ineligible = identities.changeLifecycle(
+                tenant,
+                identity.id(),
+                IdentityLifecycleState.SUSPENDED,
+                identity.revision(),
+                NOW.plusSeconds(2),
+                ids.nextId(),
+                null);
+        Identity reactivated = identities.changeLifecycle(
+                tenant,
+                identity.id(),
+                IdentityLifecycleState.ACTIVE,
+                ineligible.revision(),
+                NOW.plusSeconds(3),
+                ids.nextId(),
+                null);
+        assertThat(reactivated.accessEligibilityEpoch())
+                .isGreaterThan(active.identityAccessEpoch());
+
+        assertThatThrownBy(() -> assignments.resume(
+                tenant,
+                suspendedAssignment.id(),
+                suspendedAssignment.revision(),
+                NOW.plusSeconds(4)))
+                .isInstanceOf(AccessAssignmentCommandException.class)
+                .hasMessageContaining("earlier Identity access-eligibility era");
+        assertThat(assignmentRepository.findById(
+                        tenant, active.id()).orElseThrow().lifecycleState())
+                .isEqualTo(AccessAssignment.LifecycleState.SUSPENDED);
+    }
+
+    @Test
     void terminationMaterializesRevokedOrExpiredAndUsesOptimisticRevision() {
         TenantContext tenant = tenant("terminate");
         Identity identity = identity(tenant, "Term User");
