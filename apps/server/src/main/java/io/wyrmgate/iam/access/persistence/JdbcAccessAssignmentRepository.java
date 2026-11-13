@@ -97,9 +97,27 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
     }
 
     @Override
-    public List<AccessAssignment> findByRoleId(TenantContext tenant, UUID roleId) {
-        return jdbc.query(baseSelect() + " WHERE tenant_id = ? AND target_kind = 'ROLE' AND role_id = ? ORDER BY id",
-                (rs,row) -> assignment(rs), tenant.tenantId(), roleId);
+    public List<AccessAssignment> findRoleRefreshPage(
+            TenantContext tenant, UUID roleId, Instant snapshotAt,
+            Instant afterCreatedAt, UUID afterId, int limit) {
+        requirePageLimit(limit);
+        if ((afterCreatedAt == null) != (afterId == null)) {
+            throw new IllegalArgumentException("Role refresh checkpoint must be complete");
+        }
+        String afterClause = afterCreatedAt == null
+                ? "" : " AND (created_at, id) > (?, ?)";
+        String sql = baseSelect() + """
+                WHERE tenant_id = ? AND target_kind = 'ROLE' AND role_id = ?
+                  AND lifecycle_state IN ('ACTIVE','SUSPENDED','SCHEDULED')
+                  AND created_at <= ?
+                """ + afterClause + " ORDER BY created_at, id LIMIT ?";
+        if (afterCreatedAt == null) {
+            return jdbc.query(sql, (rs,row) -> assignment(rs),
+                    tenant.tenantId(), roleId, Timestamp.from(snapshotAt), limit);
+        }
+        return jdbc.query(sql, (rs,row) -> assignment(rs),
+                tenant.tenantId(), roleId, Timestamp.from(snapshotAt),
+                Timestamp.from(afterCreatedAt), afterId, limit);
     }
 
     @Override

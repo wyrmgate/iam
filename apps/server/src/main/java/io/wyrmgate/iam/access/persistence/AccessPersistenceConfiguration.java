@@ -19,6 +19,7 @@ import io.wyrmgate.iam.access.application.AccessReviewRemediationCommandService;
 import io.wyrmgate.iam.access.application.AccessReviewRemediationRepository;
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
+import io.wyrmgate.iam.access.application.RoleExpansionProjectionRefreshService;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
@@ -351,9 +352,21 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
+    RoleExpansionProjectionRefreshService roleExpansionProjectionRefreshService(
+            JdbcOutboxRepository outboxRepository,
+            AccessAssignmentRepository assignments,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            ObjectMapper objectMapper) {
+        return new RoleExpansionProjectionRefreshService(
+                outboxRepository, assignments, ids, transactions, objectMapper);
+    }
+
+    @Bean
     EffectiveAccessProcessingScheduler effectiveAccessProcessingScheduler(
-            EffectiveAccessProcessingService service) {
-        return new EffectiveAccessProcessingScheduler(service);
+            EffectiveAccessProcessingService service,
+            RoleExpansionProjectionRefreshService roleRefresh) {
+        return new EffectiveAccessProcessingScheduler(service, roleRefresh);
     }
 
     @Bean

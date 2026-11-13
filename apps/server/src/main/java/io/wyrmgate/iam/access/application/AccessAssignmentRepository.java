@@ -19,7 +19,12 @@ public interface AccessAssignmentRepository {
             AccessAssignment.ProvenanceKind provenanceKind,
             UUID provenanceRefId) { return Optional.empty(); }
 
-    default List<AccessAssignment> findByRoleId(TenantContext tenant, UUID roleId) { return List.of(); }
+    /** Bounded, immutable-order scan for a current Role projection repair. */
+    default List<AccessAssignment> findRoleRefreshPage(
+            TenantContext tenant, UUID roleId, Instant snapshotAt,
+            Instant afterCreatedAt, UUID afterId, int limit) {
+        throw new UnsupportedOperationException("Role projection refresh paging is not implemented");
+    }
 
     default Optional<AccessAssignment> findCurrentLifecyclePolicyAssignment(
             TenantContext tenant, UUID identityId, UUID ruleId) { return Optional.empty(); }
