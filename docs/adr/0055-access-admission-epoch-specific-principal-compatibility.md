@@ -24,7 +24,11 @@ Every new AccessAssignment records the current eligible Identity epoch as identi
 
 An AccessAssignment can contribute semantic EffectiveAccess only while the Identity is currently access-eligible and its current epoch equals the assignment's captured epoch.
 
-This is a fencing invariant, not a second Identity authority. Identity ineligibility still starts the ADR-0021 Access-owned durable reduction. The epoch makes a late/raced assignment harmless even when it commits after the reduction snapshot, and prevents an assignment from an older eligibility era from silently reviving after reactivation. New access after reactivation must be admitted in the new epoch.
+This is a fencing invariant, not a second Identity authority. Identity ineligibility still starts the ADR-0021 Access-owned durable reduction. The epoch makes a late/raced assignment harmless even when it commits after the reduction snapshot, and prevents an assignment from an older eligibility era from silently reviving after reactivation. New access after reactivation must be admitted in the new epoch. A suspended
+assignment captured in an older epoch cannot be resumed into authority. Lifecycle-policy
+reconciliation treats an otherwise matching policy assignment from an older epoch as stale intent:
+it terminates that assignment with ordinary Access semantics and, if the current rule still
+authorizes, admits a successor in the current epoch.
 
 ### SPECIFIC compatibility is current-state semantic eligibility
 
