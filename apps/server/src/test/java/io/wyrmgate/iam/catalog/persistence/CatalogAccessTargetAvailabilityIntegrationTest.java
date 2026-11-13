@@ -407,7 +407,9 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
         var reductionRepository = new JdbcAccessTargetReductionRepository(jdbc);
         var reductionWork = new JdbcAccessTargetReductionWorkSink(outbox, ids);
         // Use a new processor instance for each page; progress is durable.
-        var clock = Clock.fixed(NOW.plusSeconds(10), ZoneOffset.UTC);
+        // Intake and Catalog propagation use the runtime clock; reduction progress
+        // must not be timestamped before its durable process was created.
+        var clock = Clock.systemUTC();
         new AccessTargetReductionProcessingService(outbox, reductionRepository,
                 assignments, assignmentCommands, availability, reductionWork,
                 transactions, clock).processAvailable();
