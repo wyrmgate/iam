@@ -662,10 +662,13 @@ class RoleEffectiveAccessIntegrationTest {
                 effectiveRepository,
                 expansion,
                 desiredDerivation,
+                new EffectiveAccessSemanticSupport(assignmentRepository, identityReferences,
+                        catalogQuery, catalogAvailability, expansion),
                 new TerminalCatalogAssignmentRepairService(
                         assignmentRepository,
                         catalogAvailability,
                         assignments),
+                ids, transactions, new com.fasterxml.jackson.databind.ObjectMapper(),
                 Clock.fixed(at, ZoneOffset.UTC));
     }
 

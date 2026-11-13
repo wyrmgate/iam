@@ -19,7 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Bounded Access-owned fan-out from a Catalog Role expansion fact to current
+ * Bounded Access-owned fan-out from Role, Principal and Identity changes to current
  * assignment projection repair work. No authoritative assignment is mutated here.
  *
  * <p>Each page atomically acknowledges its input, emits independent assignment
@@ -30,6 +30,8 @@ import java.util.UUID;
 public final class RoleExpansionProjectionRefreshService {
 
     public static final String PAGE_REQUESTED = "access.role-projection-refresh-page-requested";
+    public static final String PRINCIPAL_PAGE_REQUESTED = "access.principal-assignment-refresh-page-requested";
+    public static final String IDENTITY_PAGE_REQUESTED = "access.identity-assignment-refresh-page-requested";
     public static final String ASSIGNMENT_REFRESH_REQUESTED =
             "access.assignment-projection-refresh-requested";
 
@@ -64,7 +66,8 @@ public final class RoleExpansionProjectionRefreshService {
 
     public BatchResult processAvailable() {
         List<ClaimedOutboxEvent> claimed = outbox.claimPending(
-                Set.of(RoleExpansionFactSink.ROLE_EXPANSION_CHANGED, PAGE_REQUESTED),
+                Set.of(RoleExpansionFactSink.ROLE_EXPANSION_CHANGED, PAGE_REQUESTED,
+                        PRINCIPAL_PAGE_REQUESTED, IDENTITY_PAGE_REQUESTED),
                 clock.instant(), CLAIM_LEASE, CLAIM_BATCH);
         int processed = 0;
         int failed = 0;
@@ -87,8 +90,13 @@ public final class RoleExpansionProjectionRefreshService {
 
     private void processOne(ClaimedOutboxEvent item, Instant now) {
         OutboxEvent event = item.event();
+        String kind = switch (event.eventType()) {
+            case PRINCIPAL_PAGE_REQUESTED -> "principal";
+            case IDENTITY_PAGE_REQUESTED -> "identity";
+            default -> "role";
+        };
         if (event.eventVersion() != 1
-                || !"role".equals(event.aggregateType())
+                || !kind.equals(event.aggregateType())
                 || event.aggregateId() == null
                 || event.aggregateRevision() == null) {
             throw new IllegalArgumentException("invalid Role projection refresh input");
@@ -105,9 +113,17 @@ public final class RoleExpansionProjectionRefreshService {
             if (!outbox.markPublished(item.tenant(), event.eventId(), now)) {
                 return null;
             }
-            List<AccessAssignment> page = assignments.findRoleRefreshPage(
-                    item.tenant(), event.aggregateId(), cursor.snapshotAt(),
-                    cursor.afterCreatedAt(), cursor.afterAssignmentId(), PAGE_SIZE + 1);
+            List<AccessAssignment> page = switch (kind) {
+                case "principal" -> assignments.findSpecificPrincipalRefreshPage(
+                        item.tenant(), event.aggregateId(), cursor.snapshotAt(),
+                        cursor.afterCreatedAt(), cursor.afterAssignmentId(), PAGE_SIZE + 1);
+                case "identity" -> assignments.findIdentityProjectionRefreshPage(
+                        item.tenant(), event.aggregateId(), cursor.snapshotAt(),
+                        cursor.afterCreatedAt(), cursor.afterAssignmentId(), PAGE_SIZE + 1);
+                default -> assignments.findRoleRefreshPage(
+                        item.tenant(), event.aggregateId(), cursor.snapshotAt(),
+                        cursor.afterCreatedAt(), cursor.afterAssignmentId(), PAGE_SIZE + 1);
+            };
             boolean more = page.size() > PAGE_SIZE;
             List<AccessAssignment> selected = more ? page.subList(0, PAGE_SIZE) : page;
             for (AccessAssignment assignment : selected) {
@@ -124,7 +140,11 @@ public final class RoleExpansionProjectionRefreshService {
                         .put("afterAssignmentId", last.id().toString())
                         .toString();
                 outbox.append(item.tenant(), new OutboxEvent(
-                        ids.nextId(), PAGE_REQUESTED, 1, "role",
+                        ids.nextId(), switch (kind) {
+                            case "principal" -> PRINCIPAL_PAGE_REQUESTED;
+                            case "identity" -> IDENTITY_PAGE_REQUESTED;
+                            default -> PAGE_REQUESTED;
+                        }, 1, kind,
                         event.aggregateId(), event.aggregateRevision(), now,
                         correlation, event.eventId(), payload), now);
             }
@@ -136,6 +156,9 @@ public final class RoleExpansionProjectionRefreshService {
         try {
             JsonNode node = json.readTree(payload);
             Instant snapshotAt = Instant.parse(node.path("snapshotAt").asText());
+            if (!node.has("afterCreatedAt") && !node.has("afterAssignmentId")) {
+                return new Cursor(snapshotAt, null, null);
+            }
             Instant afterCreatedAt = Instant.parse(node.path("afterCreatedAt").asText());
             UUID afterId = UUID.fromString(node.path("afterAssignmentId").asText());
             if (afterCreatedAt.isAfter(snapshotAt)) {

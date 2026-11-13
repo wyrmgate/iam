@@ -169,6 +169,20 @@ than falsely treating the entitlement as absent. Public Access reads surface thi
 HTTP 503 with `effective_access_semantic_evaluation_unavailable`; mandatory privilege-increase
 evaluation therefore fails closed and retries.
 
+The support subresource first establishes semantic parent existence. A semantically absent
+parent returns 404; an exhausted bounded semantic determination returns 503. Only a
+semantically current parent may return an empty continuation page.
+
+Access materializes support using the same current Identity epoch, Catalog availability and
+SPECIFIC Principal compatibility semantics as reads. Identity eligibility changes and
+Principal changes enqueue bounded assignment refresh pages, including all non-terminal
+SPECIFIC assignments referencing the governed Principal irrespective of its previous/current
+owner. A stale epoch or incompatible SPECIFIC relationship removes derived support without
+automatically terminating the assignment. Terminal Catalog unavailability still uses the
+ordinary authoritative reduction contract. Support changes and touched-tuple desired-grant
+refresh work commit together; desired derivation retries independently if semantic evaluation
+is unavailable, so it cannot prevent stale support cleanup.
+
 There is intentionally no EffectiveAccess mutation endpoint.
 
 ## EffectiveAccess operator view

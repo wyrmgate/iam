@@ -75,9 +75,9 @@ public final class JdbcEffectiveAccessRepository
         int supportInserted = jdbc.update("""
                 INSERT INTO access.effective_access_support (
                     id, tenant_id, effective_access_id,
-                    access_assignment_id, role_version_id,
+                    access_assignment_id,
                     path_hash, path_depth)
-                VALUES (?, ?, ?, ?, NULL, ?, 0)
+                VALUES (?, ?, ?, ?, ?, 0)
                 ON CONFLICT (
                     tenant_id, effective_access_id,
                     access_assignment_id, path_hash)
@@ -271,9 +271,9 @@ public final class JdbcEffectiveAccessRepository
             int supportInserted = jdbc.update("""
                     INSERT INTO access.effective_access_support (
                         id, tenant_id, effective_access_id,
-                        access_assignment_id, role_version_id,
+                        access_assignment_id,
                         path_hash, path_depth)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT (
                         tenant_id, effective_access_id,
                         access_assignment_id, path_hash)
@@ -283,7 +283,6 @@ public final class JdbcEffectiveAccessRepository
                     tenant.tenantId(),
                     effectiveId,
                     assignment.id(),
-                    path.roleVersionPath().getFirst(),
                     path.pathHash(),
                     path.roleVersionPath().size());
             if (supportInserted == 1) {

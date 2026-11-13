@@ -109,6 +109,7 @@ class AccessApiIntegrationTest {
     private static AccessAssignmentCommandService assignmentCommands;
     private static AccessAssignmentQueryService assignmentQueries;
     private static EffectiveAccessReadService effectiveReads;
+    private static EffectiveAccessSemanticSupport semanticSupport;
     private static DesiredStateDerivationService desiredDerivation;
     private static LifecycleAccessPolicyRepository lifecyclePolicyRepository;
     private static io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery
@@ -223,7 +224,7 @@ class AccessApiIntegrationTest {
         assignmentQueries =
                 new AccessAssignmentQueryService(
                         assignmentRepository);
-        var semanticSupport =
+        semanticSupport =
                 new EffectiveAccessSemanticSupport(
                         assignmentRepository,
                         identityReferences,
@@ -575,6 +576,11 @@ class AccessApiIntegrationTest {
                                 effectiveId)
                                 .requestAttr(
                                         ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isNotFound());
+
+        authorized.perform(
+                        get("/api/v1/effective-access/{id}/supports", effectiveId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor))
                 .andExpect(status().isNotFound());
 
         authorized.perform(
@@ -1140,10 +1146,12 @@ class AccessApiIntegrationTest {
                 effectiveRepository,
                 expansion,
                 desiredDerivation,
+                semanticSupport,
                 new io.wyrmgate.iam.access.application.TerminalCatalogAssignmentRepairService(
                         assignmentRepository,
                         catalogAvailability,
-                        assignmentCommands));
+                        assignmentCommands),
+                ids, transactions, json);
     }
 
     private Identity identity(String displayName) {

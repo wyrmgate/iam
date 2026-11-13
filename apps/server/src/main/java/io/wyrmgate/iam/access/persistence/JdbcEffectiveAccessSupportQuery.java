@@ -8,6 +8,8 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -62,18 +64,28 @@ public final class JdbcEffectiveAccessSupportQuery implements EffectiveAccessSup
                 rs.getObject("access_assignment_id", UUID.class),
                 rs.getString("path_hash"),
                 rs.getInt("path_depth")), args.toArray());
+        if (bases.isEmpty()) return List.of();
+        Map<UUID, List<UUID>> paths = new LinkedHashMap<>();
+        String placeholders = String.join(",", java.util.Collections.nCopies(bases.size(), "?"));
+        List<Object> pathArgs = new ArrayList<>();
+        pathArgs.add(tenant.tenantId());
+        bases.forEach(base -> pathArgs.add(base.supportId()));
+        jdbc.query("""
+                SELECT effective_access_support_id, role_version_id
+                FROM access.effective_access_support_role_version
+                WHERE tenant_id = ? AND effective_access_support_id IN (%s)
+                ORDER BY effective_access_support_id, path_ordinal
+                """.formatted(placeholders), rs -> {
+                    paths.computeIfAbsent(rs.getObject("effective_access_support_id", UUID.class),
+                            ignored -> new ArrayList<>())
+                            .add(rs.getObject("role_version_id", UUID.class));
+                }, pathArgs.toArray());
         List<EffectiveSupport> result = new ArrayList<>(bases.size());
         for (Base base : bases) {
-            List<UUID> roleVersions = jdbc.query("""
-                    SELECT role_version_id
-                    FROM access.effective_access_support_role_version
-                    WHERE tenant_id = ?
-                      AND effective_access_support_id = ?
-                    ORDER BY path_ordinal
-                    """,
-                    (rs, row) -> rs.getObject("role_version_id", UUID.class),
-                    tenant.tenantId(),
-                    base.supportId());
+            List<UUID> roleVersions = paths.getOrDefault(base.supportId(), List.of());
+            if (roleVersions.size() != base.pathDepth()) {
+                throw new IllegalStateException("EffectiveAccess support path depth is inconsistent");
+            }
             result.add(new EffectiveSupport(
                     base.assignmentId(),
                     base.pathHash(),

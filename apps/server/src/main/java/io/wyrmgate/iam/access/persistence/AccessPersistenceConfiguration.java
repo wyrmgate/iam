@@ -356,7 +356,11 @@ public class AccessPersistenceConfiguration {
             EffectiveAccessRepository effectiveAccessRepository,
             RoleExpansionQuery roleExpansion,
             DesiredStateDerivationService desiredStateDerivationService,
-            TerminalCatalogAssignmentRepairService terminalCatalogRepair) {
+            EffectiveAccessSemanticSupport semanticSupport,
+            TerminalCatalogAssignmentRepairService terminalCatalogRepair,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            ObjectMapper json) {
         return new EffectiveAccessProcessingService(
                 outboxRepository,
                 scheduledWorkRepository,
@@ -364,7 +368,8 @@ public class AccessPersistenceConfiguration {
                 effectiveAccessRepository,
                 roleExpansion,
                 desiredStateDerivationService,
-                terminalCatalogRepair);
+                semanticSupport,
+                terminalCatalogRepair, ids, transactions, json);
     }
 
     @Bean

@@ -128,6 +128,20 @@ public final class DesiredStateProcessingService {
                 : event.correlationId();
 
         transactions.required(() -> {
+            if (!outbox.markPublished(item.tenant(), event.eventId(), now)) {
+                return null;
+            }
+            if (PrincipalFactSink.ACCESS_PROJECTION_INPUT_CHANGED.equals(event.eventType())) {
+                outbox.append(item.tenant(), new OutboxEvent(
+                        ids.nextId(), RoleExpansionProjectionRefreshService.PRINCIPAL_PAGE_REQUESTED,
+                        1, "principal", event.aggregateId(), event.aggregateRevision(),
+                        now, correlationId, event.eventId(),
+                        json.createObjectNode().put("snapshotAt", now.toString()).toString()), now);
+                // Do not couple assignment fan-out to a potentially unavailable semantic
+                // desired-state read. The independent durable page can retry after support repair.
+                appendContinuation(item, context, correlationId, now);
+                return null;
+            }
             var page = derivation.reconcilePrincipalChangePage(
                     item.tenant(),
                     event.aggregateId(),
@@ -159,13 +173,6 @@ public final class DesiredStateProcessingService {
                 }
             }
 
-            if (!outbox.markPublished(
-                    item.tenant(),
-                    event.eventId(),
-                    now)) {
-                throw new IllegalStateException(
-                        "Principal desired-state repair input could not be acknowledged");
-            }
             return null;
         });
     }
@@ -205,7 +212,7 @@ public final class DesiredStateProcessingService {
                 requiredUuid(payload, "applicationTargetId"),
                 optionalUuid(payload, "currentIdentityId"),
                 optionalUuid(payload, "previousIdentityId"),
-                requiredUuid(payload, "afterDesiredGrantId"));
+                optionalUuid(payload, "afterDesiredGrantId"));
     }
 
     private void appendContinuation(
@@ -215,9 +222,10 @@ public final class DesiredStateProcessingService {
             Instant now) {
         var payload = json.createObjectNode()
                 .put("applicationTargetId",
-                        context.applicationTargetId().toString())
-                .put("afterDesiredGrantId",
-                        context.afterDesiredGrantId().toString());
+                        context.applicationTargetId().toString());
+        if (context.afterDesiredGrantId() != null) {
+            payload.put("afterDesiredGrantId", context.afterDesiredGrantId().toString());
+        }
         if (context.currentIdentityId() != null) {
             payload.put(
                     "currentIdentityId",

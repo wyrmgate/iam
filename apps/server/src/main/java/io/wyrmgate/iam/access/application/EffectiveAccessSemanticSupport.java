@@ -39,28 +39,54 @@ public final class EffectiveAccessSemanticSupport {
             UUID entitlementId,
             Instant at) {
         AccessAssignment assignment = assignments.findById(tenant, assignmentId).orElse(null);
-        if (assignment == null || !assignment.isSemanticallyEffectiveAt(at)) return false;
+        if (assignment == null) return false;
+
+        if (assignment.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT) {
+            return assignment.entitlementId().equals(entitlementId)
+                    && directAssignmentContributes(tenant, assignment, at);
+        }
+
+        if (!assignmentBaseContributes(tenant, assignment, at)) return false;
+        RoleExpansionQuery.Result current =
+                roleExpansion.expandCurrent(tenant, assignment.roleId());
+        return roleAssignmentContributes(tenant, assignment, current, at)
+                && current.paths().stream()
+                        .anyMatch(path -> path.entitlementId().equals(entitlementId));
+    }
+
+
+    boolean directAssignmentContributes(
+            TenantContext tenant,
+            AccessAssignment assignment,
+            Instant at) {
+        return assignmentBaseContributes(tenant, assignment, at)
+                && specificDirectCompatible(tenant, assignment);
+    }
+
+    boolean roleAssignmentContributes(
+            TenantContext tenant,
+            AccessAssignment assignment,
+            RoleExpansionQuery.Result expansion,
+            Instant at) {
+        return assignmentBaseContributes(tenant, assignment, at)
+                && expansion.status() == RoleExpansionQuery.Status.AVAILABLE
+                && specificRoleCompatible(tenant, assignment, expansion);
+    }
+
+    boolean assignmentBaseContributes(
+            TenantContext tenant,
+            AccessAssignment assignment,
+            Instant at) {
+        if (!assignment.isSemanticallyEffectiveAt(at)) return false;
         if (!identityEpochCompatible(tenant, assignment)) return false;
 
         CatalogAccessTargetKind targetKind =
                 CatalogAccessTargetKind.valueOf(assignment.targetKind().name());
         UUID targetId = assignment.targetKind() == AccessAssignment.TargetKind.ROLE
                 ? assignment.roleId() : assignment.entitlementId();
-        boolean assignable = catalog.currentAvailability(tenant, targetKind, targetId)
-                .map(decision -> decision.assignable()).orElse(false);
-        if (!assignable) return false;
-
-        if (assignment.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT) {
-            return assignment.entitlementId().equals(entitlementId)
-                    && specificDirectCompatible(tenant, assignment);
-        }
-
-        RoleExpansionQuery.Result current =
-                roleExpansion.expandCurrent(tenant, assignment.roleId());
-        return current.status() == RoleExpansionQuery.Status.AVAILABLE
-                && specificRoleCompatible(tenant, assignment, current)
-                && current.paths().stream()
-                        .anyMatch(path -> path.entitlementId().equals(entitlementId));
+        return catalog.currentAvailability(tenant, targetKind, targetId)
+                .map(decision -> decision.assignable())
+                .orElse(false);
     }
 
     private boolean identityEpochCompatible(
