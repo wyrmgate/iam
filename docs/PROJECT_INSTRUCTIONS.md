@@ -193,4 +193,4 @@ Do not generate DOCX for content that should be living Markdown, and do not leav
 
 Do not hard-code the next development phase into these instructions. Determine current status from `docs/README.md`, the ADR index, current issues/PRs and the latest controlled specification checkpoint.
 
-The current controlled formal package remains v0.8. ADR-0042 through ADR-0053 are newer accepted architecture amendments and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision at the deliberate checkpoint. Repository Markdown is the current implementation-facing contract in the meantime.
+The current controlled formal package remains v0.8. ADR-0042 through ADR-0056 are newer accepted architecture amendments and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision at the deliberate checkpoint. Repository Markdown is the current implementation-facing contract in the meantime.
