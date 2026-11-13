@@ -268,6 +268,9 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
                 alwaysEligibleIdentity(),
                 new EffectiveAccessSemanticSupport(
                         assignments,
+                        alwaysEligibleIdentity(),
+                        new io.wyrmgate.iam.catalog.application.CatalogQueryService(
+                                catalogRepository),
                         availability,
                         new RoleExpansionQueryService(catalogRepository, roleRepository)));
         assertThat(semantic.find(
