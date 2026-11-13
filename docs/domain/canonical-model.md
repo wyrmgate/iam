@@ -142,7 +142,7 @@ ApprovalDecision, ReviewDecision, RiskAssessment, SoDConflict, PolicyEvaluation,
 
 ### Projection
 
-EffectiveAccess, DesiredPrincipalState, DesiredGrantState, AssignmentFulfillment, Identity360, Application360, effective administrative access, archived-record/query indexes, search/reporting views and protocol claim projections.
+EffectiveAccess, DesiredPrincipalState, DesiredGrantState, optional fulfillment/read views, Identity360, Application360, effective administrative access, archived-record/query indexes, search/reporting views and protocol claim projections. The current v3 runtime does not materialize a separate Access-owned AssignmentFulfillment table; Integration-owned provisioning process/evidence and provider observation are the concrete fulfillment/observation dimensions.
 
 ## Administrative break-glass
 
