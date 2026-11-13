@@ -33,14 +33,15 @@ public final class JdbcIdentityRepository implements IdentityRepository {
                 """
                 INSERT INTO identity.identity (
                     id, tenant_id, identity_type, lifecycle_state, display_name,
-                    revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    access_eligibility_epoch, revision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 identity.id(),
                 tenant.tenantId(),
                 identity.type().name(),
                 identity.lifecycleState().name(),
                 identity.displayName(),
+                identity.accessEligibilityEpoch(),
                 identity.revision(),
                 Timestamp.from(identity.createdAt()),
                 Timestamp.from(identity.updatedAt()));
@@ -63,7 +64,7 @@ public final class JdbcIdentityRepository implements IdentityRepository {
         List<Identity> rows = jdbcTemplate.query(
                 """
                 SELECT i.id, i.identity_type, i.lifecycle_state, i.display_name,
-                       i.revision, i.created_at, i.updated_at,
+                       i.access_eligibility_epoch, i.revision, i.created_at, i.updated_at,
                        (p.identity_id IS NOT NULL) AS has_person_profile,
                        (s.identity_id IS NOT NULL) AS has_service_profile,
                        (w.identity_id IS NOT NULL) AS has_workload_profile
@@ -89,6 +90,7 @@ public final class JdbcIdentityRepository implements IdentityRepository {
                             profile,
                             IdentityLifecycleState.valueOf(rs.getString("lifecycle_state")),
                             rs.getString("display_name"),
+                            rs.getLong("access_eligibility_epoch"),
                             rs.getLong("revision"),
                             rs.getTimestamp("created_at").toInstant(),
                             rs.getTimestamp("updated_at").toInstant());
@@ -148,12 +150,16 @@ public final class JdbcIdentityRepository implements IdentityRepository {
         int affected = jdbcTemplate.update("""
                 UPDATE identity.identity
                 SET lifecycle_state = ?,
+                    access_eligibility_epoch = access_eligibility_epoch
+                        + CASE WHEN ((lifecycle_state = 'ACTIVE') <> (? = 'ACTIVE'))
+                            THEN 1 ELSE 0 END,
                     revision = revision + 1,
                     updated_at = ?
                 WHERE tenant_id = ?
                   AND id = ?
                   AND revision = ?
                 """,
+                lifecycleState.name(),
                 lifecycleState.name(),
                 Timestamp.from(now),
                 tenant.tenantId(),
