@@ -512,6 +512,9 @@ public final class AccessAssignmentCommandService {
         Objects.requireNonNull(now, "now");
         return transactions.required(() -> {
             AccessAssignment current = current(tenant, assignmentId, expectedRevision);
+            if (action == Action.RESUME) {
+                requireCurrentIdentityEpoch(tenant, current);
+            }
             AccessAssignment.LifecycleState next;
             try {
                 next = AccessAssignmentLifecycleDefinition.transition(current, action, now);
@@ -543,6 +546,25 @@ public final class AccessAssignmentCommandService {
                     "The requested Identity is not access-eligible.");
         }
         return status;
+    }
+
+    private void requireCurrentIdentityEpoch(
+            TenantContext tenant,
+            AccessAssignment assignment) {
+        var status = identityReferences.accessStatus(
+                tenant, assignment.identityId());
+        if (status.status()
+                != IdentityAccessReferenceQuery.AccessStatus.ACCESS_ELIGIBLE) {
+            throw new AccessAssignmentCommandException(
+                    "identity_not_access_eligible",
+                    "The AccessAssignment Identity is not currently access-eligible.");
+        }
+        if (status.accessEligibilityEpoch()
+                != assignment.identityAccessEpoch()) {
+            throw new AccessAssignmentCommandException(
+                    "access_assignment_identity_epoch_stale",
+                    "This AccessAssignment belongs to an earlier Identity access-eligibility era.");
+        }
     }
 
     private AccessAssignment current(
