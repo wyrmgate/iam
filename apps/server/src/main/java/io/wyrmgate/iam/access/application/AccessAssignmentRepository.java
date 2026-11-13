@@ -26,6 +26,24 @@ public interface AccessAssignmentRepository {
         throw new UnsupportedOperationException("Role projection refresh paging is not implemented");
     }
 
+    /** Bounded immutable-order scan for SPECIFIC assignments referencing one Principal. */
+    List<AccessAssignment> findSpecificPrincipalRefreshPage(
+            TenantContext tenant,
+            UUID principalId,
+            Instant snapshotAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit);
+
+    /** Bounded immutable-order scan for Identity projection repair after epoch changes. */
+    List<AccessAssignment> findIdentityProjectionRefreshPage(
+            TenantContext tenant,
+            UUID identityId,
+            Instant snapshotAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit);
+
     default Optional<AccessAssignment> findCurrentLifecyclePolicyAssignment(
             TenantContext tenant, UUID identityId, UUID ruleId) { return Optional.empty(); }
 
