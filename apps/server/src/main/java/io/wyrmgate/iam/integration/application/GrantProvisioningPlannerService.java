@@ -220,6 +220,12 @@ public final class GrantProvisioningPlannerService {
             targets.put(targetKey(prior), prior);
         }
 
+        if (targets.isEmpty()) {
+            // Preserve the existing fail-closed retry contract for an unresolved
+            // privilege increase that has no prior technical realization to reduce.
+            return null;
+        }
+
         List<GrantProvisioningRepository.TaskSpec> removals =
                 new ArrayList<>();
         for (var target : targets.values()) {
@@ -239,7 +245,9 @@ public final class GrantProvisioningPlannerService {
             removals.add(task(
                     grant, target, "REMOVE_GRANT", null));
         }
-        return List.copyOf(removals);
+        // If every old grant is still required by another desired cause, this
+        // unresolved cause remains retryable until its Principal resolution changes.
+        return removals.isEmpty() ? null : List.copyOf(removals);
     }
 
     private GrantProvisioningRepository.TechnicalGrantTarget resolvePrincipalId(
