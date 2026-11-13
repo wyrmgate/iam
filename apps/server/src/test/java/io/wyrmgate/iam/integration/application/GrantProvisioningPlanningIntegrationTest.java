@@ -531,6 +531,67 @@ class GrantProvisioningPlanningIntegrationTest {
         assertThat(jobCount(tenant)).isEqualTo(2);
     }
 
+    @Test
+    void cleanupDeduplicatesHistoryAcrossDurablePagesAndReplays() {
+        TenantContext tenant = tenant("paged-cleanup");
+        UUID targetId = ids.nextId();
+        UUID entitlementId = ids.nextId();
+        UUID identityId = ids.nextId();
+        UUID principalId = ids.nextId();
+        mappedGroupBinding(tenant, targetId, entitlementId, "group-initial");
+        var present = desired.reconcileGrant(tenant, identityId, targetId, entitlementId,
+                "ANY", principalId, DesiredPresence.PRESENT, NOW);
+        facts.changed(tenant, present);
+        var references = activePrincipal(principalId, identityId, targetId, "provider-user");
+        assertThat(processor(references).processAvailable()).isEqualTo(1);
+        jdbc.update("""
+                UPDATE integration.provisioning_task SET state = 'SUCCEEDED'
+                WHERE tenant_id = ? AND operation_type = 'ADD_GRANT'
+                """, tenant.tenantId());
+        // 205 distinct historical routes, each with two successful executions.
+        jdbc.update("""
+                INSERT INTO integration.provisioning_task (
+                    id, tenant_id, provisioning_job_id, operation_id, operation_type,
+                    subject_kind, subject_id, desired_revision, idempotency_key,
+                    contract_id, contract_version, payload, state, attempt_count, revision,
+                    correlation_id, created_at, updated_at)
+                SELECT gen_random_uuid(), t.tenant_id, t.provisioning_job_id,
+                    gen_random_uuid(), 'ADD_GRANT', 'DESIRED_GRANT', t.subject_id,
+                    t.desired_revision, 'history:' || n || ':' || d,
+                    t.contract_id, t.contract_version,
+                    jsonb_set(t.payload, '{providerEntitlementId}', to_jsonb('route-' || n)),
+                    'SUCCEEDED', 1, 1, t.correlation_id, t.created_at, t.updated_at
+                FROM integration.provisioning_task t
+                CROSS JOIN generate_series(1,205) n
+                CROSS JOIN generate_series(1,2) d
+                WHERE t.tenant_id = ? AND t.operation_type = 'ADD_GRANT'
+                """, tenant.tenantId());
+        var absent = desired.reconcileGrant(tenant, identityId, targetId, entitlementId,
+                "ANY", principalId, DesiredPresence.ABSENT, NOW.plusSeconds(1));
+        facts.changed(tenant, absent);
+
+        assertThat(processor(references).processAvailable()).isEqualTo(1);
+        assertThat(removeCount(tenant)).isEqualTo(100);
+        assertThat(processor(references).processAvailable()).isEqualTo(1);
+        assertThat(removeCount(tenant)).isEqualTo(200);
+        assertThat(processor(references).processAvailable()).isEqualTo(1);
+        assertThat(removeCount(tenant)).isEqualTo(206);
+        assertThat(processor(references).processAvailable()).isZero();
+        facts.changed(tenant, absent);
+        for (int i = 0; i < 3; i++) {
+            assertThat(processor(references).processAvailable()).isEqualTo(1);
+        }
+        assertThat(removeCount(tenant)).isEqualTo(206);
+        assertThat(processor(references).processAvailable()).isZero();
+    }
+
+    private int removeCount(TenantContext tenant) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM integration.provisioning_task
+                WHERE tenant_id = ? AND operation_type = 'REMOVE_GRANT'
+                """, Integer.class, tenant.tenantId());
+    }
+
     private GrantProvisioningPlanningProcessor processor(
             PrincipalTechnicalReferenceQuery principals) {
         var planner = new GrantProvisioningPlannerService(
@@ -540,7 +601,7 @@ class GrantProvisioningPlanningIntegrationTest {
         return new GrantProvisioningPlanningProcessor(
                 outbox,
                 planner,
-                transactions,
+                transactions, ids, new ObjectMapper().findAndRegisterModules(),
                 Clock.fixed(NOW.plusSeconds(10), ZoneOffset.UTC));
     }
 

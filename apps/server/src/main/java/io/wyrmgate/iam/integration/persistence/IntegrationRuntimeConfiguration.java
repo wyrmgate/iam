@@ -211,9 +211,11 @@ public class IntegrationRuntimeConfiguration {
     GrantProvisioningPlanningProcessor grantProvisioningPlanningProcessor(
             JdbcOutboxRepository outboxRepository,
             GrantProvisioningPlannerService planner,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions,
+            IdGenerator ids,
+            ObjectMapper objectMapper) {
         return new GrantProvisioningPlanningProcessor(
-                outboxRepository, planner, transactions);
+                outboxRepository, planner, transactions, ids, objectMapper);
     }
 
     @Bean
