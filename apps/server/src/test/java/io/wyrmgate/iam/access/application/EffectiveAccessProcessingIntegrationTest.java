@@ -53,6 +53,8 @@ class EffectiveAccessProcessingIntegrationTest {
     private static PrincipalCommandService principals;
     private static CatalogCommandService catalogCommands;
     private static CatalogQueryService catalogQuery;
+    private static io.wyrmgate.iam.catalog.application.RoleExpansionQueryService roleExpansion;
+    private static io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery catalogAvailability;
     private static JdbcAccessAssignmentRepository assignmentRepository;
     private static JdbcEffectiveAccessRepository effectiveRepository;
     private static JdbcDesiredStateProjectionRepository desiredRepository;
@@ -104,10 +106,10 @@ class EffectiveAccessProcessingIntegrationTest {
         var catalogRepository = new JdbcCatalogRepository(jdbc);
         var roleRepository =
                 new io.wyrmgate.iam.catalog.persistence.JdbcRoleRepository(jdbc);
-        var roleExpansion =
+        roleExpansion =
                 new io.wyrmgate.iam.catalog.application.RoleExpansionQueryService(
                         catalogRepository, roleRepository);
-        var catalogAvailability =
+        catalogAvailability =
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
                         catalogRepository, roleRepository);
         catalogCommands = new CatalogCommandService(
@@ -175,8 +177,12 @@ class EffectiveAccessProcessingIntegrationTest {
         effectiveQuery = new EffectiveAccessQueryService(
                 effectiveRepository,
                 identityReferences,
-                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
-                        assignmentRepository, catalogAvailability));
+                new EffectiveAccessSemanticSupport(
+                        assignmentRepository,
+                        identityReferences,
+                        catalogQuery,
+                        catalogAvailability,
+                        roleExpansion));
         desiredDerivation = new DesiredStateDerivationService(
                 effectiveQuery,
                 desiredRepository,
@@ -368,6 +374,84 @@ class EffectiveAccessProcessingIntegrationTest {
         assertThat(assignmentRepository.findById(tenant, scheduled.id())
                 .orElseThrow().lifecycleState())
                 .isEqualTo(AccessAssignment.LifecycleState.SCHEDULED);
+    }
+
+    @Test
+    void identityEligibilityEpochPreventsOldIntentFromRevivingAfterReactivation() {
+        TenantContext tenant = tenant("epoch");
+        Identity identity = identity(tenant, "Epoch User");
+        var catalog = catalog(tenant, "epoch-app");
+
+        AccessAssignment assignment = assignments.createEntitlementAssignment(
+                tenant,
+                identity.id(),
+                catalog.entitlement().id(),
+                AccessAssignment.PrincipalConstraintKind.ANY,
+                null,
+                null,
+                null,
+                NOW);
+        processor(NOW).processAvailable();
+
+        assertThat(assignment.identityAccessEpoch())
+                .isEqualTo(identity.accessEligibilityEpoch());
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                catalog.entitlement().id(),
+                "ANY",
+                NOW)).isPresent();
+
+        Identity suspended = identities.changeLifecycle(
+                tenant,
+                identity.id(),
+                IdentityLifecycleState.SUSPENDED,
+                identity.revision(),
+                NOW.plusSeconds(1),
+                ids.nextId(),
+                null);
+        assertThat(suspended.accessEligibilityEpoch())
+                .isGreaterThan(identity.accessEligibilityEpoch());
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                catalog.entitlement().id(),
+                "ANY",
+                NOW.plusSeconds(1))).isEmpty();
+
+        Identity active = identities.changeLifecycle(
+                tenant,
+                identity.id(),
+                IdentityLifecycleState.ACTIVE,
+                suspended.revision(),
+                NOW.plusSeconds(2),
+                ids.nextId(),
+                null);
+        assertThat(active.accessEligibilityEpoch())
+                .isGreaterThan(suspended.accessEligibilityEpoch());
+
+        // The old assignment is still a historical authoritative row, but its
+        // captured eligibility era cannot silently revive.
+        assertThat(assignmentRepository.findById(
+                tenant, assignment.id())).isPresent();
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                catalog.entitlement().id(),
+                "ANY",
+                NOW.plusSeconds(2))).isEmpty();
+
+        AccessAssignment successor = assignments.createEntitlementAssignment(
+                tenant,
+                identity.id(),
+                catalog.entitlement().id(),
+                AccessAssignment.PrincipalConstraintKind.ANY,
+                null,
+                null,
+                null,
+                NOW.plusSeconds(3));
+        assertThat(successor.identityAccessEpoch())
+                .isEqualTo(active.accessEligibilityEpoch());
     }
 
     @Test
