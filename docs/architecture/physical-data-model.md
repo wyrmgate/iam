@@ -1008,3 +1008,10 @@ Flyway V55/V56 extend the Audit schema beyond the V46 AuditRecord and V53/V54 ex
 - `audit.audit_record.material_snapshot` / `integrity_metadata` — closed versioned JSON shapes only; they are not extension bags.
 
 The AuditRecord mutation trigger remains the destructive-write fence. A DELETE is accepted only when the same transaction sets the purge-operation fence and the database function proves the row belongs to a RUNNING dual-approved purge, is covered by the selected SUCCEEDED archive segment/index, satisfies minimum-online retention, matches immutable selection/cutoff and has no ACTIVE matching legal hold.
+
+
+ADR-0056 does not add a new Access table. `access.desired_grant_state` remains unique by semantic
+cause. Integration provisioning task evidence now carries data-minimized governed `principalId`
+and `entitlementId` values in its validated task payload in addition to provider-native execution
+identifiers. These stable IDs support cause-independent technical cleanup evidence; current removal
+permission is still supplied by the Access desired-state semantic query.
