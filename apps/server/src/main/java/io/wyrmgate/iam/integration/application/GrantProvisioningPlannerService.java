@@ -1,8 +1,8 @@
 package io.wyrmgate.iam.integration.application;
 
 import io.wyrmgate.iam.access.application.DesiredProvisioningStateQuery;
-import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.DesiredPresence;
 import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.DesiredGrantState;
+import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.DesiredPresence;
 import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery;
 import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
@@ -84,36 +84,57 @@ public final class GrantProvisioningPlannerService {
             return null;
         }
 
-        var addTargets = provisioning.addTargets(
+        var rawTargets = provisioning.addTargets(
                 tenant,
                 grant.applicationTargetId(),
                 grant.entitlementId(),
                 principal.nativePrincipalKey());
-        if (addTargets.size() != 1) return null;
+        if (rawTargets.size() != 1) return null;
 
-        var addTarget = addTargets.getFirst();
-        var add = task(
-                grant,
-                addTarget,
-                "ADD_GRANT",
-                null);
+        var addTarget = rawTargets.getFirst()
+                .withPrincipalId(grant.principalId());
+        var add = task(grant, addTarget, "ADD_GRANT", null);
 
         List<GrantProvisioningRepository.TaskSpec> result =
                 new ArrayList<>();
         result.add(add);
 
-        for (var old : uniqueTargets(provisioning.priorSuccessfulAddTargets(
+        for (var rawOld : uniqueTargets(provisioning.priorSuccessfulAddTargets(
                 tenant, grant.id()))) {
-            if (!sameTechnicalTarget(old, addTarget)) {
-                result.add(task(
-                        grant,
-                        old,
-                        "REMOVE_GRANT",
-                        old.connectorBindingId().equals(
-                                addTarget.connectorBindingId())
-                                ? add.taskKey()
-                                : null));
+            var old = resolvePrincipalId(
+                    tenant, grant, rawOld);
+            if (old == null) return null;
+            if (sameTechnicalTarget(old, addTarget)) {
+                continue;
             }
+
+            // Principal re-resolution may move ANY access from one governed
+            // Principal to another. Do not remove the old Principal's provider
+            // grant while another desired cause still requires it.
+            if (!old.principalId().equals(addTarget.principalId())) {
+                var demand = desired.technicalGrantDemand(
+                        tenant,
+                        grant.applicationTargetId(),
+                        grant.entitlementId(),
+                        old.principalId());
+                if (demand
+                        == DesiredProvisioningStateQuery.TechnicalGrantDemand.UNAVAILABLE) {
+                    return null;
+                }
+                if (demand
+                        == DesiredProvisioningStateQuery.TechnicalGrantDemand.REQUIRED) {
+                    continue;
+                }
+            }
+
+            result.add(task(
+                    grant,
+                    old,
+                    "REMOVE_GRANT",
+                    old.connectorBindingId().equals(
+                            addTarget.connectorBindingId())
+                            ? add.taskKey()
+                            : null));
         }
         return List.copyOf(result);
     }
@@ -123,37 +144,81 @@ public final class GrantProvisioningPlannerService {
             DesiredGrantState grant) {
         LinkedHashMap<String,GrantProvisioningRepository.TechnicalGrantTarget> targets =
                 new LinkedHashMap<>();
-        for (var prior : provisioning.priorSuccessfulAddTargets(
+
+        for (var rawPrior : provisioning.priorSuccessfulAddTargets(
                 tenant, grant.id())) {
+            var prior = resolvePrincipalId(
+                    tenant, grant, rawPrior);
+            if (prior == null) return null;
             targets.put(targetKey(prior), prior);
         }
 
-        List<String> principalKeys = principals.activeForIdentityTarget(
+        // Observation can supplement missing execution evidence only when this
+        // desired cause still carries the exact governed Principal it last
+        // resolved to. Provider strings are never used to guess that Principal.
+        if (grant.principalId() != null) {
+            for (var observed : provisioning.observedRemoveTargetsByPrincipalIds(
+                    tenant,
+                    grant.applicationTargetId(),
+                    grant.entitlementId(),
+                    List.of(grant.principalId()))) {
+                targets.put(targetKey(observed), observed);
+            }
+        }
+
+        List<GrantProvisioningRepository.TaskSpec> removals =
+                new ArrayList<>();
+        for (var target : targets.values()) {
+            if (target.principalId() == null) return null;
+            var demand = desired.technicalGrantDemand(
+                    tenant,
+                    grant.applicationTargetId(),
+                    grant.entitlementId(),
+                    target.principalId());
+            if (demand
+                    == DesiredProvisioningStateQuery.TechnicalGrantDemand.UNAVAILABLE) {
+                return null;
+            }
+            if (demand
+                    == DesiredProvisioningStateQuery.TechnicalGrantDemand.REQUIRED) {
+                continue;
+            }
+            removals.add(task(
+                    grant, target, "REMOVE_GRANT", null));
+        }
+        return List.copyOf(removals);
+    }
+
+    private GrantProvisioningRepository.TechnicalGrantTarget resolvePrincipalId(
+            TenantContext tenant,
+            DesiredGrantState grant,
+            GrantProvisioningRepository.TechnicalGrantTarget target) {
+        if (target.principalId() != null) return target;
+
+        var candidates = principals.forIdentityTarget(
                         tenant,
                         grant.identityId(),
                         grant.applicationTargetId())
                 .stream()
-                .map(PrincipalTechnicalReferenceQuery.Result::nativePrincipalKey)
+                .filter(candidate ->
+                        candidate.status()
+                                != PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE)
+                .filter(candidate ->
+                        target.providerPrincipalId().equals(
+                                candidate.nativePrincipalKey()))
                 .toList();
-        for (var observed : provisioning.observedRemoveTargets(
-                tenant,
-                grant.applicationTargetId(),
-                grant.entitlementId(),
-                principalKeys)) {
-            targets.put(targetKey(observed), observed);
-        }
-
-        return targets.values().stream()
-                .map(target -> task(
-                        grant, target, "REMOVE_GRANT", null))
-                .toList();
+        if (candidates.size() != 1) return null;
+        return target.withPrincipalId(
+                candidates.getFirst().principalId());
     }
 
     private static List<GrantProvisioningRepository.TechnicalGrantTarget> uniqueTargets(
             List<GrantProvisioningRepository.TechnicalGrantTarget> values) {
         LinkedHashMap<String,GrantProvisioningRepository.TechnicalGrantTarget> unique =
                 new LinkedHashMap<>();
-        for (var value : values) unique.put(targetKey(value), value);
+        for (var value : values) {
+            unique.put(targetKey(value), value);
+        }
         return List.copyOf(unique.values());
     }
 
@@ -163,13 +228,22 @@ public final class GrantProvisioningPlannerService {
             String operation,
             String dependsOnTaskKey) {
         Map<String,Object> payload = new LinkedHashMap<>();
-        payload.put("providerEntitlementId", target.providerEntitlementId());
+        payload.put(
+                "providerEntitlementId",
+                target.providerEntitlementId());
         if (target.providerEntitlementVersion() != null) {
             payload.put(
                     "providerEntitlementVersion",
                     target.providerEntitlementVersion());
         }
-        payload.put("providerPrincipalId", target.providerPrincipalId());
+        payload.put(
+                "providerPrincipalId",
+                target.providerPrincipalId());
+        if (target.principalId() != null) {
+            payload.put(
+                    "principalId",
+                    target.principalId().toString());
+        }
 
         String technicalKey = targetKey(target);
         String fingerprint = RequestFingerprint.sha256(
