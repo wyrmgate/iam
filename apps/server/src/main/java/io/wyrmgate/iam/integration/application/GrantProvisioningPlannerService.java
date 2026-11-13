@@ -109,9 +109,8 @@ public final class GrantProvisioningPlannerService {
             removals.add(remove);
         }
 
-        String planKey = "desired-grant:" + grant.id() + ":rev:" + grant.desiredRevision();
         if (add != null && provisioning.taskState(tenant, add.taskKey()).isEmpty()) {
-            provisioning.createPlan(tenant, planKey, grant.id(), grant.desiredRevision(),
+            provisioning.createPlan(tenant, add.taskKey(), grant.id(), grant.desiredRevision(),
                     List.of(add), correlationId, causationId, now);
         }
         // Preserve same-binding ADD-before-REMOVE ordering without a cross-job
