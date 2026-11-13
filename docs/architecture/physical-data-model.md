@@ -168,6 +168,7 @@ identity.identity
 - identity_type varchar(16) NOT NULL CHECK (identity_type IN ('PERSON','SERVICE','WORKLOAD'))
 - lifecycle_state varchar(24) NOT NULL
 - display_name varchar(512) NOT NULL
+- access_eligibility_epoch bigint NOT NULL CHECK (access_eligibility_epoch > 0)
 - revision bigint NOT NULL CHECK (revision > 0)
 - created_at timestamptz NOT NULL
 - updated_at timestamptz NOT NULL
