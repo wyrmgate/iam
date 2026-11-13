@@ -258,7 +258,7 @@ class GrantProvisioningPlanningIntegrationTest {
                 WHERE tenant_id = ?
                   AND operation_type = 'ADD_GRANT'
                 """,
-                Timestamp.from(NOW.plusSeconds(1)),
+                Timestamp.from(NOW.plusSeconds(11)),
                 tenant.tenantId());
 
         DesiredGrantState unresolved = desired.reconcileGrant(
@@ -396,7 +396,7 @@ class GrantProvisioningPlanningIntegrationTest {
                 WHERE tenant_id = ?
                   AND operation_type = 'ADD_GRANT'
                 """,
-                Timestamp.from(NOW.plusSeconds(1)),
+                Timestamp.from(NOW.plusSeconds(11)),
                 tenant.tenantId());
 
         DesiredGrantState specific = desired.reconcileGrant(
