@@ -579,6 +579,11 @@ class AccessApiIntegrationTest {
                 .andExpect(status().isNotFound());
 
         authorized.perform(
+                        get("/api/v1/effective-access/{id}/supports", effectiveId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isNotFound());
+
+        authorized.perform(
                         post("/api/v1/access-assignments/{id}/resume",
                                 assignmentId)
                                 .requestAttr(

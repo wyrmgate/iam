@@ -2,6 +2,15 @@ package io.wyrmgate.iam.access.application;
 
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.wyrmgate.iam.access.persistence.JdbcEffectiveAccessSupportQuery;
+import io.wyrmgate.iam.access.persistence.JdbcIdentityAccessReductionRepository;
+import io.wyrmgate.iam.access.persistence.JdbcIdentityAccessReductionWorkSink;
+import io.wyrmgate.iam.identity.persistence.JdbcIdentityFactSink;
+import io.wyrmgate.iam.identity.persistence.JdbcIdentityMergeSplitRepository;
+import io.wyrmgate.iam.identity.persistence.JdbcPrincipalFactSink;
 
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentBoundaryScheduler;
@@ -14,7 +23,6 @@ import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.persistence.JdbcCatalogRepository;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService;
 import io.wyrmgate.iam.identity.application.IdentityCommandService;
-import io.wyrmgate.iam.identity.application.IdentityFactSink;
 import io.wyrmgate.iam.identity.application.PrincipalCommandService;
 import io.wyrmgate.iam.identity.application.PrincipalFactSink;
 import io.wyrmgate.iam.identity.domain.Identity;
@@ -76,31 +84,9 @@ class EffectiveAccessProcessingIntegrationTest {
                 new DataSourceTransactionManager(dataSource));
 
         var identityRepository = new JdbcIdentityRepository(jdbc);
-        IdentityFactSink noIdentityFacts = new IdentityFactSink() {
-            @Override
-            public void identityCreated(
-                    TenantContext tenant, Identity identity,
-                    java.util.UUID correlationId, java.util.UUID causationId) {
-            }
-
-            @Override
-            public void displayNameChanged(
-                    TenantContext tenant, Identity identity,
-                    java.util.UUID correlationId, java.util.UUID causationId) {
-            }
-
-
-            @Override
-            public void lifecycleChanged(
-                    TenantContext tenant,
-                    io.wyrmgate.iam.identity.domain.IdentityLifecycleState previousState,
-                    Identity identity,
-                    java.util.UUID correlationId,
-                    java.util.UUID causationId) {
-            }
-        };
         identities = new IdentityCommandService(
-                identityRepository, noIdentityFacts, ids, transactions,
+                identityRepository, new JdbcIdentityFactSink(new JdbcOutboxRepository(jdbc), ids),
+                ids, transactions,
                 (tenant, identityId, at) -> {});
 
         var catalogRepository = new JdbcCatalogRepository(jdbc);
@@ -515,6 +501,26 @@ class EffectiveAccessProcessingIntegrationTest {
                 NOW.plusSeconds(3));
         assertThat(successor.identityAccessEpoch())
                 .isEqualTo(active.accessEligibilityEpoch());
+
+        // The eligibility intake must repair projections in both directions.
+        // Intentionally do not run the authoritative reduction worker.
+        Instant repairAt = NOW.plusSeconds(4);
+        new IdentityAccessReductionIntakeService(
+                outbox, new JdbcIdentityAccessReductionRepository(jdbc),
+                new JdbcIdentityAccessReductionWorkSink(outbox, ids), ids,
+                transactions, new ObjectMapper(), Clock.fixed(repairAt, ZoneOffset.UTC))
+                .processAvailable();
+        refresh(repairAt).processAvailable();
+        processor(repairAt).processAvailable();
+        assertThat(assignmentRepository.findById(tenant, assignment.id()).orElseThrow()
+                .lifecycleState()).isEqualTo(AccessAssignment.LifecycleState.ACTIVE);
+        assertThat(effectiveQuery.find(tenant, identity.id(), catalog.entitlement().id(),
+                "ANY", repairAt).orElseThrow().supportingAssignmentIds())
+                .containsExactly(successor.id());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM access.effective_access_support
+                WHERE tenant_id = ? AND access_assignment_id = ?
+                """, Integer.class, tenant.tenantId(), assignment.id())).isZero();
     }
 
     @Test
@@ -561,6 +567,151 @@ class EffectiveAccessProcessingIntegrationTest {
         assertThat(effectiveQuery.find(
                 other, identity.id(), catalog.entitlement().id(), "ANY", NOW))
                 .isEmpty();
+    }
+
+    @Test
+    void principalRefreshPagesStaleSpecificSupportsAndDesiredRetryCannotBlockConvergence() {
+        TenantContext tenant = tenant("specific-refresh");
+        Identity original = identity(tenant, "Original Owner");
+        Identity replacement = identity(tenant, "New Owner");
+        var fixture = catalog(tenant, "specific-refresh-app");
+        var principal = principals.create(tenant, fixture.target().id(),
+                "specific-refresh-user", original.id(), NOW, ids.nextId(), null);
+        String constraint = "SPECIFIC:" + principal.id();
+
+        // Materialize a high-cardinality support set as a pre-existing fixture.
+        for (int i = 0; i < 105; i++) {
+            var assignment = new AccessAssignment(
+                    ids.nextId(), original.id(), original.accessEligibilityEpoch(),
+                    AccessAssignment.TargetKind.ENTITLEMENT, null, fixture.entitlement().id(),
+                    AccessAssignment.PrincipalConstraintKind.SPECIFIC, principal.id(),
+                    AccessAssignment.ProvenanceKind.MANUAL, null,
+                    AccessAssignment.LifecycleState.ACTIVE, null, null, 1, NOW, NOW);
+            assignmentRepository.insert(tenant, assignment);
+            effectiveRepository.applyDirectAssignment(tenant, assignment, constraint,
+                    EffectiveAccessProcessingService.directPathHash(assignment, constraint), NOW);
+        }
+        desiredDerivation.reconcileGrant(tenant, original.id(),
+                fixture.entitlement().id(), constraint, NOW);
+        var effectiveId = effectiveRepository.findCurrent(tenant, original.id(),
+                fixture.entitlement().id(), constraint, NOW).orElseThrow().id();
+        assertThat(rawSupportCount(tenant)).isEqualTo(105);
+
+        var move = new JdbcIdentityMergeSplitRepository(jdbc, new JdbcIdentityRepository(jdbc));
+        var principalFacts = new JdbcPrincipalFactSink(outbox, ids);
+        var moved = transactions.required(() -> {
+            var current = move.reassignPrincipal(tenant, principal.id(), original.id(),
+                    replacement.id(), principal.revision(), NOW.plusSeconds(1));
+            principalFacts.principalReassigned(tenant, current, original.id(), ids.nextId(), null);
+            return current;
+        });
+        Instant repairAt = NOW.plusSeconds(2);
+        var read = new EffectiveAccessReadService(effectiveRepository, identityReferences,
+                new EffectiveAccessSemanticSupport(assignmentRepository, identityReferences,
+                        catalogQuery, catalogAvailability, roleExpansion),
+                new JdbcEffectiveAccessSupportQuery(jdbc));
+        assertThatThrownBy(() -> read.supports(tenant, effectiveId, null, 100, repairAt))
+                .isInstanceOf(EffectiveAccessSemanticEvaluationException.class);
+
+        // Intake commits the independent assignment fan-out before a desired
+        // semantic page is attempted. The latter exceeds its support budget.
+        assertThat(principalRepair(repairAt).processAvailable()).isEqualTo(1);
+        assertThat(principalRepair(repairAt).processAvailable()).isZero();
+        assertThat(refresh(repairAt).processAvailable().processed()).isEqualTo(1);
+        processor(repairAt).processAvailable();
+        assertThat(rawSupportCount(tenant)).isEqualTo(5);
+        assertThat(read.supports(tenant, effectiveId, null, 100, repairAt)).isEmpty();
+
+        // New service instances resume the persisted continuation.
+        assertThat(refresh(repairAt.plusSeconds(1)).processAvailable().processed()).isEqualTo(1);
+        processor(repairAt.plusSeconds(1)).processAvailable();
+        assertThat(rawSupportCount(tenant)).isZero();
+        assertThat(principalRepair(repairAt.plusSeconds(10)).processAvailable()).isEqualTo(1);
+        assertThat(desiredRepository.findGrantTuple(tenant, original.id(),
+                fixture.entitlement().id(), constraint).orElseThrow().desiredState())
+                .isEqualTo(DesiredStateProjectionRepository.DesiredPresence.ABSENT);
+
+        // Replayed owner fact cannot revive incompatible authority or mutate
+        // authoritative assignment lifecycle.
+        principalFacts.principalReassigned(tenant, moved, original.id(), ids.nextId(), null);
+        Instant replayAt = repairAt.plusSeconds(20);
+        principalRepair(replayAt).processAvailable();
+        principalRepair(replayAt).processAvailable();
+        refresh(replayAt).processAvailable();
+        processor(replayAt).processAvailable();
+        refresh(replayAt).processAvailable();
+        processor(replayAt).processAvailable();
+        assertThat(rawSupportCount(tenant)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM access.access_assignment
+                WHERE tenant_id = ? AND lifecycle_state = 'ACTIVE'
+                """, Integer.class, tenant.tenantId())).isEqualTo(105);
+    }
+
+    @Test
+    void specificSupportReturnsWhenCurrentPrincipalOwnershipIsCorrected() {
+        TenantContext tenant = tenant("specific-restored");
+        Identity original = identity(tenant, "Original");
+        Identity other = identity(tenant, "Other");
+        var fixture = catalog(tenant, "specific-restored-app");
+        var principal = principals.create(tenant, fixture.target().id(),
+                "restored-user", original.id(), NOW, ids.nextId(), null);
+        var assignment = assignments.createEntitlementAssignment(tenant, original.id(),
+                fixture.entitlement().id(), AccessAssignment.PrincipalConstraintKind.SPECIFIC,
+                principal.id(), null, null, NOW);
+        processor(NOW).processAvailable();
+        var move = new JdbcIdentityMergeSplitRepository(jdbc, new JdbcIdentityRepository(jdbc));
+        var sink = new JdbcPrincipalFactSink(outbox, ids);
+        var moved = transactions.required(() -> {
+            var current = move.reassignPrincipal(tenant, principal.id(), original.id(),
+                    other.id(), principal.revision(), NOW.plusSeconds(1));
+            sink.principalReassigned(tenant, current, original.id(), ids.nextId(), null);
+            return current;
+        });
+        drainPrincipalRepair(NOW.plusSeconds(2));
+        assertThat(rawSupportCount(tenant)).isZero();
+
+        transactions.required(() -> {
+            var current = move.reassignPrincipal(tenant, principal.id(), other.id(),
+                    original.id(), moved.revision(), NOW.plusSeconds(3));
+            sink.principalReassigned(tenant, current, other.id(), ids.nextId(), null);
+            // Out-of-order previous fact is only a trigger, not mutation authority.
+            sink.principalReassigned(tenant, moved, original.id(), ids.nextId(), null);
+            return null;
+        });
+        drainPrincipalRepair(NOW.plusSeconds(4));
+        assertThat(effectiveQuery.find(tenant, original.id(), fixture.entitlement().id(),
+                "SPECIFIC:" + principal.id(), NOW.plusSeconds(4)).orElseThrow()
+                .supportingAssignmentIds()).containsExactly(assignment.id());
+        assertThat(desiredRepository.findGrantTuple(tenant, original.id(),
+                fixture.entitlement().id(), "SPECIFIC:" + principal.id()).orElseThrow()
+                .desiredState()).isEqualTo(DesiredStateProjectionRepository.DesiredPresence.PRESENT);
+        assertThat(assignmentRepository.findById(tenant, assignment.id()).orElseThrow().revision())
+                .isEqualTo(assignment.revision());
+    }
+
+    private void drainPrincipalRepair(Instant at) {
+        for (int i = 0; i < 4; i++) {
+            principalRepair(at).processAvailable();
+            refresh(at).processAvailable();
+            processor(at).processAvailable();
+        }
+    }
+
+    private int rawSupportCount(TenantContext tenant) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM access.effective_access_support WHERE tenant_id = ?
+                """, Integer.class, tenant.tenantId());
+    }
+
+    private DesiredStateProcessingService principalRepair(Instant at) {
+        return new DesiredStateProcessingService(outbox, identityReferences, desiredDerivation,
+                ids, transactions, new ObjectMapper(), Clock.fixed(at, ZoneOffset.UTC));
+    }
+
+    private RoleExpansionProjectionRefreshService refresh(Instant at) {
+        return new RoleExpansionProjectionRefreshService(outbox, assignmentRepository,
+                ids, transactions, new ObjectMapper(), Clock.fixed(at, ZoneOffset.UTC));
     }
 
     private EffectiveAccessProcessingService processor(Instant at) {
