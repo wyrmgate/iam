@@ -34,6 +34,7 @@ public final class EffectiveAccessProcessingService {
     private final EffectiveAccessRepository effectiveAccess;
     private final RoleExpansionQuery roleExpansion;
     private final DesiredStateDerivationService desiredState;
+    private final EffectiveAccessSemanticSupport semanticSupport;
     private final TerminalCatalogAssignmentRepairService terminalCatalogRepair;
     private final Clock clock;
 
@@ -44,6 +45,7 @@ public final class EffectiveAccessProcessingService {
             EffectiveAccessRepository effectiveAccess,
             RoleExpansionQuery roleExpansion,
             DesiredStateDerivationService desiredState,
+            EffectiveAccessSemanticSupport semanticSupport,
             TerminalCatalogAssignmentRepairService terminalCatalogRepair) {
         this(
                 outbox,
@@ -52,6 +54,7 @@ public final class EffectiveAccessProcessingService {
                 effectiveAccess,
                 roleExpansion,
                 desiredState,
+                semanticSupport,
                 terminalCatalogRepair,
                 Clock.systemUTC());
     }
@@ -63,6 +66,7 @@ public final class EffectiveAccessProcessingService {
             EffectiveAccessRepository effectiveAccess,
             RoleExpansionQuery roleExpansion,
             DesiredStateDerivationService desiredState,
+            EffectiveAccessSemanticSupport semanticSupport,
             TerminalCatalogAssignmentRepairService terminalCatalogRepair,
             Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
@@ -71,6 +75,7 @@ public final class EffectiveAccessProcessingService {
         this.effectiveAccess = Objects.requireNonNull(effectiveAccess, "effectiveAccess");
         this.roleExpansion = Objects.requireNonNull(roleExpansion, "roleExpansion");
         this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
+        this.semanticSupport = Objects.requireNonNull(semanticSupport, "semanticSupport");
         this.terminalCatalogRepair = Objects.requireNonNull(
                 terminalCatalogRepair, "terminalCatalogRepair");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -172,7 +177,8 @@ public final class EffectiveAccessProcessingService {
 
         String constraintKey = principalConstraintKey(assignment);
         if (assignment.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT) {
-            if (!assignment.isSemanticallyEffectiveAt(at)) {
+            if (!semanticSupport.directAssignmentContributes(
+                    tenant, assignment, at)) {
                 effectiveAccess.removeAssignmentSupport(
                         tenant, assignmentId, at);
             } else {
@@ -198,7 +204,8 @@ public final class EffectiveAccessProcessingService {
         if (assignment.isSemanticallyEffectiveAt(at)) {
             var expansion = roleExpansion.expandCurrent(
                     tenant, assignment.roleId());
-            if (expansion.status() == RoleExpansionQuery.Status.AVAILABLE) {
+            if (semanticSupport.roleAssignmentContributes(
+                    tenant, assignment, expansion, at)) {
                 for (var path : expansion.paths()) {
                     desiredPaths.add(new EffectiveAccessRepository.RoleSupportPath(
                             path.entitlementId(),
