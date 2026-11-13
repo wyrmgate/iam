@@ -8,6 +8,7 @@ import java.util.UUID;
 public record AccessAssignment(
         UUID id,
         UUID identityId,
+        long identityAccessEpoch,
         TargetKind targetKind,
         UUID roleId,
         UUID entitlementId,
@@ -22,6 +23,28 @@ public record AccessAssignment(
         Instant createdAt,
         Instant updatedAt) {
 
+    public AccessAssignment(
+            UUID id,
+            UUID identityId,
+            TargetKind targetKind,
+            UUID roleId,
+            UUID entitlementId,
+            PrincipalConstraintKind principalConstraintKind,
+            UUID specificPrincipalId,
+            ProvenanceKind provenanceKind,
+            UUID provenanceRefId,
+            LifecycleState lifecycleState,
+            Instant validFrom,
+            Instant validUntil,
+            long revision,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(id, identityId, 1, targetKind, roleId, entitlementId,
+                principalConstraintKind, specificPrincipalId, provenanceKind,
+                provenanceRefId, lifecycleState, validFrom, validUntil,
+                revision, createdAt, updatedAt);
+    }
+
     public AccessAssignment {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(identityId, "identityId");
@@ -31,6 +54,10 @@ public record AccessAssignment(
         Objects.requireNonNull(lifecycleState, "lifecycleState");
         Objects.requireNonNull(createdAt, "createdAt");
         Objects.requireNonNull(updatedAt, "updatedAt");
+
+        if (identityAccessEpoch < 1) {
+            throw new IllegalArgumentException("identityAccessEpoch must be positive");
+        }
 
         if (targetKind == TargetKind.ROLE) {
             Objects.requireNonNull(roleId, "roleId");
