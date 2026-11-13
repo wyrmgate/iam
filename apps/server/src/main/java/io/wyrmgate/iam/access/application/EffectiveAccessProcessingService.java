@@ -42,77 +42,6 @@ public final class EffectiveAccessProcessingService {
             JdbcScheduledWorkRepository scheduledWork,
             AccessAssignmentRepository assignments,
             EffectiveAccessRepository effectiveAccess,
-            DesiredStateDerivationService desiredState) {
-        this(
-                outbox,
-                scheduledWork,
-                assignments,
-                effectiveAccess,
-                (tenant, roleId) -> RoleExpansionQuery.Result.unavailable(
-                        RoleExpansionQuery.Status.NOT_FOUND, roleId),
-                desiredState,
-                Clock.systemUTC());
-    }
-
-    public EffectiveAccessProcessingService(
-            JdbcOutboxRepository outbox,
-            JdbcScheduledWorkRepository scheduledWork,
-            AccessAssignmentRepository assignments,
-            EffectiveAccessRepository effectiveAccess,
-            RoleExpansionQuery roleExpansion,
-            DesiredStateDerivationService desiredState) {
-        this(
-                outbox,
-                scheduledWork,
-                assignments,
-                effectiveAccess,
-                roleExpansion,
-                desiredState,
-                Clock.systemUTC());
-    }
-
-    EffectiveAccessProcessingService(
-            JdbcOutboxRepository outbox,
-            JdbcScheduledWorkRepository scheduledWork,
-            AccessAssignmentRepository assignments,
-            EffectiveAccessRepository effectiveAccess,
-            DesiredStateDerivationService desiredState,
-            Clock clock) {
-        this(
-                outbox,
-                scheduledWork,
-                assignments,
-                effectiveAccess,
-                (tenant, roleId) -> RoleExpansionQuery.Result.unavailable(
-                        RoleExpansionQuery.Status.NOT_FOUND, roleId),
-                desiredState,
-                clock);
-    }
-
-    EffectiveAccessProcessingService(
-            JdbcOutboxRepository outbox,
-            JdbcScheduledWorkRepository scheduledWork,
-            AccessAssignmentRepository assignments,
-            EffectiveAccessRepository effectiveAccess,
-            RoleExpansionQuery roleExpansion,
-            DesiredStateDerivationService desiredState,
-            Clock clock) {
-        this(
-                outbox,
-                scheduledWork,
-                assignments,
-                effectiveAccess,
-                roleExpansion,
-                desiredState,
-                null,
-                clock);
-    }
-
-    public EffectiveAccessProcessingService(
-            JdbcOutboxRepository outbox,
-            JdbcScheduledWorkRepository scheduledWork,
-            AccessAssignmentRepository assignments,
-            EffectiveAccessRepository effectiveAccess,
             RoleExpansionQuery roleExpansion,
             DesiredStateDerivationService desiredState,
             TerminalCatalogAssignmentRepairService terminalCatalogRepair) {
@@ -142,7 +71,8 @@ public final class EffectiveAccessProcessingService {
         this.effectiveAccess = Objects.requireNonNull(effectiveAccess, "effectiveAccess");
         this.roleExpansion = Objects.requireNonNull(roleExpansion, "roleExpansion");
         this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
-        this.terminalCatalogRepair = terminalCatalogRepair;
+        this.terminalCatalogRepair = Objects.requireNonNull(
+                terminalCatalogRepair, "terminalCatalogRepair");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -237,13 +167,8 @@ public final class EffectiveAccessProcessingService {
             TenantContext tenant,
             UUID assignmentId,
             Instant at) {
-        AccessAssignment assignment = terminalCatalogRepair == null
-                ? assignments.findById(
-                                tenant, assignmentId)
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "AccessAssignment projection input does not exist"))
-                : terminalCatalogRepair.repairIfTerminal(
-                        tenant, assignmentId, at);
+        AccessAssignment assignment = terminalCatalogRepair.repairIfTerminal(
+                tenant, assignmentId, at);
 
         String constraintKey = principalConstraintKey(assignment);
         if (assignment.targetKind() == AccessAssignment.TargetKind.ENTITLEMENT) {

@@ -139,29 +139,6 @@ public interface IdentityLifecycleAccessQuery {
             }
         }
 
-        public Context(
-                Status status,
-                String lifecycleState,
-                long identityRevision,
-                Map<String, CanonicalScalar> canonicalScalars,
-                Map<String, CanonicalMulti> canonicalMultis) {
-            this(
-                    status,
-                    lifecycleState,
-                    identityRevision,
-                    status == Status.AVAILABLE ? 1 : 0,
-                    canonicalScalars,
-                    canonicalMultis);
-        }
-
-        public Context(
-                Status status,
-                String lifecycleState,
-                long identityRevision,
-                Map<String, CanonicalScalar> canonicalScalars) {
-            this(status, lifecycleState, identityRevision, canonicalScalars, Map.of());
-        }
-
         public static Context notFound() {
             return new Context(Status.NOT_FOUND, null, 0, 0, Map.of(), Map.of());
         }

@@ -980,7 +980,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         void setScalar(UUID identityId, String key, ScalarType type, Object value, long revision) {
             Context current = contexts.get(identityId);
             if (current == null) {
-                current = new Context(Status.AVAILABLE, "ACTIVE", 1, Map.of());
+                current = new Context(Status.AVAILABLE, "ACTIVE", 1, 1, Map.of(), Map.of());
             }
             Map<String, CanonicalScalar> values = new LinkedHashMap<>(
                     current.canonicalScalars());
@@ -999,7 +999,7 @@ class LifecycleAccessReconciliationIntegrationTest {
         void setMulti(UUID identityId, String key, ScalarType type, java.util.List<?> values, long revision) {
             Context current = contexts.get(identityId);
             if (current == null) {
-                current = new Context(Status.AVAILABLE, "ACTIVE", 1, Map.of(), Map.of());
+                current = new Context(Status.AVAILABLE, "ACTIVE", 1, 1, Map.of(), Map.of());
             }
             Map<String, CanonicalMulti> multiValues = new LinkedHashMap<>(current.canonicalMultis());
             multiValues.put(key, CanonicalMulti.trusted(type, values, revision));

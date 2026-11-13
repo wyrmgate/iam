@@ -58,12 +58,6 @@ public interface IdentityAccessReferenceQuery {
                     accessEligibilityEpoch);
         }
 
-        public static IdentityAccessStatus eligible(
-                String lifecycleState,
-                long revision) {
-            return eligible(lifecycleState, revision, 1);
-        }
-
         public static IdentityAccessStatus ineligible(
                 String lifecycleState,
                 long revision,
@@ -73,12 +67,6 @@ public interface IdentityAccessReferenceQuery {
                     lifecycleState,
                     revision,
                     accessEligibilityEpoch);
-        }
-
-        public static IdentityAccessStatus ineligible(
-                String lifecycleState,
-                long revision) {
-            return ineligible(lifecycleState, revision, 1);
         }
     }
 

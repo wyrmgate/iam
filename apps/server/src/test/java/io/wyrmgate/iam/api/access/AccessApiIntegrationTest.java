@@ -111,6 +111,8 @@ class AccessApiIntegrationTest {
     private static EffectiveAccessReadService effectiveReads;
     private static DesiredStateDerivationService desiredDerivation;
     private static LifecycleAccessPolicyRepository lifecyclePolicyRepository;
+    private static io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery
+            catalogAvailability;
     private static LifecycleAccessPolicyService lifecyclePolicyService;
 
     private final ObjectMapper json = new ObjectMapper();
@@ -197,7 +199,7 @@ class AccessApiIntegrationTest {
                         principalRepository);
         CatalogQueryService catalogQueries =
                 new CatalogQueryService(catalogRepository);
-        var catalogAvailability =
+        catalogAvailability =
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
                         catalogRepository, roleRepository);
 
@@ -247,6 +249,7 @@ class AccessApiIntegrationTest {
                         desiredRepository,
                         catalogQueries,
                         identityReferences,
+                        (tenant, state) -> { },
                         (tenant, state) -> { },
                         transactions);
 
@@ -1136,7 +1139,11 @@ class AccessApiIntegrationTest {
                 assignmentRepository,
                 effectiveRepository,
                 expansion,
-                desiredDerivation);
+                desiredDerivation,
+                new io.wyrmgate.iam.access.application.TerminalCatalogAssignmentRepairService(
+                        assignmentRepository,
+                        catalogAvailability,
+                        assignmentCommands));
     }
 
     private Identity identity(String displayName) {

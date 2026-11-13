@@ -23,28 +23,6 @@ public record AccessAssignment(
         Instant createdAt,
         Instant updatedAt) {
 
-    public AccessAssignment(
-            UUID id,
-            UUID identityId,
-            TargetKind targetKind,
-            UUID roleId,
-            UUID entitlementId,
-            PrincipalConstraintKind principalConstraintKind,
-            UUID specificPrincipalId,
-            ProvenanceKind provenanceKind,
-            UUID provenanceRefId,
-            LifecycleState lifecycleState,
-            Instant validFrom,
-            Instant validUntil,
-            long revision,
-            Instant createdAt,
-            Instant updatedAt) {
-        this(id, identityId, 1, targetKind, roleId, entitlementId,
-                principalConstraintKind, specificPrincipalId, provenanceKind,
-                provenanceRefId, lifecycleState, validFrom, validUntil,
-                revision, createdAt, updatedAt);
-    }
-
     public AccessAssignment {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(identityId, "identityId");

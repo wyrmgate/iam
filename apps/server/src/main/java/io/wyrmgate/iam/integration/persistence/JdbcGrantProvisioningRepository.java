@@ -67,70 +67,11 @@ public final class JdbcGrantProvisioningRepository
                         rs.getInt(3),
                         rs.getString(4),
                         rs.getString(5),
-                        providerPrincipalId),
+                        providerPrincipalId,
+                        null),
                 entitlementId,
                 tenant.tenantId(),
                 applicationTargetId);
-    }
-
-    @Override
-    public List<TechnicalGrantTarget> observedRemoveTargets(
-            TenantContext tenant,
-            UUID applicationTargetId,
-            UUID entitlementId,
-            List<String> providerPrincipalIds) {
-        if (providerPrincipalIds == null || providerPrincipalIds.isEmpty()) {
-            return List.of();
-        }
-        String placeholders = String.join(
-                ",", java.util.Collections.nCopies(
-                        providerPrincipalIds.size(), "?"));
-        String sql = """
-                SELECT b.id, b.contract_id, b.contract_version,
-                       g.entitlement_provider_id, e.provider_version,
-                       g.principal_provider_id
-                FROM integration.observed_grant g
-                JOIN integration.connector_binding b
-                  ON b.tenant_id = g.tenant_id
-                 AND b.id = g.connector_binding_id
-                 AND b.target_kind = 'APPLICATION_TARGET'
-                 AND b.target_id = ?
-                 AND b.lifecycle_state = 'ACTIVE'
-                JOIN integration.connector_instance ci
-                  ON ci.tenant_id = b.tenant_id
-                 AND ci.id = b.connector_instance_id
-                 AND ci.lifecycle_state = 'ACTIVE'
-                JOIN integration.entitlement_observation_mapping m
-                  ON m.tenant_id = g.tenant_id
-                 AND m.connector_binding_id = g.connector_binding_id
-                 AND m.provider_stable_id = g.entitlement_provider_id
-                 AND m.entitlement_id = ?
-                 AND m.lifecycle_state = 'ACTIVE'
-                LEFT JOIN integration.observed_entitlement e
-                  ON e.tenant_id = g.tenant_id
-                 AND e.connector_binding_id = g.connector_binding_id
-                 AND e.provider_stable_id = g.entitlement_provider_id
-                WHERE g.tenant_id = ?
-                  AND g.present
-                  AND g.principal_provider_id IN (%s)
-                ORDER BY b.id, g.entitlement_provider_id, g.principal_provider_id
-                """.formatted(placeholders);
-
-        List<Object> args = new ArrayList<>();
-        args.add(applicationTargetId);
-        args.add(entitlementId);
-        args.add(tenant.tenantId());
-        args.addAll(providerPrincipalIds);
-        return jdbc.query(
-                sql,
-                (rs,row) -> new TechnicalGrantTarget(
-                        rs.getObject(1, UUID.class),
-                        rs.getString(2),
-                        rs.getInt(3),
-                        rs.getString(4),
-                        rs.getString(5),
-                        rs.getString(6)),
-                args.toArray());
     }
 
     @Override
@@ -210,19 +151,11 @@ public final class JdbcGrantProvisioningRepository
                        t.payload ->> 'providerEntitlementId',
                        t.payload ->> 'providerEntitlementVersion',
                        t.payload ->> 'providerPrincipalId',
-                       COALESCE(
-                           t.payload ->> 'principalId',
-                           pm.principal_id::text)
+                       t.payload ->> 'principalId'
                 FROM integration.provisioning_task t
                 JOIN integration.provisioning_job j
                   ON j.tenant_id = t.tenant_id
                  AND j.id = t.provisioning_job_id
-                LEFT JOIN integration.principal_observation_mapping pm
-                  ON pm.tenant_id = t.tenant_id
-                 AND pm.connector_binding_id = j.connector_binding_id
-                 AND pm.provider_stable_id =
-                     t.payload ->> 'providerPrincipalId'
-                 AND pm.lifecycle_state = 'ACTIVE'
                 WHERE t.tenant_id = ?
                   AND t.subject_kind = 'DESIRED_GRANT'
                   AND t.subject_id = ?
@@ -275,22 +208,7 @@ public final class JdbcGrantProvisioningRepository
                   AND t.payload ->> 'principalId' = ?
                   AND jsonb_exists(t.payload, 'providerEntitlementId')
                   AND jsonb_exists(t.payload, 'providerPrincipalId')
-                  AND (
-                      t.payload ->> 'entitlementId' = ?
-                      OR (
-                          NOT jsonb_exists(t.payload, 'entitlementId')
-                          AND EXISTS (
-                              SELECT 1
-                              FROM integration.entitlement_observation_mapping em
-                              WHERE em.tenant_id = t.tenant_id
-                                AND em.connector_binding_id = j.connector_binding_id
-                                AND em.provider_stable_id =
-                                    t.payload ->> 'providerEntitlementId'
-                                AND em.entitlement_id = ?
-                                AND em.lifecycle_state = 'ACTIVE'
-                          )
-                      )
-                  )
+                  AND t.payload ->> 'entitlementId' = ?
                 ORDER BY t.created_at, t.id
                 """,
                 (rs,row) -> new TechnicalGrantTarget(
@@ -304,8 +222,7 @@ public final class JdbcGrantProvisioningRepository
                 applicationTargetId,
                 tenant.tenantId(),
                 principalId.toString(),
-                entitlementId.toString(),
-                entitlementId);
+                entitlementId.toString());
     }
 
     @Override

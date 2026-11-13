@@ -508,6 +508,7 @@ class IdentityAccessReductionIntegrationTest {
         return new AccessAssignment(
                 ids.nextId(),
                 identityId,
+                1,
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 null,
                 entitlementId,

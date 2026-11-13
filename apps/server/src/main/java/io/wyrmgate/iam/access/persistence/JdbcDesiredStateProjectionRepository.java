@@ -181,27 +181,6 @@ public final class JdbcDesiredStateProjectionRepository
     }
 
     @Override
-    public List<DesiredGrantState> findPresentAnyGrants(
-            TenantContext tenant,
-            UUID identityId,
-            UUID applicationTargetId) {
-        return jdbc.query("""
-                SELECT id, identity_id, application_target_id, entitlement_id,
-                       principal_constraint_key, principal_id, desired_state,
-                       desired_revision, source_generation, computed_at
-                FROM access.desired_grant_state
-                WHERE tenant_id = ?
-                  AND identity_id = ?
-                  AND application_target_id = ?
-                  AND principal_constraint_key = 'ANY'
-                  AND desired_state = 'PRESENT'
-                ORDER BY id
-                """,
-                (rs,row) -> grant(rs),
-                tenant.tenantId(), identityId, applicationTargetId);
-    }
-
-    @Override
     public List<DesiredGrantState> findPrincipalRefreshPage(
             TenantContext tenant,
             UUID principalId,

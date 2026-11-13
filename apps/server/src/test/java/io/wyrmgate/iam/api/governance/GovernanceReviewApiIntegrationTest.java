@@ -151,7 +151,7 @@ class GovernanceReviewApiIntegrationTest {
                             TenantContext tenant,
                             UUID identityId) {
                         return identityExists(tenant, identityId)
-                                ? IdentityAccessStatus.eligible("ACTIVE", 1)
+                                ? IdentityAccessStatus.eligible("ACTIVE", 1, 1)
                                 : IdentityAccessStatus.notFound();
                     }
 

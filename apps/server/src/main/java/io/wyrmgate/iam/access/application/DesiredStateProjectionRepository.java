@@ -33,36 +33,25 @@ public interface DesiredStateProjectionRepository {
             UUID identityId,
             UUID applicationTargetId);
 
-    java.util.List<DesiredGrantState> findPresentAnyGrants(
-            TenantContext tenant,
-            UUID identityId,
-            UUID applicationTargetId);
-
     /**
      * Bounded repair candidates for one Principal change. SPECIFIC rows are always
      * reconsidered; ANY rows are reconsidered only for the Principal's current or
      * previous Identity on the same target.
      */
-    default java.util.List<DesiredGrantState> findPrincipalRefreshPage(
+    java.util.List<DesiredGrantState> findPrincipalRefreshPage(
             TenantContext tenant,
             UUID principalId,
             UUID applicationTargetId,
             UUID currentIdentityId,
             UUID previousIdentityId,
             UUID afterId,
-            int limit) {
-        throw new UnsupportedOperationException(
-                "Principal desired-state refresh paging is not implemented");
-    }
+            int limit);
 
-    default boolean hasPresentTechnicalGrant(
+    boolean hasPresentTechnicalGrant(
             TenantContext tenant,
             UUID applicationTargetId,
             UUID entitlementId,
-            UUID principalId) {
-        throw new UnsupportedOperationException(
-                "technical grant demand query is not implemented");
-    }
+            UUID principalId);
 
     java.util.Optional<DesiredGrantState> findGrantTuple(
             TenantContext tenant,
@@ -73,15 +62,11 @@ public interface DesiredStateProjectionRepository {
     java.util.Optional<DesiredGrantState> findGrantById(
             TenantContext tenant, UUID desiredGrantId);
 
-    default java.util.Optional<DesiredPrincipalState> findPrincipalTuple(
-            TenantContext tenant, UUID identityId, UUID applicationTargetId) {
-        return java.util.Optional.empty();
-    }
+    java.util.Optional<DesiredPrincipalState> findPrincipalTuple(
+            TenantContext tenant, UUID identityId, UUID applicationTargetId);
 
-    default java.util.Optional<DesiredPrincipalState> findPrincipalById(
-            TenantContext tenant, UUID desiredPrincipalId) {
-        return java.util.Optional.empty();
-    }
+    java.util.Optional<DesiredPrincipalState> findPrincipalById(
+            TenantContext tenant, UUID desiredPrincipalId);
 
     DesiredAccessStateQuery.Freshness principalFreshness(TenantContext tenant, UUID id);
 
