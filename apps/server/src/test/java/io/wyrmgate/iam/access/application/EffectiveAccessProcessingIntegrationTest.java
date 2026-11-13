@@ -377,6 +377,54 @@ class EffectiveAccessProcessingIntegrationTest {
     }
 
     @Test
+    void lateAssignmentAfterTerminalCatalogRetirementIsAuthoritativelyReduced() {
+        TenantContext tenant = tenant("late-terminal");
+        Identity identity = identity(tenant, "Late Terminal User");
+        var fixture = catalog(tenant, "late-terminal-app");
+
+        catalogCommands.retireTarget(
+                tenant,
+                fixture.target().id(),
+                fixture.target().revision(),
+                NOW.plusSeconds(1));
+
+        AccessAssignment late = new AccessAssignment(
+                ids.nextId(),
+                identity.id(),
+                identity.accessEligibilityEpoch(),
+                AccessAssignment.TargetKind.ENTITLEMENT,
+                null,
+                fixture.entitlement().id(),
+                AccessAssignment.PrincipalConstraintKind.ANY,
+                null,
+                AccessAssignment.ProvenanceKind.MANUAL,
+                null,
+                AccessAssignment.LifecycleState.ACTIVE,
+                null,
+                null,
+                1,
+                NOW.plusSeconds(2),
+                NOW.plusSeconds(2));
+        assignmentRepository.insert(tenant, late);
+        new JdbcAccessAssignmentFactSink(outbox, ids)
+                .projectionInputChanged(tenant, late);
+
+        processor(NOW.plusSeconds(2)).processAvailable();
+
+        AccessAssignment reduced = assignmentRepository.findById(
+                        tenant, late.id())
+                .orElseThrow();
+        assertThat(reduced.lifecycleState())
+                .isEqualTo(AccessAssignment.LifecycleState.REVOKED);
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                fixture.entitlement().id(),
+                "ANY",
+                NOW.plusSeconds(2))).isEmpty();
+    }
+
+    @Test
     void identityEligibilityEpochPreventsOldIntentFromRevivingAfterReactivation() {
         TenantContext tenant = tenant("epoch");
         Identity identity = identity(tenant, "Epoch User");
@@ -506,7 +554,12 @@ class EffectiveAccessProcessingIntegrationTest {
                 scheduledWork,
                 assignmentRepository,
                 effectiveRepository,
+                roleExpansion,
                 desiredDerivation,
+                new TerminalCatalogAssignmentRepairService(
+                        assignmentRepository,
+                        catalogAvailability,
+                        assignments),
                 Clock.fixed(at, ZoneOffset.UTC));
     }
 
