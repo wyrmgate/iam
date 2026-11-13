@@ -91,7 +91,7 @@ public final class DesiredStateDerivationService {
                                 existing.applicationTargetId(),
                                 entitlementId,
                                 principalConstraintKey,
-                                null,
+                                existing.principalId(),
                                 DesiredStateProjectionRepository.DesiredPresence.ABSENT,
                                 at);
                         if (updated.desiredRevision() != existing.desiredRevision()) {
@@ -110,6 +110,8 @@ public final class DesiredStateDerivationService {
                 tenant, identityId, entitlementId, principalConstraintKey, at);
         boolean present = effective.isPresent();
 
+        var previous = desired.findGrantTuple(
+                tenant, identityId, entitlementId, principalConstraintKey);
         UUID principalId = null;
         if (present) {
             if (principalConstraintKey.startsWith("SPECIFIC:")) {
@@ -125,10 +127,11 @@ public final class DesiredStateDerivationService {
                 throw new IllegalArgumentException(
                         "unsupported principal constraint key");
             }
+        } else if (previous.isPresent()) {
+            principalId = previous.get().principalId();
+        } else if (principalConstraintKey.startsWith("SPECIFIC:")) {
+            principalId = parseSpecificPrincipal(principalConstraintKey);
         }
-
-        var previous = desired.findGrantTuple(
-                tenant, identityId, entitlementId, principalConstraintKey);
         var updatedGrant = desired.reconcileGrant(
                 tenant,
                 identityId,
@@ -174,6 +177,52 @@ public final class DesiredStateDerivationService {
         }
     }
 
+    public PrincipalRefreshPageResult reconcilePrincipalChangePage(
+            TenantContext tenant,
+            UUID principalId,
+            UUID applicationTargetId,
+            UUID currentIdentityId,
+            UUID previousIdentityId,
+            UUID afterId,
+            int limit,
+            Instant at) {
+        if (limit < 1 || limit > 200) {
+            throw new IllegalArgumentException("limit must be between 1 and 200");
+        }
+        var page = desired.findPrincipalRefreshPage(
+                tenant,
+                principalId,
+                applicationTargetId,
+                currentIdentityId,
+                previousIdentityId,
+                afterId,
+                limit + 1);
+        boolean more = page.size() > limit;
+        var selected = more ? page.subList(0, limit) : page;
+        for (var grant : selected) {
+            reconcileGrant(
+                    tenant,
+                    grant.identityId(),
+                    grant.entitlementId(),
+                    grant.principalConstraintKey(),
+                    at);
+        }
+        UUID next = more && !selected.isEmpty()
+                ? selected.getLast().id()
+                : null;
+        return new PrincipalRefreshPageResult(
+                selected.size(), more, next);
+    }
+
+    public void revalidatePrincipalForPrincipalChange(
+            TenantContext tenant,
+            UUID identityId,
+            UUID applicationTargetId) {
+        if (identityId == null) return;
+        desired.findPrincipalTuple(tenant, identityId, applicationTargetId)
+                .ifPresent(state -> principalFacts.revalidate(tenant, state));
+    }
+
     public void reconcileAnyForPrincipalChange(
             TenantContext tenant,
             UUID identityId,
@@ -190,6 +239,20 @@ public final class DesiredStateDerivationService {
         }
         desired.findPrincipalTuple(tenant, identityId, applicationTargetId)
                 .ifPresent(state -> principalFacts.revalidate(tenant, state));
+    }
+
+    public record PrincipalRefreshPageResult(
+            int processed,
+            boolean hasMore,
+            UUID nextAfterId) {
+        public PrincipalRefreshPageResult {
+            if (processed < 0) {
+                throw new IllegalArgumentException("processed must not be negative");
+            }
+            if (hasMore && nextAfterId == null) {
+                throw new IllegalArgumentException("continuation requires nextAfterId");
+            }
+        }
     }
 
     private static UUID parseSpecificPrincipal(String key) {
