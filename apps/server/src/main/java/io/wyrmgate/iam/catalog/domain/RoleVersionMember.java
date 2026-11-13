@@ -23,7 +23,9 @@ public record RoleVersionMember(
             Objects.requireNonNull(memberEntitlementId, "memberEntitlementId");
             if (memberRoleId != null) throw new IllegalArgumentException("entitlement member must not carry role");
         }
-        if (ordinal < 0) throw new IllegalArgumentException("ordinal must not be negative");
+        if (ordinal < 0 || ordinal >= RoleCardinality.MAX_DIRECT_MEMBERS) {
+            throw new IllegalArgumentException("RoleVersion member ordinal must be between 0 and 999");
+        }
     }
 
     public enum MemberKind {

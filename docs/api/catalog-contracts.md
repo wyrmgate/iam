@@ -35,6 +35,7 @@ An Entitlement has a stable IAM ID. A SCIM Group/provider object ID is provider-
 - an active Role has at most one ACTIVE RoleVersion;
 - ACTIVE/SUPERSEDED RoleVersion content is immutable;
 - BUSINESS expansion resolves member APPLICATION Roles through their current ACTIVE versions and returns exact ordered RoleVersion derivation paths;
+- ADR-0057 limits each RoleVersion to 1,000 direct members and each complete current expansion to 1,000 entitlement derivation paths (including multiple paths to the same Entitlement). Validation and activation reject oversized expansions. If later child activation makes a BUSINESS expansion exceed the bound, the parent is temporarily unavailable, with no partial paths or automatic assignment termination; a later valid expansion restores availability.
 - Role activation/retirement emits internal expansion-change facts for Access projection repair; these are not automatically public integration events.
 
 ## Public Role management
