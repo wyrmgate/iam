@@ -134,6 +134,72 @@ public final class JdbcGrantProvisioningRepository
     }
 
     @Override
+    public List<TechnicalGrantTarget> observedRemoveTargetsByPrincipalIds(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            List<UUID> principalIds) {
+        if (principalIds == null || principalIds.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(
+                ",", java.util.Collections.nCopies(
+                        principalIds.size(), "?"));
+        String sql = """
+                SELECT b.id, b.contract_id, b.contract_version,
+                       g.entitlement_provider_id, e.provider_version,
+                       g.principal_provider_id, pm.principal_id
+                FROM integration.observed_grant g
+                JOIN integration.connector_binding b
+                  ON b.tenant_id = g.tenant_id
+                 AND b.id = g.connector_binding_id
+                 AND b.target_kind = 'APPLICATION_TARGET'
+                 AND b.target_id = ?
+                 AND b.lifecycle_state = 'ACTIVE'
+                JOIN integration.connector_instance ci
+                  ON ci.tenant_id = b.tenant_id
+                 AND ci.id = b.connector_instance_id
+                 AND ci.lifecycle_state = 'ACTIVE'
+                JOIN integration.entitlement_observation_mapping em
+                  ON em.tenant_id = g.tenant_id
+                 AND em.connector_binding_id = g.connector_binding_id
+                 AND em.provider_stable_id = g.entitlement_provider_id
+                 AND em.entitlement_id = ?
+                 AND em.lifecycle_state = 'ACTIVE'
+                JOIN integration.principal_observation_mapping pm
+                  ON pm.tenant_id = g.tenant_id
+                 AND pm.connector_binding_id = g.connector_binding_id
+                 AND pm.provider_stable_id = g.principal_provider_id
+                 AND pm.lifecycle_state = 'ACTIVE'
+                LEFT JOIN integration.observed_entitlement e
+                  ON e.tenant_id = g.tenant_id
+                 AND e.connector_binding_id = g.connector_binding_id
+                 AND e.provider_stable_id = g.entitlement_provider_id
+                WHERE g.tenant_id = ?
+                  AND g.present
+                  AND pm.principal_id IN (%s)
+                ORDER BY b.id, g.entitlement_provider_id, g.principal_provider_id
+                """.formatted(placeholders);
+
+        List<Object> args = new ArrayList<>();
+        args.add(applicationTargetId);
+        args.add(entitlementId);
+        args.add(tenant.tenantId());
+        args.addAll(principalIds);
+        return jdbc.query(
+                sql,
+                (rs,row) -> new TechnicalGrantTarget(
+                        rs.getObject(1, UUID.class),
+                        rs.getString(2),
+                        rs.getInt(3),
+                        rs.getString(4),
+                        rs.getString(5),
+                        rs.getString(6),
+                        rs.getObject(7, UUID.class)),
+                args.toArray());
+    }
+
+    @Override
     public List<TechnicalGrantTarget> priorSuccessfulAddTargets(
             TenantContext tenant,
             UUID desiredGrantId) {
@@ -143,7 +209,8 @@ public final class JdbcGrantProvisioningRepository
                        t.contract_version,
                        t.payload ->> 'providerEntitlementId',
                        t.payload ->> 'providerEntitlementVersion',
-                       t.payload ->> 'providerPrincipalId'
+                       t.payload ->> 'providerPrincipalId',
+                       t.payload ->> 'principalId'
                 FROM integration.provisioning_task t
                 JOIN integration.provisioning_job j
                   ON j.tenant_id = t.tenant_id
@@ -163,7 +230,10 @@ public final class JdbcGrantProvisioningRepository
                         rs.getInt(3),
                         rs.getString(4),
                         rs.getString(5),
-                        rs.getString(6)),
+                        rs.getString(6),
+                        rs.getString(7) == null
+                                ? null
+                                : UUID.fromString(rs.getString(7))),
                 tenant.tenantId(),
                 desiredGrantId);
     }
