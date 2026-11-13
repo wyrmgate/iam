@@ -239,6 +239,68 @@ public final class JdbcGrantProvisioningRepository
     }
 
     @Override
+    public List<TechnicalGrantTarget> priorSuccessfulTechnicalAddTargets(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            UUID principalId) {
+        return jdbc.query("""
+                SELECT j.connector_binding_id,
+                       t.contract_id,
+                       t.contract_version,
+                       t.payload ->> 'providerEntitlementId',
+                       t.payload ->> 'providerEntitlementVersion',
+                       t.payload ->> 'providerPrincipalId'
+                FROM integration.provisioning_task t
+                JOIN integration.provisioning_job j
+                  ON j.tenant_id = t.tenant_id
+                 AND j.id = t.provisioning_job_id
+                JOIN integration.connector_binding b
+                  ON b.tenant_id = j.tenant_id
+                 AND b.id = j.connector_binding_id
+                 AND b.target_kind = 'APPLICATION_TARGET'
+                 AND b.target_id = ?
+                WHERE t.tenant_id = ?
+                  AND t.subject_kind = 'DESIRED_GRANT'
+                  AND t.operation_type = 'ADD_GRANT'
+                  AND t.state = 'SUCCEEDED'
+                  AND t.payload ->> 'principalId' = ?
+                  AND jsonb_exists(t.payload, 'providerEntitlementId')
+                  AND jsonb_exists(t.payload, 'providerPrincipalId')
+                  AND (
+                      t.payload ->> 'entitlementId' = ?
+                      OR (
+                          NOT jsonb_exists(t.payload, 'entitlementId')
+                          AND EXISTS (
+                              SELECT 1
+                              FROM integration.entitlement_observation_mapping em
+                              WHERE em.tenant_id = t.tenant_id
+                                AND em.connector_binding_id = j.connector_binding_id
+                                AND em.provider_stable_id =
+                                    t.payload ->> 'providerEntitlementId'
+                                AND em.entitlement_id = ?
+                                AND em.lifecycle_state = 'ACTIVE'
+                          )
+                      )
+                  )
+                ORDER BY t.created_at, t.id
+                """,
+                (rs,row) -> new TechnicalGrantTarget(
+                        rs.getObject(1, UUID.class),
+                        rs.getString(2),
+                        rs.getInt(3),
+                        rs.getString(4),
+                        rs.getString(5),
+                        rs.getString(6),
+                        principalId),
+                applicationTargetId,
+                tenant.tenantId(),
+                principalId.toString(),
+                entitlementId.toString(),
+                entitlementId);
+    }
+
+    @Override
     public boolean createPlan(
             TenantContext tenant,
             String planKey,
