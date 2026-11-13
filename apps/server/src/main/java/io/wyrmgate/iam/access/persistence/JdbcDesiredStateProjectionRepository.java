@@ -202,6 +202,76 @@ public final class JdbcDesiredStateProjectionRepository
     }
 
     @Override
+    public List<DesiredGrantState> findPrincipalRefreshPage(
+            TenantContext tenant,
+            UUID principalId,
+            UUID applicationTargetId,
+            UUID currentIdentityId,
+            UUID previousIdentityId,
+            UUID afterId,
+            int limit) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(principalId, "principalId");
+        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
+        if (limit < 1 || limit > 201) {
+            throw new IllegalArgumentException("principal refresh limit must be between 1 and 201");
+        }
+        String after = afterId == null ? "" : " AND id > ?";
+        String sql = """
+                SELECT id, identity_id, application_target_id, entitlement_id,
+                       principal_constraint_key, principal_id, desired_state,
+                       desired_revision, source_generation, computed_at
+                FROM access.desired_grant_state
+                WHERE tenant_id = ?
+                  AND application_target_id = ?
+                  AND (
+                      principal_constraint_key = ?
+                      OR (
+                          principal_constraint_key = 'ANY'
+                          AND desired_state = 'PRESENT'
+                          AND (identity_id = ? OR identity_id = ?)
+                      )
+                  )
+                """ + after + " ORDER BY id LIMIT ?";
+        java.util.ArrayList<Object> args = new java.util.ArrayList<>();
+        args.add(tenant.tenantId());
+        args.add(applicationTargetId);
+        args.add("SPECIFIC:" + principalId);
+        args.add(currentIdentityId);
+        args.add(previousIdentityId);
+        if (afterId != null) args.add(afterId);
+        args.add(limit);
+        return jdbc.query(sql, (rs,row) -> grant(rs), args.toArray());
+    }
+
+    @Override
+    public boolean hasPresentTechnicalGrant(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            UUID principalId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
+        Objects.requireNonNull(entitlementId, "entitlementId");
+        Objects.requireNonNull(principalId, "principalId");
+        Integer count = jdbc.queryForObject("""
+                SELECT count(*)
+                FROM access.desired_grant_state
+                WHERE tenant_id = ?
+                  AND application_target_id = ?
+                  AND entitlement_id = ?
+                  AND principal_id = ?
+                  AND desired_state = 'PRESENT'
+                """,
+                Integer.class,
+                tenant.tenantId(),
+                applicationTargetId,
+                entitlementId,
+                principalId);
+        return count != null && count > 0;
+    }
+
+    @Override
     public java.util.Optional<DesiredGrantState> findGrantTuple(
             TenantContext tenant,
             UUID identityId,
