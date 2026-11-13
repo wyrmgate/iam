@@ -267,3 +267,10 @@ Invariant set:
 - Audit integrity metadata is deterministic tamper-detection metadata, not authorization, ordering, consensus or a global hash chain.
 - EvidenceSnapshot is immutable and cannot authorize mutation of current capability state.
 - Audit/SIEM delivery is at-least-once. SIEM scheduling or delivery failure cannot roll back or reinterpret an AuditRecord or the business action it describes.
+
+
+### Access v3 dependency fencing and SPECIFIC compatibility
+
+ADR-0055 adds an Identity-owned positive access-eligibility epoch. The epoch advances only when Identity crosses the ACTIVE/non-ACTIVE access-eligibility boundary. AccessAssignment captures the current epoch at admission and semantic support requires the current eligible Identity epoch to match. IdentityAccessReduction remains the durable authoritative cleanup; the epoch is the fail-safe fence that prevents a late assignment from an older eligibility era from reviving after reactivation.
+
+SPECIFIC assignments are revalidated at semantic use time. Direct Entitlement intent requires the specified Principal to remain owned by the assignment Identity on that Entitlement's exact ApplicationTarget. Role intent requires the Principal to remain owned by the Identity and the full current Role expansion to resolve to exactly one matching ApplicationTarget. Incompatibility suppresses EffectiveAccess without rewriting the assignment or selecting another Principal.
