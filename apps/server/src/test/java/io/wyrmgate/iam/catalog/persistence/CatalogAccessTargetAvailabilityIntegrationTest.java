@@ -10,6 +10,7 @@ import io.wyrmgate.iam.access.application.AccessTargetReductionIntakeService;
 import io.wyrmgate.iam.access.application.AccessTargetReductionProcessingService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport;
+import io.wyrmgate.iam.access.application.TerminalCatalogAssignmentRepairService;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentRepository;
 import io.wyrmgate.iam.access.persistence.JdbcAccessTargetReductionRepository;
@@ -333,6 +334,49 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
                 .isEqualTo(AccessAssignment.LifecycleState.ACTIVE);
 
         assertThat(retired.revision()).isEqualTo(app.revision() + 1);
+    }
+
+    @Test
+    void lateAssignmentFromAdmissionRaceIsTerminatedByItsNormalRepairPath() {
+        TenantContext tenant = tenant("late-catalog-race");
+        UUID identityId = ids.nextId();
+        var app = catalog.createApplication(
+                tenant, "late-race", "Late Race", NOW);
+        var target = catalog.createTarget(
+                tenant, app.id(), "prod", NOW);
+        var entitlement = catalog.createEntitlement(
+                tenant, app.id(), target.id(), "read", NOW);
+
+        // Model a request that completed its Catalog validation before retirement,
+        // then committed after the bulk reduction had already drained.
+        catalog.retireApplication(
+                tenant, app.id(), app.revision(), NOW.plusSeconds(1));
+        drainCatalogPropagation();
+        drainReductionIntake();
+        drainReductions();
+
+        AccessAssignment late = assignment(
+                identityId,
+                AccessAssignment.TargetKind.ENTITLEMENT,
+                null,
+                entitlement.id(),
+                AccessAssignment.LifecycleState.ACTIVE,
+                NOW.minusSeconds(1),
+                null);
+        assignments.insert(tenant, late);
+
+        var repaired = new TerminalCatalogAssignmentRepairService(
+                assignments,
+                availability,
+                assignmentCommands)
+                .repairIfTerminal(
+                        tenant, late.id(), NOW.plusSeconds(2));
+
+        assertThat(repaired.lifecycleState())
+                .isEqualTo(AccessAssignment.LifecycleState.REVOKED);
+        assertThat(assignments.findById(
+                        tenant, late.id()).orElseThrow().lifecycleState())
+                .isEqualTo(AccessAssignment.LifecycleState.REVOKED);
     }
 
     private static void drainCatalogPropagation() {
