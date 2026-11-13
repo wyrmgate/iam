@@ -149,7 +149,9 @@ public final class LifecycleAccessReconciliationService {
         // Authoritative reductions happen before any evaluator-dependent privilege increase.
         for(AccessAssignment existing:assignments.findCurrentLifecyclePolicyAssignments(tenant,identityId)){
             var rule=desired.get(existing.provenanceRefId());
-            if(rule==null || !sameTarget(existing,rule)){
+            if(rule==null
+                    || !sameTarget(existing,rule)
+                    || existing.identityAccessEpoch() != context.accessEligibilityEpoch()){
                 commands.terminateLifecyclePolicyAssignment(
                         tenant,
                         existing.id(),
