@@ -224,6 +224,70 @@ class GrantProvisioningPlanningIntegrationTest {
     }
 
     @Test
+    void losingUniqueAnyPrincipalRemovesPreviouslyRealizedGrant() {
+        TenantContext tenant = tenant("lost-principal");
+        UUID targetId = ids.nextId();
+        UUID entitlementId = ids.nextId();
+        UUID identityId = ids.nextId();
+        UUID principalId = ids.nextId();
+        mappedGroupBinding(
+                tenant, targetId, entitlementId, "group-lost-principal");
+
+        DesiredGrantState present = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "ANY",
+                principalId,
+                DesiredPresence.PRESENT,
+                NOW);
+        facts.changed(tenant, present);
+        var resolvedProcessor = processor(activePrincipal(
+                principalId,
+                identityId,
+                targetId,
+                "provider-user-lost"));
+        assertThat(resolvedProcessor.processAvailable()).isEqualTo(1);
+
+        jdbc.update("""
+                UPDATE integration.provisioning_task
+                SET state = 'SUCCEEDED',
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ?
+                  AND operation_type = 'ADD_GRANT'
+                """,
+                Timestamp.from(NOW.plusSeconds(1)),
+                tenant.tenantId());
+
+        DesiredGrantState unresolved = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "ANY",
+                null,
+                DesiredPresence.PRESENT,
+                NOW.plusSeconds(2));
+        assertThat(unresolved.desiredRevision())
+                .isEqualTo(present.desiredRevision() + 1);
+        facts.changed(tenant, unresolved);
+
+        // No replacement Principal is guessed. The safely identified old
+        // realization is reduced instead.
+        assertThat(processor(unavailablePrincipal())
+                .processAvailable()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*)
+                FROM integration.provisioning_task
+                WHERE tenant_id = ?
+                  AND operation_type = 'REMOVE_GRANT'
+                """, Integer.class, tenant.tenantId()))
+                .isEqualTo(1);
+    }
+
+    @Test
     void absentGrantPlansRemoveFromPriorSuccessfulAddAndNoKnownGrantIsNoop() {
         TenantContext tenant = tenant("remove");
         UUID targetId = ids.nextId();
