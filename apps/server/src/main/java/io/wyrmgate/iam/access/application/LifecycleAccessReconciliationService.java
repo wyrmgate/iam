@@ -27,6 +27,14 @@ public final class LifecycleAccessReconciliationService {
     private static final Duration RETRY_DELAY = Duration.ofSeconds(5);
     private static final int CLAIM_BATCH = 50;
 
+    private static final Set<String> TERMINAL_TARGET_FAILURES = Set.of(
+            "entitlement_not_found",
+            "entitlement_retired",
+            "application_target_retired",
+            "entitlement_unavailable_terminal",
+            "role_not_found",
+            "role_unavailable_terminal");
+
     private final JdbcOutboxRepository outbox;
     private final LifecycleAccessPolicyRepository policies;
     private final AccessAssignmentRepository assignments;
@@ -203,6 +211,15 @@ public final class LifecycleAccessReconciliationService {
                             correlationId,
                             causationId);
                 }
+            }catch(AccessAssignmentCommandException rejected){
+                if (!TERMINAL_TARGET_FAILURES.contains(rejected.code())) {
+                    throw rejected;
+                }
+                // The active policy rule remains explainable, but ADR-0052 says a
+                // terminal Catalog target can never authorize a new assignment.
+                // A later policy version/input change may reconcile again; this
+                // current input must not retry forever.
+                continue;
             }catch(AccessAssignmentProvenanceConflictException race){
                 AccessAssignment replay=assignments.findCurrentLifecyclePolicyAssignment(
                         tenant,identityId,rule.ruleId()).orElseThrow(()->race);
