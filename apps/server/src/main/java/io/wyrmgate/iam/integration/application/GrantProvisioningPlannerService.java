@@ -162,8 +162,7 @@ public final class GrantProvisioningPlannerService {
                     grant.applicationTargetId(),
                     grant.entitlementId(),
                     grant.principalId())) {
-                var prior = resolvePrincipalId(
-                        tenant, grant, rawPrior);
+                var prior = requireGovernedPrincipal(rawPrior);
                 if (prior == null) return null;
                 targets.put(targetKey(prior), prior);
             }
