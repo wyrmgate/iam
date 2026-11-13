@@ -20,6 +20,14 @@ public interface GrantProvisioningRepository {
             UUID entitlementId,
             List<String> providerPrincipalIds);
 
+    default List<TechnicalGrantTarget> observedRemoveTargetsByPrincipalIds(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            List<UUID> principalIds) {
+        return List.of();
+    }
+
     List<TechnicalGrantTarget> priorSuccessfulAddTargets(
             TenantContext tenant,
             UUID desiredGrantId);
@@ -40,7 +48,36 @@ public interface GrantProvisioningRepository {
             int contractVersion,
             String providerEntitlementId,
             String providerEntitlementVersion,
-            String providerPrincipalId) {
+            String providerPrincipalId,
+            UUID principalId) {
+
+        public TechnicalGrantTarget(
+                UUID connectorBindingId,
+                String contractId,
+                int contractVersion,
+                String providerEntitlementId,
+                String providerEntitlementVersion,
+                String providerPrincipalId) {
+            this(
+                    connectorBindingId,
+                    contractId,
+                    contractVersion,
+                    providerEntitlementId,
+                    providerEntitlementVersion,
+                    providerPrincipalId,
+                    null);
+        }
+
+        public TechnicalGrantTarget withPrincipalId(UUID value) {
+            return new TechnicalGrantTarget(
+                    connectorBindingId,
+                    contractId,
+                    contractVersion,
+                    providerEntitlementId,
+                    providerEntitlementVersion,
+                    providerPrincipalId,
+                    value);
+        }
     }
 
     record TaskSpec(
