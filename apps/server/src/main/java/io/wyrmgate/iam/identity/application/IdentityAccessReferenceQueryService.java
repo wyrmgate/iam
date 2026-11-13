@@ -38,10 +38,12 @@ public final class IdentityAccessReferenceQueryService
                                         .IdentityLifecycleState.ACTIVE
                                 ? IdentityAccessStatus.eligible(
                                         identity.lifecycleState().name(),
-                                        identity.revision())
+                                        identity.revision(),
+                                        identity.accessEligibilityEpoch())
                                 : IdentityAccessStatus.ineligible(
                                         identity.lifecycleState().name(),
-                                        identity.revision()))
+                                        identity.revision(),
+                                        identity.accessEligibilityEpoch()))
                 .orElseGet(
                         IdentityAccessStatus::notFound);
     }

@@ -161,3 +161,8 @@ Audit concepts that must not be collapsed include:
 - `AuditEvidenceScope` — explicit TENANT or DEPLOYMENT ownership realm.
 
 SIEM delivery is a separate outbound technical transport of data-minimized Audit evidence. It is neither a public integration event nor authoritative business state.
+
+
+### Access dependency fencing
+
+AccessAssignment remains Access-owned authority, but admission records the current Identity access-eligibility epoch defined by ADR-0055. EffectiveAccess is semantically present only when the Identity is currently eligible in that same epoch and current target/Principal compatibility rules hold. The epoch is a foreign semantic reference value, not duplicated Identity authority.

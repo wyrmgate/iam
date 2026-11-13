@@ -11,9 +11,22 @@ public record Identity(
         IdentityProfile profile,
         IdentityLifecycleState lifecycleState,
         String displayName,
+        long accessEligibilityEpoch,
         long revision,
         Instant createdAt,
         Instant updatedAt) {
+
+    public Identity(
+            UUID id,
+            IdentityType type,
+            IdentityProfile profile,
+            IdentityLifecycleState lifecycleState,
+            String displayName,
+            long revision,
+            Instant createdAt,
+            Instant updatedAt) {
+        this(id, type, profile, lifecycleState, displayName, 1, revision, createdAt, updatedAt);
+    }
 
     public Identity {
         Objects.requireNonNull(id, "id");
@@ -27,6 +40,9 @@ public record Identity(
         }
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName must not be blank");
+        }
+        if (accessEligibilityEpoch < 1) {
+            throw new IllegalArgumentException("accessEligibilityEpoch must be positive");
         }
         if (revision < 1) {
             throw new IllegalArgumentException("revision must be positive");

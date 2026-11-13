@@ -146,7 +146,7 @@ public final class AccessAssignmentCommandService {
         Objects.requireNonNull(principalConstraintKind, "principalConstraintKind");
         Objects.requireNonNull(now, "now");
 
-        requireAccessEligibleIdentity(
+        var identityStatus = requireAccessEligibleIdentity(
                 tenant, identityId);
 
         var entitlementAvailability = catalogAvailability.currentAvailability(
@@ -235,6 +235,7 @@ public final class AccessAssignmentCommandService {
         AccessAssignment assignment = new AccessAssignment(
                 ids.nextId(),
                 identityId,
+                identityStatus.accessEligibilityEpoch(),
                 AccessAssignment.TargetKind.ENTITLEMENT,
                 null,
                 entitlementId,
@@ -353,7 +354,7 @@ public final class AccessAssignmentCommandService {
         Objects.requireNonNull(principalConstraintKind, "principalConstraintKind");
         Objects.requireNonNull(now, "now");
 
-        requireAccessEligibleIdentity(
+        var identityStatus = requireAccessEligibleIdentity(
                 tenant, identityId);
 
         var roleAvailability = catalogAvailability.currentAvailability(
@@ -444,6 +445,7 @@ public final class AccessAssignmentCommandService {
         AccessAssignment assignment = new AccessAssignment(
                 ids.nextId(),
                 identityId,
+                identityStatus.accessEligibilityEpoch(),
                 AccessAssignment.TargetKind.ROLE,
                 roleId,
                 null,
@@ -523,7 +525,7 @@ public final class AccessAssignmentCommandService {
         });
     }
 
-    private void requireAccessEligibleIdentity(
+    private IdentityAccessReferenceQuery.IdentityAccessStatus requireAccessEligibleIdentity(
             TenantContext tenant,
             UUID identityId) {
         var status = identityReferences.accessStatus(
@@ -540,6 +542,7 @@ public final class AccessAssignmentCommandService {
                     "identity_not_access_eligible",
                     "The requested Identity is not access-eligible.");
         }
+        return status;
     }
 
     private AccessAssignment current(
