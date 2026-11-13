@@ -210,11 +210,19 @@ public final class JdbcGrantProvisioningRepository
                        t.payload ->> 'providerEntitlementId',
                        t.payload ->> 'providerEntitlementVersion',
                        t.payload ->> 'providerPrincipalId',
-                       t.payload ->> 'principalId'
+                       COALESCE(
+                           t.payload ->> 'principalId',
+                           pm.principal_id::text)
                 FROM integration.provisioning_task t
                 JOIN integration.provisioning_job j
                   ON j.tenant_id = t.tenant_id
                  AND j.id = t.provisioning_job_id
+                LEFT JOIN integration.principal_observation_mapping pm
+                  ON pm.tenant_id = t.tenant_id
+                 AND pm.connector_binding_id = j.connector_binding_id
+                 AND pm.provider_stable_id =
+                     t.payload ->> 'providerPrincipalId'
+                 AND pm.lifecycle_state = 'ACTIVE'
                 WHERE t.tenant_id = ?
                   AND t.subject_kind = 'DESIRED_GRANT'
                   AND t.subject_id = ?
