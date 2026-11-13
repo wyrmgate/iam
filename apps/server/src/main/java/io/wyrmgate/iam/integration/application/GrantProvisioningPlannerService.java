@@ -30,246 +30,126 @@ public final class GrantProvisioningPlannerService {
         this.provisioning = Objects.requireNonNull(provisioning, "provisioning");
     }
 
-    public PlanResult plan(
-            TenantContext tenant,
-            UUID desiredGrantId,
-            long triggerRevision,
-            UUID correlationId,
-            UUID causationId,
-            Instant now) {
+    private static final int CLEANUP_PAGE_SIZE = 100;
+
+    public PageResult planPage(
+            TenantContext tenant, UUID desiredGrantId, long triggerRevision,
+            UUID correlationId, UUID causationId, Instant now,
+            GrantProvisioningRepository.CleanupCursor after, boolean hadRemoval,
+            boolean continuation) {
         var snapshot = desired.desiredGrant(tenant, desiredGrantId);
         if (snapshot.status() == DesiredProvisioningStateQuery.Status.UNAVAILABLE) {
-            return PlanResult.RETRY;
+            return PageResult.finished(PlanResult.RETRY);
         }
-        if (snapshot.status() == DesiredProvisioningStateQuery.Status.ABSENT) {
-            return PlanResult.STALE_NOOP;
+        if (snapshot.status() == DesiredProvisioningStateQuery.Status.ABSENT
+                || snapshot.grant().desiredRevision() != triggerRevision) {
+            return PageResult.finished(PlanResult.STALE_NOOP);
         }
-
         DesiredGrantState grant = snapshot.grant();
-        if (grant.desiredRevision() != triggerRevision) {
-            return PlanResult.STALE_NOOP;
+        boolean present = grant.desiredState() == DesiredPresence.PRESENT;
+        boolean unresolved = present && grant.principalId() == null;
+        if (provisioning.hasUninterpretablePriorEvidence(tenant, grant.id(), grant.entitlementId())) {
+            return PageResult.finished(PlanResult.RETRY);
         }
 
-        List<GrantProvisioningRepository.TaskSpec> tasks =
-                grant.desiredState() == DesiredPresence.PRESENT
-                        ? presentTasks(tenant, grant)
-                        : absentTasks(tenant, grant);
-        if (tasks == null) return PlanResult.RETRY;
-        if (tasks.isEmpty()) return PlanResult.NOOP;
-
-        String planKey = "desired-grant:" + grant.id()
-                + ":rev:" + grant.desiredRevision();
-        provisioning.createPlan(
-                tenant,
-                planKey,
-                grant.id(),
-                grant.desiredRevision(),
-                tasks,
-                correlationId,
-                causationId,
-                now);
-        return PlanResult.PLANNED;
-    }
-
-    private List<GrantProvisioningRepository.TaskSpec> presentTasks(
-            TenantContext tenant,
-            DesiredGrantState grant) {
-        if (grant.principalId() == null) {
-            return unresolvedPresentTasks(tenant, grant);
+        GrantProvisioningRepository.TechnicalGrantTarget addTarget = null;
+        GrantProvisioningRepository.TaskSpec add = null;
+        if (present && !unresolved) {
+            var principal = principals.resolve(tenant, grant.principalId());
+            if (principal.status() != PrincipalTechnicalReferenceQuery.Status.ACTIVE
+                    || !grant.identityId().equals(principal.identityId())
+                    || !grant.applicationTargetId().equals(principal.applicationTargetId())) {
+                return PageResult.finished(PlanResult.RETRY);
+            }
+            var routes = provisioning.addTargets(tenant, grant.applicationTargetId(),
+                    grant.entitlementId(), principal.nativePrincipalKey());
+            if (routes.size() != 1) return PageResult.finished(PlanResult.RETRY);
+            addTarget = routes.getFirst().withPrincipalId(grant.principalId());
+            add = task(grant, addTarget, "ADD_GRANT", null);
         }
 
-        var principal = principals.resolve(tenant, grant.principalId());
-        if (principal.status() != PrincipalTechnicalReferenceQuery.Status.ACTIVE
-                || !grant.identityId().equals(principal.identityId())
-                || !grant.applicationTargetId().equals(
-                        principal.applicationTargetId())) {
-            return null;
-        }
-
-        var rawTargets = provisioning.addTargets(
-                tenant,
-                grant.applicationTargetId(),
-                grant.entitlementId(),
-                principal.nativePrincipalKey());
-        if (rawTargets.size() != 1) return null;
-
-        var addTarget = rawTargets.getFirst()
-                .withPrincipalId(grant.principalId());
-        var add = task(grant, addTarget, "ADD_GRANT", null);
-
-        List<GrantProvisioningRepository.TaskSpec> result =
-                new ArrayList<>();
-        result.add(add);
-
-        for (var rawOld : uniqueTargets(provisioning.priorSuccessfulAddTargets(
-                tenant, grant.id()))) {
-            var old = requireGovernedPrincipal(rawOld);
-            if (old == null) return null;
-            if (sameTechnicalTarget(old, addTarget)) {
+        var page = provisioning.cleanupTargetsPage(tenant, grant.id(), grant.applicationTargetId(),
+                grant.entitlementId(), present ? null : grant.principalId(), after, CLEANUP_PAGE_SIZE);
+        boolean more = page.size() > CLEANUP_PAGE_SIZE;
+        var targets = more ? page.subList(0, CLEANUP_PAGE_SIZE) : page;
+        var removals = new ArrayList<GrantProvisioningRepository.TaskSpec>();
+        boolean waitsForAdd = false;
+        for (var candidate : targets) {
+            var old = candidate.target();
+            if (old.principalId() == null) return PageResult.finished(PlanResult.RETRY);
+            if (candidate.includesObservation()) {
+                var mappedPrincipal = principals.resolve(tenant, old.principalId());
+                if (mappedPrincipal.status() == PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE
+                        || !grant.applicationTargetId().equals(mappedPrincipal.applicationTargetId())) {
+                    return PageResult.finished(PlanResult.RETRY);
+                }
+            }
+            if (addTarget != null && sameTechnicalTarget(old, addTarget)) {
+                if (!old.principalId().equals(addTarget.principalId())) {
+                    return PageResult.finished(PlanResult.RETRY);
+                }
                 continue;
             }
-
-            // Principal re-resolution may move ANY access from one governed
-            // Principal to another. Do not remove the old Principal's provider
-            // grant while another desired cause still requires it.
-            if (!old.principalId().equals(addTarget.principalId())) {
-                var demand = desired.technicalGrantDemand(
-                        tenant,
-                        grant.applicationTargetId(),
-                        grant.entitlementId(),
-                        old.principalId());
-                if (demand
-                        == DesiredProvisioningStateQuery.TechnicalGrantDemand.UNAVAILABLE) {
-                    return null;
+            if (addTarget == null || !old.principalId().equals(addTarget.principalId())) {
+                var demand = desired.technicalGrantDemand(tenant, grant.applicationTargetId(),
+                        grant.entitlementId(), old.principalId());
+                if (demand == DesiredProvisioningStateQuery.TechnicalGrantDemand.UNAVAILABLE) {
+                    return PageResult.finished(PlanResult.RETRY);
                 }
-                if (demand
-                        == DesiredProvisioningStateQuery.TechnicalGrantDemand.REQUIRED) {
-                    continue;
-                }
+                if (demand == DesiredProvisioningStateQuery.TechnicalGrantDemand.REQUIRED) continue;
             }
-
-            result.add(task(
-                    grant,
-                    old,
-                    "REMOVE_GRANT",
-                    old.connectorBindingId().equals(
-                            addTarget.connectorBindingId())
-                            ? add.taskKey()
-                            : null));
-        }
-        return List.copyOf(result);
-    }
-
-    private List<GrantProvisioningRepository.TaskSpec> absentTasks(
-            TenantContext tenant,
-            DesiredGrantState grant) {
-        LinkedHashMap<String,GrantProvisioningRepository.TechnicalGrantTarget> targets =
-                new LinkedHashMap<>();
-
-        // Always retain same-cause execution evidence for pre-upgrade and
-        // out-of-order cases. When the last governed Principal is known, add
-        // cause-independent evidence so a final disappearing cause can clean a
-        // grant originally realized by another cause.
-        for (var rawPrior : provisioning.priorSuccessfulAddTargets(
-                tenant, grant.id())) {
-            var prior = requireGovernedPrincipal(rawPrior);
-            if (prior == null) return null;
-            targets.put(targetKey(prior), prior);
-        }
-        if (grant.principalId() != null) {
-            for (var rawPrior : provisioning.priorSuccessfulTechnicalAddTargets(
-                    tenant,
-                    grant.applicationTargetId(),
-                    grant.entitlementId(),
-                    grant.principalId())) {
-                var prior = requireGovernedPrincipal(rawPrior);
-                if (prior == null) return null;
-                targets.put(targetKey(prior), prior);
-            }
-        }
-
-        // Observation can supplement execution evidence only when this
-        // desired cause still carries the exact governed Principal it last
-        // resolved to. Provider strings are never used to guess that Principal.
-        if (grant.principalId() != null) {
-            var observed = provisioning.observedRemoveTargetsByPrincipalIds(
-                    tenant,
-                    grant.applicationTargetId(),
-                    grant.entitlementId(),
-                    List.of(grant.principalId()));
-            if (!observed.isEmpty()) {
-                var mappedPrincipal = principals.resolve(
-                        tenant, grant.principalId());
-                if (mappedPrincipal.status()
-                                == PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE
-                        || !grant.applicationTargetId().equals(
-                                mappedPrincipal.applicationTargetId())) {
-                    return null;
-                }
-                for (var target : observed) {
-                    targets.put(targetKey(target), target);
-                }
-            }
-        }
-
-        List<GrantProvisioningRepository.TaskSpec> removals =
-                new ArrayList<>();
-        for (var target : targets.values()) {
-            if (target.principalId() == null) return null;
-            var demand = desired.technicalGrantDemand(
-                    tenant,
-                    grant.applicationTargetId(),
-                    grant.entitlementId(),
-                    target.principalId());
-            if (demand
-                    == DesiredProvisioningStateQuery.TechnicalGrantDemand.UNAVAILABLE) {
-                return null;
-            }
-            if (demand
-                    == DesiredProvisioningStateQuery.TechnicalGrantDemand.REQUIRED) {
+            var remove = task(grant, old, "REMOVE_GRANT", null);
+            if (provisioning.taskState(tenant, remove.taskKey()).isPresent()) {
+                hadRemoval = true;
                 continue;
             }
-            removals.add(task(
-                    grant, target, "REMOVE_GRANT", null));
-        }
-        return List.copyOf(removals);
-    }
-
-    private List<GrantProvisioningRepository.TaskSpec> unresolvedPresentTasks(
-            TenantContext tenant,
-            DesiredGrantState grant) {
-        LinkedHashMap<String,GrantProvisioningRepository.TechnicalGrantTarget> targets =
-                new LinkedHashMap<>();
-        for (var rawPrior : provisioning.priorSuccessfulAddTargets(
-                tenant, grant.id())) {
-            var prior = requireGovernedPrincipal(rawPrior);
-            if (prior == null) return null;
-            targets.put(targetKey(prior), prior);
-        }
-
-        if (targets.isEmpty()) {
-            // Preserve the existing fail-closed retry contract for an unresolved
-            // privilege increase that has no prior technical realization to reduce.
-            return null;
-        }
-
-        List<GrantProvisioningRepository.TaskSpec> removals =
-                new ArrayList<>();
-        for (var target : targets.values()) {
-            var demand = desired.technicalGrantDemand(
-                    tenant,
-                    grant.applicationTargetId(),
-                    grant.entitlementId(),
-                    target.principalId());
-            if (demand
-                    == DesiredProvisioningStateQuery.TechnicalGrantDemand.UNAVAILABLE) {
-                return null;
+            if (addTarget != null && old.connectorBindingId().equals(addTarget.connectorBindingId())) {
+                waitsForAdd = true;
             }
-            if (demand
-                    == DesiredProvisioningStateQuery.TechnicalGrantDemand.REQUIRED) {
-                continue;
-            }
-            removals.add(task(
-                    grant, target, "REMOVE_GRANT", null));
+            removals.add(remove);
         }
-        // If every old grant is still required by another desired cause, this
-        // unresolved cause remains retryable until its Principal resolution changes.
-        return removals.isEmpty() ? null : List.copyOf(removals);
+
+        String planKey = "desired-grant:" + grant.id() + ":rev:" + grant.desiredRevision();
+        if (add != null && provisioning.taskState(tenant, add.taskKey()).isEmpty()) {
+            provisioning.createPlan(tenant, planKey, grant.id(), grant.desiredRevision(),
+                    List.of(add), correlationId, causationId, now);
+        }
+        // Preserve same-binding ADD-before-REMOVE ordering without a cross-job
+        // FK: wait for the exact replacement ADD task to succeed. Do not advance
+        // past a blocked route.
+        if (waitsForAdd && !"SUCCEEDED".equals(
+                provisioning.taskState(tenant, add.taskKey()).orElse(null))) {
+            return continuation ? PageResult.finished(PlanResult.RETRY)
+                    : new PageResult(PlanResult.PLANNED, true, after, hadRemoval, true);
+        }
+
+        for (var remove : removals) {
+            // A deterministic per-route plan is independent of page boundaries.
+            provisioning.createPlan(tenant, remove.taskKey(), grant.id(), grant.desiredRevision(),
+                    List.of(remove), correlationId, causationId, now);
+            hadRemoval = true;
+        }
+
+        if (more) {
+            return new PageResult(PlanResult.PLANNED, true,
+                    GrantProvisioningRepository.CleanupCursor.from(targets.getLast().target()),
+                    hadRemoval, false);
+        }
+        if (unresolved && !hadRemoval) {
+            // A multi-page scan with no reducible realization restarts so a
+            // later change in coalesced demand on an earlier route isn't missed.
+            return after == null ? PageResult.finished(PlanResult.RETRY)
+                    : new PageResult(PlanResult.NOOP, true, null, false, true);
+        }
+        return PageResult.finished(add != null || hadRemoval ? PlanResult.PLANNED : PlanResult.NOOP);
     }
 
-    private static GrantProvisioningRepository.TechnicalGrantTarget requireGovernedPrincipal(
-            GrantProvisioningRepository.TechnicalGrantTarget target) {
-        return target.principalId() == null ? null : target;
-    }
-
-    private static List<GrantProvisioningRepository.TechnicalGrantTarget> uniqueTargets(
-            List<GrantProvisioningRepository.TechnicalGrantTarget> values) {
-        LinkedHashMap<String,GrantProvisioningRepository.TechnicalGrantTarget> unique =
-                new LinkedHashMap<>();
-        for (var value : values) {
-            unique.put(targetKey(value), value);
+    public record PageResult(PlanResult outcome, boolean more,
+                             GrantProvisioningRepository.CleanupCursor after,
+                             boolean hadRemoval, boolean delayed) {
+        static PageResult finished(PlanResult outcome) {
+            return new PageResult(outcome, false, null, false, false);
         }
-        return List.copyOf(unique.values());
     }
 
     private static GrantProvisioningRepository.TaskSpec task(
@@ -322,7 +202,8 @@ public final class GrantProvisioningPlannerService {
     private static boolean sameTechnicalTarget(
             GrantProvisioningRepository.TechnicalGrantTarget left,
             GrantProvisioningRepository.TechnicalGrantTarget right) {
-        return targetKey(left).equals(targetKey(right));
+        return GrantProvisioningRepository.CleanupCursor.from(left)
+                .equals(GrantProvisioningRepository.CleanupCursor.from(right));
     }
 
     private static String targetKey(
