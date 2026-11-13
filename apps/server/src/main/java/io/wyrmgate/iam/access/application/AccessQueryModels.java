@@ -65,8 +65,18 @@ public final class AccessQueryModels {
 
     public record EffectivePosition(UUID id) {}
 
+    public record EffectiveReadSummary(
+            EffectiveAccess effectiveAccess,
+            boolean supportCountTruncated) {
+        public EffectiveReadSummary {
+            if (effectiveAccess == null) {
+                throw new IllegalArgumentException("effectiveAccess is required");
+            }
+        }
+    }
+
     public record EffectivePage(
-            List<EffectiveAccess> items,
+            List<EffectiveReadSummary> items,
             EffectivePosition nextPosition) {
         public EffectivePage {
             items = List.copyOf(items);
@@ -104,9 +114,20 @@ public final class AccessQueryModels {
 
     public record EffectiveDetail(
             EffectiveAccess effectiveAccess,
-            List<EffectiveSupport> supports) {
+            List<EffectiveSupport> supports,
+            boolean supportCountTruncated,
+            EffectiveSupportPosition nextSupportPosition) {
         public EffectiveDetail {
+            if (effectiveAccess == null) {
+                throw new IllegalArgumentException("effectiveAccess is required");
+            }
             supports = List.copyOf(supports);
+        }
+
+        public EffectiveDetail(
+                EffectiveAccess effectiveAccess,
+                List<EffectiveSupport> supports) {
+            this(effectiveAccess, supports, false, null);
         }
     }
 }
