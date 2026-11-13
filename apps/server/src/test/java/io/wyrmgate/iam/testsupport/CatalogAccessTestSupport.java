@@ -4,6 +4,8 @@ import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
 import io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQueryService;
+import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
+import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationService;
 import io.wyrmgate.iam.catalog.application.CatalogAvailabilityPropagationStarter;
 import io.wyrmgate.iam.catalog.application.CatalogRepository;
@@ -96,7 +98,44 @@ public final class CatalogAccessTestSupport {
             AccessAssignmentRepository assignments,
             CatalogAccessTargetAvailabilityQuery availability,
             io.wyrmgate.iam.catalog.application.RoleExpansionQuery roleExpansion) {
+        IdentityAccessReferenceQuery identities = new IdentityAccessReferenceQuery() {
+            @Override
+            public boolean identityExists(
+                    io.wyrmgate.iam.platform.tenant.TenantContext tenant,
+                    java.util.UUID identityId) {
+                return true;
+            }
+
+            @Override
+            public IdentityAccessStatus accessStatus(
+                    io.wyrmgate.iam.platform.tenant.TenantContext tenant,
+                    java.util.UUID identityId) {
+                return IdentityAccessStatus.eligible("ACTIVE", 1, 1);
+            }
+
+            @Override
+            public PrincipalReference principal(
+                    io.wyrmgate.iam.platform.tenant.TenantContext tenant,
+                    java.util.UUID principalId) {
+                return PrincipalReference.notFound();
+            }
+
+            @Override
+            public PrincipalSelection selectUniqueActivePrincipal(
+                    io.wyrmgate.iam.platform.tenant.TenantContext tenant,
+                    java.util.UUID identityId,
+                    java.util.UUID applicationTargetId) {
+                return PrincipalSelection.none();
+            }
+        };
+        CatalogAccessReferenceQuery catalogReferences =
+                (tenant, entitlementId) ->
+                        CatalogAccessReferenceQuery.EntitlementReference.notFound();
         return new EffectiveAccessSemanticSupport(
-                assignments, availability, roleExpansion);
+                assignments,
+                identities,
+                catalogReferences,
+                availability,
+                roleExpansion);
     }
 }
