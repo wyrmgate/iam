@@ -167,17 +167,18 @@ public final class JdbcDesiredStateProjectionRepository
             TenantContext tenant,
             UUID identityId,
             UUID applicationTargetId) {
-        Integer count = jdbc.queryForObject("""
-                SELECT count(*)
-                FROM access.desired_grant_state
+        Boolean present = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM access.desired_grant_state
                 WHERE tenant_id = ?
                   AND identity_id = ?
                   AND application_target_id = ?
                   AND desired_state = 'PRESENT'
+                )
                 """,
-                Integer.class,
+                Boolean.class,
                 tenant.tenantId(), identityId, applicationTargetId);
-        return count != null && count > 0;
+        return Boolean.TRUE.equals(present);
     }
 
     @Override
@@ -302,21 +303,22 @@ public final class JdbcDesiredStateProjectionRepository
         Objects.requireNonNull(applicationTargetId, "applicationTargetId");
         Objects.requireNonNull(entitlementId, "entitlementId");
         Objects.requireNonNull(principalId, "principalId");
-        Integer count = jdbc.queryForObject("""
-                SELECT count(*)
-                FROM access.desired_grant_state
+        Boolean present = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM access.desired_grant_state
                 WHERE tenant_id = ?
                   AND application_target_id = ?
                   AND entitlement_id = ?
                   AND principal_id = ?
                   AND desired_state = 'PRESENT'
+                )
                 """,
-                Integer.class,
+                Boolean.class,
                 tenant.tenantId(),
                 applicationTargetId,
                 entitlementId,
                 principalId);
-        return count != null && count > 0;
+        return Boolean.TRUE.equals(present);
     }
 
     @Override
