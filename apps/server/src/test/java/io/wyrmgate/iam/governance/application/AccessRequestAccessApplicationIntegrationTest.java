@@ -4,6 +4,7 @@ package io.wyrmgate.iam.governance.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.wyrmgate.iam.access.application.AccessAssignmentBoundaryScheduler;
+import io.wyrmgate.iam.access.application.AccessAssignmentCommandException;
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
@@ -412,6 +413,115 @@ class AccessRequestAccessApplicationIntegrationTest {
                 .isEqualTo(applied.accessAssignmentId());
         assertThat(requestDerivedAssignmentCount(
                 authorized.id())).isEqualTo(1);
+    }
+
+    @Test
+    void permanentAccessRejectionTerminatesAuthorizedItemWithoutRetryLoop() {
+        Identity requester = identity("Requester");
+        Identity beneficiary = identity("Beneficiary");
+        var targetAndEntitlement = entitlement();
+
+        AccessRequestCommandService requests =
+                requestService((t, request, item) ->
+                        EligibilityResult.authorized());
+        var draft = requests.createDraft(
+                tenant,
+                requester.id(),
+                beneficiary.id(),
+                List.of(new ItemSpec(
+                        TargetKind.ENTITLEMENT,
+                        targetAndEntitlement.entitlementId(),
+                        PrincipalConstraintKind.ANY,
+                        null,
+                        null,
+                        null)),
+                NOW);
+        var submitted = requests.submit(
+                tenant,
+                draft.request().id(),
+                1,
+                NOW.plusSeconds(1));
+        var authorized = requests.evaluateItem(
+                tenant,
+                submitted.items().getFirst().id(),
+                2,
+                NOW.plusSeconds(2));
+
+        AccessIntentCommand terminal = (requestedTenant, request, now) -> {
+            throw new AccessAssignmentCommandException(
+                    "identity_not_access_eligible",
+                    "Identity is no longer access-eligible");
+        };
+
+        var first = processor(
+                terminal, NOW.plusSeconds(3))
+                .processAvailable();
+        assertThat(first.processed()).isEqualTo(1);
+        assertThat(first.failed()).isZero();
+
+        var cancelled = requestRepository.findItem(
+                        tenant, authorized.id())
+                .orElseThrow();
+        assertThat(cancelled.state())
+                .isEqualTo(ItemState.CANCELLED);
+        assertThat(cancelled.accessAssignmentId()).isNull();
+        assertThat(requestDerivedAssignmentCount(
+                authorized.id())).isZero();
+
+        assertThat(processor(
+                terminal, NOW.plusSeconds(10))
+                .processAvailable().claimed())
+                .isZero();
+    }
+
+    @Test
+    void endedValidityTerminatesAuthorizedItemAsExpired() {
+        Identity requester = identity("Requester");
+        Identity beneficiary = identity("Beneficiary");
+        var targetAndEntitlement = entitlement();
+
+        AccessRequestCommandService requests =
+                requestService((t, request, item) ->
+                        EligibilityResult.authorized());
+        var draft = requests.createDraft(
+                tenant,
+                requester.id(),
+                beneficiary.id(),
+                List.of(new ItemSpec(
+                        TargetKind.ENTITLEMENT,
+                        targetAndEntitlement.entitlementId(),
+                        PrincipalConstraintKind.ANY,
+                        null,
+                        null,
+                        NOW.plusSeconds(60))),
+                NOW);
+        var submitted = requests.submit(
+                tenant,
+                draft.request().id(),
+                1,
+                NOW.plusSeconds(1));
+        var authorized = requests.evaluateItem(
+                tenant,
+                submitted.items().getFirst().id(),
+                2,
+                NOW.plusSeconds(2));
+
+        AccessIntentCommand expired = (requestedTenant, request, now) -> {
+            throw new AccessAssignmentCommandException(
+                    "validity_already_ended",
+                    "Validity already ended");
+        };
+
+        var batch = processor(
+                expired, NOW.plusSeconds(61))
+                .processAvailable();
+        assertThat(batch.processed()).isEqualTo(1);
+        assertThat(requestRepository.findItem(
+                        tenant, authorized.id())
+                .orElseThrow().state())
+                .isEqualTo(ItemState.EXPIRED);
+        assertThat(requestDerivedAssignmentCount(
+                authorized.id())).isZero();
     }
 
     private AccessRequestCommandService requestService(
