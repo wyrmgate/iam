@@ -38,6 +38,26 @@ public interface DesiredStateProjectionRepository {
             UUID identityId,
             UUID applicationTargetId);
 
+    /**
+     * Bounded repair candidates for one Principal change. SPECIFIC rows are always
+     * reconsidered; ANY rows are reconsidered only for the Principal's current or
+     * previous Identity on the same target.
+     */
+    java.util.List<DesiredGrantState> findPrincipalRefreshPage(
+            TenantContext tenant,
+            UUID principalId,
+            UUID applicationTargetId,
+            UUID currentIdentityId,
+            UUID previousIdentityId,
+            UUID afterId,
+            int limit);
+
+    boolean hasPresentTechnicalGrant(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            UUID principalId);
+
     java.util.Optional<DesiredGrantState> findGrantTuple(
             TenantContext tenant,
             UUID identityId,
