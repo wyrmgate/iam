@@ -137,6 +137,10 @@ public final class DesiredStateProcessingService {
                         1, "principal", event.aggregateId(), event.aggregateRevision(),
                         now, correlationId, event.eventId(),
                         json.createObjectNode().put("snapshotAt", now.toString()).toString()), now);
+                // Do not couple assignment fan-out to a potentially unavailable semantic
+                // desired-state read. The independent durable page can retry after support repair.
+                appendContinuation(item, context, correlationId, now);
+                return null;
             }
             var page = derivation.reconcilePrincipalChangePage(
                     item.tenant(),
@@ -208,7 +212,7 @@ public final class DesiredStateProcessingService {
                 requiredUuid(payload, "applicationTargetId"),
                 optionalUuid(payload, "currentIdentityId"),
                 optionalUuid(payload, "previousIdentityId"),
-                requiredUuid(payload, "afterDesiredGrantId"));
+                optionalUuid(payload, "afterDesiredGrantId"));
     }
 
     private void appendContinuation(
@@ -218,9 +222,10 @@ public final class DesiredStateProcessingService {
             Instant now) {
         var payload = json.createObjectNode()
                 .put("applicationTargetId",
-                        context.applicationTargetId().toString())
-                .put("afterDesiredGrantId",
-                        context.afterDesiredGrantId().toString());
+                        context.applicationTargetId().toString());
+        if (context.afterDesiredGrantId() != null) {
+            payload.put("afterDesiredGrantId", context.afterDesiredGrantId().toString());
+        }
         if (context.currentIdentityId() != null) {
             payload.put(
                     "currentIdentityId",

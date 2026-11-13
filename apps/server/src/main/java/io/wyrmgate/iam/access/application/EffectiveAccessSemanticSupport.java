@@ -46,6 +46,7 @@ public final class EffectiveAccessSemanticSupport {
                     && directAssignmentContributes(tenant, assignment, at);
         }
 
+        if (!assignmentBaseContributes(tenant, assignment, at)) return false;
         RoleExpansionQuery.Result current =
                 roleExpansion.expandCurrent(tenant, assignment.roleId());
         return roleAssignmentContributes(tenant, assignment, current, at)
@@ -72,7 +73,7 @@ public final class EffectiveAccessSemanticSupport {
                 && specificRoleCompatible(tenant, assignment, expansion);
     }
 
-    private boolean assignmentBaseContributes(
+    boolean assignmentBaseContributes(
             TenantContext tenant,
             AccessAssignment assignment,
             Instant at) {

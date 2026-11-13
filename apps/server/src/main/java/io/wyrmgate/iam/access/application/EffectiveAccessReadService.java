@@ -128,14 +128,13 @@ public final class EffectiveAccessReadService {
             Instant at) {
         requireSupportLimit(limit);
         Objects.requireNonNull(at, "at");
-        return repository.findCurrentById(
-                        tenant, effectiveAccessId, at)
-                .filter(value -> accessEligible(
-                        tenant, value.identityId()))
-                .map(value -> {
+        // A support page is subordinate to a semantically current parent,
+        // not merely a materialized tuple. find() preserves the 503 budget fence.
+        return find(tenant, effectiveAccessId, at)
+                .map(detail -> {
                     SupportSlice slice = semanticPage(
                             tenant,
-                            value,
+                            detail.effectiveAccess(),
                             after,
                             limit,
                             at);

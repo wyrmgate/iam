@@ -1,6 +1,10 @@
 package io.wyrmgate.iam.access.application;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
+import io.wyrmgate.iam.platform.id.IdGenerator;
+import io.wyrmgate.iam.platform.persistence.OutboxEvent;
+import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.platform.persistence.ClaimedOutboxEvent;
 import io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository;
@@ -21,6 +25,8 @@ import java.util.UUID;
 
 public final class EffectiveAccessProcessingService {
 
+    public static final String DESIRED_GRANT_REFRESH_REQUESTED = "access.desired-grant-refresh-requested";
+
     private static final Duration CLAIM_LEASE = Duration.ofSeconds(30);
     private static final Duration RETRY_DELAY = Duration.ofSeconds(5);
     private static final int BATCH_SIZE = 100;
@@ -36,6 +42,9 @@ public final class EffectiveAccessProcessingService {
     private final DesiredStateDerivationService desiredState;
     private final EffectiveAccessSemanticSupport semanticSupport;
     private final TerminalCatalogAssignmentRepairService terminalCatalogRepair;
+    private final IdGenerator ids;
+    private final TransactionExecutor transactions;
+    private final ObjectMapper json;
     private final Clock clock;
 
     public EffectiveAccessProcessingService(
@@ -46,7 +55,10 @@ public final class EffectiveAccessProcessingService {
             RoleExpansionQuery roleExpansion,
             DesiredStateDerivationService desiredState,
             EffectiveAccessSemanticSupport semanticSupport,
-            TerminalCatalogAssignmentRepairService terminalCatalogRepair) {
+            TerminalCatalogAssignmentRepairService terminalCatalogRepair,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            ObjectMapper json) {
         this(
                 outbox,
                 scheduledWork,
@@ -56,6 +68,7 @@ public final class EffectiveAccessProcessingService {
                 desiredState,
                 semanticSupport,
                 terminalCatalogRepair,
+                ids, transactions, json,
                 Clock.systemUTC());
     }
 
@@ -68,6 +81,9 @@ public final class EffectiveAccessProcessingService {
             DesiredStateDerivationService desiredState,
             EffectiveAccessSemanticSupport semanticSupport,
             TerminalCatalogAssignmentRepairService terminalCatalogRepair,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            ObjectMapper json,
             Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.scheduledWork = Objects.requireNonNull(scheduledWork, "scheduledWork");
@@ -78,12 +94,16 @@ public final class EffectiveAccessProcessingService {
         this.semanticSupport = Objects.requireNonNull(semanticSupport, "semanticSupport");
         this.terminalCatalogRepair = Objects.requireNonNull(
                 terminalCatalogRepair, "terminalCatalogRepair");
+        this.ids = Objects.requireNonNull(ids, "ids");
+        this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     public ProcessingResult processAvailable() {
         int factProcessed = processFacts();
         int boundaryProcessed = processBoundaries();
+        processDesiredFacts();
         return new ProcessingResult(factProcessed, boundaryProcessed);
     }
 
@@ -112,16 +132,19 @@ public final class EffectiveAccessProcessingService {
                         throw new IllegalArgumentException(
                                 "invalid AccessAssignment projection fact");
                     }
-                    reconcile(
-                            item.tenant(),
-                            event.aggregateId(),
-                            clock.instant());
+                    transactions.required(() -> {
+                        Instant at = clock.instant();
+                        if (outbox.markPublished(item.tenant(), event.eventId(), at)) {
+                            reconcileInternal(item.tenant(), event.aggregateId(), at,
+                                    event.correlationId() == null ? event.eventId() : event.correlationId(),
+                                    event.eventId());
+                        }
+                        return null;
+                    });
                 } else {
                     throw new IllegalArgumentException(
                             "unsupported EffectiveAccess projection fact");
                 }
-                outbox.markPublished(
-                        item.tenant(), event.eventId(), clock.instant());
                 processed++;
             } catch (IllegalArgumentException invalid) {
                 outbox.markTerminalFailure(
@@ -172,6 +195,15 @@ public final class EffectiveAccessProcessingService {
             TenantContext tenant,
             UUID assignmentId,
             Instant at) {
+        transactions.required(() -> {
+            reconcileInternal(tenant, assignmentId, at, ids.nextId(), null);
+            return null;
+        });
+    }
+
+    private void reconcileInternal(
+            TenantContext tenant, UUID assignmentId, Instant at,
+            UUID correlationId, UUID causationId) {
         AccessAssignment assignment = terminalCatalogRepair.repairIfTerminal(
                 tenant, assignmentId, at);
 
@@ -190,18 +222,14 @@ public final class EffectiveAccessProcessingService {
                         at);
             }
 
-            desiredState.reconcileGrant(
-                    tenant,
-                    assignment.identityId(),
-                    assignment.entitlementId(),
-                    constraintKey,
-                    at);
+            requestDesiredRefresh(tenant, assignment, assignment.entitlementId(),
+                    at, correlationId, causationId);
             return;
         }
 
         List<EffectiveAccessRepository.RoleSupportPath> desiredPaths =
                 new ArrayList<>();
-        if (assignment.isSemanticallyEffectiveAt(at)) {
+        if (semanticSupport.assignmentBaseContributes(tenant, assignment, at)) {
             var expansion = roleExpansion.expandCurrent(
                     tenant, assignment.roleId());
             if (semanticSupport.roleAssignmentContributes(
@@ -226,12 +254,55 @@ public final class EffectiveAccessProcessingService {
                 desiredPaths,
                 at);
         for (UUID entitlementId : touched) {
-            desiredState.reconcileGrant(
-                    tenant,
-                    assignment.identityId(),
-                    entitlementId,
-                    constraintKey,
-                    at);
+            requestDesiredRefresh(tenant, assignment, entitlementId,
+                    at, correlationId, causationId);
+        }
+    }
+
+    private void requestDesiredRefresh(
+            TenantContext tenant, AccessAssignment assignment, UUID entitlementId,
+            Instant at, UUID correlationId, UUID causationId) {
+        outbox.append(tenant, new OutboxEvent(
+                ids.nextId(), DESIRED_GRANT_REFRESH_REQUESTED, 1,
+                "access-assignment", assignment.id(), assignment.revision(), at,
+                correlationId, causationId,
+                json.createObjectNode().put("entitlementId", entitlementId.toString()).toString()), at);
+    }
+
+    // Projection changes and the refresh requests commit together. A semantic
+    // read that exceeds its budget must not roll back removal of stale support.
+    private void processDesiredFacts() {
+        for (var item : outbox.claimPending(Set.of(DESIRED_GRANT_REFRESH_REQUESTED),
+                clock.instant(), CLAIM_LEASE, BATCH_SIZE)) {
+            var event = item.event();
+            try {
+                if (event.eventVersion() != 1 || !"access-assignment".equals(event.aggregateType())
+                        || event.aggregateId() == null || event.aggregateRevision() == null) {
+                    throw new IllegalArgumentException("invalid desired refresh fact");
+                }
+                UUID entitlementId;
+                try {
+                    entitlementId = UUID.fromString(json.readTree(event.payloadJson())
+                            .path("entitlementId").asText());
+                } catch (Exception invalid) {
+                    throw new IllegalArgumentException("invalid desired refresh entitlement", invalid);
+                }
+                transactions.required(() -> {
+                    Instant at = clock.instant();
+                    if (outbox.markPublished(item.tenant(), event.eventId(), at)) {
+                        AccessAssignment assignment = assignments.findById(item.tenant(),
+                                event.aggregateId()).orElseThrow();
+                        desiredState.reconcileGrant(item.tenant(), assignment.identityId(),
+                                entitlementId, principalConstraintKey(assignment), at);
+                    }
+                    return null;
+                });
+            } catch (IllegalArgumentException invalid) {
+                outbox.markTerminalFailure(item.tenant(), event.eventId(), INVALID_FACT);
+            } catch (RuntimeException retryable) {
+                outbox.markFailed(item.tenant(), event.eventId(),
+                        clock.instant().plus(RETRY_DELAY), PROCESSING_FAILED);
+            }
         }
     }
 
