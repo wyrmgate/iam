@@ -574,7 +574,6 @@ access.effective_access_support
 - tenant_id uuid NOT NULL
 - effective_access_id uuid NOT NULL
 - access_assignment_id uuid NOT NULL
-- role_version_id uuid NULL
 - path_hash varchar(128) NOT NULL
 - path_depth integer NOT NULL CHECK (path_depth >= 0)
 - UNIQUE (tenant_id, effective_access_id, access_assignment_id, path_hash)
@@ -585,7 +584,7 @@ Support/path rows preserve explainability without putting an unbounded opaque ar
 
 Migration V24 adds `access.effective_access_support_role_version`, an ordered normalized path table for role-derived supports. A direct assignment has no RoleVersion path. An APPLICATION Role -> Entitlement support records one RoleVersion; BUSINESS -> Entitlement also records one; BUSINESS -> APPLICATION Role -> Entitlement records the BUSINESS and child APPLICATION RoleVersion IDs in order. These are cross-capability stable IDs and intentionally do not create Access-owned foreign keys into Catalog.
 
-The first runtime implementation is migration V20 and currently projects direct Entitlement assignments only. The stable `principal_constraint_key` encoding is `ANY` or `SPECIFIC:<principal UUID>`. A direct support row has `role_version_id = NULL`, `path_depth = 0`, and a deterministic lowercase SHA-256 path hash over `DIRECT|<assignmentId>|<identityId>|<entitlementId>|<principalConstraintKey>`. Adding or removing a support advances `projection_generation`; replay of an already-present support is a no-op and does not advance generation. Assignment mutation facts and technical valid-from/valid-until work both re-read current authoritative assignment state before projection mutation. Semantic reads additionally filter support by current lifecycle and validity-window clock comparison, so scheduler delay cannot extend or prematurely start effective access.
+The stable `principal_constraint_key` encoding is `ANY` or `SPECIFIC:<principal UUID>`. A direct support row has an empty normalized RoleVersion path, `path_depth = 0`, and a deterministic lowercase SHA-256 path hash over `DIRECT|<assignmentId>|<identityId>|<entitlementId>|<principalConstraintKey>`. Role-derived support retains its ordered RoleVersion IDs only in `access.effective_access_support_role_version`; the redundant single RoleVersion column is removed. `path_depth` is derived presentation metadata equal to normalized path length. Adding or removing a support advances `projection_generation`; replay of an already-present support is a no-op and does not advance generation. Assignment mutation facts and technical valid-from/valid-until work both re-read current authoritative assignment state before projection mutation. Semantic reads additionally filter support by current lifecycle and validity-window clock comparison, so scheduler delay cannot extend or prematurely start effective access.
 
 ### Desired state
 
@@ -1022,3 +1021,12 @@ It seeds pre-existing Identity and Access rows with epoch 1 using constant defau
 the AccessAssignment default so future writes must supply the captured epoch explicitly; no
 unbounded row-by-row eligibility backfill is performed. Flyway V19 adds partial indexes for current
 technical-grant demand and successful governed ADD evidence used by ADR-0056 coalesced cleanup.
+
+
+Flyway V20 adds the partial SPECIFIC assignment refresh index
+`(tenant_id, specific_principal_id, created_at, id)` for bounded dependency repair;
+Identity scans reuse the non-terminal Identity reduction page index. It removes the redundant
+`access.effective_access_support.role_version_id` column. Support page reads batch-fetch
+normalized path rows and check that the retained derived depth matches their length.
+Support replacement and durable touched-tuple desired-grant refresh requests commit in one
+Access transaction.
