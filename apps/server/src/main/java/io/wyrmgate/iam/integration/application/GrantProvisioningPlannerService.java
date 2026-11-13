@@ -175,20 +175,23 @@ public final class GrantProvisioningPlannerService {
         // desired cause still carries the exact governed Principal it last
         // resolved to. Provider strings are never used to guess that Principal.
         if (grant.principalId() != null) {
-            var mappedPrincipal = principals.resolve(
-                    tenant, grant.principalId());
-            if (mappedPrincipal.status()
-                            == PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE
-                    || !grant.applicationTargetId().equals(
-                            mappedPrincipal.applicationTargetId())) {
-                return null;
-            }
-            for (var observed : provisioning.observedRemoveTargetsByPrincipalIds(
+            var observed = provisioning.observedRemoveTargetsByPrincipalIds(
                     tenant,
                     grant.applicationTargetId(),
                     grant.entitlementId(),
-                    List.of(grant.principalId()))) {
-                targets.put(targetKey(observed), observed);
+                    List.of(grant.principalId()));
+            if (!observed.isEmpty()) {
+                var mappedPrincipal = principals.resolve(
+                        tenant, grant.principalId());
+                if (mappedPrincipal.status()
+                                == PrincipalTechnicalReferenceQuery.Status.UNAVAILABLE
+                        || !grant.applicationTargetId().equals(
+                                mappedPrincipal.applicationTargetId())) {
+                    return null;
+                }
+                for (var target : observed) {
+                    targets.put(targetKey(target), target);
+                }
             }
         }
 
