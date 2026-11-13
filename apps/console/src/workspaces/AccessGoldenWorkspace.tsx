@@ -214,9 +214,13 @@ function GrantAccessDialog({ open, onClose, onCreated }: { open: boolean; onClos
 }
 
 function actionFor(value: AccessAssignmentView): AssignmentAction[] {
+  if (value.validityState === 'ENDED') return [];
   if (value.lifecycleState === 'ACTIVE') return ['suspend', 'revoke'];
   if (value.lifecycleState === 'SUSPENDED') return ['resume', 'revoke'];
-  if (value.lifecycleState === 'SCHEDULED' && value.validityState === 'FUTURE') return ['cancel'];
+  if (value.lifecycleState === 'SCHEDULED') {
+    if (value.validityState === 'FUTURE') return ['cancel'];
+    if (value.validityState === 'CURRENT') return ['suspend', 'revoke'];
+  }
   return [];
 }
 

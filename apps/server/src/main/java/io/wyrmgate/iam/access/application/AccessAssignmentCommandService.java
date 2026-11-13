@@ -1,6 +1,8 @@
 package io.wyrmgate.iam.access.application;
 
 import io.wyrmgate.iam.access.domain.AccessAssignment;
+import io.wyrmgate.iam.access.domain.AccessAssignmentLifecycleDefinition;
+import io.wyrmgate.iam.access.domain.AccessAssignmentLifecycleDefinition.Action;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery;
 import io.wyrmgate.iam.catalog.domain.CatalogAccessTargetKind;
@@ -472,15 +474,7 @@ public final class AccessAssignmentCommandService {
             UUID assignmentId,
             long expectedRevision,
             Instant now) {
-        return transition(
-                tenant,
-                assignmentId,
-                expectedRevision,
-                now,
-                AccessAssignment.LifecycleState.ACTIVE,
-                AccessAssignment.LifecycleState.SUSPENDED,
-                "access_assignment_not_active",
-                "Only an ACTIVE AccessAssignment can be suspended.");
+        return transition(tenant, assignmentId, expectedRevision, now, Action.SUSPEND);
     }
 
     public AccessAssignment resume(
@@ -488,37 +482,7 @@ public final class AccessAssignmentCommandService {
             UUID assignmentId,
             long expectedRevision,
             Instant now) {
-        Objects.requireNonNull(now, "now");
-        return transactions.required(() -> {
-            AccessAssignment current = current(
-                    tenant, assignmentId, expectedRevision);
-            if (current.lifecycleState()
-                    != AccessAssignment.LifecycleState.SUSPENDED) {
-                throw new AccessAssignmentCommandException(
-                        "access_assignment_not_suspended",
-                        "Only a SUSPENDED AccessAssignment can be resumed.");
-            }
-            if (current.validUntil() != null
-                    && !current.validUntil().isAfter(now)) {
-                throw new AccessAssignmentCommandException(
-                        "access_assignment_expired",
-                        "The AccessAssignment validity has already ended.");
-            }
-            if (current.validFrom() != null
-                    && now.isBefore(current.validFrom())) {
-                throw new AccessAssignmentCommandException(
-                        "access_assignment_not_yet_valid",
-                        "The AccessAssignment validity has not started.");
-            }
-            AccessAssignment updated = assignments.updateLifecycle(
-                    tenant,
-                    assignmentId,
-                    AccessAssignment.LifecycleState.ACTIVE,
-                    expectedRevision,
-                    now);
-            facts.projectionInputChanged(tenant, updated);
-            return updated;
-        });
+        return transition(tenant, assignmentId, expectedRevision, now, Action.RESUME);
     }
 
     public AccessAssignment cancel(
@@ -526,27 +490,7 @@ public final class AccessAssignmentCommandService {
             UUID assignmentId,
             long expectedRevision,
             Instant now) {
-        Objects.requireNonNull(now, "now");
-        return transactions.required(() -> {
-            AccessAssignment current = current(
-                    tenant, assignmentId, expectedRevision);
-            if (current.lifecycleState()
-                    != AccessAssignment.LifecycleState.SCHEDULED
-                    || current.validFrom() == null
-                    || !now.isBefore(current.validFrom())) {
-                throw new AccessAssignmentCommandException(
-                        "access_assignment_not_cancellable",
-                        "Only a future SCHEDULED AccessAssignment can be cancelled.");
-            }
-            AccessAssignment updated = assignments.updateLifecycle(
-                    tenant,
-                    assignmentId,
-                    AccessAssignment.LifecycleState.CANCELLED,
-                    expectedRevision,
-                    now);
-            facts.projectionInputChanged(tenant, updated);
-            return updated;
-        });
+        return transition(tenant, assignmentId, expectedRevision, now, Action.CANCEL);
     }
 
     public AccessAssignment revoke(
@@ -554,33 +498,7 @@ public final class AccessAssignmentCommandService {
             UUID assignmentId,
             long expectedRevision,
             Instant now) {
-        Objects.requireNonNull(now, "now");
-        return transactions.required(() -> {
-            AccessAssignment current = current(
-                    tenant, assignmentId, expectedRevision);
-            if (current.lifecycleState()
-                    != AccessAssignment.LifecycleState.ACTIVE
-                    && current.lifecycleState()
-                            != AccessAssignment.LifecycleState.SUSPENDED) {
-                throw new AccessAssignmentCommandException(
-                        "access_assignment_not_revocable",
-                        "Only ACTIVE or SUSPENDED AccessAssignment can be revoked.");
-            }
-            if (current.validUntil() != null
-                    && !current.validUntil().isAfter(now)) {
-                throw new AccessAssignmentCommandException(
-                        "access_assignment_expired",
-                        "The AccessAssignment validity has already ended.");
-            }
-            AccessAssignment updated = assignments.updateLifecycle(
-                    tenant,
-                    assignmentId,
-                    AccessAssignment.LifecycleState.REVOKED,
-                    expectedRevision,
-                    now);
-            facts.projectionInputChanged(tenant, updated);
-            return updated;
-        });
+        return transition(tenant, assignmentId, expectedRevision, now, Action.REVOKE);
     }
 
     private AccessAssignment transition(
@@ -588,30 +506,18 @@ public final class AccessAssignmentCommandService {
             UUID assignmentId,
             long expectedRevision,
             Instant now,
-            AccessAssignment.LifecycleState requiredState,
-            AccessAssignment.LifecycleState nextState,
-            String errorCode,
-            String errorMessage) {
+            Action action) {
         Objects.requireNonNull(now, "now");
         return transactions.required(() -> {
-            AccessAssignment current = current(
-                    tenant, assignmentId, expectedRevision);
-            if (current.lifecycleState() != requiredState) {
-                throw new AccessAssignmentCommandException(
-                        errorCode, errorMessage);
-            }
-            if (current.validUntil() != null
-                    && !current.validUntil().isAfter(now)) {
-                throw new AccessAssignmentCommandException(
-                        "access_assignment_expired",
-                        "The AccessAssignment validity has already ended.");
+            AccessAssignment current = current(tenant, assignmentId, expectedRevision);
+            AccessAssignment.LifecycleState next;
+            try {
+                next = AccessAssignmentLifecycleDefinition.transition(current, action, now);
+            } catch (AccessAssignmentLifecycleDefinition.Rejection rejected) {
+                throw new AccessAssignmentCommandException(rejected.code(), rejected.getMessage());
             }
             AccessAssignment updated = assignments.updateLifecycle(
-                    tenant,
-                    assignmentId,
-                    nextState,
-                    expectedRevision,
-                    now);
+                    tenant, assignmentId, next, expectedRevision, now);
             facts.projectionInputChanged(tenant, updated);
             return updated;
         });
@@ -699,47 +605,15 @@ public final class AccessAssignmentCommandService {
         }
 
         return transactions.required(() -> {
-            AccessAssignment current = assignments.findById(
-                            tenant, assignmentId)
-                    .orElseThrow(() -> new AccessAssignmentCommandException(
-                            "access_assignment_not_found",
-                            "The requested AccessAssignment was not found."));
-
-            if (current.revision() != expectedRevision) {
-                throw new io.wyrmgate.iam.platform.persistence.StaleWriteException(
-                        "access-assignment", assignmentId, expectedRevision);
-            }
-
-            if (current.lifecycleState()
-                    == AccessAssignment.LifecycleState.REVOKED
-                    || current.lifecycleState()
-                            == AccessAssignment.LifecycleState.EXPIRED
-                    || current.lifecycleState()
-                            == AccessAssignment.LifecycleState.CANCELLED) {
-                throw new AccessAssignmentCommandException(
-                        "access_assignment_terminal",
-                        "The AccessAssignment is already terminal.");
-            }
-
+            AccessAssignment current = current(tenant, assignmentId, expectedRevision);
             AccessAssignment.LifecycleState terminalState;
-            if (current.validUntil() != null
-                    && !current.validUntil().isAfter(now)) {
-                terminalState = AccessAssignment.LifecycleState.EXPIRED;
-            } else if (current.lifecycleState()
-                    == AccessAssignment.LifecycleState.SCHEDULED
-                    && current.validFrom() != null
-                    && now.isBefore(current.validFrom())) {
-                terminalState = AccessAssignment.LifecycleState.CANCELLED;
-            } else {
-                terminalState = AccessAssignment.LifecycleState.REVOKED;
+            try {
+                terminalState = AccessAssignmentLifecycleDefinition.terminate(current, now);
+            } catch (AccessAssignmentLifecycleDefinition.Rejection rejected) {
+                throw new AccessAssignmentCommandException(rejected.code(), rejected.getMessage());
             }
-
             AccessAssignment updated = assignments.terminate(
-                    tenant,
-                    assignmentId,
-                    terminalState,
-                    expectedRevision,
-                    now);
+                    tenant, assignmentId, terminalState, expectedRevision, now);
             facts.projectionInputChanged(
                     tenant, updated, correlationId, causationId);
             return updated;

@@ -243,6 +243,52 @@ class AccessAssignmentPersistenceIntegrationTest {
     }
 
     @Test
+    void dueScheduledAccessCanBeReducedWithoutWaitingForBoundaryWork() {
+        TenantContext tenant = tenant("scheduled-reduction");
+        Identity identity = identity(tenant, "Scheduled User");
+        var catalog = catalog(tenant, "scheduled-access", "prod");
+        Instant starts = NOW.plusSeconds(60);
+        Instant ends = starts.plusSeconds(60);
+
+        AccessAssignment scheduled = assignments.createEntitlementAssignment(
+                tenant, identity.id(), catalog.entitlement().id(),
+                AccessAssignment.PrincipalConstraintKind.ANY, null, starts, ends, NOW);
+
+        assertThatThrownBy(() -> assignments.revoke(
+                tenant, scheduled.id(), scheduled.revision(), NOW))
+                .isInstanceOf(AccessAssignmentCommandException.class);
+        assertThatThrownBy(() -> assignments.suspend(
+                tenant, scheduled.id(), scheduled.revision(), NOW))
+                .isInstanceOf(AccessAssignmentCommandException.class);
+        assertThatThrownBy(() -> assignments.cancel(
+                tenant, scheduled.id(), scheduled.revision(), starts))
+                .isInstanceOf(AccessAssignmentCommandException.class);
+
+        assertThat(assignmentRepository.findById(tenant, scheduled.id()).orElseThrow()
+                .lifecycleState()).isEqualTo(AccessAssignment.LifecycleState.SCHEDULED);
+        AccessAssignment suspended = assignments.suspend(
+                tenant, scheduled.id(), scheduled.revision(), starts);
+        assertThat(suspended.lifecycleState()).isEqualTo(AccessAssignment.LifecycleState.SUSPENDED);
+        assertThat(suspended.isSemanticallyEffectiveAt(starts)).isFalse();
+
+        AccessAssignment resumed = assignments.resume(
+                tenant, suspended.id(), suspended.revision(), starts.plusSeconds(1));
+        assertThat(resumed.lifecycleState()).isEqualTo(AccessAssignment.LifecycleState.ACTIVE);
+        assertThat(resumed.isSemanticallyEffectiveAt(starts.plusSeconds(1))).isTrue();
+
+        AccessAssignment another = assignments.createEntitlementAssignment(
+                tenant, identity.id(), catalog.entitlement().id(),
+                AccessAssignment.PrincipalConstraintKind.ANY, null, starts, ends, NOW);
+        AccessAssignment revoked = assignments.revoke(
+                tenant, another.id(), another.revision(), starts);
+        assertThat(revoked.lifecycleState()).isEqualTo(AccessAssignment.LifecycleState.REVOKED);
+        assertThat(revoked.isSemanticallyEffectiveAt(starts)).isFalse();
+        assertThatThrownBy(() -> assignments.resume(
+                tenant, revoked.id(), revoked.revision(), starts.plusSeconds(1)))
+                .isInstanceOf(AccessAssignmentCommandException.class);
+    }
+
+    @Test
     void terminationMaterializesRevokedOrExpiredAndUsesOptimisticRevision() {
         TenantContext tenant = tenant("terminate");
         Identity identity = identity(tenant, "Term User");
