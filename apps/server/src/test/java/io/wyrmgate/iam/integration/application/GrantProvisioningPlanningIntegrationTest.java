@@ -362,6 +362,86 @@ class GrantProvisioningPlanningIntegrationTest {
     }
 
     @Test
+    void legacySuccessfulAddWithoutGovernedPrincipalIdIsNotReinterpretedThroughCurrentMapping() {
+        TenantContext tenant = tenant("legacy-evidence");
+        UUID targetId = ids.nextId();
+        UUID entitlementId = ids.nextId();
+        UUID identityId = ids.nextId();
+        UUID principalId = ids.nextId();
+        UUID bindingId = mappedGroupBinding(
+                tenant, targetId, entitlementId, "group-legacy");
+
+        DesiredGrantState present = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "ANY",
+                principalId,
+                DesiredPresence.PRESENT,
+                NOW);
+        facts.changed(tenant, present);
+        var processor = processor(activePrincipal(
+                principalId,
+                identityId,
+                targetId,
+                "provider-user-legacy"));
+        assertThat(processor.processAvailable()).isEqualTo(1);
+
+        jdbc.update("""
+                UPDATE integration.provisioning_task
+                SET state = 'SUCCEEDED',
+                    payload = payload - 'principalId',
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ?
+                  AND operation_type = 'ADD_GRANT'
+                """,
+                Timestamp.from(NOW.plusSeconds(11)),
+                tenant.tenantId());
+
+        // A current mutable observation mapping must not be used to reinterpret
+        // historical task evidence that did not record the governed Principal ID.
+        jdbc.update("""
+                INSERT INTO integration.principal_observation_mapping (
+                    id, tenant_id, connector_binding_id,
+                    provider_stable_id, principal_id,
+                    lifecycle_state, revision,
+                    created_at, updated_at, retired_at)
+                VALUES (?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?, NULL)
+                """,
+                ids.nextId(),
+                tenant.tenantId(),
+                bindingId,
+                "provider-user-legacy",
+                principalId,
+                Timestamp.from(NOW.plusSeconds(12)),
+                Timestamp.from(NOW.plusSeconds(12)));
+
+        DesiredGrantState absent = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "ANY",
+                null,
+                DesiredPresence.ABSENT,
+                NOW.plusSeconds(2));
+        facts.changed(tenant, absent);
+
+        assertThat(processor.processAvailable()).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*)
+                FROM integration.provisioning_task
+                WHERE tenant_id = ?
+                  AND operation_type = 'REMOVE_GRANT'
+                """, Integer.class, tenant.tenantId()))
+                .isZero();
+        assertThat(latestOutboxError(tenant))
+                .isEqualTo("grant_provisioning_planning_unavailable");
+    }
+
+    @Test
     void sharedTechnicalGrantIsRemovedOnlyAfterFinalDesiredCauseDisappears() {
         TenantContext tenant = tenant("shared-demand");
         UUID targetId = ids.nextId();
