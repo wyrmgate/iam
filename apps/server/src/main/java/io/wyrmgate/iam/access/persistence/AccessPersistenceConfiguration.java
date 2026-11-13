@@ -25,6 +25,7 @@ import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
 import io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport;
+import io.wyrmgate.iam.access.application.EffectiveAccessSupportQuery;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionIntakeService;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionProcessingService;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionRepository;
@@ -331,9 +332,10 @@ public class AccessPersistenceConfiguration {
     EffectiveAccessReadService effectiveAccessReadService(
             EffectiveAccessRepository repository,
             IdentityAccessReferenceQuery identities,
-            EffectiveAccessSemanticSupport semanticSupport) {
+            EffectiveAccessSemanticSupport semanticSupport,
+            EffectiveAccessSupportQuery supportQuery) {
         return new EffectiveAccessReadService(
-                repository, identities, semanticSupport);
+                repository, identities, semanticSupport, supportQuery);
     }
 
     @Bean
