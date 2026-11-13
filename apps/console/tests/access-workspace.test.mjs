@@ -68,3 +68,7 @@ test('Access mobile controls retain the enterprise 44px touch-target baseline', 
   assertSourceContains(cssVariables, /'--wg-mobile-target': px\(tokens\.density\.mobileTargetHeight\)/);
   assertSourceContains(enterprisePresentation, /@media \(max-width: 760px\)/, /\.access-detail-close/, /width: var\(--wg-mobile-target\)/, /height: var\(--wg-mobile-target\)/);
 });
+
+test('scheduled access can be reduced once valid, regardless of stored lifecycle', () => {
+  assertSourceContains(accessWorkspace, /validityState === 'ENDED'\) return \[\]/, /validityState === 'FUTURE'\) return \['cancel'\]/, /validityState === 'CURRENT'\) return \['suspend', 'revoke'\]/);
+});

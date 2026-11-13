@@ -96,15 +96,16 @@ copied into Access authoritative state and cannot mutate it.
 
 The public operations expose business meaning rather than arbitrary status mutation.
 
-- `suspend`: ACTIVE -> SUSPENDED;
+- `suspend`: ACTIVE or due SCHEDULED -> SUSPENDED while temporally valid;
 - `resume`: SUSPENDED -> ACTIVE only while temporal validity is currently effective;
 - `cancel`: future SCHEDULED -> CANCELLED;
-- `revoke`: ACTIVE/SUSPENDED -> REVOKED.
+- `revoke`: ACTIVE/SUSPENDED or due SCHEDULED -> REVOKED while temporally valid.
 
-`REVOKED`, `CANCELLED` and `EXPIRED` remain terminal. Natural `validFrom` /
-`validUntil` boundary materialization remains scheduler-owned. Semantic validity is
-still evaluated directly from authoritative state/time, so scheduler delay cannot extend
-or prematurely start access.
+`REVOKED`, `CANCELLED` and `EXPIRED` remain terminal. The current `validFrom` /
+`validUntil` workers repair derived projections without automatically rewriting stored
+assignment lifecycle. Semantic validity and reduction eligibility are evaluated directly
+from authoritative state/time, so worker delay cannot extend, prematurely start, or
+prevent reduction of access.
 
 Neither public lifecycle mutation nor internal request application synchronously calls a
 provider. Access emits the existing projection-input fact; EffectiveAccess, desired state

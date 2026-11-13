@@ -51,7 +51,7 @@ public final class AccessTargetReductionProcessingService {
                 Clock.systemUTC());
     }
 
-    AccessTargetReductionProcessingService(
+    public AccessTargetReductionProcessingService(
             JdbcOutboxRepository outbox,
             AccessTargetReductionRepository reductions,
             AccessAssignmentRepository assignments,

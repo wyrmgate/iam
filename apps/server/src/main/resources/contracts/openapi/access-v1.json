@@ -145,7 +145,7 @@
       "post": {
         "operationId": "suspendAccessAssignment",
         "summary": "Suspend access assignment",
-        "description": "Transitions ACTIVE to SUSPENDED. Technical provider state is handled asynchronously from resulting desired state.",
+        "description": "Transitions ACTIVE or a currently valid SCHEDULED assignment to SUSPENDED. Technical provider state is handled asynchronously from resulting desired state.",
         "parameters": [
           {
             "$ref": "#/components/parameters/AssignmentId"
@@ -313,7 +313,7 @@
       "post": {
         "operationId": "revokeAccessAssignment",
         "summary": "Revoke access assignment",
-        "description": "Transitions ACTIVE or SUSPENDED assignment to terminal REVOKED immediately; provider-side removal is tracked separately.",
+        "description": "Transitions ACTIVE, SUSPENDED or a currently valid SCHEDULED assignment to terminal REVOKED immediately; provider-side removal is tracked separately.",
         "parameters": [
           {
             "$ref": "#/components/parameters/AssignmentId"

@@ -33,7 +33,9 @@ import io.wyrmgate.iam.platform.persistence.SpringTransactionExecutor;
 import io.wyrmgate.iam.platform.persistence.TransactionExecutor;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import io.wyrmgate.iam.tenancy.persistence.TenantTestFixture;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
@@ -142,7 +144,8 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
                 assignmentCommands,
                 availability,
                 reductionWork,
-                transactions);
+                transactions,
+                Clock.fixed(NOW.plusSeconds(10), ZoneOffset.UTC));
     }
 
     @BeforeEach
