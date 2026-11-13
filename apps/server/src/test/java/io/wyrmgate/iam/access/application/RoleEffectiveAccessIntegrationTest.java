@@ -204,6 +204,7 @@ class RoleEffectiveAccessIntegrationTest {
                 catalogQuery,
                 identityReferences,
                 (tenant, state) -> { },
+                (tenant, state) -> { },
                 transactions);
         assignments = new AccessAssignmentCommandService(
                 assignmentRepository,
@@ -590,14 +591,14 @@ class RoleEffectiveAccessIntegrationTest {
         Instant createdAt = NOW.plusSeconds(5);
         for (int i = 0; i < 105; i++) {
             assignmentRepository.insert(tenant, new AccessAssignment(
-                    ids.nextId(), identity.id(), AccessAssignment.TargetKind.ROLE,
+                    ids.nextId(), identity.id(), identity.accessEligibilityEpoch(), AccessAssignment.TargetKind.ROLE,
                     role.id(), null, AccessAssignment.PrincipalConstraintKind.ANY, null,
                     AccessAssignment.ProvenanceKind.MANUAL, null,
                     AccessAssignment.LifecycleState.ACTIVE, null, null, 1,
                     createdAt, createdAt));
         }
         assignmentRepository.insert(tenant, new AccessAssignment(
-                ids.nextId(), identity.id(), AccessAssignment.TargetKind.ROLE,
+                ids.nextId(), identity.id(), identity.accessEligibilityEpoch(), AccessAssignment.TargetKind.ROLE,
                 role.id(), null, AccessAssignment.PrincipalConstraintKind.ANY, null,
                 AccessAssignment.ProvenanceKind.MANUAL, null,
                 AccessAssignment.LifecycleState.REVOKED, null, null, 1,
@@ -661,6 +662,10 @@ class RoleEffectiveAccessIntegrationTest {
                 effectiveRepository,
                 expansion,
                 desiredDerivation,
+                new TerminalCatalogAssignmentRepairService(
+                        assignmentRepository,
+                        catalogAvailability,
+                        assignments),
                 Clock.fixed(at, ZoneOffset.UTC));
     }
 
