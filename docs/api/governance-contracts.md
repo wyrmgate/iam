@@ -108,9 +108,18 @@ The public API preserves the existing separation:
 
 `SUBMITTED -> EVALUATING -> PENDING_APPROVAL -> AUTHORIZED -> APPLIED`
 
-- `AUTHORIZED`: Governance requirements succeeded.
+- `AUTHORIZED`: Governance requirements succeeded and durable Access application remains pending.
 - `APPLIED`: Access accepted the authoritative AccessAssignment.
-- neither state means provider provisioning succeeded.
+- `CANCELLED`: an already-authorized item can no longer be applied because a permanent current
+  Access precondition is invalid, such as an ineligible Identity or terminally unavailable target.
+- `EXPIRED`: the authorized item's requested validity ended before Access could accept it.
+- none of these states means provider provisioning succeeded.
+
+The authorized-intent consumer classifies Access application failure semantically. Temporary
+Catalog unavailability, transient infrastructure failure and other retryable conditions preserve
+`AUTHORIZED` and retry. Permanent Access rejection is recorded as `CANCELLED` or `EXPIRED`
+and the authorization fact is acknowledged so the worker cannot retry forever. No terminal
+Governance outcome creates an AccessAssignment.
 
 Provider fulfillment remains downstream through EffectiveAccess, desired state and
 Integration provisioning.
