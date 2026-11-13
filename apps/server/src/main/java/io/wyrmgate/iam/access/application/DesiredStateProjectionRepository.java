@@ -38,6 +38,32 @@ public interface DesiredStateProjectionRepository {
             UUID identityId,
             UUID applicationTargetId);
 
+    /**
+     * Bounded repair candidates for one Principal change. SPECIFIC rows are always
+     * reconsidered; ANY rows are reconsidered only for the Principal's current or
+     * previous Identity on the same target.
+     */
+    default java.util.List<DesiredGrantState> findPrincipalRefreshPage(
+            TenantContext tenant,
+            UUID principalId,
+            UUID applicationTargetId,
+            UUID currentIdentityId,
+            UUID previousIdentityId,
+            UUID afterId,
+            int limit) {
+        throw new UnsupportedOperationException(
+                "Principal desired-state refresh paging is not implemented");
+    }
+
+    default boolean hasPresentTechnicalGrant(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            UUID principalId) {
+        throw new UnsupportedOperationException(
+                "technical grant demand query is not implemented");
+    }
+
     java.util.Optional<DesiredGrantState> findGrantTuple(
             TenantContext tenant,
             UUID identityId,

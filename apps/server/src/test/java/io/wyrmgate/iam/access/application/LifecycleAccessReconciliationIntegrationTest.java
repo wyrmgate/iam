@@ -90,8 +90,14 @@ class LifecycleAccessReconciliationIntegrationTest {
                 var context = identityPolicy.contexts.get(identityId);
                 if (context == null) return IdentityAccessStatus.notFound();
                 return "ACTIVE".equals(context.lifecycleState())
-                        ? IdentityAccessStatus.eligible(context.lifecycleState(), context.identityRevision())
-                        : IdentityAccessStatus.ineligible(context.lifecycleState(), context.identityRevision());
+                        ? IdentityAccessStatus.eligible(
+                                context.lifecycleState(),
+                                context.identityRevision(),
+                                context.accessEligibilityEpoch())
+                        : IdentityAccessStatus.ineligible(
+                                context.lifecycleState(),
+                                context.identityRevision(),
+                                context.accessEligibilityEpoch());
             }
 
             @Override
@@ -167,6 +173,39 @@ class LifecycleAccessReconciliationIntegrationTest {
         assertThat(first.provenanceRefId()).isEqualTo(ruleId);
         assertThat(guard.calls).isEqualTo(1);
         assertThat(currentPolicyAssignmentCount(tenant, identityId)).isEqualTo(1);
+    }
+
+    @Test
+    void reactivationReplacesPolicyAssignmentFromPriorEligibilityEpoch() {
+        TenantContext tenant = tenant("Policy epoch");
+        UUID identityId = ids.nextId();
+        identityPolicy.setContext(identityId, "ACTIVE", 1, 1);
+        UUID entitlementId = ids.nextId();
+        UUID ruleId = ids.nextId();
+        policyService.activate(
+                tenant,
+                java.util.List.of(alwaysEntitlement(ruleId, entitlementId)),
+                NOW.plusSeconds(1));
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(2));
+        AccessAssignment first = assignments.findCurrentLifecyclePolicyAssignment(
+                tenant, identityId, ruleId).orElseThrow();
+        assertThat(first.identityAccessEpoch()).isEqualTo(1);
+
+        // Model a missed/late bulk reduction: the old policy assignment is still
+        // non-terminal when the Identity enters a new eligibility era.
+        identityPolicy.setContext(identityId, "INACTIVE", 2, 2);
+        identityPolicy.setContext(identityId, "ACTIVE", 3, 3);
+
+        reconciler.reconcileEvent(tenant, identityId, NOW.plusSeconds(3));
+        AccessAssignment successor = assignments.findCurrentLifecyclePolicyAssignment(
+                tenant, identityId, ruleId).orElseThrow();
+
+        assertThat(successor.id()).isNotEqualTo(first.id());
+        assertThat(successor.identityAccessEpoch()).isEqualTo(3);
+        assertThat(assignments.findById(
+                        tenant, first.id()).orElseThrow().lifecycleState())
+                .isEqualTo(AccessAssignment.LifecycleState.REVOKED);
     }
 
     @Test
@@ -903,11 +942,25 @@ class LifecycleAccessReconciliationIntegrationTest {
                     base.status(),
                     base.lifecycleState(),
                     base.identityRevision(),
+                    base.accessEligibilityEpoch(),
                     values,
                     multiValues);
         }
 
         void setContext(UUID identityId, String lifecycleState, long revision) {
+            Context current = contexts.get(identityId);
+            setContext(
+                    identityId,
+                    lifecycleState,
+                    revision,
+                    current == null ? 1 : current.accessEligibilityEpoch());
+        }
+
+        void setContext(
+                UUID identityId,
+                String lifecycleState,
+                long revision,
+                long accessEligibilityEpoch) {
             Context current = contexts.get(identityId);
             contexts.put(
                     identityId,
@@ -915,6 +968,7 @@ class LifecycleAccessReconciliationIntegrationTest {
                             Status.AVAILABLE,
                             lifecycleState,
                             revision,
+                            accessEligibilityEpoch,
                             current == null ? Map.of() : current.canonicalScalars(),
                             current == null ? Map.of() : current.canonicalMultis()));
         }
@@ -937,6 +991,7 @@ class LifecycleAccessReconciliationIntegrationTest {
                             Status.AVAILABLE,
                             current.lifecycleState(),
                             current.identityRevision(),
+                            current.accessEligibilityEpoch(),
                             values,
                             current.canonicalMultis()));
         }
@@ -954,6 +1009,7 @@ class LifecycleAccessReconciliationIntegrationTest {
                             Status.AVAILABLE,
                             current.lifecycleState(),
                             current.identityRevision(),
+                            current.accessEligibilityEpoch(),
                             current.canonicalScalars(),
                             multiValues));
         }

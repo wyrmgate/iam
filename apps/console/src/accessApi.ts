@@ -57,6 +57,7 @@ export type EffectiveAccessSummary = {
   entitlementLabel?: string | null;
   principalConstraintKey: string;
   supportCount: number;
+  supportCountTruncated: boolean;
   computedAt: string;
   projectionGeneration: number;
 };
@@ -70,6 +71,12 @@ export type EffectiveAccessSupport = {
 
 export type EffectiveAccessResource = EffectiveAccessSummary & {
   supports: EffectiveAccessSupport[];
+  supportsNextCursor?: string | null;
+};
+
+export type EffectiveAccessSupportPage = {
+  items: EffectiveAccessSupport[];
+  nextCursor?: string | null;
 };
 
 export type EffectiveAccessPage = {
@@ -241,6 +248,19 @@ export async function listEffectiveAccess(
 
 export function getEffectiveAccess(id: string, signal?: AbortSignal): Promise<ApiResult<EffectiveAccessResource>> {
   return apiRequest<EffectiveAccessResource>(`${V1_ROOT}/effective-access-views/${encodeURIComponent(id)}`, { signal });
+}
+
+export async function listEffectiveAccessSupports(
+  id: string,
+  cursor?: string | null,
+  signal?: AbortSignal,
+): Promise<EffectiveAccessSupportPage> {
+  const query = new URLSearchParams({ limit: '100' });
+  if (cursor) query.set('cursor', cursor);
+  return (await apiRequest<EffectiveAccessSupportPage>(
+    `${V1_ROOT}/effective-access/${encodeURIComponent(id)}/supports?${query.toString()}`,
+    { signal },
+  )).data;
 }
 
 export async function getLifecycleAccessPolicy(signal?: AbortSignal): Promise<LifecycleAccessPolicy> {

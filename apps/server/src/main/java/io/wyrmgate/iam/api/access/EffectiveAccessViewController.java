@@ -2,6 +2,7 @@ package io.wyrmgate.iam.api.access;
 
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveDetail;
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectivePosition;
+import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveReadSummary;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
 import io.wyrmgate.iam.access.domain.EffectiveAccess;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
@@ -92,22 +93,32 @@ public final class EffectiveAccessViewController {
                 new AdministrativeResource("effective-access", effectiveAccessId), correlationId);
         EffectiveDetail detail = effectiveAccess.find(actor.tenant(), effectiveAccessId, Instant.now())
                 .orElseThrow(() -> AccessApiException.notFound(correlationId));
-        EffectiveViewSummary summary = view(actor, detail.effectiveAccess());
+        EffectiveViewSummary summary = view(
+                actor,
+                new EffectiveReadSummary(
+                        detail.effectiveAccess(),
+                        detail.supportCountTruncated()));
         return ResponseEntity.ok()
                 .header("X-Correlation-Id", correlationId.toString())
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .body(new EffectiveViewResource(
                         summary.id(), summary.identityId(), summary.identityLabel(), summary.entitlementId(),
                         summary.entitlementLabel(), summary.principalConstraintKey(), summary.supportCount(),
+                        summary.supportCountTruncated(),
                         summary.computedAt(), summary.projectionGeneration(),
                         detail.supports().stream().map(value -> new SupportView(
                                 value.accessAssignmentId(), value.pathHash(), value.pathDepth(), value.roleVersionPath()))
-                                .toList()));
+                                .toList(),
+                        cursors.encodeEffectiveSupport(
+                                actor.tenant(),
+                                summary.id(),
+                                detail.nextSupportPosition())));
     }
 
     private EffectiveViewSummary view(
             AuthenticatedAdministrativeActor actor,
-            EffectiveAccess value) {
+            EffectiveReadSummary read) {
+        EffectiveAccess value = read.effectiveAccess();
         String identityLabel = null;
         if (canRead(actor, AdministrativePermissions.IDENTITY_READ, "identity", value.identityId())) {
             identityLabel = identities.findIdentity(actor.tenant(), value.identityId())
@@ -120,7 +131,8 @@ public final class EffectiveAccessViewController {
         }
         return new EffectiveViewSummary(
                 value.id(), value.identityId(), identityLabel, value.entitlementId(), entitlementLabel,
-                value.principalConstraintKey(), value.supportCount(), value.computedAt(), value.projectionGeneration());
+                value.principalConstraintKey(), value.supportCount(), read.supportCountTruncated(),
+                value.computedAt(), value.projectionGeneration());
     }
 
     private boolean canRead(
@@ -174,6 +186,7 @@ public final class EffectiveAccessViewController {
             String entitlementLabel,
             String principalConstraintKey,
             int supportCount,
+            boolean supportCountTruncated,
             Instant computedAt,
             long projectionGeneration) {}
 
@@ -191,9 +204,11 @@ public final class EffectiveAccessViewController {
             String entitlementLabel,
             String principalConstraintKey,
             int supportCount,
+            boolean supportCountTruncated,
             Instant computedAt,
             long projectionGeneration,
-            List<SupportView> supports) {}
+            List<SupportView> supports,
+            String supportsNextCursor) {}
 
     public record EffectiveViewPage(
             List<EffectiveViewSummary> items,

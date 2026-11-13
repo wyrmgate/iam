@@ -119,6 +119,7 @@ public interface IdentityLifecycleAccessQuery {
             Status status,
             String lifecycleState,
             long identityRevision,
+            long accessEligibilityEpoch,
             Map<String, CanonicalScalar> canonicalScalars,
             Map<String, CanonicalMulti> canonicalMultis) {
         public Context {
@@ -126,13 +127,31 @@ public interface IdentityLifecycleAccessQuery {
             canonicalScalars = Map.copyOf(Objects.requireNonNull(canonicalScalars, "canonicalScalars"));
             canonicalMultis = Map.copyOf(Objects.requireNonNull(canonicalMultis, "canonicalMultis"));
             if (status == Status.AVAILABLE) {
-                if (lifecycleState == null || lifecycleState.isBlank() || identityRevision < 1) {
-                    throw new IllegalArgumentException("available Identity context requires lifecycle/revision");
+                if (lifecycleState == null || lifecycleState.isBlank()
+                        || identityRevision < 1 || accessEligibilityEpoch < 1) {
+                    throw new IllegalArgumentException(
+                            "available Identity context requires lifecycle/revision/access epoch");
                 }
             } else if (lifecycleState != null || identityRevision != 0
+                    || accessEligibilityEpoch != 0
                     || !canonicalScalars.isEmpty() || !canonicalMultis.isEmpty()) {
                 throw new IllegalArgumentException("NOT_FOUND context must not carry state");
             }
+        }
+
+        public Context(
+                Status status,
+                String lifecycleState,
+                long identityRevision,
+                Map<String, CanonicalScalar> canonicalScalars,
+                Map<String, CanonicalMulti> canonicalMultis) {
+            this(
+                    status,
+                    lifecycleState,
+                    identityRevision,
+                    status == Status.AVAILABLE ? 1 : 0,
+                    canonicalScalars,
+                    canonicalMultis);
         }
 
         public Context(
@@ -144,7 +163,7 @@ public interface IdentityLifecycleAccessQuery {
         }
 
         public static Context notFound() {
-            return new Context(Status.NOT_FOUND, null, 0, Map.of(), Map.of());
+            return new Context(Status.NOT_FOUND, null, 0, 0, Map.of(), Map.of());
         }
     }
 }

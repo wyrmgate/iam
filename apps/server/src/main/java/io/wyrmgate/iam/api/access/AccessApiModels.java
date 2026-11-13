@@ -34,6 +34,7 @@ final class AccessApiModels {
             UUID entitlementId,
             String principalConstraintKey,
             int supportCount,
+            boolean supportCountTruncated,
             Instant computedAt,
             long projectionGeneration) {}
 
@@ -49,9 +50,15 @@ final class AccessApiModels {
             UUID entitlementId,
             String principalConstraintKey,
             int supportCount,
+            boolean supportCountTruncated,
             Instant computedAt,
             long projectionGeneration,
-            List<EffectiveAccessSupportResource> supports) {}
+            List<EffectiveAccessSupportResource> supports,
+            String supportsNextCursor) {}
+
+    record EffectiveAccessSupportPage(
+            List<EffectiveAccessSupportResource> items,
+            String nextCursor) {}
 
     record EffectiveAccessPage(
             List<EffectiveAccessSummary> items,

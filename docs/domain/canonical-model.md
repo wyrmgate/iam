@@ -142,7 +142,7 @@ ApprovalDecision, ReviewDecision, RiskAssessment, SoDConflict, PolicyEvaluation,
 
 ### Projection
 
-EffectiveAccess, DesiredPrincipalState, DesiredGrantState, AssignmentFulfillment, Identity360, Application360, effective administrative access, archived-record/query indexes, search/reporting views and protocol claim projections.
+EffectiveAccess, DesiredPrincipalState, DesiredGrantState, optional fulfillment/read views, Identity360, Application360, effective administrative access, archived-record/query indexes, search/reporting views and protocol claim projections. The current v3 runtime does not materialize a separate Access-owned AssignmentFulfillment table; Integration-owned provisioning process/evidence and provider observation are the concrete fulfillment/observation dimensions.
 
 ## Administrative break-glass
 
@@ -161,3 +161,17 @@ Audit concepts that must not be collapsed include:
 - `AuditEvidenceScope` — explicit TENANT or DEPLOYMENT ownership realm.
 
 SIEM delivery is a separate outbound technical transport of data-minimized Audit evidence. It is neither a public integration event nor authoritative business state.
+
+
+### Access dependency fencing
+
+AccessAssignment remains Access-owned authority, but admission records the current Identity access-eligibility epoch defined by ADR-0055. EffectiveAccess is semantically present only when the Identity is currently eligible in that same epoch and current target/Principal compatibility rules hold. The epoch is a foreign semantic reference value, not duplicated Identity authority.
+
+
+### Desired-state cause and technical demand
+
+DesiredGrantState preserves the semantic Access cause, including its principal-constraint key.
+Multiple DesiredGrantState rows may resolve to one technical grant. ADR-0056 defines the derived
+technical-demand question across those rows; it does not introduce another authoritative grant
+object. Integration execution evidence is reusable for cleanup only after Access reports that no
+current desired cause requires the governed Principal + Entitlement tuple.

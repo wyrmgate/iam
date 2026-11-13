@@ -61,6 +61,9 @@ class RoleEffectiveAccessIntegrationTest {
     private static CatalogCommandService catalog;
     private static RoleCommandService roles;
     private static RoleExpansionQueryService expansion;
+    private static io.wyrmgate.iam.catalog.application.CatalogQueryService catalogQuery;
+    private static io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery catalogAvailability;
+    private static IdentityAccessReferenceQueryService identityReferences;
     private static JdbcOutboxRepository outbox;
     private static JdbcScheduledWorkRepository scheduledWork;
     private static JdbcAccessAssignmentRepository assignmentRepository;
@@ -137,9 +140,12 @@ class RoleEffectiveAccessIntegrationTest {
         catalogPropagation =
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.propagationService(
                         jdbc, ids, transactions);
-        var catalogAvailability =
+        catalogAvailability =
                 io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.availability(
                         catalogRepository, roleRepository);
+        catalogQuery =
+                new io.wyrmgate.iam.catalog.application.CatalogQueryService(
+                        catalogRepository);
 
         var principalRepository = new JdbcPrincipalRepository(jdbc);
         PrincipalFactSink noPrincipalFacts = new PrincipalFactSink() {
@@ -177,7 +183,7 @@ class RoleEffectiveAccessIntegrationTest {
                 ids,
                 transactions,
                 (tenant, principalId, identityId, at) -> {});
-        var identityReferences = new IdentityAccessReferenceQueryService(
+        identityReferences = new IdentityAccessReferenceQueryService(
                 identityRepository, principalRepository);
 
         assignmentRepository = new JdbcAccessAssignmentRepository(jdbc);
@@ -186,21 +192,23 @@ class RoleEffectiveAccessIntegrationTest {
         effectiveQuery = new EffectiveAccessQueryService(
                 effectiveRepository,
                 identityReferences,
-                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
-                        assignmentRepository, catalogAvailability, expansion));
+                new EffectiveAccessSemanticSupport(
+                        assignmentRepository,
+                        identityReferences,
+                        catalogQuery,
+                        catalogAvailability,
+                        expansion));
         desiredDerivation = new DesiredStateDerivationService(
                 effectiveQuery,
                 desiredRepository,
-                new io.wyrmgate.iam.catalog.application.CatalogQueryService(
-                        catalogRepository),
+                catalogQuery,
                 identityReferences,
                 (tenant, state) -> { },
                 transactions);
         assignments = new AccessAssignmentCommandService(
                 assignmentRepository,
                 identityReferences,
-                new io.wyrmgate.iam.catalog.application.CatalogQueryService(
-                        catalogRepository),
+                catalogQuery,
                 catalogAvailability,
                 expansion,
                 new JdbcAccessAssignmentFactSink(outbox, ids),
@@ -447,6 +455,118 @@ class RoleEffectiveAccessIntegrationTest {
                 NOW.plusSeconds(10)))
                 .isInstanceOf(AccessAssignmentCommandException.class)
                 .hasMessageContaining("exactly one ApplicationTarget");
+    }
+
+    @Test
+    void specificRoleStopsContributingWhenCurrentExpansionBecomesMultiTarget() {
+        TenantContext tenant = tenant("specific-role-change");
+        Identity identity = identity(tenant, "Specific Expansion User");
+
+        var appOne = catalog.createApplication(
+                tenant, "specific-one", "Specific One", NOW);
+        var targetOne = catalog.createTarget(
+                tenant, appOne.id(), "prod", NOW);
+        var entitlementOne = catalog.createEntitlement(
+                tenant, appOne.id(), targetOne.id(), "read", NOW);
+        Role applicationRole = roles.createRole(
+                tenant,
+                Role.RoleType.APPLICATION,
+                appOne.id(),
+                "specific-app-role",
+                "Specific App Role",
+                NOW);
+        activate(
+                tenant,
+                applicationRole.id(),
+                List.of(RoleCommandService.MemberSpec.entitlement(
+                        entitlementOne.id())),
+                NOW.plusSeconds(1));
+
+        Role businessRole = roles.createRole(
+                tenant,
+                Role.RoleType.BUSINESS,
+                null,
+                "specific-business-role",
+                "Specific Business Role",
+                NOW.plusSeconds(4));
+        activate(
+                tenant,
+                businessRole.id(),
+                List.of(RoleCommandService.MemberSpec.applicationRole(
+                        applicationRole.id())),
+                NOW.plusSeconds(5));
+
+        var principal = principals.create(
+                tenant,
+                targetOne.id(),
+                "specific-expansion-user",
+                identity.id(),
+                NOW.plusSeconds(8),
+                ids.nextId(),
+                null);
+
+        AccessAssignment assignment = assignments.createRoleAssignment(
+                tenant,
+                identity.id(),
+                businessRole.id(),
+                AccessAssignment.PrincipalConstraintKind.SPECIFIC,
+                principal.id(),
+                null,
+                null,
+                NOW.plusSeconds(9));
+        process(NOW.plusSeconds(10));
+
+        String constraint = "SPECIFIC:" + principal.id();
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                entitlementOne.id(),
+                constraint,
+                NOW.plusSeconds(10))).isPresent();
+
+        var appTwo = catalog.createApplication(
+                tenant, "specific-two", "Specific Two", NOW.plusSeconds(11));
+        var targetTwo = catalog.createTarget(
+                tenant, appTwo.id(), "prod", NOW.plusSeconds(11));
+        var entitlementTwo = catalog.createEntitlement(
+                tenant, appTwo.id(), targetTwo.id(), "read", NOW.plusSeconds(11));
+
+        activate(
+                tenant,
+                businessRole.id(),
+                List.of(
+                        RoleCommandService.MemberSpec.applicationRole(
+                                applicationRole.id()),
+                        RoleCommandService.MemberSpec.entitlement(
+                                entitlementTwo.id())),
+                NOW.plusSeconds(12));
+
+        // Current Catalog meaning is authoritative immediately: stale materialized
+        // support for the old single-target expansion cannot preserve SPECIFIC access.
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                entitlementOne.id(),
+                constraint,
+                NOW.plusSeconds(15))).isEmpty();
+
+        drainCatalogPropagation();
+        process(NOW.plusSeconds(16));
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                entitlementOne.id(),
+                constraint,
+                NOW.plusSeconds(16))).isEmpty();
+        assertThat(effectiveQuery.find(
+                tenant,
+                identity.id(),
+                entitlementTwo.id(),
+                constraint,
+                NOW.plusSeconds(16))).isEmpty();
+
+        assertThat(assignmentRepository.findById(
+                tenant, assignment.id())).isPresent();
     }
 
     @Test

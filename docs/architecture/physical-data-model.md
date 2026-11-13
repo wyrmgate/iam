@@ -39,7 +39,7 @@ Schemas make physical ownership visible and allow grants/migrations to be organi
 | Authoritative | mutable under aggregate/process invariants | Identity, Role, AccessAssignment, Policy, Credential, Connector configuration, AdministrativeGrant | normalized relational state; optimistic revision where concurrent mutation matters |
 | Observation | append/current/staging based on source/provider reports | SourceRecord, ObservedPrincipal, ObservedEntitlement, ObservedGrant | provenance/as-of/run semantics; never silently authorizes or overwrites IAM intent |
 | Evidence | immutable/append-oriented | ApprovalDecision, ReviewDecision, ProvisioningAttempt, AuditRecord, EvidenceSnapshot | no ordinary update/delete; correction is successor evidence |
-| Projection | derived/rebuildable | EffectiveAccess, DesiredGrantState, AssignmentFulfillment, Identity360 | may lag; carries computation/source generation rather than authoritative revision |
+| Projection | derived/rebuildable | EffectiveAccess, DesiredGrantState, optional fulfillment/read views, Identity360 | may lag; carries computation/source generation rather than authoritative revision |
 
 A physical schema may contain more than one class, but each table has one declared class and mutation model.
 
@@ -137,7 +137,7 @@ The following is the initial physical table-family contract. Additional subordin
 | `catalog` | `access_target_availability_propagation` | Catalog | Authoritative/process |
 | `access` | `access_assignment` | Access | Authoritative |
 | `access` | `identity_access_reduction`, `access_target_reduction` | Access | Authoritative/process |
-| `access` | `effective_access`, support/path, `desired_principal_state`, `desired_grant_state`, `assignment_fulfillment` | Access | Projection |
+| `access` | `effective_access`, support/path, `desired_principal_state`, `desired_grant_state` | Access | Projection |
 | `governance` | request/item/plan, review campaign/item/remediation, policy/version, exception, finding | Governance | Authoritative/process |
 | `governance` | approval/review decision, policy/risk/SoD evaluation result | Governance | Evidence/result |
 | `credential` | `credential`, credential binding, rotation process | Credential | Authoritative/process |
@@ -168,6 +168,7 @@ identity.identity
 - identity_type varchar(16) NOT NULL CHECK (identity_type IN ('PERSON','SERVICE','WORKLOAD'))
 - lifecycle_state varchar(24) NOT NULL
 - display_name varchar(512) NOT NULL
+- access_eligibility_epoch bigint NOT NULL CHECK (access_eligibility_epoch > 0)
 - revision bigint NOT NULL CHECK (revision > 0)
 - created_at timestamptz NOT NULL
 - updated_at timestamptz NOT NULL
@@ -268,6 +269,7 @@ access.access_assignment
 - id uuid PRIMARY KEY
 - tenant_id uuid NOT NULL
 - identity_id uuid NOT NULL                 -- cross-capability stable ID
+- identity_access_epoch bigint NOT NULL CHECK (identity_access_epoch > 0)
 - target_kind varchar(16) NOT NULL CHECK (target_kind IN ('ROLE','ENTITLEMENT'))
 - role_id uuid NULL
 - entitlement_id uuid NULL
@@ -287,9 +289,9 @@ access.access_assignment
 - CHECK valid_until IS NULL OR valid_from IS NULL OR valid_until > valid_from
 ```
 
-Identity, Role, Entitlement and Principal references are cross-capability stable IDs. Access uses semantic queries to validate material current facts when an assignment mutation requires them; the references never authorize direct foreign repository mutation.
+Identity, Role, Entitlement and Principal references are cross-capability stable IDs. Access uses semantic queries to validate material current facts when an assignment mutation requires them; the references never authorize direct foreign repository mutation. ADR-0055 adds Identity-owned access-eligibility epoch fencing; epoch mismatch suppresses semantic contribution and does not create a cross-capability foreign key.
 
-The first runtime implementation of this authoritative contract is migration V19. The initial command surface creates Entitlement-target assignments only because canonical Role/RoleVersion runtime is not yet implemented; the relational shape retains both target kinds for the later Role slice. Public/manual provenance is typed as `MANUAL` with no provenance reference. V27 adds internal `REQUEST_ITEM` provenance whose reference is the originating Governance RequestItem ID, unique per tenant, while retaining no cross-capability foreign key. Principal constraints are `ANY` or `SPECIFIC`. A SPECIFIC Principal must resolve through Identity semantics to the same Identity and the Entitlement's active ApplicationTarget. Creation materializes `SCHEDULED` when `valid_from` is future and otherwise `ACTIVE`; semantic effectiveness is still evaluated directly from lifecycle plus the validity window, so scheduler delay cannot extend expired authority or delay a reached valid-from instant. The first termination command materializes `CANCELLED`, `REVOKED` or `EXPIRED` with optimistic revision. EffectiveAccess, desired-state derivation and fulfillment remain separate later projections.
+The first runtime implementation of this authoritative contract is migration V19. The initial command surface creates Entitlement-target assignments only because canonical Role/RoleVersion runtime is not yet implemented; the relational shape retains both target kinds for the later Role slice. Public/manual provenance is typed as `MANUAL` with no provenance reference. V27 adds internal `REQUEST_ITEM` provenance whose reference is the originating Governance RequestItem ID, unique per tenant, while retaining no cross-capability foreign key. Principal constraints are `ANY` or `SPECIFIC`. A SPECIFIC Principal must resolve through Identity semantics to the same Identity and the Entitlement's active ApplicationTarget. Creation materializes `SCHEDULED` when `valid_from` is future and otherwise `ACTIVE`; semantic effectiveness is still evaluated directly from lifecycle plus the validity window, so scheduler delay cannot extend expired authority or delay a reached valid-from instant. The first termination command materializes `CANCELLED`, `REVOKED` or `EXPIRED` with optimistic revision. EffectiveAccess and desired-state derivation remain separate Access projections; technical fulfillment is Integration-owned process/evidence and provider observation remains separate.
 
 The first Access desired-state implementation materializes `access.desired_principal_state` and `access.desired_grant_state` as rebuildable projections. Each row carries tenant scope, stable projection ID, technical target context, desired state, positive `desired_revision`, positive `source_generation`, and `computed_at`; grant rows additionally carry entitlement and optional principal context. Cross-capability references remain stable IDs without database foreign keys.
 
@@ -591,7 +593,7 @@ The first runtime implementation is migration V20 and currently projects direct 
 
 `access.desired_grant_state` is keyed by tenant + principal/target context + entitlement and records desired presence plus desired revision/generation. Large causal support collections are normalized in support tables.
 
-`access.assignment_fulfillment` is an Access-owned rebuildable projection of current technical realization, produced from Integration semantic facts/attempt summaries/observations. Integration never updates this table directly through an Access repository shortcut; an Access projector consumes the semantic feed.
+The current v3 runtime intentionally has **no `access.assignment_fulfillment` table**. Fulfillment remains a separate conceptual dimension under ADR-0003, concretely represented by Integration-owned `ProvisioningJob`, `ProvisioningTask`, immutable `ProvisioningAttempt` evidence, and provider observation. Access may later expose a rebuildable fulfillment read view if a concrete operator/use-case contract justifies it, consistent with ADR-0010, but such a view would not become AccessAssignment authority and Integration would not mutate it through an Access repository shortcut.
 
 Projection corruption is repaired by rebuild from authoritative inputs/facts, never by rewriting AccessAssignment history.
 
@@ -891,9 +893,9 @@ This phase intentionally does not mandate Flyway, Liquibase or another migration
 2. EffectiveAccess recomputation removes that assignment support path. If another support remains, access stays effective; otherwise the desired grant becomes absent.
 3. Integration observes/receives the new desired state and creates or revalidates revoke work.
 4. Provider removal fails; immutable `provisioning_attempt` records the failure.
-5. Access-owned `assignment_fulfillment` projects failed/remediation-needed technical state from Integration facts.
-6. Reconciliation still reports `observed_grant=PRESENT`.
-7. Governance may create/update a drift finding.
+5. Integration retains failed/remediation-needed fulfillment state in its provisioning process and immutable attempt evidence.
+6. Reconciliation still reports `observed_grant=PRESENT` independently of that process state.
+7. Governance may create/update a drift finding; an optional future Access fulfillment read view could compose these dimensions without becoming authority.
 
 The assignment never returns to ACTIVE merely because the provider failed.
 
@@ -1007,3 +1009,16 @@ Flyway V55/V56 extend the Audit schema beyond the V46 AuditRecord and V53/V54 ex
 - `audit.audit_record.material_snapshot` / `integrity_metadata` — closed versioned JSON shapes only; they are not extension bags.
 
 The AuditRecord mutation trigger remains the destructive-write fence. A DELETE is accepted only when the same transaction sets the purge-operation fence and the database function proves the row belongs to a RUNNING dual-approved purge, is covered by the selected SUCCEEDED archive segment/index, satisfies minimum-online retention, matches immutable selection/cutoff and has no ACTIVE matching legal hold.
+
+
+ADR-0056 does not add a new Access table. `access.desired_grant_state` remains unique by semantic
+cause. Integration provisioning task evidence now carries data-minimized governed `principalId`
+and `entitlementId` values in its validated task payload in addition to provider-native execution
+identifiers. These stable IDs support cause-independent technical cleanup evidence; current removal
+permission is still supplied by the Access desired-state semantic query.
+
+Flyway V18 adds the Identity/Access eligibility-epoch fence and bounded Principal-refresh indexes.
+It seeds pre-existing Identity and Access rows with epoch 1 using constant defaults and then drops
+the AccessAssignment default so future writes must supply the captured epoch explicitly; no
+unbounded row-by-row eligibility backfill is performed. Flyway V19 adds partial indexes for current
+technical-grant demand and successful governed ADD evidence used by ADR-0056 coalesced cleanup.

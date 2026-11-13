@@ -128,13 +128,31 @@ failure is operationally logged and never rewrites the AccessAssignment business
 
 Resources:
 
-- `GET /effective-access`
-- `GET /effective-access/{effectiveAccessId}`
+- `GET /effective-access`;
+- `GET /effective-access/{effectiveAccessId}`;
+- `GET /effective-access/{effectiveAccessId}/supports`.
 
 The list may be filtered by `identityId`. Its cursor is bound to the tenant and exact
 identity-filter context.
 
-EffectiveAccess detail returns normalized explanation evidence:
+EffectiveAccess is entitlement-level derived state and is never mutation authority. Every
+returned row is revalidated against current Identity eligibility/epoch, AccessAssignment
+lifecycle and temporal validity, current Catalog availability, current Role expansion and,
+for `SPECIFIC`, the governed Principal/target compatibility from ADR-0055.
+
+Explanation evidence is deliberately bounded. List and detail responses inspect at most the
+first 100 ordered support candidates for one EffectiveAccess tuple. `supportCount` is the
+number of semantically current supports verified in that bounded page; when
+`supportCountTruncated=true`, it is a lower bound rather than an exhaustive total.
+`supportsNextCursor` continues the detail explanation through the support collection.
+
+Support pages are ordered deterministically by supporting AccessAssignment ID + path hash and
+are capped at 100 candidates. A page may contain fewer semantic items than the requested limit
+because stale materialized support is filtered after the bounded raw page is read. A page may
+therefore be empty while still carrying `nextCursor`; callers continue until the cursor is
+absent when exhaustive explanation is required.
+
+Each support exposes:
 
 - supporting AccessAssignment ID;
 - deterministic path hash;
@@ -144,9 +162,12 @@ EffectiveAccess detail returns normalized explanation evidence:
 Direct Entitlement assignment support has depth 0 and an empty RoleVersion path.
 Role-derived supports preserve their exact ordered version path.
 
-Both list and detail filter materialized support against authoritative AccessAssignment
-lifecycle and temporal validity at read time. The returned `supportCount` is the count of
-currently semantically effective support evidence, not an unverified persisted counter.
+Security/governance current-access queries do not perform an unbounded search for a valid
+support. They inspect a bounded support budget. If all candidates inside the budget are stale
+while additional candidates remain, Access returns semantic evaluation as unavailable rather
+than falsely treating the entitlement as absent. Public Access reads surface this condition as
+HTTP 503 with `effective_access_semantic_evaluation_unavailable`; mandatory privilege-increase
+evaluation therefore fails closed and retries.
 
 There is intentionally no EffectiveAccess mutation endpoint.
 
@@ -154,14 +175,15 @@ There is intentionally no EffectiveAccess mutation endpoint.
 
 The Console may use the equivalent read-only presentation surface:
 
-- `GET /effective-access-views`
-- `GET /effective-access-views/{effectiveAccessId}`
+- `GET /effective-access-views`;
+- `GET /effective-access-views/{effectiveAccessId}`.
 
-This view delegates projection semantics and support filtering to the same
+This view delegates projection semantics and bounded support filtering to the same
 `EffectiveAccessReadService`; it does not persist or mutate EffectiveAccess. It adds only
-optional permission-aware Identity and Entitlement presentation labels. Collection
-filtering, pagination, support semantics, projection generation and read-time validity
-checks remain identical to the canonical EffectiveAccess query.
+optional permission-aware Identity and Entitlement presentation labels. Detail exposes the
+same lower-bound `supportCount`, `supportCountTruncated` and signed
+`supportsNextCursor`; subsequent support pages use the canonical
+`/effective-access/{effectiveAccessId}/supports` endpoint.
 
 Failure to resolve a foreign presentation label never changes whether EffectiveAccess is
 semantically present. The stable Identity/Entitlement IDs remain the cross-capability

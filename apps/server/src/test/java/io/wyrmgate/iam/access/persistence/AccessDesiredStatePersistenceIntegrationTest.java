@@ -135,6 +135,134 @@ class AccessDesiredStatePersistenceIntegrationTest {
         assertThat(resolved.desiredRevision()).isEqualTo(first.desiredRevision() + 1);
     }
 
+    @Test
+    void principalRefreshCandidatesArePagedAcrossSpecificAndAnyBranches() {
+        TenantContext tenant = tenant("principal-refresh");
+        Instant now = Instant.parse("2026-09-21T09:00:00Z");
+        UUID principalId = ids.nextId();
+        UUID targetId = ids.nextId();
+        UUID currentIdentityId = ids.nextId();
+        UUID previousIdentityId = ids.nextId();
+
+        for (int i = 0; i < 105; i++) {
+            repository.reconcileGrant(
+                    tenant,
+                    ids.nextId(),
+                    targetId,
+                    ids.nextId(),
+                    "SPECIFIC:" + principalId,
+                    principalId,
+                    DesiredPresence.PRESENT,
+                    now.plusSeconds(i));
+        }
+        for (int i = 0; i < 2; i++) {
+            repository.reconcileGrant(
+                    tenant,
+                    currentIdentityId,
+                    targetId,
+                    ids.nextId(),
+                    "ANY",
+                    principalId,
+                    DesiredPresence.PRESENT,
+                    now.plusSeconds(200 + i));
+        }
+        repository.reconcileGrant(
+                tenant,
+                previousIdentityId,
+                targetId,
+                ids.nextId(),
+                "ANY",
+                principalId,
+                DesiredPresence.PRESENT,
+                now.plusSeconds(203));
+
+        var first = repository.findPrincipalRefreshPage(
+                tenant,
+                principalId,
+                targetId,
+                currentIdentityId,
+                previousIdentityId,
+                null,
+                100);
+        assertThat(first).hasSize(100);
+        assertThat(first)
+                .extracting(DesiredGrantState::id)
+                .isSorted();
+
+        var second = repository.findPrincipalRefreshPage(
+                tenant,
+                principalId,
+                targetId,
+                currentIdentityId,
+                previousIdentityId,
+                first.getLast().id(),
+                100);
+        assertThat(second).hasSize(8);
+        assertThat(second)
+                .extracting(DesiredGrantState::id)
+                .isSorted();
+        assertThat(second.getFirst().id())
+                .isGreaterThan(first.getLast().id());
+    }
+
+    @Test
+    void technicalGrantDemandRemainsPresentUntilFinalCauseIsAbsent() {
+        TenantContext tenant = tenant("technical-demand");
+        Instant now = Instant.parse("2026-09-21T10:00:00Z");
+        UUID targetId = ids.nextId();
+        UUID entitlementId = ids.nextId();
+        UUID principalId = ids.nextId();
+
+        DesiredGrantState any = repository.reconcileGrant(
+                tenant,
+                ids.nextId(),
+                targetId,
+                entitlementId,
+                "ANY",
+                principalId,
+                DesiredPresence.PRESENT,
+                now);
+        DesiredGrantState specific = repository.reconcileGrant(
+                tenant,
+                ids.nextId(),
+                targetId,
+                entitlementId,
+                "SPECIFIC:" + principalId,
+                principalId,
+                DesiredPresence.PRESENT,
+                now.plusSeconds(1));
+
+        assertThat(repository.hasPresentTechnicalGrant(
+                tenant, targetId, entitlementId, principalId))
+                .isTrue();
+
+        repository.reconcileGrant(
+                tenant,
+                any.identityId(),
+                targetId,
+                entitlementId,
+                any.principalConstraintKey(),
+                principalId,
+                DesiredPresence.ABSENT,
+                now.plusSeconds(2));
+        assertThat(repository.hasPresentTechnicalGrant(
+                tenant, targetId, entitlementId, principalId))
+                .isTrue();
+
+        repository.reconcileGrant(
+                tenant,
+                specific.identityId(),
+                targetId,
+                entitlementId,
+                specific.principalConstraintKey(),
+                principalId,
+                DesiredPresence.ABSENT,
+                now.plusSeconds(3));
+        assertThat(repository.hasPresentTechnicalGrant(
+                tenant, targetId, entitlementId, principalId))
+                .isFalse();
+    }
+
     private TenantContext tenant(String name) {
         return new TenantContext(tenants.createActive(name, Instant.now()).id());
     }

@@ -224,6 +224,70 @@ class GrantProvisioningPlanningIntegrationTest {
     }
 
     @Test
+    void losingUniqueAnyPrincipalRemovesPreviouslyRealizedGrant() {
+        TenantContext tenant = tenant("lost-principal");
+        UUID targetId = ids.nextId();
+        UUID entitlementId = ids.nextId();
+        UUID identityId = ids.nextId();
+        UUID principalId = ids.nextId();
+        mappedGroupBinding(
+                tenant, targetId, entitlementId, "group-lost-principal");
+
+        DesiredGrantState present = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "ANY",
+                principalId,
+                DesiredPresence.PRESENT,
+                NOW);
+        facts.changed(tenant, present);
+        var resolvedProcessor = processor(activePrincipal(
+                principalId,
+                identityId,
+                targetId,
+                "provider-user-lost"));
+        assertThat(resolvedProcessor.processAvailable()).isEqualTo(1);
+
+        jdbc.update("""
+                UPDATE integration.provisioning_task
+                SET state = 'SUCCEEDED',
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ?
+                  AND operation_type = 'ADD_GRANT'
+                """,
+                Timestamp.from(NOW.plusSeconds(11)),
+                tenant.tenantId());
+
+        DesiredGrantState unresolved = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "ANY",
+                null,
+                DesiredPresence.PRESENT,
+                NOW.plusSeconds(2));
+        assertThat(unresolved.desiredRevision())
+                .isEqualTo(present.desiredRevision() + 1);
+        facts.changed(tenant, unresolved);
+
+        // No replacement Principal is guessed. The safely identified old
+        // realization is reduced instead.
+        assertThat(processor(unavailablePrincipal())
+                .processAvailable()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*)
+                FROM integration.provisioning_task
+                WHERE tenant_id = ?
+                  AND operation_type = 'REMOVE_GRANT'
+                """, Integer.class, tenant.tenantId()))
+                .isEqualTo(1);
+    }
+
+    @Test
     void absentGrantPlansRemoveFromPriorSuccessfulAddAndNoKnownGrantIsNoop() {
         TenantContext tenant = tenant("remove");
         UUID targetId = ids.nextId();
@@ -295,6 +359,96 @@ class GrantProvisioningPlanningIntegrationTest {
                 WHERE tenant_id = ?
                 """, Integer.class, tenant.tenantId()))
                 .isEqualTo(2);
+    }
+
+    @Test
+    void sharedTechnicalGrantIsRemovedOnlyAfterFinalDesiredCauseDisappears() {
+        TenantContext tenant = tenant("shared-demand");
+        UUID targetId = ids.nextId();
+        UUID entitlementId = ids.nextId();
+        UUID identityId = ids.nextId();
+        UUID principalId = ids.nextId();
+        mappedGroupBinding(
+                tenant, targetId, entitlementId, "group-shared");
+
+        DesiredGrantState any = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "ANY",
+                principalId,
+                DesiredPresence.PRESENT,
+                NOW);
+        facts.changed(tenant, any);
+        var processor = processor(activePrincipal(
+                principalId,
+                identityId,
+                targetId,
+                "provider-user-shared"));
+        assertThat(processor.processAvailable()).isEqualTo(1);
+
+        jdbc.update("""
+                UPDATE integration.provisioning_task
+                SET state = 'SUCCEEDED',
+                    revision = revision + 1,
+                    updated_at = ?
+                WHERE tenant_id = ?
+                  AND operation_type = 'ADD_GRANT'
+                """,
+                Timestamp.from(NOW.plusSeconds(11)),
+                tenant.tenantId());
+
+        DesiredGrantState specific = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "SPECIFIC:" + principalId,
+                principalId,
+                DesiredPresence.PRESENT,
+                NOW.plusSeconds(2));
+
+        DesiredGrantState anyAbsent = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                "ANY",
+                principalId,
+                DesiredPresence.ABSENT,
+                NOW.plusSeconds(3));
+        facts.changed(tenant, anyAbsent);
+        assertThat(processor.processAvailable()).isEqualTo(1);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*)
+                FROM integration.provisioning_task
+                WHERE tenant_id = ?
+                  AND operation_type = 'REMOVE_GRANT'
+                """, Integer.class, tenant.tenantId()))
+                .isZero();
+
+        DesiredGrantState specificAbsent = desired.reconcileGrant(
+                tenant,
+                identityId,
+                targetId,
+                entitlementId,
+                specific.principalConstraintKey(),
+                principalId,
+                DesiredPresence.ABSENT,
+                NOW.plusSeconds(4));
+        facts.changed(tenant, specificAbsent);
+        assertThat(processor.processAvailable()).isEqualTo(1);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*)
+                FROM integration.provisioning_task
+                WHERE tenant_id = ?
+                  AND operation_type = 'REMOVE_GRANT'
+                """, Integer.class, tenant.tenantId()))
+                .isEqualTo(1);
+        assertThat(jobCount(tenant)).isEqualTo(2);
     }
 
     private GrantProvisioningPlanningProcessor processor(

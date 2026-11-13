@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.api.access;
 
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandException;
+import io.wyrmgate.iam.access.application.EffectiveAccessSemanticEvaluationException;
 import io.wyrmgate.iam.api.access.AccessApiModels.ErrorResponse;
 import io.wyrmgate.iam.api.access.AccessApiModels.FieldError;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -51,6 +52,19 @@ public class AccessApiErrorHandler {
                 error.code(),
                 error.getMessage(),
                 correlationId,
+                List.of());
+    }
+
+    @ExceptionHandler(EffectiveAccessSemanticEvaluationException.class)
+    ResponseEntity<ErrorResponse> effectiveAccessUnavailable(
+            EffectiveAccessSemanticEvaluationException error,
+            HttpServletRequest request) {
+        return response(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "effective_access_semantic_evaluation_unavailable",
+                "Current EffectiveAccess support could not be established within the bounded evaluation budget.",
+                AccessApiRequestContext.correlationIdForError(
+                        request, ids),
                 List.of());
     }
 

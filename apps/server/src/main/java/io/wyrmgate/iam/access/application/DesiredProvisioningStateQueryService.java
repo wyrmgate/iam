@@ -15,6 +15,29 @@ public final class DesiredProvisioningStateQueryService
     }
 
     @Override
+    public TechnicalGrantDemand technicalGrantDemand(
+            TenantContext tenant,
+            UUID applicationTargetId,
+            UUID entitlementId,
+            UUID principalId) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(applicationTargetId, "applicationTargetId");
+        Objects.requireNonNull(entitlementId, "entitlementId");
+        Objects.requireNonNull(principalId, "principalId");
+        try {
+            return repository.hasPresentTechnicalGrant(
+                            tenant,
+                            applicationTargetId,
+                            entitlementId,
+                            principalId)
+                    ? TechnicalGrantDemand.REQUIRED
+                    : TechnicalGrantDemand.NOT_REQUIRED;
+        } catch (RuntimeException unavailable) {
+            return TechnicalGrantDemand.UNAVAILABLE;
+        }
+    }
+
+    @Override
     public PrincipalResult desiredPrincipal(
             TenantContext tenant, UUID desiredPrincipalId) {
         Objects.requireNonNull(tenant, "tenant");

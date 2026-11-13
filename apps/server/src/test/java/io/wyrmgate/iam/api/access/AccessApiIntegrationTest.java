@@ -16,13 +16,16 @@ import io.wyrmgate.iam.access.application.DesiredStateDerivationService;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
+import io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport;
 import io.wyrmgate.iam.access.application.LifecycleAccessPolicyRepository;
 import io.wyrmgate.iam.access.application.LifecycleAccessPolicyService;
+import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentBoundaryScheduler;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentFactSink;
 import io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentRepository;
 import io.wyrmgate.iam.access.persistence.JdbcDesiredStateProjectionRepository;
 import io.wyrmgate.iam.access.persistence.JdbcEffectiveAccessRepository;
+import io.wyrmgate.iam.access.persistence.JdbcEffectiveAccessSupportQuery;
 import io.wyrmgate.iam.access.persistence.JdbcLifecycleAccessPolicyRepository;
 import io.wyrmgate.iam.administration.application.AdministrativeAuthorizationService;
 import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
@@ -219,13 +222,18 @@ class AccessApiIntegrationTest {
                 new AccessAssignmentQueryService(
                         assignmentRepository);
         var semanticSupport =
-                io.wyrmgate.iam.testsupport.CatalogAccessTestSupport.semanticSupport(
-                        assignmentRepository, catalogAvailability, expansion);
+                new EffectiveAccessSemanticSupport(
+                        assignmentRepository,
+                        identityReferences,
+                        catalogQueries,
+                        catalogAvailability,
+                        expansion);
         effectiveReads =
                 new EffectiveAccessReadService(
                         effectiveRepository,
                         identityReferences,
-                        semanticSupport);
+                        semanticSupport,
+                        new JdbcEffectiveAccessSupportQuery(jdbc));
 
         var desiredRepository =
                 new JdbcDesiredStateProjectionRepository(
@@ -789,6 +797,83 @@ class AccessApiIntegrationTest {
                         jsonPath(
                                 "$.supports[0].roleVersionPath[0]")
                                 .value(active.id().toString()));
+    }
+
+    @Test
+    void effectiveAccessSupportDetailIsBoundedAndContinuesWithSignedCursor()
+            throws Exception {
+        Identity identity = identity("High Cardinality");
+        var app = catalog.createApplication(
+                tenant, "high-card", "High Card", NOW);
+        var target = catalog.createTarget(
+                tenant, app.id(), "prod", NOW);
+        var entitlement = catalog.createEntitlement(
+                tenant, app.id(), target.id(), "read", NOW);
+
+        for (int i = 0; i < 105; i++) {
+            AccessAssignment assignment = new AccessAssignment(
+                    ids.nextId(),
+                    identity.id(),
+                    identity.accessEligibilityEpoch(),
+                    AccessAssignment.TargetKind.ENTITLEMENT,
+                    null,
+                    entitlement.id(),
+                    AccessAssignment.PrincipalConstraintKind.ANY,
+                    null,
+                    AccessAssignment.ProvenanceKind.MANUAL,
+                    null,
+                    AccessAssignment.LifecycleState.ACTIVE,
+                    null,
+                    null,
+                    1,
+                    NOW,
+                    NOW);
+            assignmentRepository.insert(tenant, assignment);
+            effectiveRepository.applyDirectAssignment(
+                    tenant,
+                    assignment,
+                    "ANY",
+                    String.format("%064x", i + 1),
+                    NOW.plusSeconds(1));
+        }
+
+        UUID effectiveId = jdbc.queryForObject("""
+                SELECT id
+                FROM access.effective_access
+                WHERE tenant_id = ?
+                  AND identity_id = ?
+                  AND entitlement_id = ?
+                  AND principal_constraint_key = 'ANY'
+                """,
+                UUID.class,
+                tenant.tenantId(),
+                identity.id(),
+                entitlement.id());
+
+        String detailJson = authorized.perform(
+                        get("/api/v1/effective-access/{id}", effectiveId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supportCount").value(100))
+                .andExpect(jsonPath("$.supportCountTruncated").value(true))
+                .andExpect(jsonPath("$.supports.length()").value(100))
+                .andExpect(jsonPath("$.supportsNextCursor").isString())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String supportCursor = json.readTree(detailJson)
+                .get("supportsNextCursor")
+                .asText();
+
+        authorized.perform(
+                        get("/api/v1/effective-access/{id}/supports", effectiveId)
+                                .requestAttr(ACTOR_ATTRIBUTE, actor)
+                                .param("cursor", supportCursor)
+                                .param("limit", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(5))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
     }
 
     @Test

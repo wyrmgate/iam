@@ -397,6 +397,9 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/SemanticUnavailable"
           }
         },
         "x-wyrmgate-authority": "Access rebuildable projection",
@@ -432,11 +435,14 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/SemanticUnavailable"
           }
         },
         "x-wyrmgate-authority": "Access rebuildable projection",
         "x-wyrmgate-administrative-permission": "effective-access:read",
-        "x-wyrmgate-consistency": "Support evidence is filtered against authoritative assignment lifecycle/time at read time."
+        "x-wyrmgate-consistency": "Initial support evidence is bounded and semantically revalidated. supportCount is a lower bound when supportCountTruncated=true; supportsNextCursor continues explanation evidence."
       }
     },
     "/lifecycle-access-policy": {
@@ -518,6 +524,51 @@
         "x-wyrmgate-authority": "Access authoritative policy",
         "x-wyrmgate-administrative-permission": "lifecycle-access-policy:activate",
         "x-wyrmgate-idempotency": "Required causal idempotency with request-fingerprint conflict detection"
+      }
+    },
+    "/effective-access/{effectiveAccessId}/supports": {
+      "get": {
+        "operationId": "listEffectiveAccessSupports",
+        "summary": "List bounded current EffectiveAccess support evidence",
+        "description": "Returns at most 100 raw-position-bounded support candidates after current semantic filtering. Empty item pages may still carry nextCursor when stale candidates were filtered.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/EffectiveAccessId"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EffectiveAccess support page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveAccessSupportPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "x-wyrmgate-authority": "Access rebuildable projection",
+        "x-wyrmgate-administrative-permission": "effective-access:read",
+        "x-wyrmgate-pagination": "Signed cursor bound to tenant and EffectiveAccess ID; limit is capped at 100."
       }
     }
   },
@@ -658,6 +709,16 @@
       },
       "StaleRevision": {
         "description": "Stale If-Match revision",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "SemanticUnavailable": {
+        "description": "Current semantic support could not be established within the bounded evaluation budget",
         "content": {
           "application/json": {
             "schema": {
@@ -879,6 +940,7 @@
           "entitlementId",
           "principalConstraintKey",
           "supportCount",
+          "supportCountTruncated",
           "computedAt",
           "projectionGeneration"
         ],
@@ -900,7 +962,8 @@
           },
           "supportCount": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "description": "Lower bound of semantically verified current supports in the bounded first explanation page."
           },
           "computedAt": {
             "type": "string",
@@ -910,6 +973,10 @@
             "type": "integer",
             "format": "int64",
             "minimum": 1
+          },
+          "supportCountTruncated": {
+            "type": "boolean",
+            "description": "True when additional support candidates exist beyond the bounded first explanation page; use the support collection cursor to continue."
           }
         }
       },
@@ -951,7 +1018,8 @@
           {
             "type": "object",
             "required": [
-              "supports"
+              "supports",
+              "supportsNextCursor"
             ],
             "properties": {
               "supports": {
@@ -959,7 +1027,13 @@
                 "minItems": 1,
                 "items": {
                   "$ref": "#/components/schemas/EffectiveAccessSupport"
-                }
+                },
+                "maxItems": 100
+              },
+              "supportsNextCursor": {
+                "type": "string",
+                "nullable": true,
+                "description": "Signed continuation cursor for additional support evidence."
               }
             }
           }
@@ -1238,6 +1312,27 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "EffectiveAccessSupportPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/EffectiveAccessSupport"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
           }
         }
       }

@@ -20,11 +20,13 @@ import io.wyrmgate.iam.access.application.AccessReviewRemediationRepository;
 import io.wyrmgate.iam.access.application.AccessDesiredStateQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessProcessingService;
 import io.wyrmgate.iam.access.application.RoleExpansionProjectionRefreshService;
+import io.wyrmgate.iam.access.application.TerminalCatalogAssignmentRepairService;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.EffectiveAccessQueryService;
 import io.wyrmgate.iam.access.application.EffectiveAccessRepository;
 import io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport;
+import io.wyrmgate.iam.access.application.EffectiveAccessSupportQuery;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionIntakeService;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionProcessingService;
 import io.wyrmgate.iam.access.application.IdentityAccessReductionRepository;
@@ -303,10 +305,21 @@ public class AccessPersistenceConfiguration {
     @Bean
     EffectiveAccessSemanticSupport effectiveAccessSemanticSupport(
             AccessAssignmentRepository assignments,
+            IdentityAccessReferenceQuery identities,
+            CatalogAccessReferenceQuery catalogReferences,
             CatalogAccessTargetAvailabilityQuery catalog,
             RoleExpansionQuery roleExpansion) {
         return new EffectiveAccessSemanticSupport(
-                assignments, catalog, roleExpansion);
+                assignments, identities, catalogReferences, catalog, roleExpansion);
+    }
+
+    @Bean
+    TerminalCatalogAssignmentRepairService terminalCatalogAssignmentRepairService(
+            AccessAssignmentRepository assignments,
+            CatalogAccessTargetAvailabilityQuery catalogAvailability,
+            AccessAssignmentCommandService commands) {
+        return new TerminalCatalogAssignmentRepairService(
+                assignments, catalogAvailability, commands);
     }
 
     @Bean
@@ -329,9 +342,10 @@ public class AccessPersistenceConfiguration {
     EffectiveAccessReadService effectiveAccessReadService(
             EffectiveAccessRepository repository,
             IdentityAccessReferenceQuery identities,
-            EffectiveAccessSemanticSupport semanticSupport) {
+            EffectiveAccessSemanticSupport semanticSupport,
+            EffectiveAccessSupportQuery supportQuery) {
         return new EffectiveAccessReadService(
-                repository, identities, semanticSupport);
+                repository, identities, semanticSupport, supportQuery);
     }
 
     @Bean
@@ -341,14 +355,16 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentRepository assignmentRepository,
             EffectiveAccessRepository effectiveAccessRepository,
             RoleExpansionQuery roleExpansion,
-            DesiredStateDerivationService desiredStateDerivationService) {
+            DesiredStateDerivationService desiredStateDerivationService,
+            TerminalCatalogAssignmentRepairService terminalCatalogRepair) {
         return new EffectiveAccessProcessingService(
                 outboxRepository,
                 scheduledWorkRepository,
                 assignmentRepository,
                 effectiveAccessRepository,
                 roleExpansion,
-                desiredStateDerivationService);
+                desiredStateDerivationService,
+                terminalCatalogRepair);
     }
 
     @Bean
@@ -419,9 +435,17 @@ public class AccessPersistenceConfiguration {
     DesiredStateProcessingService desiredStateProcessingService(
             JdbcOutboxRepository outboxRepository,
             IdentityAccessReferenceQuery identityReferences,
-            DesiredStateDerivationService derivationService) {
+            DesiredStateDerivationService derivationService,
+            IdGenerator ids,
+            TransactionExecutor transactions,
+            ObjectMapper objectMapper) {
         return new DesiredStateProcessingService(
-                outboxRepository, identityReferences, derivationService);
+                outboxRepository,
+                identityReferences,
+                derivationService,
+                ids,
+                transactions,
+                objectMapper);
     }
 
     @Bean

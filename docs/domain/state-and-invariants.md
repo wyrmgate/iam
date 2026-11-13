@@ -117,11 +117,40 @@ This is visible drift, not an ambiguous still-pending governance state.
 
 The current AccessAssignment runtime supports Entitlement and Role targets with explicit `MANUAL` provenance and `ANY`/`SPECIFIC` principal constraints. Creation validates foreign references through semantic Identity/Catalog queries and never reads their repositories directly. A future `SCHEDULED` assignment is not effective before `validFrom`, but if materialized state still says `SCHEDULED` after that instant, semantic evaluation treats the reached validity window as effective. Conversely, `validUntil` ends authority immediately even before an `EXPIRED` state is materialized. Internal generic termination uses optimistic revision and chooses `CANCELLED` before a scheduled start, `EXPIRED` after the validity window, and otherwise `REVOKED`. The public control-plane contract exposes the narrower semantic operations suspend, resume, cancel and revoke rather than generic status mutation. The Access-owned typed lifecycle definition uses the shared Platform LifecycleEngine for transition mechanics. Suspend applies to ACTIVE or a SCHEDULED assignment whose validFrom has arrived; resume is allowed only from SUSPENDED while temporally valid; cancel applies only to a future SCHEDULED assignment; revoke applies to ACTIVE, SUSPENDED or a due SCHEDULED assignment and is authoritative immediately. A due SCHEDULED assignment can therefore be reduced without waiting for a worker. Terminal assignments cannot return to ACTIVE.
 
-EffectiveAccess is a rebuildable projection, never assignment authority. Direct Entitlement assignments contribute one normalized support path while semantically effective. Role assignments contribute one support per current entitlement derivation path and retain the exact ordered RoleVersion path used for explanation. Multiple assignments or multiple role paths may support the same Identity + Entitlement + principal-constraint tuple; removing one support leaves the effective row while another support remains, and removing the final support removes the effective row. A RoleVersion activation replaces only the affected assignment's role-derived support set; obsolete paths are removed and new current paths are added idempotently. EffectiveAccess is a rebuildable projection, never assignment authority. Direct Entitlement assignments contribute one normalized support path while semantically effective. Role assignments contribute one support per current entitlement derivation path and retain the exact ordered RoleVersion path used for explanation. Multiple assignments or multiple role paths may support the same Identity + Entitlement + principal-constraint tuple; removing one support leaves the effective row while another support remains, and removing the final support removes the effective row. A RoleVersion activation replaces only the affected assignment's role-derived support set; obsolete paths are removed and new current paths are added idempotently. Catalog Role expansion facts trigger an Access-owned bounded projection refresh over non-terminal assignments, ordered by immutable creation time and ID with a fixed initial scan cutoff. Each page atomically acknowledges its input and emits assignment-specific current-state repair work plus a typed outbox continuation when needed. New assignments have their own projection input facts; no Role expansion fact loads the complete historical assignment collection. Projection-input replay is idempotent. Valid-from/valid-until timers repair materialized state around time boundaries, while semantic EffectiveAccess reads still evaluate current AccessAssignment validity directly so timer delay cannot change authorization meaning. Projection-input replay is idempotent. The current valid-from/valid-until workers repair derived EffectiveAccess and desired-state projections; they do not automatically rewrite stored assignment lifecycle or revision. Semantic reads and lifecycle commands evaluate the validity window directly, so delayed or replayed work cannot change authority time or block a due assignment's reduction. Explicit Access-owned termination may materialize EXPIRED.
+EffectiveAccess is a rebuildable projection, never assignment authority. Direct Entitlement
+assignments contribute normalized support paths while semantically effective. Role assignments
+contribute one support per current entitlement derivation path and retain the exact ordered
+RoleVersion path used for explanation. Multiple assignments or multiple Role paths may support the
+same Identity + Entitlement + principal-constraint tuple; removing one support leaves the effective
+row while another semantic support remains.
 
+Every semantic read revalidates the supporting AccessAssignment against current lifecycle and
+temporal validity, current Identity eligibility and ADR-0055 eligibility epoch, current Catalog
+availability, current Role expansion, and current SPECIFIC Principal compatibility. A stale
+materialized support therefore never extends authority. SPECIFIC incompatibility suppresses current
+EffectiveAccess without rewriting the authoritative assignment or guessing another Principal.
+
+Role expansion changes are repaired asynchronously through bounded Access-owned fan-out. Catalog
+Role expansion facts scan only non-terminal Role assignments in deterministic `createdAt + id`
+pages under a fixed initial cutoff, emit independent assignment repair work, and use typed durable
+continuations. New assignments emit their own projection-input facts; no Role expansion fact loads
+the complete historical assignment collection. Duplicate/replayed facts are idempotent.
+
+High-cardinality explanation is also bounded. Public/operator detail verifies at most 100 ordered
+support candidates per page and exposes a signed continuation cursor. `supportCount` is a verified
+lower bound when `supportCountTruncated=true`. Governance/current-access evaluation uses a bounded
+semantic support budget: if no valid support is found inside the budget while more candidates remain,
+the query is `UNAVAILABLE`, never false absence, so mandatory privilege-increase evaluation fails
+closed.
+
+The current valid-from/valid-until workers repair derived EffectiveAccess and desired-state
+projections; they do not automatically rewrite stored assignment lifecycle or revision. Semantic
+reads and lifecycle commands evaluate the validity window directly, so delayed or replayed work
+cannot change authority time or block a due assignment's reduction. Explicit Access-owned
+termination may materialize `EXPIRED`.
 Role-target AccessAssignment now uses the same lifecycle, validity and MANUAL provenance semantics as direct Entitlement assignments. ANY is valid for any current Role expansion. SPECIFIC is accepted only when the full current expansion resolves to exactly one ApplicationTarget and the governed Principal belongs to that Identity and target; a multi-target BUSINESS Role cannot guess which technical Principal should realize the assignment.
 
-Catalog target availability is a separate current-state semantic dimension. New Role/Entitlement AccessAssignments require Catalog `ASSIGNABLE`; `TEMPORARILY_UNAVAILABLE` suppresses contribution without destroying the assignment, while `TERMINALLY_UNAVAILABLE` suppresses contribution immediately and starts/reuses an Access-owned durable `AccessTargetReduction`. EffectiveAccess reads revalidate the current supporting AccessAssignment, current Catalog availability and current Role expansion, so stale projection support cannot preserve removed RoleVersion entitlements. Target reduction scans current non-terminal assignments in deterministic bounded pages, re-reads the exact Catalog cause before each mutation page and terminates only through ordinary Access semantics.
+Catalog target availability is a separate current-state semantic dimension. New Role/Entitlement AccessAssignments require Catalog `ASSIGNABLE`; `TEMPORARILY_UNAVAILABLE` suppresses contribution without destroying the assignment, while `TERMINALLY_UNAVAILABLE` suppresses contribution immediately and starts/reuses an Access-owned durable `AccessTargetReduction`. EffectiveAccess reads revalidate the current supporting AccessAssignment, current Catalog availability and current Role expansion, so stale projection support cannot preserve removed RoleVersion entitlements. Target reduction scans current non-terminal assignments in deterministic bounded pages, re-reads the exact Catalog cause before each mutation page and terminates only through ordinary Access semantics. A newly committed assignment also rechecks terminal availability on its ordinary projection fact; if it raced with terminal retirement after admission validation, Access immediately terminates that single late assignment, closing the fixed-snapshot reduction gap without Catalog mutation or a distributed transaction.
 
 DesiredPrincipalState and DesiredGrantState are rebuildable technical-intent projections over EffectiveAccess, not governance authority. A desired grant keeps a stable tuple identity across PRESENT/ABSENT transitions. `desiredRevision` changes only when desired presence or resolved Principal changes; replay/recompute may advance source generation without changing desired revision. `ANY` principal realization is deterministic: one active correlated Principal for the Identity + ApplicationTarget resolves, while zero or multiple active Principals leave the grant unresolved. `SPECIFIC` preserves the explicitly governed Principal. An unresolved desired grant does not authorize guessing a provider account.
 
@@ -267,3 +296,21 @@ Invariant set:
 - Audit integrity metadata is deterministic tamper-detection metadata, not authorization, ordering, consensus or a global hash chain.
 - EvidenceSnapshot is immutable and cannot authorize mutation of current capability state.
 - Audit/SIEM delivery is at-least-once. SIEM scheduling or delivery failure cannot roll back or reinterpret an AuditRecord or the business action it describes.
+
+
+### Access v3 dependency fencing and SPECIFIC compatibility
+
+ADR-0055 adds an Identity-owned positive access-eligibility epoch. The epoch advances only when Identity crosses the ACTIVE/non-ACTIVE access-eligibility boundary. AccessAssignment captures the current epoch at admission and semantic support requires the current eligible Identity epoch to match. IdentityAccessReduction remains the durable authoritative cleanup; the epoch is the fail-safe fence that prevents a late assignment from an older eligibility era from reviving after reactivation. Resume also requires the assignment's captured epoch to equal the current eligible Identity epoch. Lifecycle-policy reconciliation terminates an otherwise matching old-epoch policy assignment and may create a successor only after current privilege-increase governance succeeds.
+
+SPECIFIC assignments are revalidated at semantic use time. Direct Entitlement intent requires the specified Principal to remain owned by the assignment Identity on that Entitlement's exact ApplicationTarget. Role intent requires the Principal to remain owned by the Identity and the full current Role expansion to resolve to exactly one matching ApplicationTarget. Incompatibility suppresses EffectiveAccess without rewriting the assignment or selecting another Principal.
+
+
+### Coalesced technical grant demand
+
+ADR-0056 keeps DesiredGrantState cause-preserving while coalescing provider removal safety by
+ApplicationTarget + Entitlement + governed Principal. Before Integration plans a REMOVE because a
+desired cause disappeared or moved to another Principal, it asks Access whether any PRESENT desired
+cause still requires that technical tuple. REQUIRED suppresses the removal; UNAVAILABLE is retryable
+and fails closed. ABSENT desired rows retain their last resolved Principal when known so final
+cleanup remains exact. Integration may reuse successful ADD evidence across desired causes, but that
+evidence never becomes access authority.

@@ -3,12 +3,15 @@ package io.wyrmgate.iam.access.application;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
+
+    private static final int SEMANTIC_SUPPORT_LIMIT = 100;
 
     private final EffectiveAccessRepository repository;
     private final IdentityAccessReferenceQuery identities;
@@ -18,10 +21,8 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
             EffectiveAccessRepository repository,
             IdentityAccessReferenceQuery identities,
             EffectiveAccessSemanticSupport semanticSupport) {
-        this.repository = Objects.requireNonNull(
-                repository, "repository");
-        this.identities = Objects.requireNonNull(
-                identities, "identities");
+        this.repository = Objects.requireNonNull(repository, "repository");
+        this.identities = Objects.requireNonNull(identities, "identities");
         this.semanticSupport = Objects.requireNonNull(
                 semanticSupport, "semanticSupport");
     }
@@ -39,17 +40,29 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
         if (!accessEligible(tenant, identityId)) {
             return Set.of();
         }
+
         Set<UUID> projected = repository.findCurrentEntitlementIds(
                 tenant, identityId, entitlementIds, at);
-        java.util.LinkedHashSet<UUID> semantic = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<UUID> semantic =
+                new java.util.LinkedHashSet<>();
         for (UUID entitlementId : projected) {
-            boolean supported = repository.currentSupportingAssignmentIds(
-                            tenant, identityId, entitlementId, at)
-                    .stream()
+            List<UUID> candidates = repository.currentSupportingAssignmentIds(
+                    tenant,
+                    identityId,
+                    entitlementId,
+                    at,
+                    SEMANTIC_SUPPORT_LIMIT + 1);
+            boolean supported = candidates.stream()
+                    .limit(SEMANTIC_SUPPORT_LIMIT)
                     .anyMatch(assignmentId -> semanticSupport.contributes(
-                            tenant, assignmentId, entitlementId, at));
+                            tenant,
+                            assignmentId,
+                            entitlementId,
+                            at));
             if (supported) {
                 semantic.add(entitlementId);
+            } else if (candidates.size() > SEMANTIC_SUPPORT_LIMIT) {
+                throw new EffectiveAccessSemanticEvaluationException();
             }
         }
         return Set.copyOf(semantic);
@@ -67,18 +80,34 @@ public final class EffectiveAccessQueryService implements EffectiveAccessQuery {
             return Optional.empty();
         }
         return repository.findCurrent(
-                        tenant, identityId, entitlementId, principalConstraintKey, at)
+                        tenant,
+                        identityId,
+                        entitlementId,
+                        principalConstraintKey,
+                        at)
                 .flatMap(effective -> {
-                    var supports = repository.currentSupportingAssignmentIds(
-                                    tenant, effective.id(), at)
-                            .stream()
-                            .filter(assignmentId -> semanticSupport.contributes(
+                    List<UUID> candidates =
+                            repository.currentSupportingAssignmentIds(
                                     tenant,
-                                    assignmentId,
-                                    effective.entitlementId(),
-                                    at))
+                                    effective.id(),
+                                    at,
+                                    SEMANTIC_SUPPORT_LIMIT + 1);
+                    List<UUID> supports = candidates.stream()
+                            .limit(SEMANTIC_SUPPORT_LIMIT)
+                            .filter(assignmentId ->
+                                    semanticSupport.contributes(
+                                            tenant,
+                                            assignmentId,
+                                            effective.entitlementId(),
+                                            at))
                             .toList();
-                    if (supports.isEmpty()) return Optional.empty();
+                    if (supports.isEmpty()
+                            && candidates.size() > SEMANTIC_SUPPORT_LIMIT) {
+                        throw new EffectiveAccessSemanticEvaluationException();
+                    }
+                    if (supports.isEmpty()) {
+                        return Optional.empty();
+                    }
                     var semantic = new io.wyrmgate.iam.access.domain.EffectiveAccess(
                             effective.id(),
                             effective.identityId(),

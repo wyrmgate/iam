@@ -4,6 +4,8 @@ import io.wyrmgate.iam.access.application.AccessAssignmentQueryService;
 import io.wyrmgate.iam.access.application.AccessQueryModels.AssignmentPosition;
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveDetail;
 import io.wyrmgate.iam.access.application.AccessQueryModels.EffectivePosition;
+import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveReadSummary;
+import io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveSupportPosition;
 import io.wyrmgate.iam.access.application.EffectiveAccessReadService;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.domain.EffectiveAccess;
@@ -18,6 +20,7 @@ import io.wyrmgate.iam.api.access.AccessApiModels.EffectiveAccessPage;
 import io.wyrmgate.iam.api.access.AccessApiModels.EffectiveAccessResource;
 import io.wyrmgate.iam.api.access.AccessApiModels.EffectiveAccessSummary;
 import io.wyrmgate.iam.api.access.AccessApiModels.EffectiveAccessSupportResource;
+import io.wyrmgate.iam.api.access.AccessApiModels.EffectiveAccessSupportPage;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
@@ -428,7 +431,57 @@ public class AccessController {
                         "X-Correlation-Id",
                         correlationId.toString())
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(resource(detail));
+                .body(resource(actor, detail));
+    }
+
+    @GetMapping("/effective-access/{effectiveAccessId}/supports")
+    public ResponseEntity<EffectiveAccessSupportPage> listEffectiveAccessSupports(
+            @PathVariable UUID effectiveAccessId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Integer limit,
+            HttpServletRequest request) {
+        UUID correlationId =
+                AccessApiRequestContext.resolveCorrelationId(
+                        request, ids);
+        AuthenticatedAdministrativeActor actor =
+                ControlPlaneActorRequestContext.require(request);
+        require(
+                actor,
+                AdministrativePermissions.EFFECTIVE_ACCESS_READ,
+                new AdministrativeResource(
+                        "effective-access",
+                        effectiveAccessId),
+                correlationId);
+        int effectiveLimit =
+                validateSupportLimit(limit, correlationId);
+        EffectiveSupportPosition position =
+                decodeEffectiveSupport(
+                        cursor,
+                        actor,
+                        effectiveAccessId,
+                        correlationId);
+        var page = effectiveAccess.supports(
+                        actor.tenant(),
+                        effectiveAccessId,
+                        position,
+                        effectiveLimit,
+                        Instant.now())
+                .orElseThrow(() ->
+                        AccessApiException.notFound(
+                                correlationId));
+        return ResponseEntity.ok()
+                .header(
+                        "X-Correlation-Id",
+                        correlationId.toString())
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(new EffectiveAccessSupportPage(
+                        page.items().stream()
+                                .map(AccessController::supportResource)
+                                .toList(),
+                        cursors.encodeEffectiveSupport(
+                                actor.tenant(),
+                                effectiveAccessId,
+                                page.nextPosition())));
     }
 
     private ResponseEntity<AccessAssignmentResource> lifecycle(
@@ -541,6 +594,22 @@ public class AccessController {
         }
     }
 
+    private EffectiveSupportPosition decodeEffectiveSupport(
+            String cursor,
+            AuthenticatedAdministrativeActor actor,
+            UUID effectiveAccessId,
+            UUID correlationId) {
+        if (cursor == null) return null;
+        try {
+            return cursors.decodeEffectiveSupport(
+                    cursor,
+                    actor.tenant(),
+                    effectiveAccessId);
+        } catch (IllegalArgumentException invalid) {
+            throw invalidCursor(correlationId);
+        }
+    }
+
     private static AccessApiException invalidCursor(
             UUID correlationId) {
         return AccessApiException.validation(
@@ -559,6 +628,20 @@ public class AccessController {
                     "limit",
                     "out_of_range",
                     "limit must be between 1 and 200.");
+        }
+        return value;
+    }
+
+    private static int validateSupportLimit(
+            Integer limit,
+            UUID correlationId) {
+        int value = limit == null ? 50 : limit;
+        if (value < 1 || value > 100) {
+            throw AccessApiException.validation(
+                    correlationId,
+                    "limit",
+                    "out_of_range",
+                    "support limit must be between 1 and 100.");
         }
         return value;
     }
@@ -762,18 +845,21 @@ public class AccessController {
     }
 
     private static EffectiveAccessSummary summary(
-            EffectiveAccess value) {
+            EffectiveReadSummary summary) {
+        EffectiveAccess value = summary.effectiveAccess();
         return new EffectiveAccessSummary(
                 value.id(),
                 value.identityId(),
                 value.entitlementId(),
                 value.principalConstraintKey(),
                 value.supportCount(),
+                summary.supportCountTruncated(),
                 value.computedAt(),
                 value.projectionGeneration());
     }
 
-    private static EffectiveAccessResource resource(
+    private EffectiveAccessResource resource(
+            AuthenticatedAdministrativeActor actor,
             EffectiveDetail detail) {
         EffectiveAccess value = detail.effectiveAccess();
         return new EffectiveAccessResource(
@@ -782,14 +868,24 @@ public class AccessController {
                 value.entitlementId(),
                 value.principalConstraintKey(),
                 value.supportCount(),
+                detail.supportCountTruncated(),
                 value.computedAt(),
                 value.projectionGeneration(),
                 detail.supports().stream()
-                        .map(s -> new EffectiveAccessSupportResource(
-                                s.accessAssignmentId(),
-                                s.pathHash(),
-                                s.pathDepth(),
-                                s.roleVersionPath()))
-                        .toList());
+                        .map(AccessController::supportResource)
+                        .toList(),
+                cursors.encodeEffectiveSupport(
+                        actor.tenant(),
+                        value.id(),
+                        detail.nextSupportPosition()));
+    }
+
+    private static EffectiveAccessSupportResource supportResource(
+            io.wyrmgate.iam.access.application.AccessQueryModels.EffectiveSupport support) {
+        return new EffectiveAccessSupportResource(
+                support.accessAssignmentId(),
+                support.pathHash(),
+                support.pathDepth(),
+                support.roleVersionPath());
     }
 }

@@ -30,13 +30,13 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
         try {
             jdbc.update("""
                     INSERT INTO access.access_assignment (
-                        id, tenant_id, identity_id, target_kind, role_id, entitlement_id,
+                        id, tenant_id, identity_id, identity_access_epoch, target_kind, role_id, entitlement_id,
                         principal_constraint_kind, specific_principal_id,
                         provenance_kind, provenance_ref_id, lifecycle_state,
                         valid_from, valid_until, revision, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    assignment.id(), tenant.tenantId(), assignment.identityId(), assignment.targetKind().name(),
+                    assignment.id(), tenant.tenantId(), assignment.identityId(), assignment.identityAccessEpoch(), assignment.targetKind().name(),
                     assignment.roleId(), assignment.entitlementId(), assignment.principalConstraintKind().name(),
                     assignment.specificPrincipalId(), assignment.provenanceKind().name(), assignment.provenanceRefId(),
                     assignment.lifecycleState().name(), timestamp(assignment.validFrom()), timestamp(assignment.validUntil()),
@@ -312,7 +312,7 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
 
     private static String baseSelect() {
         return """
-                SELECT id, identity_id, target_kind, role_id, entitlement_id,
+                SELECT id, identity_id, identity_access_epoch, target_kind, role_id, entitlement_id,
                        principal_constraint_kind, specific_principal_id,
                        provenance_kind, provenance_ref_id, lifecycle_state,
                        valid_from, valid_until, revision, created_at, updated_at
@@ -329,6 +329,7 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
         Timestamp validUntil = rs.getTimestamp("valid_until");
         return new AccessAssignment(
                 rs.getObject("id", UUID.class), rs.getObject("identity_id", UUID.class),
+                rs.getLong("identity_access_epoch"),
                 AccessAssignment.TargetKind.valueOf(rs.getString("target_kind")),
                 rs.getObject("role_id", UUID.class), rs.getObject("entitlement_id", UUID.class),
                 AccessAssignment.PrincipalConstraintKind.valueOf(rs.getString("principal_constraint_kind")),
