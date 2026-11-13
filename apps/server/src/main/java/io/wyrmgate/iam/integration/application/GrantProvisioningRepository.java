@@ -4,6 +4,8 @@ import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 
 public interface GrantProvisioningRepository {
@@ -14,21 +16,33 @@ public interface GrantProvisioningRepository {
             UUID entitlementId,
             String providerPrincipalId);
 
-    List<TechnicalGrantTarget> observedRemoveTargetsByPrincipalIds(
-            TenantContext tenant,
-            UUID applicationTargetId,
-            UUID entitlementId,
-            List<UUID> principalIds);
+    /** At most pageSize + 1 distinct technical routes in route-key order. */
+    List<CleanupTarget> cleanupTargetsPage(
+            TenantContext tenant, UUID desiredGrantId, UUID applicationTargetId,
+            UUID entitlementId, UUID observedAndTechnicalPrincipalId,
+            CleanupCursor after, int pageSize);
 
-    List<TechnicalGrantTarget> priorSuccessfulAddTargets(
-            TenantContext tenant,
-            UUID desiredGrantId);
+    boolean hasUninterpretablePriorEvidence(
+            TenantContext tenant, UUID desiredGrantId, UUID entitlementId);
 
-    List<TechnicalGrantTarget> priorSuccessfulTechnicalAddTargets(
-            TenantContext tenant,
-            UUID applicationTargetId,
-            UUID entitlementId,
-            UUID principalId);
+    Optional<String> taskState(TenantContext tenant, String taskKey);
+
+    record CleanupCursor(UUID connectorBindingId, String providerEntitlementId,
+                         String providerPrincipalId) {
+        public CleanupCursor {
+            Objects.requireNonNull(connectorBindingId, "connectorBindingId");
+            Objects.requireNonNull(providerEntitlementId, "providerEntitlementId");
+            Objects.requireNonNull(providerPrincipalId, "providerPrincipalId");
+        }
+
+        public static CleanupCursor from(TechnicalGrantTarget target) {
+            return new CleanupCursor(target.connectorBindingId(), target.providerEntitlementId(),
+                    target.providerPrincipalId());
+        }
+    }
+
+    /** Null governed Principal denotes conflicting/malformed evidence, never a guessed mapping. */
+    record CleanupTarget(TechnicalGrantTarget target, boolean includesObservation) {}
 
     boolean createPlan(
             TenantContext tenant,
