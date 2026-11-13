@@ -303,10 +303,12 @@ public class AccessPersistenceConfiguration {
     @Bean
     EffectiveAccessSemanticSupport effectiveAccessSemanticSupport(
             AccessAssignmentRepository assignments,
+            IdentityAccessReferenceQuery identities,
+            CatalogAccessReferenceQuery catalogReferences,
             CatalogAccessTargetAvailabilityQuery catalog,
             RoleExpansionQuery roleExpansion) {
         return new EffectiveAccessSemanticSupport(
-                assignments, catalog, roleExpansion);
+                assignments, identities, catalogReferences, catalog, roleExpansion);
     }
 
     @Bean
