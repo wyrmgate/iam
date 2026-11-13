@@ -76,6 +76,64 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
     }
 
     @Override
+    public List<AccessAssignment> findSpecificPrincipalRefreshPage(
+            TenantContext tenant,
+            UUID principalId,
+            Instant snapshotAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        requirePageLimit(limit);
+        if ((afterCreatedAt == null) != (afterId == null)) {
+            throw new IllegalArgumentException("Principal refresh checkpoint must be complete");
+        }
+        String afterClause = afterCreatedAt == null
+                ? "" : " AND (created_at, id) > (?, ?)";
+        String sql = baseSelect() + """
+                WHERE tenant_id = ?
+                  AND principal_constraint_kind = 'SPECIFIC'
+                  AND specific_principal_id = ?
+                  AND lifecycle_state IN ('ACTIVE','SUSPENDED','SCHEDULED')
+                  AND created_at <= ?
+                """ + afterClause + " ORDER BY created_at, id LIMIT ?";
+        if (afterCreatedAt == null) {
+            return jdbc.query(sql, (rs,row) -> assignment(rs),
+                    tenant.tenantId(), principalId, Timestamp.from(snapshotAt), limit);
+        }
+        return jdbc.query(sql, (rs,row) -> assignment(rs),
+                tenant.tenantId(), principalId, Timestamp.from(snapshotAt),
+                Timestamp.from(afterCreatedAt), afterId, limit);
+    }
+
+    @Override
+    public List<AccessAssignment> findIdentityProjectionRefreshPage(
+            TenantContext tenant,
+            UUID identityId,
+            Instant snapshotAt,
+            Instant afterCreatedAt,
+            UUID afterId,
+            int limit) {
+        requirePageLimit(limit);
+        if ((afterCreatedAt == null) != (afterId == null)) {
+            throw new IllegalArgumentException("Identity projection refresh checkpoint must be complete");
+        }
+        String afterClause = afterCreatedAt == null
+                ? "" : " AND (created_at, id) > (?, ?)";
+        String sql = baseSelect() + """
+                WHERE tenant_id = ? AND identity_id = ?
+                  AND lifecycle_state IN ('ACTIVE','SUSPENDED','SCHEDULED')
+                  AND created_at <= ?
+                """ + afterClause + " ORDER BY created_at, id LIMIT ?";
+        if (afterCreatedAt == null) {
+            return jdbc.query(sql, (rs,row) -> assignment(rs),
+                    tenant.tenantId(), identityId, Timestamp.from(snapshotAt), limit);
+        }
+        return jdbc.query(sql, (rs,row) -> assignment(rs),
+                tenant.tenantId(), identityId, Timestamp.from(snapshotAt),
+                Timestamp.from(afterCreatedAt), afterId, limit);
+    }
+
+    @Override
     public Optional<AccessAssignment> findCurrentLifecyclePolicyAssignment(
             TenantContext tenant, UUID identityId, UUID ruleId) {
         return jdbc.query(baseSelect() + """
