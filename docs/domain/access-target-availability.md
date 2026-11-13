@@ -10,7 +10,7 @@ Catalog owns whether a Role or Entitlement is currently assignable/available as 
 
 Access owns `AccessAssignment`, `EffectiveAccess`, desired technical-state projections and `AccessTargetReduction`.
 
-Catalog never edits AccessAssignment. Access never infers Catalog state from persistence or provider observation.
+Catalog never edits AccessAssignment. Access never infers Catalog state from persistence or provider observation. A narrow admission/retirement race is repaired inside Access: every newly committed assignment emits ordinary projection work, which re-reads current Catalog availability and terminates that one assignment with ordinary Access semantics if terminal unavailability won the race after admission validation. The durable `AccessTargetReduction` remains the bounded bulk process for assignments already present at retirement.
 
 ## Availability decision
 
