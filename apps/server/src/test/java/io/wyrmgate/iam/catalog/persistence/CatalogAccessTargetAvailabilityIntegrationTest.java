@@ -425,6 +425,7 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
         return new AccessAssignment(
                 ids.nextId(),
                 identityId,
+                1,
                 targetKind,
                 roleId,
                 entitlementId,
@@ -450,7 +451,7 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
             @Override
             public IdentityAccessStatus accessStatus(
                     TenantContext tenant, UUID identityId) {
-                return IdentityAccessStatus.eligible("ACTIVE", 1);
+                return IdentityAccessStatus.eligible("ACTIVE", 1, 1);
             }
 
             @Override
