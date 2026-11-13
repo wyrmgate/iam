@@ -274,3 +274,14 @@ Invariant set:
 ADR-0055 adds an Identity-owned positive access-eligibility epoch. The epoch advances only when Identity crosses the ACTIVE/non-ACTIVE access-eligibility boundary. AccessAssignment captures the current epoch at admission and semantic support requires the current eligible Identity epoch to match. IdentityAccessReduction remains the durable authoritative cleanup; the epoch is the fail-safe fence that prevents a late assignment from an older eligibility era from reviving after reactivation.
 
 SPECIFIC assignments are revalidated at semantic use time. Direct Entitlement intent requires the specified Principal to remain owned by the assignment Identity on that Entitlement's exact ApplicationTarget. Role intent requires the Principal to remain owned by the Identity and the full current Role expansion to resolve to exactly one matching ApplicationTarget. Incompatibility suppresses EffectiveAccess without rewriting the assignment or selecting another Principal.
+
+
+### Coalesced technical grant demand
+
+ADR-0056 keeps DesiredGrantState cause-preserving while coalescing provider removal safety by
+ApplicationTarget + Entitlement + governed Principal. Before Integration plans a REMOVE because a
+desired cause disappeared or moved to another Principal, it asks Access whether any PRESENT desired
+cause still requires that technical tuple. REQUIRED suppresses the removal; UNAVAILABLE is retryable
+and fails closed. ABSENT desired rows retain their last resolved Principal when known so final
+cleanup remains exact. Integration may reuse successful ADD evidence across desired causes, but that
+evidence never becomes access authority.
