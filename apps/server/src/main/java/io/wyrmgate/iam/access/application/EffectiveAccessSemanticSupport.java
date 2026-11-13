@@ -33,18 +33,6 @@ public final class EffectiveAccessSemanticSupport {
         this.roleExpansion = Objects.requireNonNull(roleExpansion, "roleExpansion");
     }
 
-    /** Compatibility constructor for focused tests that do not model foreign dependency changes. */
-    public EffectiveAccessSemanticSupport(
-            AccessAssignmentRepository assignments,
-            CatalogAccessTargetAvailabilityQuery catalog,
-            RoleExpansionQuery roleExpansion) {
-        this.assignments = Objects.requireNonNull(assignments, "assignments");
-        this.identities = null;
-        this.catalogReferences = null;
-        this.catalog = Objects.requireNonNull(catalog, "catalog");
-        this.roleExpansion = Objects.requireNonNull(roleExpansion, "roleExpansion");
-    }
-
     public boolean contributes(
             TenantContext tenant,
             UUID assignmentId,
@@ -77,7 +65,6 @@ public final class EffectiveAccessSemanticSupport {
 
     private boolean identityEpochCompatible(
             TenantContext tenant, AccessAssignment assignment) {
-        if (identities == null) return true;
         var status = identities.accessStatus(tenant, assignment.identityId());
         return status.status() == IdentityAccessReferenceQuery.AccessStatus.ACCESS_ELIGIBLE
                 && status.accessEligibilityEpoch() == assignment.identityAccessEpoch();
@@ -87,7 +74,6 @@ public final class EffectiveAccessSemanticSupport {
             TenantContext tenant, AccessAssignment assignment) {
         if (assignment.principalConstraintKind()
                 != AccessAssignment.PrincipalConstraintKind.SPECIFIC) return true;
-        if (identities == null || catalogReferences == null) return true;
 
         var principal = identities.principal(tenant, assignment.specificPrincipalId());
         if (principal.status() != IdentityAccessReferenceQuery.Status.RESOLVED
@@ -105,7 +91,6 @@ public final class EffectiveAccessSemanticSupport {
             RoleExpansionQuery.Result expansion) {
         if (assignment.principalConstraintKind()
                 != AccessAssignment.PrincipalConstraintKind.SPECIFIC) return true;
-        if (identities == null) return true;
 
         var principal = identities.principal(tenant, assignment.specificPrincipalId());
         if (principal.status() != IdentityAccessReferenceQuery.Status.RESOLVED
