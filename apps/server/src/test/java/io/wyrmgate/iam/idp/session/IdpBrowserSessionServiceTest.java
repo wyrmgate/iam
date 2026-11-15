@@ -127,6 +127,24 @@ class IdpBrowserSessionServiceTest {
         assertThat(repository.single().revokedAt()).isEqualTo(NOW.plusSeconds(1));
     }
 
+    @Test
+    void codeSessionCheckDoesNotRefreshIdleAndRejectsLogoutOrForeignTenant() {
+        var repository = new InMemorySessions();
+        var identities = mock(IdentityAuthenticationQuery.class);
+        var credentials = mock(CredentialAuthenticationService.class);
+        var subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
+        when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
+        when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
+        var service = new IdpBrowserSessionService(repository, identities, credentials, new IdpSessionTokenCodec(), UUID::randomUUID);
+        var established = service.establish(TENANT, subject, new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW);
+        UUID id = established.context().sessionId();
+        assertThat(service.revalidateAuthorizationCodeSession(TENANT, id, NOW.plusSeconds(60))).isPresent();
+        assertThat(repository.single().lastSeenAt()).isEqualTo(NOW);
+        assertThat(service.revalidateAuthorizationCodeSession(new TenantContext(UUID.randomUUID()), id, NOW.plusSeconds(60))).isEmpty();
+        service.logout(TENANT, established.token(), NOW.plusSeconds(61));
+        assertThat(service.revalidateAuthorizationCodeSession(TENANT, id, NOW.plusSeconds(62))).isEmpty();
+    }
+
     private static final class InMemorySessions implements IdpBrowserSessionRepository {
         private final Map<String, IdpBrowserSession> byHash = new HashMap<>();
 
@@ -141,6 +159,12 @@ class IdpBrowserSessionServiceTest {
         }
 
         @Override
+        public Optional<IdpBrowserSession> findById(TenantContext tenant, UUID sessionId) {
+            return TENANT.equals(tenant) ? byHash.values().stream().filter(x -> x.id().equals(sessionId)).findFirst()
+                    : Optional.empty();
+        }
+
+        @Override
         public boolean touch(
                 TenantContext tenant,
                 UUID sessionId,
@@ -148,8 +172,9 @@ class IdpBrowserSessionServiceTest {
                 Instant idleExpiresAt) {
             for (Map.Entry<String, IdpBrowserSession> entry : byHash.entrySet()) {
                 IdpBrowserSession current = entry.getValue();
-                if (!current.id().equals(sessionId) || current.revokedAt() != null) continue;
-                entry.setValue(copy(current, lastSeenAt, idleExpiresAt, current.revokedAt()));
+                if (!current.id().equals(sessionId) || !current.usableAt(lastSeenAt)) continue;
+                entry.setValue(copy(current, current.lastSeenAt().isAfter(lastSeenAt) ? current.lastSeenAt() : lastSeenAt,
+                        current.idleExpiresAt().isAfter(idleExpiresAt) ? current.idleExpiresAt() : idleExpiresAt, current.revokedAt()));
                 return true;
             }
             return false;

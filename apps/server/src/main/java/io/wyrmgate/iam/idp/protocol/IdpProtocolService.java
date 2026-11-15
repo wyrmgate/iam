@@ -180,11 +180,32 @@ public final class IdpProtocolService {
         if (!current.id().equals(code.clientRegistrationId())
                 || current.revision() != code.clientRegistrationRevision()
                 || !current.clientId().equals(code.clientId())
+                || !current.applicationId().equals(code.applicationId())
+                || !current.allowedScopes().containsAll(code.scopes())
                 || !Objects.equals(request.redirectUri(), code.redirectUri())
                 || !current.redirectUris().contains(code.redirectUri())
                 || !PKCE_VERIFIER.matcher(nullToEmpty(request.codeVerifier())).matches()
                 || !pkceMatches(request.codeVerifier(), code.pkceChallenge())) {
             throw ProtocolException.direct("invalid_grant");
+        }
+
+        try {
+            SessionContext session = sessions.revalidateAuthorizationCodeSession(tenant, code.browserSessionId(), now)
+                    .orElseThrow(() -> ProtocolException.direct("invalid_grant"));
+            if (!session.sessionId().equals(code.browserSessionId())
+                    || !session.principalId().equals(code.principalId())
+                    || !session.identityId().equals(code.identityId())
+                    || !session.createdAt().equals(code.authTime())) {
+                throw ProtocolException.direct("invalid_grant");
+            }
+            if (current.requiresGovernedAccess() && !applicationAccess.hasCurrentAccess(
+                    tenant, session.identityId(), current.applicationId(), now)) {
+                throw ProtocolException.direct("invalid_grant");
+            }
+        } catch (ProtocolException denied) {
+            throw denied;
+        } catch (RuntimeException unavailable) {
+            throw ProtocolException.direct("temporarily_unavailable");
         }
 
         IdpTokenIssuer.TokenPair issued = tokens.issue(tenant, code, now);
@@ -318,25 +339,33 @@ public final class IdpProtocolService {
             String state,
             String codeChallenge,
             String codeChallengeMethod,
-            String nonce) {}
+            String nonce) {
+        @Override public String toString() { return "AuthorizationRequest[REDACTED]"; }
+    }
 
     public record AuthorizationResult(
             String redirectUri,
             String code,
-            String state) {}
+            String state) {
+        @Override public String toString() { return "AuthorizationResult[REDACTED]"; }
+    }
 
     public record TokenRequest(
             String grantType,
             String code,
             String clientId,
             String redirectUri,
-            String codeVerifier) {}
+            String codeVerifier) {
+        @Override public String toString() { return "TokenRequest[REDACTED]"; }
+    }
 
     public record TokenResult(
             String accessToken,
             String idToken,
             long expiresInSeconds,
-            String scope) {}
+            String scope) {
+        @Override public String toString() { return "TokenResult[REDACTED]"; }
+    }
 
     public static final class ProtocolException extends RuntimeException {
         private final String error;

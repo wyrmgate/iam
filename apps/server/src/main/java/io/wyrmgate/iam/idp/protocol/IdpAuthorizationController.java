@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriUtils;
 
-/** Public Authorization Code + PKCE adapter. Browser-session establishment is a later slice. */
+/** Public Authorization Code + PKCE adapter over current first-party sessions. */
 @RestController
 @ConditionalOnProperty(prefix = "iam.idp", name = "enabled", havingValue = "true")
 public class IdpAuthorizationController {

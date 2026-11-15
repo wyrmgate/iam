@@ -82,3 +82,7 @@ Concrete upstream OIDC/SAML login providers and optional OAuth/OIDC extensions a
 ### Local password change
 
 ADR-0064 permits only a current first-party browser session's exact local PASSWORD Credential to be changed through the dedicated same-origin `/api/auth/password/change` interaction (CSRF, current password reproof, new password 15–1024 characters). Local verifier replacement, old authoritative revocation and completed rotation are atomic; old Credential revision sessions fail closed. No password-derived request fingerprint or plaintext persistence, generic enrollment, reset, external provider call or ordinary Credential secret API is introduced. Existing administrative `rotate` remains a metadata plan.
+
+### Authorization-code redemption freshness (ADR-0066)
+
+Revalidate the original tenant-scoped session, exact subject and effective Credential revision and current governed application access (when required) after code consumption and client/redirect/PKCE binding checks, before signing. Missing/denied context fails closed; unavailable mandatory evaluation produces no token. Exchange is not browser activity. Session touches are monotonic and reject expired/revoked rows. Previously issued stateless JWTs are not retroactively revoked.

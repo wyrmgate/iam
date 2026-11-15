@@ -23,6 +23,9 @@ public interface IdpBrowserSessionRepository {
         return Optional.empty();
     }
 
+    /** Internal lookup for a code already bound to a session, never a possession credential. */
+    Optional<IdpBrowserSession> findById(TenantContext tenant, UUID sessionId);
+
     boolean touch(
             TenantContext tenant,
             UUID sessionId,

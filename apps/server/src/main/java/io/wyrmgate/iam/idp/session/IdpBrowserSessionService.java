@@ -144,6 +144,16 @@ public final class IdpBrowserSessionService {
                         .map(context -> new ResolvedSession(located.tenant(), context)));
     }
 
+    /** Internal code-redemption check; never extends browser idle lifetime. */
+    public Optional<SessionContext> revalidateAuthorizationCodeSession(
+            TenantContext tenant, UUID sessionId, Instant now) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(sessionId, "sessionId");
+        Objects.requireNonNull(now, "now");
+        return sessions.findById(tenant, sessionId)
+                .flatMap(session -> revalidate(tenant, session, now, false));
+    }
+
     /** Internal exact authenticator context for the dedicated current-session password change. */
     Optional<PasswordChangeSubject> resolvePasswordChangeSubject(String rawToken, Instant now) {
         return hash(rawToken).flatMap(sessions::findByTokenHash)
@@ -182,6 +192,12 @@ public final class IdpBrowserSessionService {
             TenantContext tenant,
             IdpBrowserSession session,
             Instant now) {
+        return revalidate(tenant, session, now, true);
+    }
+
+    private Optional<SessionContext> revalidate(TenantContext tenant, IdpBrowserSession session,
+            Instant now, boolean browserActivity) {
+        if (now.isBefore(session.createdAt())) return Optional.empty();
         if (!session.usableAt(now)) {
             revokeQuietly(tenant, session.id(), now);
             return Optional.empty();
@@ -201,9 +217,17 @@ public final class IdpBrowserSessionService {
             return Optional.empty();
         }
 
-        Instant idleExpiry = minimum(now.plus(idleTimeout), session.absoluteExpiresAt());
-        if (!idleExpiry.isAfter(now)
-                || !sessions.touch(tenant, session.id(), now, idleExpiry)) {
+        Instant idleExpiry = session.idleExpiresAt();
+        if (browserActivity) {
+            Instant proposed = minimum(now.plus(idleTimeout), session.absoluteExpiresAt());
+            if (!proposed.isAfter(now) || !sessions.touch(tenant, session.id(), now, proposed)) {
+                return Optional.empty();
+            }
+            // Return the current persisted bounds, including concurrent later activity.
+            var current = sessions.findById(tenant, session.id());
+            if (current.isEmpty() || !current.get().usableAt(now)) return Optional.empty();
+            idleExpiry = current.get().idleExpiresAt();
+        } else if (!idleExpiry.isAfter(now)) {
             return Optional.empty();
         }
         return Optional.of(new SessionContext(
