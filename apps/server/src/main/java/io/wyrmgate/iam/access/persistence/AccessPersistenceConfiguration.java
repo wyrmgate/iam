@@ -8,6 +8,7 @@ import io.wyrmgate.iam.access.application.AccessTargetReductionRepository;
 import io.wyrmgate.iam.access.application.AccessTargetReductionWorkSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
 import io.wyrmgate.iam.access.application.AccessAdmissionCoordinator;
+import io.wyrmgate.iam.access.application.AccessPrivilegeIncreaseGuard;
 import io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery;
 import io.wyrmgate.iam.access.application.AccessAdmissionConflictQueryService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
@@ -96,7 +97,7 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentFactSink facts,
             AccessAssignmentBoundaryScheduler boundaries,
             IdGenerator idGenerator,
-            TransactionExecutor transactionExecutor) {
+            TransactionExecutor transactionExecutor, AccessAdmissionCoordinator coordinator, AccessPrivilegeIncreaseGuard privilegeGuard) {
         return new AccessAssignmentCommandService(
                 repository,
                 identityReferences,
@@ -106,7 +107,7 @@ public class AccessPersistenceConfiguration {
                 facts,
                 boundaries,
                 idGenerator,
-                transactionExecutor);
+                transactionExecutor, coordinator, privilegeGuard);
     }
 
     @Bean

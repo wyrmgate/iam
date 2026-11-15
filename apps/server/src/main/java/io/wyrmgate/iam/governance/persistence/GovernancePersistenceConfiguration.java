@@ -5,6 +5,8 @@ import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.access.application.AccessIntentApplicationQuery;
 import io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService;
 import io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery;
+import io.wyrmgate.iam.access.application.AccessPrivilegeIncreaseGuard;
+import io.wyrmgate.iam.governance.application.GovernanceAccessPrivilegeIncreaseGuard;
 import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
 import io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand;
 import io.wyrmgate.iam.access.application.AccessReviewSnapshotQuery;
@@ -363,6 +365,12 @@ public class GovernancePersistenceConfiguration {
     AccessRequestAccessApplicationScheduler accessRequestAccessApplicationScheduler(
             AccessRequestAccessApplicationService service) {
         return new AccessRequestAccessApplicationScheduler(service);
+    }
+
+    @Bean
+    AccessPrivilegeIncreaseGuard accessPrivilegeIncreaseGuard(GovernancePolicyService policies, CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roles, AccessAdmissionConflictQuery conflicts, GovernanceExceptionQuery exceptions) {
+        return new GovernanceAccessPrivilegeIncreaseGuard(policies, catalog, roles, conflicts, exceptions);
     }
 
     @Bean
