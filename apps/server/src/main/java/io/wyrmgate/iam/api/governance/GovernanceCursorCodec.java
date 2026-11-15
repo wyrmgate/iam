@@ -88,6 +88,14 @@ final class GovernanceCursorCodec {
         }
     }
 
+    String encodeFindings(TenantContext tenant,String state,Position position){
+        return encodeReviewPosition("governance-findings",tenant,state,position);
+    }
+
+    Position decodeFindings(String cursor,TenantContext tenant,String state){
+        return decodeReviewPosition(cursor,"governance-findings",tenant,state);
+    }
+
     String encodeReviewCampaigns(
             TenantContext tenant,
             Position position) {

@@ -481,6 +481,11 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    io.wyrmgate.iam.governance.application.GovernanceFindingQueryService governanceFindingQueryService(GovernanceFindingRepository findings){
+        return new io.wyrmgate.iam.governance.application.GovernanceFindingQueryService(findings);
+    }
+
+    @Bean
     GovernanceObservationReporter governanceObservationReporter(
             GovernanceFindingRepository findings,
             IdGenerator ids,
