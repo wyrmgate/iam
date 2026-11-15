@@ -84,6 +84,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
     private static JdbcAccessAssignmentRepository assignmentRepository;
     private static AccessIntentCommandService accessIntent;
+    private static io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery conflicts;
 
     private TenantContext tenant;
     private JdbcAccessRequestRepository requestRepository;
@@ -160,6 +161,8 @@ class AccessRequestAccessApplicationIntegrationTest {
                         boundaries,
                         ids,
                         transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
+        conflicts = new io.wyrmgate.iam.access.application.AccessAdmissionConflictQueryService(assignmentRepository, identityReferences, catalogAvailability, roleExpansion,
+                new io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport(assignmentRepository, identityReferences, new CatalogQueryService(catalogRepository), catalogAvailability, roleExpansion));
         accessIntent = new AccessIntentCommandService(
                 assignmentRepository, assignmentCommands);
     }
@@ -594,6 +597,37 @@ class AccessRequestAccessApplicationIntegrationTest {
         assertThat(processor(accessIntent, NOW.plusSeconds(3)).processAvailable().processed()).isEqualTo(1);
         assertThat(requestRepository.findItem(tenant, authorized.id()).orElseThrow().state()).isEqualTo(ItemState.CANCELLED);
         assertThat(requestDerivedAssignmentCount(authorized.id())).isZero();
+    }
+
+    @Test
+    void independentConcurrentAdmissionsCannotBothPassAnOverlappingConflict() throws Exception {
+        var beneficiary = identity("Concurrent subject");
+        var left = entitlement().entitlementId();
+        var right = entitlement().entitlementId();
+        var from = NOW.plusSeconds(3600);
+        var until = from.plusSeconds(3600);
+        var coordinator = io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions);
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        java.util.function.BiFunction<java.util.UUID,java.util.UUID,Boolean> admit = (target,counterpart) ->
+                coordinator.execute(tenant, beneficiary.id(), permit -> {
+                    if (conflicts.overlappingEntitlementIds(tenant, beneficiary.id(), java.util.Set.of(counterpart), from, until).contains(counterpart)) return false;
+                    var reference = new CatalogQueryService(catalogRepository).resolveActiveEntitlement(tenant,target);
+                    accessIntent.applyRequestedAccess(tenant,new AccessIntentCommand.RequestedAccess(ids.nextId(),beneficiary.id(),
+                            AccessIntentCommand.TargetKind.ENTITLEMENT,null,target,AccessIntentCommand.PrincipalConstraintKind.ANY,null,from,until),
+                            new AccessIntentCommand.Admission(identityReferences.accessStatus(tenant,beneficiary.id()).accessEligibilityEpoch(),
+                                    io.wyrmgate.iam.catalog.application.AccessTargetFingerprint.entitlement(target,reference.applicationTargetId())), NOW);
+                    return true;
+                });
+        try (var workers = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = workers.submit(() -> { gate.await(); return admit.apply(left,right); });
+            var second = workers.submit(() -> { gate.await(); return admit.apply(right,left); });
+            gate.countDown();
+            assertThat(java.util.List.of(first.get(15,java.util.concurrent.TimeUnit.SECONDS),second.get(15,java.util.concurrent.TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true,false);
+        }
+        assertThat(conflicts.overlappingEntitlementIds(tenant,beneficiary.id(),java.util.Set.of(left,right),from,until)).hasSize(1);
+        assertThat(conflicts.overlappingEntitlementIds(tenant,beneficiary.id(),java.util.Set.of(left,right),until,until.plusSeconds(1))).isEmpty();
+        assertThat(conflicts.overlappingEntitlementIds(tenant,beneficiary.id(),java.util.Set.of(left,right),NOW,from)).isEmpty();
     }
 
     private RequestAdmissionContext contextFor(TenantContext t, AccessRequestModels.AccessRequest request,
