@@ -75,7 +75,7 @@ class IdpInteractiveLoginServiceTest {
         var service = new IdpInteractiveLoginService(clients, identities, credentials, sessions, (t, k, id) -> true, mock(IdpSecurityEvidence.class), UUID::randomUUID);
         assertThat(service.authenticate("client", UUID.randomUUID(), "alice", new char[1025], Instant.now())).isEmpty();
         assertThat(service.authenticate("client", UUID.randomUUID(), "a".repeat(513), "secret".toCharArray(), Instant.now())).isEmpty();
-        org.mockito.Mockito.verifyNoInteractions(clients, identities, credentials, sessions, (t, k, id) -> true, mock(IdpSecurityEvidence.class), UUID::randomUUID);
+        org.mockito.Mockito.verifyNoInteractions(clients, identities, credentials, sessions);
     }
 
     @Test
