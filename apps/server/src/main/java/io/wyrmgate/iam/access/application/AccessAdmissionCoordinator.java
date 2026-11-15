@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 /** Access-owned bounded local admission boundary; no provider calls or human waits. */
 public final class AccessAdmissionCoordinator {
+    private final ThreadLocal<Permit> current = new ThreadLocal<>();
     private final LockRepository locks;
     private final TransactionExecutor transactions;
 
@@ -20,15 +21,28 @@ public final class AccessAdmissionCoordinator {
         Objects.requireNonNull(tenant);
         Objects.requireNonNull(identityId);
         Objects.requireNonNull(work);
+        Permit existing = current.get();
+        if (existing != null) {
+            existing.require(tenant, identityId);
+            return work.apply(existing);
+        }
         return transactions.required(() -> {
             locks.lock(tenant, identityId);
             Permit permit = new Permit(tenant, identityId);
+            current.set(permit);
             try {
                 return work.apply(permit);
             } finally {
                 permit.active = false;
+                current.remove();
             }
         });
+    }
+
+    public void requireActive(TenantContext tenant, UUID identityId) {
+        Permit permit = current.get();
+        if (permit == null) throw new IllegalStateException("current Access admission scope required");
+        permit.require(tenant, identityId);
     }
 
     @FunctionalInterface

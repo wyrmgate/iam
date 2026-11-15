@@ -84,7 +84,7 @@ public final class AccessAssignmentCommandService {
                 now));
     }
 
-    public AccessAssignment createRequestedEntitlementAssignment(
+    AccessAssignment createRequestedEntitlementAssignment(
             TenantContext tenant,
             UUID requestItemId,
             UUID identityId,
@@ -97,7 +97,8 @@ public final class AccessAssignmentCommandService {
             Instant now) {
         Objects.requireNonNull(requestItemId, "requestItemId");
         Objects.requireNonNull(admission, "admission");
-        return admissionCoordinator.execute(tenant, identityId, permit -> createEntitlementAssignmentInternal(
+        admissionCoordinator.requireActive(tenant, identityId);
+        return createEntitlementAssignmentInternal(
                 tenant,
                 identityId,
                 entitlementId,
@@ -110,10 +111,10 @@ public final class AccessAssignmentCommandService {
                 null,
                 null,
                 admission,
-                now));
+                now);
     }
 
-    public AccessAssignment createLifecyclePolicyEntitlementAssignment(
+    AccessAssignment createLifecyclePolicyEntitlementAssignment(
             TenantContext tenant,
             UUID ruleId,
             UUID identityId,
@@ -122,7 +123,8 @@ public final class AccessAssignmentCommandService {
             UUID correlationId,
             UUID causationId) {
         Objects.requireNonNull(ruleId, "ruleId");
-        return admissionCoordinator.execute(tenant, identityId, permit -> createEntitlementAssignmentInternal(
+        admissionCoordinator.requireActive(tenant, identityId);
+        return createEntitlementAssignmentInternal(
                 tenant,
                 identityId,
                 entitlementId,
@@ -135,7 +137,7 @@ public final class AccessAssignmentCommandService {
                 correlationId,
                 causationId,
                 null,
-                now));
+                now);
     }
 
     private AccessAssignment createEntitlementAssignmentInternal(
@@ -311,7 +313,7 @@ public final class AccessAssignmentCommandService {
                 now));
     }
 
-    public AccessAssignment createRequestedRoleAssignment(
+    AccessAssignment createRequestedRoleAssignment(
             TenantContext tenant,
             UUID requestItemId,
             UUID identityId,
@@ -324,7 +326,8 @@ public final class AccessAssignmentCommandService {
             Instant now) {
         Objects.requireNonNull(requestItemId, "requestItemId");
         Objects.requireNonNull(admission, "admission");
-        return admissionCoordinator.execute(tenant, identityId, permit -> createRoleAssignmentInternal(
+        admissionCoordinator.requireActive(tenant, identityId);
+        return createRoleAssignmentInternal(
                 tenant,
                 identityId,
                 roleId,
@@ -337,10 +340,10 @@ public final class AccessAssignmentCommandService {
                 null,
                 null,
                 admission,
-                now));
+                now);
     }
 
-    public AccessAssignment createLifecyclePolicyRoleAssignment(
+    AccessAssignment createLifecyclePolicyRoleAssignment(
             TenantContext tenant,
             UUID ruleId,
             UUID identityId,
@@ -349,7 +352,8 @@ public final class AccessAssignmentCommandService {
             UUID correlationId,
             UUID causationId) {
         Objects.requireNonNull(ruleId, "ruleId");
-        return admissionCoordinator.execute(tenant, identityId, permit -> createRoleAssignmentInternal(
+        admissionCoordinator.requireActive(tenant, identityId);
+        return createRoleAssignmentInternal(
                 tenant,
                 identityId,
                 roleId,
@@ -362,7 +366,7 @@ public final class AccessAssignmentCommandService {
                 correlationId,
                 causationId,
                 null,
-                now));
+                now);
     }
 
     private AccessAssignment createRoleAssignmentInternal(
