@@ -179,6 +179,7 @@ public class GovernancePersistenceConfiguration {
             RoleExpansionQuery roleExpansion,
             EffectiveAccessQuery effectiveAccess,
             GovernanceExceptionQuery exceptions,
+            IdentityAccessReferenceQuery identities,
             IdGenerator ids,
             TransactionExecutor transactions) {
         return new GovernancePolicyEligibilityEvaluator(
@@ -189,6 +190,7 @@ public class GovernancePersistenceConfiguration {
                 roleExpansion,
                 effectiveAccess,
                 exceptions,
+                identities,
                 ids,
                 transactions);
     }

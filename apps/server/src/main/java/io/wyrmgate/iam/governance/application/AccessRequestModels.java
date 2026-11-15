@@ -153,9 +153,13 @@ public final class AccessRequestModels {
     public record EligibilityResult(
             EligibilityOutcome outcome,
             String code,
-            PlanSpec approvalPlan) {
+            PlanSpec approvalPlan,
+            RequestAdmissionContext context) {
         public EligibilityResult {
             Objects.requireNonNull(outcome, "outcome");
+            if ((outcome == EligibilityOutcome.AUTHORIZED || outcome == EligibilityOutcome.APPROVAL_REQUIRED) != (context != null)) {
+                throw new IllegalArgumentException("positive eligibility requires material admission context");
+            }
             if (outcome == EligibilityOutcome.APPROVAL_REQUIRED
                     && approvalPlan == null) {
                 throw new IllegalArgumentException(
@@ -168,27 +172,27 @@ public final class AccessRequestModels {
             }
         }
 
-        public static EligibilityResult authorized() {
+        public static EligibilityResult authorized(RequestAdmissionContext context) {
             return new EligibilityResult(
-                    EligibilityOutcome.AUTHORIZED, "eligible", null);
+                    EligibilityOutcome.AUTHORIZED, "eligible", null, context);
         }
 
         public static EligibilityResult approvalRequired(
-                PlanSpec plan) {
+                PlanSpec plan, RequestAdmissionContext context) {
             return new EligibilityResult(
                     EligibilityOutcome.APPROVAL_REQUIRED,
                     "approval_required",
-                    plan);
+                    plan, context);
         }
 
         public static EligibilityResult denied(String code) {
             return new EligibilityResult(
-                    EligibilityOutcome.DENIED, code, null);
+                    EligibilityOutcome.DENIED, code, null, null);
         }
 
         public static EligibilityResult unavailable(String code) {
             return new EligibilityResult(
-                    EligibilityOutcome.UNAVAILABLE, code, null);
+                    EligibilityOutcome.UNAVAILABLE, code, null, null);
         }
     }
 
