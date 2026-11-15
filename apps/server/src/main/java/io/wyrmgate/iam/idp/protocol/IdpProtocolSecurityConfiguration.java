@@ -25,7 +25,7 @@ public class IdpProtocolSecurityConfiguration {
                         "/.well-known/openid-configuration",
                         "/oauth2/jwks",
                         "/oauth2/authorize",
-                        "/oauth2/token")
+                        "/oauth2/token",IdpFederationFlow.START,IdpFederationFlow.CALLBACK)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());

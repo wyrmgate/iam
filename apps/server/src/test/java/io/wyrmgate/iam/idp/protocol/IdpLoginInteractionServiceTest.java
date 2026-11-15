@@ -101,7 +101,7 @@ class IdpLoginInteractionServiceTest {
 
     @Test void promptNoneNeverStartsInteractionAndPromptLoginDoesNotReuseSession() {
         configure(1);
-        var controller = new IdpAuthorizationController(protocol, interactions, sessions, new IdpCsrfTokenCodec());
+        var controller = new IdpAuthorizationController(protocol, interactions, sessions, new IdpCsrfTokenCodec(),mock(IdpFederationFlow.class));
         when(sessions.resolve(eq(tenant), isNull(), any(Instant.class))).thenReturn(Optional.empty());
         assertThatThrownBy(() -> controller.authorize("code", "client", REDIRECT, "openid", STATE,
                 "a".repeat(43), "S256", null, "none", null, null))

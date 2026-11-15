@@ -40,13 +40,14 @@ public class IdpAuthorizationController {
     private final IdpLoginInteractionService interactions;
     private final IdpBrowserSessionService sessions;
     private final IdpCsrfTokenCodec csrf;
+    private final IdpFederationFlow federation;
 
     public IdpAuthorizationController(IdpProtocolService protocol, IdpLoginInteractionService interactions,
-            IdpBrowserSessionService sessions, IdpCsrfTokenCodec csrf) {
+            IdpBrowserSessionService sessions, IdpCsrfTokenCodec csrf,IdpFederationFlow federation) {
         this.protocol = protocol;
         this.interactions = interactions;
         this.sessions = sessions;
-        this.csrf = csrf;
+        this.csrf = csrf;this.federation=federation;
     }
 
     @GetMapping("/oauth2/authorize")
@@ -82,7 +83,7 @@ public class IdpAuthorizationController {
                 .header("Referrer-Policy", "no-referrer")
                 .header("Content-Security-Policy", "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
                 .header(HttpHeaders.SET_COOKIE, interactionCookie(interaction.browserProof(), Duration.ofMinutes(5)).toString())
-                .body(loginPage(interaction.formProof()));
+                .body(loginPage(interaction.formProof(),federation.available(validated)));
     }
 
     @PostMapping(path = "/oauth2/authorize", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
@@ -111,6 +112,34 @@ public class IdpAuthorizationController {
         }
     }
 
+    @PostMapping(path=IdpFederationFlow.START,consumes=MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    ResponseEntity<?> startFederation(@RequestParam(name="interaction",required=false)String form,
+        @CookieValue(name=IdpLoginInteractionService.COOKIE,required=false)String browser,
+        @CookieValue(name=BROWSER_SESSION_COOKIE,required=false)String previousSession){
+        var result=federation.start(form,browser,previousSession,Instant.now());
+        return ResponseEntity.status(303).location(result.location()).cacheControl(CacheControl.noStore()).header("Referrer-Policy","no-referrer")
+            .header(HttpHeaders.SET_COOKIE,federationCookie(result.browser(),Duration.ofMinutes(5)).toString(),
+                interactionCookie("",Duration.ZERO).toString()).build();
+    }
+    @GetMapping(IdpFederationFlow.CALLBACK)
+    ResponseEntity<?> finishFederation(@RequestParam(name="code",required=false)String code,@RequestParam(name="state",required=false)String state,
+        @RequestParam(name="iss",required=false)String issuer,@RequestParam(name="error",required=false)String error,
+        @CookieValue(name=IdpFederationFlow.COOKIE,required=false)String browser){
+        try {
+            if(error!=null)throw ProtocolException.direct("access_denied");
+            var completed=federation.complete(code,state,browser,issuer,Instant.now());
+            return ResponseEntity.status(303).location(redirect(completed.result().redirectUri(),Map.of("code",completed.result().code(),"state",completed.result().state())))
+                .cacheControl(CacheControl.noStore()).header("Referrer-Policy","no-referrer")
+                .header(HttpHeaders.SET_COOKIE,IdpBrowserSessionController.sessionCookie(completed.session().token()).toString(),
+                    IdpBrowserSessionController.csrfCookie(csrf.issue()).toString(),federationCookie("",Duration.ZERO).toString()).build();
+        }catch(RuntimeException failure){
+            return ResponseEntity.badRequest().cacheControl(CacheControl.noStore()).header("Referrer-Policy","no-referrer")
+                .header(HttpHeaders.SET_COOKIE,federationCookie("",Duration.ZERO).toString()).body(Map.of("error","access_denied"));
+        }
+    }
+    private static ResponseCookie federationCookie(String value,Duration age){
+        return ResponseCookie.from(IdpFederationFlow.COOKIE,value).secure(true).httpOnly(true).sameSite("Lax").path("/").maxAge(age).build();
+    }
     private static ResponseEntity<Void> redirectResult(AuthorizationResult result) {
         return ResponseEntity.status(302)
                 .location(redirect(result.redirectUri(), Map.of("code", result.code(), "state", result.state())))
@@ -122,7 +151,7 @@ public class IdpAuthorizationController {
                 .secure(true).httpOnly(true).sameSite("Strict").path("/").maxAge(age).build();
     }
 
-    private static String loginPage(String formProof) {
+    private static String loginPage(String formProof,boolean upstream) {
         // formProof is generated base64url, never user-controlled HTML.
         return """
                 <!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -133,8 +162,8 @@ public class IdpAuthorizationController {
                 <input type="hidden" name="interaction" value="%s">
                 <p><label>Username <input name="principalKey" autocomplete="username" maxlength="512" required></label></p>
                 <p><label>Password <input type="password" name="password" autocomplete="current-password" maxlength="1024" required></label></p>
-                <button type="submit">Sign in</button></form></main></body></html>
-                """.formatted(formProof);
+                <button type="submit">Sign in</button></form>%s</main></body></html>
+                """.formatted(formProof,upstream?("<form method=\"post\" action=\"/oauth2/federation/start\"><input type=\"hidden\" name=\"interaction\" value=\""+formProof+"\"><button type=\"submit\">Sign in with external identity provider</button></form>"):"");
     }
 
     @PostMapping(

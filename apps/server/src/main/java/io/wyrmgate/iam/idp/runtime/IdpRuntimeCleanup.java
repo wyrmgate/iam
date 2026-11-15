@@ -10,6 +10,7 @@ final class IdpRuntimeCleanup {
 
     @Scheduled(fixedDelayString = "${iam.idp.cleanup.interval:PT1M}")
     void clean() {
+        jdbc.update("DELETE FROM platform.idp_federation_interaction WHERE id IN (SELECT id FROM platform.idp_federation_interaction WHERE expires_at<=clock_timestamp() ORDER BY expires_at,id LIMIT 200 FOR UPDATE SKIP LOCKED)");
         jdbc.update("""
                 DELETE FROM platform.idp_login_interaction
                 WHERE interaction_hash IN (
