@@ -71,7 +71,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 jdbc, objectMapper);
         observations = new JdbcIntegrationObservationRepository(jdbc);
         var outbox = new JdbcOutboxRepository(jdbc);
-        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids, jdbc);
         IntegrationAdministrationFactSink noFacts = new IntegrationAdministrationFactSink() {
             @Override
             public void connectorChanged(

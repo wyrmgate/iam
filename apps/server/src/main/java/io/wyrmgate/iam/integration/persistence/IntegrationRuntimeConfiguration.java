@@ -104,8 +104,8 @@ public class IntegrationRuntimeConfiguration {
     @Bean
     IntegrationObservedAccessFactSink integrationObservedAccessFactSink(
             JdbcOutboxRepository outboxRepository,
-            IdGenerator idGenerator) {
-        return new JdbcIntegrationObservedAccessFactSink(outboxRepository, idGenerator);
+            IdGenerator idGenerator, JdbcTemplate jdbcTemplate) {
+        return new JdbcIntegrationObservedAccessFactSink(outboxRepository, idGenerator, jdbcTemplate);
     }
 
     @Bean

@@ -53,7 +53,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
         tenants = new TenantTestFixture(jdbc, ids);
         json = new ObjectMapper().findAndRegisterModules();
         var outbox = new JdbcOutboxRepository(jdbc);
-        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
+        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids, jdbc);
         repository = new JdbcIntegrationRuntimeRepository(
                 jdbc, json, ids, observedAccessFacts);
         transactions = new SpringTransactionExecutor(new DataSourceTransactionManager(dataSource));
