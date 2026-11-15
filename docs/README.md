@@ -41,7 +41,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`security/control-plane-authentication.md`](security/control-plane-authentication.md) — external/federated and first-party control-plane authentication and bootstrap.
 - [`security/first-run-web-setup.md`](security/first-run-web-setup.md) — secured first-run web setup adapter.
 - [`security/identity-provider-sso.md`](security/identity-provider-sso.md) — first-party authentication, federation and SSO security boundary.
-- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0072.
+- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0073.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event semantics.
 - [`api/idp-sso-contracts.md`](api/idp-sso-contracts.md) — OIDC/OAuth/JWKS/session/claim/secret-boundary implementation contract.
@@ -99,7 +99,7 @@ The agreed v3 layered architecture reconciliation is now represented durably by 
 - The first reconciled Identity backend migration is V13: Identity lifecycle transition mechanics reuse the framework-neutral lifecycle kernel while Identity retains its state/action graph, and the previously documented Organization/manager/membership/ownership model is now persisted as tenant-safe normalized authoritative state with temporal validity, typed provenance and optimistic revision. Public relationship APIs and source-driven relationship extraction remain separate future contracts.
 - [`architecture/layered-architecture.md`](architecture/layered-architecture.md) consolidates L1–L6 and Layer 6A–6I. The image-86 internal `Layer 6L` heading is treated as a labeling error; the reconciled area is 6I Runtime/Deployment/Availability/Recovery.
 
-The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0072 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
+The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0073 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
 
 OD-005 remains open until a concrete production provider environment implements the accepted ADR-0043 objectives and measured recovery/failover evidence proves them. OD-006 legacy migration/cutover remains open.
 
@@ -114,3 +114,5 @@ ADR-0069 / V32 introduces server-owned Catalog authentication target routing and
 Authentication v3: ADR-0070/V33 implements shared admission budgets, bounded runtime retention, security evidence, bounded access and signing checks; ADR-0071 replaces the unbound federation SPI with Integration-owned typed trust/link/proof and a current-state authentication anchor. The first-party runtime is local-only; concrete upstream adapter and federated session activation remain Integration follow-up. See [IdP contracts](api/idp-sso-contracts.md).
 
 Integration v3 (#524) starts with ADR-0072: exact binding-scoped account/entitlement mapping for grant realization; no inferred provider account routing. Existing authority and historical evidence are preserved.
+
+ADR-0073 adds bounded expired provisioning lease uncertainty handling, serialized completion/append and retry exhaustion; explicit recovery and convergence remain #524 work.

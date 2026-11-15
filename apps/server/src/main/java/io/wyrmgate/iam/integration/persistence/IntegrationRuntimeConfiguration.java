@@ -225,6 +225,12 @@ public class IntegrationRuntimeConfiguration {
     }
 
     @Bean
+    ProvisioningLeaseRecoveryScheduler provisioningLeaseRecoveryScheduler(
+            JdbcIntegrationRuntimeRepository repository, TransactionExecutor transactions) {
+        return new ProvisioningLeaseRecoveryScheduler(repository, transactions);
+    }
+
+    @Bean
     ConnectorWorkerProtocolService connectorWorkerProtocolService(
             JdbcIntegrationRuntimeRepository workers,
             DesiredAccessStateQuery desiredStateQuery,

@@ -344,6 +344,34 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void expiredMutationIsBlockedAsUncertainAndNeverBlindlyReplayed() {
+        TenantContext tenant = tenant("expired-mutation");
+        UUID binding = connector(tenant, "runtime.test", "1.0", true);
+        WorkerExternalSubject subject = new WorkerExternalSubject("https://issuer.example", "expired-worker");
+        worker(tenant, subject, binding, WorkerCapability.PROVISION);
+        var registration = repository.findEnabledByExternalSubject(subject).orElseThrow();
+        UUID taskId = createProvisioning(tenant, binding, "DESIRED_GRANT", ids.nextId(), 6);
+        var service = service((t, kind, id) -> Freshness.current(6));
+        var session = service.establishSession(registration, "pod-expired", List.of(1),
+                List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.PROVISION)));
+        var lease = service.claim(registration, session.id(), 1, 0).getFirst();
+        assertThat(transactions.required(() -> repository.blockExpiredProvisioning(100, Instant.now()))).isZero();
+        jdbc.update("UPDATE platform.connector_work_lease SET claimed_at=?, lease_expires_at=?, updated_at=? WHERE tenant_id=? AND work_id=?",
+                Timestamp.from(NOW), Timestamp.from(NOW.plusSeconds(1)), Timestamp.from(NOW.plusSeconds(1)), tenant.tenantId(), taskId);
+        // Preserve a valid lease timestamp constraint for the simulated worker loss.
+        assertThat(transactions.required(() -> repository.blockExpiredProvisioning(100, Instant.now()))).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT state FROM integration.provisioning_task WHERE tenant_id=? AND id=?",
+                String.class, tenant.tenantId(), taskId)).isEqualTo("BLOCKED");
+        assertThat(jdbc.queryForObject("SELECT failure_code FROM integration.provisioning_task WHERE tenant_id=? AND id=?",
+                String.class, tenant.tenantId(), taskId)).isEqualTo("provider_effect_unknown_after_lease_expiry");
+        assertThat(service.claim(registration, session.id(), 1, 0)).isEmpty();
+        assertThat(transactions.required(() -> repository.blockExpiredProvisioning(100, Instant.now()))).isZero();
+        assertThatThrownBy(() -> service.complete(registration, session.id(), taskId, lease.lease().leaseId(),
+                lease.lease().leaseEpoch(), success(ReconciliationCompleteness.UNKNOWN)))
+                .isInstanceOf(WorkerProtocolException.class);
+    }
+
+    @Test
     void desiredGrantCurrentRevisionCanBeClaimed() {
         TenantContext tenant = tenant("grant");
         UUID binding = connector(tenant, "runtime.test", "1.0", true);

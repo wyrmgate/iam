@@ -560,6 +560,7 @@ public final class JdbcIntegrationRuntimeRepository
             WorkerSession session, UUID workId, UUID leaseId, long leaseEpoch,
             UUID batchId, int sequence, String requestFingerprint,
             List<ProviderObservation> observations, Instant now) {
+        lockProcess(session.tenant(), WorkKind.RECONCILE, workId);
         requireCurrentLease(session, WorkKind.RECONCILE, workId, leaseId, leaseEpoch, now, true);
         String scope = jdbc.queryForObject("""
                 SELECT scope_object_class
@@ -682,9 +683,51 @@ public final class JdbcIntegrationRuntimeRepository
                 session.tenant().tenantId(), workId, session.id(), leaseId, leaseEpoch);
         if (kinds.isEmpty()) throw staleLease();
         WorkKind kind = WorkKind.valueOf(kinds.getFirst());
+        lockProcess(session.tenant(), kind, workId);
+        // Serialize completion/replay against reclaim, expiry handling and observation append.
+        requireCurrentLease(session, kind, workId, leaseId, leaseEpoch, now, false);
         return kind == WorkKind.PROVISION
                 ? completeProvisioning(session, workId, leaseId, leaseEpoch, completion, completionFingerprint, now)
                 : completeReconciliation(session, workId, leaseId, leaseEpoch, completion, completionFingerprint, now);
+    }
+
+    private void lockProcess(TenantContext tenant, WorkKind kind, UUID workId) {
+        String table = kind == WorkKind.PROVISION ? "provisioning_task" : "reconciliation_run";
+        if (jdbc.query("SELECT id FROM integration." + table + " WHERE tenant_id=? AND id=? FOR UPDATE",
+                (rs,row) -> rs.getObject(1, UUID.class), tenant.tenantId(), workId).isEmpty()) {
+            throw new WorkerProtocolException("work_not_found", "work does not exist");
+        }
+    }
+
+    /** Expiry is uncertainty, not proof that the provider call did not happen. */
+    public int blockExpiredProvisioning(int limit, Instant now) {
+        if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be 1..200");
+        record Candidate(UUID tenantId, UUID taskId) {}
+        var candidates = jdbc.query("""
+                SELECT t.tenant_id, t.id FROM integration.provisioning_task t
+                WHERE t.state='RUNNING' AND NOT EXISTS (
+                    SELECT 1 FROM platform.connector_work_lease l
+                    WHERE l.tenant_id=t.tenant_id AND l.work_kind='PROVISION' AND l.work_id=t.id
+                      AND l.lease_expires_at > ?)
+                ORDER BY t.updated_at, t.id LIMIT ? FOR UPDATE OF t SKIP LOCKED
+                """, (rs,row) -> new Candidate(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)),
+                Timestamp.from(now), limit);
+        int blocked = 0;
+        for (var c : candidates) {
+            // Lock current lease after the task; a concurrent renewal may have extended it.
+            var expires = jdbc.query("""
+                    SELECT lease_expires_at FROM platform.connector_work_lease
+                    WHERE tenant_id=? AND work_kind='PROVISION' AND work_id=? FOR UPDATE
+                    """, (rs,row) -> rs.getTimestamp(1).toInstant(), c.tenantId(), c.taskId());
+            if (!expires.isEmpty() && expires.getFirst().isAfter(now)) continue;
+            blocked += jdbc.update("""
+                    UPDATE integration.provisioning_task SET state='BLOCKED',
+                        failure_code='provider_effect_unknown_after_lease_expiry', next_attempt_at=NULL,
+                        revision=revision+1, updated_at=GREATEST(updated_at, ?)
+                    WHERE tenant_id=? AND id=? AND state='RUNNING'
+                    """, Timestamp.from(now), c.tenantId(), c.taskId());
+        }
+        return blocked;
     }
 
     private CompletionResult completeProvisioning(
@@ -752,6 +795,11 @@ public final class JdbcIntegrationRuntimeRepository
             case "SKIPPED" -> "SKIPPED";
             default -> throw new WorkerProtocolException("invalid_outcome", "unsupported work outcome");
         };
+        String failureCode = completion.providerErrorCode();
+        if ("FAILED_RETRYABLE".equals(state) && task.attempt() >= 5) {
+            state = "BLOCKED";
+            failureCode = "retry_budget_exhausted";
+        }
         Instant next = "FAILED_RETRYABLE".equals(state)
                 ? now.plusSeconds(completion.retryAfterSeconds() == null ? 30 : completion.retryAfterSeconds())
                 : null;
@@ -762,7 +810,7 @@ public final class JdbcIntegrationRuntimeRepository
                 WHERE tenant_id = ? AND id = ?
                 """,
                 state, next == null ? null : Timestamp.from(next),
-                completion.providerErrorCode(), Timestamp.from(now),
+                failureCode, Timestamp.from(now),
                 session.tenant().tenantId(), taskId);
 
         Object identityValue = task.payload().get("identityId");
@@ -1125,6 +1173,7 @@ public final class JdbcIntegrationRuntimeRepository
                 WHERE tenant_id = ? AND work_kind = ? AND work_id = ?
                   AND execution_owner_id = ?
                   AND lease_id = ? AND lease_epoch = ?
+                FOR UPDATE
                 """,
                 (rs,row) -> new LeaseRow(
                         rs.getTimestamp(1).toInstant(),
