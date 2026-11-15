@@ -23,6 +23,7 @@ public final class GovernanceExceptionService
     private final GovernancePolicyRepository policies;
     private final IdentityAccessReferenceQuery identities;
     private final ApprovalCaseStartService approvals;
+    private final ApprovalRepository approvalRepository;
     private final GovernanceExceptionChangeSink changes;
     private final GovernanceExceptionBoundaryScheduler boundaries;
     private final IdGenerator ids;
@@ -36,13 +37,14 @@ public final class GovernanceExceptionService
             GovernanceExceptionChangeSink changes,
             GovernanceExceptionBoundaryScheduler boundaries,
             IdGenerator ids,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions, ApprovalRepository approvalRepository) {
         this.exceptions = Objects.requireNonNull(
                 exceptions, "exceptions");
         this.policies = Objects.requireNonNull(
                 policies, "policies");
         this.identities = Objects.requireNonNull(
                 identities, "identities");
+        this.approvalRepository = Objects.requireNonNull(approvalRepository);
         this.approvals = Objects.requireNonNull(
                 approvals, "approvals");
         this.changes = Objects.requireNonNull(
@@ -289,7 +291,9 @@ public final class GovernanceExceptionService
             var stages=policies.findApprovalStages(tenant,version.id());
             var configured=stages.stream().map(stage -> new StageSpec(stage.decisionMode(),policies.findApprovalApprovers(tenant,stage.id()).stream()
                     .map(approver -> approver.approverIdentityId()).toList())).toList();
-            if(version.state()!=VersionState.ACTIVE || configured.isEmpty()) {
+            if(version.state()!=VersionState.ACTIVE || configured.isEmpty()
+                    || !ApprovalCaseStartService.contentHash(new PlanSpec(configured)).equals(approvalRepository.findPlan(tenant,approvalCase.id()).contentHash())
+                    || configured.stream().flatMap(stage -> stage.approverIdentityIds().stream()).anyMatch(actor -> actor.equals(current.subjectIdentityId()) || actor.equals(current.requesterIdentityId()))) {
                 var rejected=exceptions.updateState(tenant,current.id(),LifecycleState.REJECTED,current.revision(),approvalCase.updatedAt(),null,approvalCase.updatedAt(),null,null);
                 changes.changed(tenant,rejected);
                 return null;

@@ -254,7 +254,7 @@ public class GovernancePersistenceConfiguration {
             GovernanceExceptionChangeSink changes,
             GovernanceExceptionBoundaryScheduler boundaries,
             IdGenerator ids,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions, ApprovalRepository approvalRepository) {
         return new GovernanceExceptionService(
                 exceptions,
                 policies,
@@ -263,7 +263,7 @@ public class GovernancePersistenceConfiguration {
                 changes,
                 boundaries,
                 ids,
-                transactions);
+                transactions, approvalRepository);
     }
 
     @Bean
