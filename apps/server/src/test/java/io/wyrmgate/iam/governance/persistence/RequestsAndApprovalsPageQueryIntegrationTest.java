@@ -54,7 +54,9 @@ class RequestsAndApprovalsPageQueryIntegrationTest {
         requestRepository = new JdbcAccessRequestRepository(jdbc);
         approvals = new ApprovalCommandService(
                 approvalRepository,
-                new AccessRequestApprovalResultSink(requestRepository, (requestedTenant, item) -> { }),
+                new AccessRequestApprovalResultSink(requestRepository, (requestedTenant, item) -> { },
+                        (t, request, item) -> EligibilityResult.unavailable("not_evaluated_in_query_test"),
+                        approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
                 transactions);
         query = new JdbcRequestsAndApprovalsPageQuery(jdbc);
@@ -88,6 +90,7 @@ class RequestsAndApprovalsPageQueryIntegrationTest {
                 (requestedTenant, request, item) -> EligibilityResult.approvalRequired(
                         new PlanSpec(List.of(new StageSpec(DecisionMode.ANY_ONE, List.of(approver))))),
                 approvals,
+                new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
                 (requestedTenant, authorizedItem) -> { },
                 ids,
                 transactions);

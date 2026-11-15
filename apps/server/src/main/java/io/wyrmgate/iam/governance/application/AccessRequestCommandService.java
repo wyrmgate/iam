@@ -34,23 +34,6 @@ public final class AccessRequestCommandService {
             AccessRequestRepository repository,
             AccessRequestEligibilityEvaluator evaluator,
             ApprovalCommandService approvals,
-            AuthorizedAccessIntentSink authorizedAccess,
-            IdGenerator ids,
-            TransactionExecutor transactions) {
-        this(
-                repository,
-                evaluator,
-                approvals,
-                (tenant, item) -> { },
-                authorizedAccess,
-                ids,
-                transactions);
-    }
-
-    public AccessRequestCommandService(
-            AccessRequestRepository repository,
-            AccessRequestEligibilityEvaluator evaluator,
-            ApprovalCommandService approvals,
             SubmittedRequestItemSink submittedItems,
             AuthorizedAccessIntentSink authorizedAccess,
             IdGenerator ids,
