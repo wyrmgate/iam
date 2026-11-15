@@ -18,7 +18,8 @@ public final class IdpCsrfTokenCodec {
 
     public boolean matches(String cookieValue, String headerValue) {
         if (cookieValue == null || headerValue == null
-                || cookieValue.isBlank() || headerValue.isBlank()) {
+                || !cookieValue.matches("[A-Za-z0-9_-]{43}")
+                || !headerValue.matches("[A-Za-z0-9_-]{43}")) {
             return false;
         }
         return MessageDigest.isEqual(

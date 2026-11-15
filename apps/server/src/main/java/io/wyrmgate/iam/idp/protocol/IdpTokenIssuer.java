@@ -17,6 +17,8 @@ public interface IdpTokenIssuer {
             String idToken,
             String accessToken,
             long expiresInSeconds) {
+        @Override public String toString() { return "TokenPair[REDACTED]"; }
+
         public TokenPair {
             Objects.requireNonNull(idToken, "idToken");
             Objects.requireNonNull(accessToken, "accessToken");

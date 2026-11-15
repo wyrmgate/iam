@@ -31,6 +31,9 @@ public record IdpProtocolProperties(
         if (text.endsWith("/")) {
             value = URI.create(text.substring(0, text.length() - 1));
         }
+        if (value.getRawPath() != null && !value.getRawPath().isEmpty()) {
+            throw new IllegalStateException("iam.idp.issuer must be an origin without a non-root path");
+        }
         if (value.getQuery() != null) {
             throw new IllegalStateException("iam.idp.issuer must not contain a query string");
         }

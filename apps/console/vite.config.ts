@@ -10,6 +10,14 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/.well-known/openid-configuration': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/oauth2': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
       '/actuator': {
         target: 'http://localhost:8080',
         changeOrigin: true,

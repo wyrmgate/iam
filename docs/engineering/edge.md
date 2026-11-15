@@ -4,7 +4,7 @@
 
 Caddy is retained as the standalone-host/reference edge implementation for the Docker Compose topology. It is not the selected shared DEV edge.
 
-The selected DEV edge is Cloudflare Pages: static console assets are served directly by Pages and only `/api/*` invokes a Pages Function. After managed DEV activation completes, that Function proxies to the verified Railway DEV `iam-server` origin through server-side `IAM_BACKEND_ORIGIN`.
+The selected DEV edge is Cloudflare Pages: static console assets are served directly by Pages; `/api/*` and the exact public IdP protocol endpoints invoke Pages Functions (ADR-0068). After managed DEV activation completes, that Function proxies to the verified Railway DEV `iam-server` origin through server-side `IAM_BACKEND_ORIGIN`.
 
 Until the activation checks in [`../operations/dev-managed-activation.md`](../operations/dev-managed-activation.md) pass, do not point Pages at an unverified, personal or production backend merely to make the console usable.
 
@@ -13,7 +13,7 @@ Until the activation checks in [`../operations/dev-managed-activation.md`](../op
 For the selected Cloudflare Pages + Railway DEV topology:
 
 - Cloudflare Pages serves static console assets;
-- only `/api/*` executes the Pages Function;
+- `/api/*`, `/.well-known/openid-configuration`, `/oauth2/jwks`, `/oauth2/authorize`, and `/oauth2/token` execute Pages Functions; other paths remain static;
 - `IAM_BACKEND_ORIGIN` is server-side only;
 - Railway terminates HTTPS for its generated/public DEV service domain;
 - Railway `/actuator/health` is the server deployment health gate;
@@ -28,7 +28,7 @@ For a future standalone host, Caddy terminates HTTP/HTTPS, manages ACME certific
 
 Reference routing remains:
 
-- `/api/*` to the IAM server;
+- `/api/*` and the four exact IdP protocol endpoints to the IAM server;
 - `/actuator/health` to the IAM server;
 - other paths to the console.
 

@@ -17,6 +17,7 @@ import { useConsolePathname } from './consoleLocation';
 type ShellChromeProps = {
   children: ReactNode;
   onSignOut?: () => Promise<void> | void;
+  onChangePassword?: () => void;
   signOutBusy?: boolean;
 };
 
@@ -31,7 +32,7 @@ function actorInitials(value: string | undefined | null): string {
   return value.slice(0, 2).toUpperCase();
 }
 
-export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellChromeProps) {
+export function ShellChrome({ children, onSignOut, onChangePassword, signOutBusy = false }: ShellChromeProps) {
   const pathname = useConsolePathname();
   const [authority, setAuthority] = useState<CurrentAdministrativeAuthority | null>(null);
   const [authorityUnavailable, setAuthorityUnavailable] = useState(false);
@@ -137,6 +138,7 @@ export function ShellChrome({ children, onSignOut, signOutBusy = false }: ShellC
       <strong>{shortId(authority?.actorIdentityId)}</strong>
       <span>{authority ? `${authority.authorities.length} effective administrative authority source${authority.authorities.length === 1 ? '' : 's'}` : 'Authority projection unavailable'}</span>
       <button onClick={() => openRoute('/administration')}>View my administrative authority</button>
+      {onChangePassword ? <button disabled={signOutBusy} onClick={onChangePassword}>Change password</button> : null}
       {onSignOut ? <button disabled={signOutBusy} onClick={() => void onSignOut()}>{signOutBusy ? 'Signing out…' : 'Sign out'}</button> : <span className="external-session-note">Session managed externally</span>}
     </div>
   ) : null;

@@ -1,5 +1,11 @@
 {
   "version": 1,
-  "include": ["/api/*"],
+  "include": [
+    "/api/*",
+    "/.well-known/openid-configuration",
+    "/oauth2/jwks",
+    "/oauth2/authorize",
+    "/oauth2/token"
+  ],
   "exclude": []
 }

@@ -4,10 +4,10 @@ import { AuthIcon } from './AuthIcon';
 import { ShellChrome } from './ShellChrome';
 import { SetupWizard } from './SetupWizard';
 import { Alert, Button, CircularProgress, TextInput } from './ui';
-import { ApiError, getAuthSession, getLoginRoute, signIn, signOut, type LoginRoute } from './api';
+import { ApiError, changeLocalPassword, getAuthSession, getLoginRoute, signIn, signOut, type LoginRoute } from './api';
 import { getInstallationStatus, type InstallationStatus } from './installationApi';
 
-type GateState = 'checking' | 'setup' | 'first-party-login' | 'authenticated' | 'external-mode';
+type GateState = 'checking' | 'setup' | 'first-party-login' | 'authenticated' | 'password-change' | 'external-mode';
 
 export function SignInGate() {
   const [state, setState] = useState<GateState>('checking');
@@ -18,6 +18,9 @@ export function SignInGate() {
   const [principalKey, setPrincipalKey] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   async function resolveAuthentication(signal?: AbortSignal) {
     setError(null);
@@ -88,6 +91,48 @@ export function SignInGate() {
       setError(cause instanceof ApiError && cause.status === 401
         ? 'Sign-in failed. Check your username and password.'
         : 'Sign-in is temporarily unavailable.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function clearPasswordChange() {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  }
+
+  function openPasswordChange() {
+    clearPasswordChange();
+    setError(null);
+    setState('password-change');
+  }
+
+  async function submitPasswordChange(event: FormEvent) {
+    event.preventDefault();
+    if (newPassword.length < 15 || newPassword.length > 1024 || newPassword !== confirmPassword || newPassword === currentPassword) {
+      setError('Choose a different password with 15–1024 characters and matching confirmation.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await changeLocalPassword(currentPassword, newPassword);
+      clearPasswordChange();
+      setPassword('');
+      setLoginRoute(null);
+      setState('checking');
+      await resolveAuthentication();
+    } catch (cause) {
+      clearPasswordChange();
+      if (cause instanceof ApiError && cause.status === 401) {
+        setState('checking');
+        await resolveAuthentication();
+      } else {
+        setError(cause instanceof ApiError && cause.status === 400
+          ? 'Password change rejected. Check your current password and requirements.'
+          : 'Password change could not be confirmed. If it succeeded, sign in with the new password.');
+      }
     } finally {
       setBusy(false);
     }
@@ -215,12 +260,43 @@ export function SignInGate() {
     );
   }
 
+  if (state === 'password-change') {
+    return (
+      <main className="auth-shell">
+        <section className="auth-login-surface" aria-labelledby="password-change-title">
+          <header className="auth-product-header">
+            <span className="auth-product-mark" aria-hidden="true">W</span>
+            <span className="auth-product-copy"><strong>Wyrmgate IAM</strong><span>Account security</span></span>
+          </header>
+          <div className="auth-login-layout">
+            <div className="auth-context-panel">
+              <p className="auth-eyebrow">First-party session</p>
+              <h1 id="password-change-title">Change password</h1>
+              <p className="auth-intro">Verify your current password to replace the authenticator for this session. After a successful change, sign in again with your new password.</p>
+            </div>
+            <div className="auth-form-panel">
+              {error && <Alert severity="error" role="alert" className="auth-error">{error}</Alert>}
+              <form className="auth-form" onSubmit={(event) => void submitPasswordChange(event)}>
+                <TextInput label="Current password" type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+                <TextInput label="New password" type="password" autoComplete="new-password" required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                <TextInput label="Confirm new password" type="password" autoComplete="new-password" required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+                <p className="auth-session-note">Use 15–1024 characters. Current and new passwords must differ.</p>
+                <Button type="submit" variant="contained" disabled={busy}>Change password</Button>
+                <Button type="button" variant="outlined" disabled={busy} onClick={() => { clearPasswordChange(); setError(null); setState('authenticated'); }}>Cancel</Button>
+              </form>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   if (state === 'external-mode') {
     return <ShellChrome><App /></ShellChrome>;
   }
 
   return (
-    <ShellChrome onSignOut={logout} signOutBusy={busy}>
+    <ShellChrome onSignOut={logout} onChangePassword={openPasswordChange} signOutBusy={busy}>
       <App />
     </ShellChrome>
   );

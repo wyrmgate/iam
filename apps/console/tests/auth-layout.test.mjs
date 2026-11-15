@@ -62,3 +62,12 @@ test('sign-in honors reduced motion and exposes only supported authentication co
   assert.doesNotMatch(signInGate, /Forgot password|Remember me|Sign in with|auth-language-control|auth-form-topbar/);
   assert.doesNotMatch(signInGate, /localStorage|sessionStorage/);
 });
+
+
+test('password change remains first-party session UX with dedicated secret input and reauthentication', () => {
+  assert.match(signInGate, /changeLocalPassword\(currentPassword, newPassword\)/);
+  assert.match(signInGate, /clearPasswordChange\(\);[\s\S]*await resolveAuthentication\(\)/);
+  assert.match(signInGate, /onChangePassword=\{openPasswordChange\}/);
+  assert.match(signInGate, /state === 'external-mode'[\s\S]*<ShellChrome><App \/><\/ShellChrome>/);
+  assert.doesNotMatch(signInGate, /localStorage|sessionStorage/);
+});
