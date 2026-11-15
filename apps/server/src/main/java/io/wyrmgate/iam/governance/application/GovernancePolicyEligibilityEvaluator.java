@@ -1,6 +1,6 @@
 package io.wyrmgate.iam.governance.application;
 
-import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
+import io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
 import io.wyrmgate.iam.catalog.application.AccessTargetFingerprint;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
@@ -46,7 +46,7 @@ public final class GovernancePolicyEligibilityEvaluator
     private final AccessRequestRepository requests;
     private final CatalogAccessReferenceQuery catalog;
     private final RoleExpansionQuery roles;
-    private final EffectiveAccessQuery effectiveAccess;
+    private final AccessAdmissionConflictQuery effectiveAccess;
     private final GovernanceExceptionQuery exceptions;
     private final IdentityAccessReferenceQuery identities;
     private final IdGenerator ids;
@@ -56,7 +56,7 @@ public final class GovernancePolicyEligibilityEvaluator
     public GovernancePolicyEligibilityEvaluator(
             GovernancePolicyService policyService, GovernancePolicyRepository policyRepository,
             AccessRequestRepository requests, CatalogAccessReferenceQuery catalog,
-            RoleExpansionQuery roles, EffectiveAccessQuery effectiveAccess,
+            RoleExpansionQuery roles, AccessAdmissionConflictQuery effectiveAccess,
             GovernanceExceptionQuery exceptions, IdentityAccessReferenceQuery identities,
             IdGenerator ids, TransactionExecutor transactions) {
         this(policyService, policyRepository, requests, catalog, roles, effectiveAccess,
@@ -66,7 +66,7 @@ public final class GovernancePolicyEligibilityEvaluator
     GovernancePolicyEligibilityEvaluator(
             GovernancePolicyService policyService, GovernancePolicyRepository policyRepository,
             AccessRequestRepository requests, CatalogAccessReferenceQuery catalog,
-            RoleExpansionQuery roles, EffectiveAccessQuery effectiveAccess,
+            RoleExpansionQuery roles, AccessAdmissionConflictQuery effectiveAccess,
             GovernanceExceptionQuery exceptions, IdentityAccessReferenceQuery identities,
             IdGenerator ids, TransactionExecutor transactions, Clock clock) {
         this.policyService = Objects.requireNonNull(
@@ -126,14 +126,22 @@ public final class GovernancePolicyEligibilityEvaluator
                     "request_too_large_for_policy_evaluation");
         }
 
+        Instant from = item.validFrom() != null && item.validFrom().isAfter(evaluatedAt)
+                ? item.validFrom() : evaluatedAt;
+        int expandedPaths = current.pathCount();
         Set<UUID> otherRequested =
                 new LinkedHashSet<>();
         for (RequestItem other : requestItems) {
             if (other.id().equals(item.id())) {
                 continue;
             }
-            Expansion expansion = expandRequested(
-                    tenant, other);
+            Instant otherFrom = other.validFrom() != null && other.validFrom().isAfter(evaluatedAt)
+                    ? other.validFrom() : evaluatedAt;
+            if ((item.validUntil() != null && !otherFrom.isBefore(item.validUntil()))
+                    || (other.validUntil() != null && !from.isBefore(other.validUntil()))) continue;
+            Expansion expansion = expandRequested(tenant, other);
+            expandedPaths += expansion.pathCount();
+            if (expandedPaths > 10000) return EligibilityResult.unavailable("request_expansion_budget_exceeded");
             if (expansion.available()) {
                 otherRequested.addAll(
                         expansion.entitlementIds());
@@ -147,11 +155,11 @@ public final class GovernancePolicyEligibilityEvaluator
         Set<UUID> currentlyEffective =
                 relevantCounterparts.isEmpty()
                         ? Set.of()
-                        : effectiveAccess.currentEntitlementIds(
+                        : effectiveAccess.overlappingEntitlementIds(
                                 tenant,
                                 request.beneficiaryIdentityId(),
                                 relevantCounterparts,
-                                evaluatedAt);
+                                from, item.validUntil());
 
         List<ConflictCandidate> conflicts =
                 detectConflicts(
@@ -289,7 +297,7 @@ public final class GovernancePolicyEligibilityEvaluator
             }
             return Expansion.available(
                     Set.of(item.entitlementId()), AccessTargetFingerprint.entitlement(
-                            item.entitlementId(), reference.applicationTargetId()));
+                            item.entitlementId(), reference.applicationTargetId()), 1);
         }
 
         var expansion =
@@ -307,7 +315,7 @@ public final class GovernancePolicyEligibilityEvaluator
                     path.entitlementId());
         }
         return Expansion.available(
-                Set.copyOf(entitlementIds), AccessTargetFingerprint.role(expansion));
+                Set.copyOf(entitlementIds), AccessTargetFingerprint.role(expansion), expansion.paths().size());
     }
 
     private static Set<UUID> counterpartIds(
@@ -485,13 +493,13 @@ public final class GovernancePolicyEligibilityEvaluator
     private record Expansion(
             boolean available,
             Set<UUID> entitlementIds,
-            String failureCode, String fingerprint) {
+            String failureCode, String fingerprint, int pathCount) {
         static Expansion available(
-                Set<UUID> entitlementIds, String fingerprint) {
+                Set<UUID> entitlementIds, String fingerprint, int pathCount) {
             return new Expansion(
                     true,
                     Set.copyOf(entitlementIds),
-                    null, fingerprint);
+                    null, fingerprint, pathCount);
         }
 
         static Expansion unavailable(
@@ -499,7 +507,7 @@ public final class GovernancePolicyEligibilityEvaluator
             return new Expansion(
                     false,
                     Set.of(),
-                    code, null);
+                    code, null, 0);
         }
     }
 

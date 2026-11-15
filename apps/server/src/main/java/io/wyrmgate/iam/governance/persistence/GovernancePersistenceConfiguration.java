@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.access.application.AccessIntentApplicationQuery;
 import io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService;
-import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
+import io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery;
 import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
 import io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand;
 import io.wyrmgate.iam.access.application.AccessReviewSnapshotQuery;
@@ -158,7 +158,7 @@ public class GovernancePersistenceConfiguration {
             GovernancePolicyService policyService,
             CatalogAccessReferenceQuery catalog,
             RoleExpansionQuery roleExpansion,
-            EffectiveAccessQuery effectiveAccess,
+            AccessAdmissionConflictQuery effectiveAccess,
             GovernanceExceptionQuery exceptions,
             LifecycleAccessEvaluationEvidenceSink evidence,
             IdGenerator ids) {
@@ -179,7 +179,7 @@ public class GovernancePersistenceConfiguration {
             AccessRequestRepository requests,
             CatalogAccessReferenceQuery catalog,
             RoleExpansionQuery roleExpansion,
-            EffectiveAccessQuery effectiveAccess,
+            AccessAdmissionConflictQuery effectiveAccess,
             GovernanceExceptionQuery exceptions,
             IdentityAccessReferenceQuery identities,
             IdGenerator ids,
