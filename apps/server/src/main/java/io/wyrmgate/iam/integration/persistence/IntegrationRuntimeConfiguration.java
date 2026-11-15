@@ -241,6 +241,13 @@ public class IntegrationRuntimeConfiguration {
     }
 
     @Bean
+    ProvisioningEffectRecoveryProcessor provisioningEffectRecoveryProcessor(JdbcTemplate jdbc,ObjectMapper json,
+            DesiredProvisioningStateQuery desired,GrantProvisioningRepository grants,
+            JdbcIntegrationRuntimeRepository fence,TransactionExecutor transactions) {
+        return new ProvisioningEffectRecoveryProcessor(jdbc,json,desired,grants,fence,transactions);
+    }
+
+    @Bean
     ProvisioningAdmission provisioningAdmission(JdbcIntegrationRuntimeRepository fence, DesiredProvisioningStateQuery desired,
             GrantProvisioningRepository grants, PrincipalProvisioningRepository principals,
             PrincipalTechnicalReferenceQuery identities,CatalogEntitlementReferenceQuery catalog,

@@ -825,7 +825,9 @@ public final class JdbcIntegrationRuntimeRepository
             throw new WorkerProtocolException("completion_conflict", "lease generation already completed with different content");
         }
         LeaseRow lease = requireCurrentLease(
-                session, WorkKind.PROVISION, taskId, leaseId, leaseEpoch, now, true);
+                session, WorkKind.PROVISION, taskId, leaseId, leaseEpoch, now, false);
+        boolean late = !lease.expiresAt().isAfter(now);
+        if (late && (!"SUCCEEDED".equals(completion.outcome()) || completion.discoveryCoverage()!=null || completion.nextCheckpoint()!=null)) throw staleLease();
         record Task(
                 int attempt,
                 UUID correlation,
@@ -840,7 +842,7 @@ public final class JdbcIntegrationRuntimeRepository
                        operation_type, subject_kind, subject_id,
                        desired_revision, payload::text
                 FROM integration.provisioning_task
-                WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
+                WHERE tenant_id = ? AND id = ? AND (state = 'RUNNING' OR (state='BLOCKED' AND failure_code='provider_effect_unknown_after_lease_expiry' AND ?))
                 """,
                 (rs,row) -> new Task(
                         rs.getInt(1),
@@ -851,9 +853,10 @@ public final class JdbcIntegrationRuntimeRepository
                         rs.getObject(6, UUID.class),
                         rs.getLong(7),
                         readMap(rs.getString(8))),
-                session.tenant().tenantId(), taskId);
+                session.tenant().tenantId(), taskId, late);
         if (tasks.isEmpty()) throw new WorkerProtocolException("work_not_running", "provisioning task is not running");
         Task task = tasks.getFirst();
+        UUID attemptId = ids.nextId();
         jdbc.update("""
                 INSERT INTO integration.provisioning_attempt (
                     id, tenant_id, task_id, attempt_number, lease_id, lease_epoch,
@@ -862,7 +865,7 @@ public final class JdbcIntegrationRuntimeRepository
                     metadata, completion_fingerprint, correlation_id, causation_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?)
                 """,
-                ids.nextId(), session.tenant().tenantId(), taskId, task.attempt(),
+                attemptId, session.tenant().tenantId(), taskId, task.attempt(),
                 leaseId, leaseEpoch, Timestamp.from(lease.claimedAt()), Timestamp.from(now),
                 completion.outcome(), completion.failureCategory(), completion.providerErrorCode(),
                 completion.providerRequestId(), completion.providerObjectId(), completion.providerVersion(),
@@ -877,6 +880,13 @@ public final class JdbcIntegrationRuntimeRepository
             default -> throw new WorkerProtocolException("invalid_outcome", "unsupported work outcome");
         };
         String failureCode = completion.providerErrorCode();
+        if (late) {state="BLOCKED";failureCode="late_provider_success_requires_recovery";}
+        if ("SUCCEEDED".equals(completion.outcome()) && (late || "DESIRED_GRANT".equals(task.subjectKind()))) {
+            jdbc.update("""
+                    INSERT INTO integration.provisioning_effect_recovery(tenant_id,attempt_id,state,created_at,updated_at)
+                    VALUES (?,?,'PENDING',?,?)
+                    """,session.tenant().tenantId(),attemptId,Timestamp.from(now),Timestamp.from(now));
+        }
         if ("FAILED_RETRYABLE".equals(state) && task.attempt() >= 5) {
             state = "BLOCKED";
             failureCode = "retry_budget_exhausted";
