@@ -107,7 +107,7 @@ public class IdpAuthorizationController {
                             interactionCookie("", Duration.ZERO).toString())
                     .build();
         } finally {
-            Arrays.fill(secret, '\\0');
+            Arrays.fill(secret, (char) 0);
         }
     }
 
