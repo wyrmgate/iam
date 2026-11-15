@@ -74,6 +74,20 @@ class IdpProtocolFoundationTest {
     }
 
     @Test
+    void discoveryAdvertisesActualMinimalClaimContractAndRejectsSameKidDifferentKey() throws Exception {
+        var generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        var current = new SigningKeyMaterial("same-kid", "RS256", generator.generateKeyPair().getPublic());
+        var other = new SigningKeyMaterial("same-kid", "RS256", generator.generateKeyPair().getPublic());
+        var properties = new IdpProtocolProperties(true, "https://idp.example.test");
+        var controller = new IdpProtocolController(properties, provider(current));
+        assertThat(controller.discovery().getBody()).containsEntry("scopes_supported", List.of("openid"))
+                .containsEntry("claims_supported", List.of("iss", "sub", "aud", "iat", "exp", "auth_time", "nonce"));
+        assertThatThrownBy(() -> new IdpProtocolController(properties, provider(current, List.of(other))))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("material");
+    }
+
+    @Test
     void controllerRejectsVerificationSetThatOmitsCurrentSigningKey() throws Exception {
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);

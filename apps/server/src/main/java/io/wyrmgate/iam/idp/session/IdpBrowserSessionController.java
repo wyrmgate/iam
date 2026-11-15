@@ -1,6 +1,9 @@
 package io.wyrmgate.iam.idp.session;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import io.wyrmgate.iam.idp.protocol.IdpAuthorizationController;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -99,6 +102,10 @@ public class IdpBrowserSessionController {
                             sessionCookie(established.orElseThrow().token()).toString(),
                             csrfCookie(csrfToken).toString())
                     .body(Map.of("authenticated", true));
+        } catch (RuntimeException unavailable) {
+            // Do not leak exception details or request inputs from mandatory authentication reads.
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).cacheControl(CacheControl.noStore())
+                    .body(Map.of("error", "login_unavailable"));
         } finally {
             Arrays.fill(password, '\0');
         }
@@ -185,9 +192,19 @@ public class IdpBrowserSessionController {
                 .build();
     }
 
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<?> invalidLoginBody() {
+        return ResponseEntity.badRequest().cacheControl(CacheControl.noStore())
+                .body(Map.of("error", "invalid_request"));
+    }
+
     public record LoginRequest(
             String principalKey,
             char[] password) {
+        @JsonAnySetter
+        public void rejectUnknown(String name, Object ignored) {
+            throw new IllegalArgumentException("unexpected login field");
+        }
         @Override public String toString() { return "LoginRequest[REDACTED]"; }
     }
 }

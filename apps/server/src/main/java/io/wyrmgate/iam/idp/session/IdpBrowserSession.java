@@ -51,6 +51,8 @@ public record IdpBrowserSession(
         }
     }
 
+    @Override public String toString() { return "IdpBrowserSession[id=" + id + ", tokenHash=REDACTED]"; }
+
     public boolean usableAt(Instant at) {
         Objects.requireNonNull(at, "at");
         return revokedAt == null
