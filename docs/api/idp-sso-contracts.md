@@ -41,7 +41,7 @@ Implemented public surfaces when `iam.idp.enabled=true`:
 - `GET /oauth2/authorize`;
 - `POST /oauth2/token`.
 
-The baseline is Authorization Code with `code_challenge_method=S256`. Redirect URIs are exact registered strings; wildcard/prefix matching is prohibited. `state` is an opaque bounded client correlation value. Optional `nonce` is carried into the ID token. Authorization codes are 256-bit random values, single-use, five minutes by default, and only SHA-256 digests are persisted. Refresh tokens are not issued.
+The baseline is Authorization Code with `code_challenge_method=S256`. Redirect URIs are exact registered strings; wildcard/prefix matching is prohibited. `state` is an opaque bounded client correlation value. Optional `nonce` is carried into the ID token. Authorization codes are 256-bit random values, single-use, five minutes by default, and only SHA-256 digests are persisted. Refresh tokens are not issued. ADR-0066 requires fresh exact session/subject/Credential and governed application access checks at redemption, after the one-use code is consumed and all original bindings are validated. Missing or denied context returns invalid_grant; unavailable mandatory checks return temporarily_unavailable. No code is restored. Token exchange does not extend browser idle expiry.
 
 Unknown or retired clients and invalid redirect URIs produce direct errors; the server never redirects to an unvalidated URI. After redirect validation, protocol errors may be returned to that exact URI with valid caller state.
 
@@ -108,7 +108,7 @@ A concrete provider endpoint and mapping flow must be accepted separately before
 
 ## Session bounds and invalidation
 
-Browser sessions default to 30 minutes idle and 8 hours absolute. Resolution fails closed and opportunistically revokes the session when it is expired/revoked, Principal or Identity is no longer eligible, the establishing Credential no longer belongs to the Principal, Credential lifecycle/temporal validity changes, or the exact Credential revision changes. Logout is server-side invalidation, not merely cookie deletion.
+Browser sessions default to 30 minutes idle and 8 hours absolute. Resolution fails closed and opportunistically revokes the session when it is expired/revoked, Principal or Identity is no longer eligible, the establishing Credential no longer belongs to the Principal, Credential lifecycle/temporal validity changes, or the exact Credential revision changes. Logout is server-side invalidation, not merely cookie deletion. Browser activity updates are monotonic and cannot revive an expired or revoked session. Existing stateless JWTs remain bounded by their expiry; no online revocation is implied.
 
 ## Subjects, claims, signing, and rotation
 

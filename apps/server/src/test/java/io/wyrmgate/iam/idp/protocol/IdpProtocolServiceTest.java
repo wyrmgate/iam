@@ -74,6 +74,8 @@ class IdpProtocolServiceTest {
                 });
         verify(sessions).resolve(TENANT, SESSION_TOKEN, NOW);
 
+        when(sessions.revalidateAuthorizationCodeSession(TENANT, SESSION_ID, NOW.plusSeconds(1)))
+                .thenReturn(Optional.of(sessionContext()));
         var token = service.redeem(
                 new TokenRequest(
                         "authorization_code",
@@ -191,6 +193,39 @@ class IdpProtocolServiceTest {
                 .isInstanceOf(ProtocolException.class)
                 .extracting(error -> ((ProtocolException) error).error())
                 .isEqualTo("invalid_grant");
+    }
+
+    @Test
+    void tokenExchangeRejectsInvalidSessionAndBurnsCode() {
+        var sessions = mock(IdpBrowserSessionService.class);
+        when(sessions.resolve(TENANT, SESSION_TOKEN, NOW)).thenReturn(Optional.of(sessionContext()));
+        var codes = new InMemoryCodes();
+        var service = service(clientQuery(client(false)), sessions, (t, i, a, at) -> true, codes);
+        var code = service.authorize(authorizeRequest(REDIRECT_URI, challenge(VERIFIER)), SESSION_TOKEN, NOW);
+        var request = new TokenRequest("authorization_code", code.code(), CLIENT_ID, REDIRECT_URI, VERIFIER);
+        assertThatThrownBy(() -> service.redeem(request, NOW.plusSeconds(1))).isInstanceOf(ProtocolException.class)
+                .extracting(e -> ((ProtocolException)e).error()).isEqualTo("invalid_grant");
+        assertThat(codes.values()).isEmpty();
+    }
+
+    @Test
+    void tokenExchangeRechecksGovernedAccessAndFailsClosedOnDenialOrOutage() {
+        var sessions = mock(IdpBrowserSessionService.class);
+        when(sessions.resolve(TENANT, SESSION_TOKEN, NOW)).thenReturn(Optional.of(sessionContext()));
+        when(sessions.revalidateAuthorizationCodeSession(TENANT, SESSION_ID, NOW.plusSeconds(1))).thenReturn(Optional.of(sessionContext()));
+        for (boolean unavailable : new boolean[]{false, true}) {
+            var codes = new InMemoryCodes();
+            var service = service(clientQuery(client(true)), sessions, (t, i, a, at) -> {
+                if (at.equals(NOW)) return true;
+                if (unavailable) throw new IllegalStateException("unavailable");
+                return false;
+            }, codes);
+            var code = service.authorize(authorizeRequest(REDIRECT_URI, challenge(VERIFIER)), SESSION_TOKEN, NOW);
+            var request = new TokenRequest("authorization_code", code.code(), CLIENT_ID, REDIRECT_URI, VERIFIER);
+            assertThatThrownBy(() -> service.redeem(request, NOW.plusSeconds(1))).isInstanceOf(ProtocolException.class)
+                    .extracting(e -> ((ProtocolException)e).error()).isEqualTo(unavailable ? "temporarily_unavailable" : "invalid_grant");
+            assertThat(codes.values()).isEmpty();
+        }
     }
 
     private static IdpProtocolService service(

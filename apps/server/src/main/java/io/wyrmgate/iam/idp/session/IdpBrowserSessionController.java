@@ -173,5 +173,6 @@ public class IdpBrowserSessionController {
             String applicationTargetId,
             String principalKey,
             char[] password) {
+        @Override public String toString() { return "LoginRequest[REDACTED]"; }
     }
 }

@@ -80,6 +80,19 @@ public final class JdbcIdpBrowserSessionRepository
     }
 
     @Override
+    public Optional<IdpBrowserSession> findById(TenantContext tenant, UUID sessionId) {
+        return jdbc.query("""
+                SELECT id, principal_id, identity_id,
+                       credential_id, credential_revision, token_hash,
+                       created_at, last_seen_at, idle_expires_at,
+                       absolute_expires_at, revoked_at
+                FROM platform.idp_browser_session
+                WHERE tenant_id = ? AND id = ?
+                """, (rs, row) -> session(rs), tenant.tenantId(), sessionId)
+                .stream().findFirst();
+    }
+
+    @Override
     public boolean touch(
             TenantContext tenant,
             UUID sessionId,
@@ -87,17 +100,20 @@ public final class JdbcIdpBrowserSessionRepository
             Instant idleExpiresAt) {
         return jdbc.update("""
                 UPDATE platform.idp_browser_session
-                SET last_seen_at = ?, idle_expires_at = ?
+                SET last_seen_at = GREATEST(last_seen_at, ?),
+                    idle_expires_at = LEAST(absolute_expires_at, GREATEST(idle_expires_at, ?))
                 WHERE tenant_id = ?
                   AND id = ?
                   AND revoked_at IS NULL
                   AND absolute_expires_at > ?
+                  AND idle_expires_at > ?
+                  AND created_at <= ?
                 """,
                 Timestamp.from(lastSeenAt),
                 Timestamp.from(idleExpiresAt),
                 tenant.tenantId(),
                 sessionId,
-                Timestamp.from(lastSeenAt)) == 1;
+                Timestamp.from(lastSeenAt), Timestamp.from(lastSeenAt), Timestamp.from(lastSeenAt)) == 1;
     }
 
     @Override
