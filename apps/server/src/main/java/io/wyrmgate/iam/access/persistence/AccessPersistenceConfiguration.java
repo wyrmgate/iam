@@ -157,7 +157,7 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
-    AccessIntentCommand accessIntentCommand(
+    AccessIntentCommandService accessIntentCommand(
             AccessAssignmentRepository repository,
             AccessAssignmentCommandService commands) {
         return new AccessIntentCommandService(repository, commands);

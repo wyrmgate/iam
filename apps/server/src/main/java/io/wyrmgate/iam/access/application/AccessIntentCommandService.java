@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 public final class AccessIntentCommandService
-        implements AccessIntentCommand {
+        implements AccessIntentCommand, AccessIntentApplicationQuery {
 
     private final AccessAssignmentRepository assignments;
     private final AccessAssignmentCommandService commands;
@@ -24,19 +24,15 @@ public final class AccessIntentCommandService
     public Result applyRequestedAccess(
             TenantContext tenant,
             RequestedAccess request,
+            Admission admission,
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(admission, "admission");
 
-        var existing = assignments.findByProvenance(
-                tenant,
-                AccessAssignment.ProvenanceKind.REQUEST_ITEM,
-                request.requestItemId());
-        if (existing.isPresent()) {
-            requireSameIntent(existing.get(), request);
-            return new Result(existing.get().id());
-        }
+        var existing = findApplied(tenant, request);
+        if (existing.isPresent()) return existing.get();
 
         try {
             AccessAssignment created = switch (request.targetKind()) {
@@ -51,6 +47,7 @@ public final class AccessIntentCommandService
                                 request.specificPrincipalId(),
                                 request.validFrom(),
                                 request.validUntil(),
+                                admission,
                                 now);
                 case ROLE ->
                         commands.createRequestedRoleAssignment(
@@ -63,6 +60,7 @@ public final class AccessIntentCommandService
                                 request.specificPrincipalId(),
                                 request.validFrom(),
                                 request.validUntil(),
+                                admission,
                                 now);
             };
             return new Result(created.id());
@@ -75,6 +73,15 @@ public final class AccessIntentCommandService
             requireSameIntent(replay, request);
             return new Result(replay.id());
         }
+    }
+
+    @Override
+    public java.util.Optional<Result> findApplied(TenantContext tenant, RequestedAccess request) {
+        return assignments.findByProvenance(tenant, AccessAssignment.ProvenanceKind.REQUEST_ITEM,
+                request.requestItemId()).map(existing -> {
+                    requireSameIntent(existing, request);
+                    return new Result(existing.id());
+                });
     }
 
     private static AccessAssignment.PrincipalConstraintKind

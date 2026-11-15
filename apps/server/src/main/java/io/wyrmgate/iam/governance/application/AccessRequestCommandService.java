@@ -24,27 +24,23 @@ public final class AccessRequestCommandService {
 
     private final AccessRequestRepository repository;
     private final AccessRequestEligibilityEvaluator evaluator;
-    private final ApprovalCommandService approvals;
+    private final RequestAdmissionDecisionService decisions;
     private final SubmittedRequestItemSink submittedItems;
-    private final AuthorizedAccessIntentSink authorizedAccess;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
 
     public AccessRequestCommandService(
             AccessRequestRepository repository,
             AccessRequestEligibilityEvaluator evaluator,
-            ApprovalCommandService approvals,
+            RequestAdmissionDecisionService decisions,
             SubmittedRequestItemSink submittedItems,
-            AuthorizedAccessIntentSink authorizedAccess,
             IdGenerator ids,
             TransactionExecutor transactions) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.evaluator = Objects.requireNonNull(evaluator, "evaluator");
-        this.approvals = Objects.requireNonNull(approvals, "approvals");
+        this.decisions = Objects.requireNonNull(decisions, "decisions");
         this.submittedItems = Objects.requireNonNull(
                 submittedItems, "submittedItems");
-        this.authorizedAccess = Objects.requireNonNull(
-                authorizedAccess, "authorizedAccess");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
@@ -196,69 +192,8 @@ public final class AccessRequestCommandService {
 
             AccessRequest request = requireRequest(
                     tenant, evaluating.accessRequestId());
-            EligibilityResult result;
-            try {
-                result = Objects.requireNonNull(
-                        evaluator.evaluate(
-                                tenant, request, evaluating),
-                        "eligibility evaluator result");
-            } catch (RuntimeException unavailable) {
-                result = EligibilityResult.unavailable(
-                        "mandatory_evaluator_unavailable");
-            }
-
-            if (result.outcome() == EligibilityOutcome.UNAVAILABLE) {
-                return repository.updateItemState(
-                        tenant,
-                        itemId,
-                        ItemState.EVALUATING,
-                        null,
-                        null,
-                        normalizeCode(result.code()),
-                        evaluating.revision(),
-                        now);
-            }
-            if (result.outcome() == EligibilityOutcome.DENIED) {
-                return repository.updateItemState(
-                        tenant,
-                        itemId,
-                        ItemState.DENIED,
-                        null,
-                        null,
-                        normalizeCode(result.code()),
-                        evaluating.revision(),
-                        now);
-            }
-            if (result.outcome() == EligibilityOutcome.AUTHORIZED) {
-                RequestItem authorized = repository.updateItemState(
-                        tenant,
-                        itemId,
-                        ItemState.AUTHORIZED,
-                        null,
-                        null,
-                        normalizeCode(result.code()),
-                        evaluating.revision(),
-                        now);
-                authorizedAccess.authorized(tenant, authorized);
-                return authorized;
-            }
-
-            ApprovalCase approvalCase = approvals.start(
-                    tenant,
-                    SubjectKind.ACCESS_REQUEST_ITEM,
-                    itemId,
-                    request.requesterIdentityId(),
-                    result.approvalPlan(),
-                    now);
-            return repository.updateItemState(
-                    tenant,
-                    itemId,
-                    ItemState.PENDING_APPROVAL,
-                    approvalCase.id(),
-                    null,
-                    normalizeCode(result.code()),
-                    evaluating.revision(),
-                    now);
+            EligibilityResult result = RequestAdmissionDecisionService.evaluate(evaluator, tenant, request, evaluating);
+            return decisions.finish(tenant, request, evaluating, result, now);
         });
     }
 

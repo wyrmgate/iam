@@ -10,7 +10,15 @@ public interface AccessIntentCommand {
     Result applyRequestedAccess(
             TenantContext tenant,
             RequestedAccess request,
+            Admission admission,
             Instant now);
+
+    record Admission(long identityEpoch, String targetFingerprint) {
+        public Admission {
+            if (identityEpoch < 1 || targetFingerprint == null || !targetFingerprint.matches("sha256:[0-9a-f]{64}"))
+                throw new IllegalArgumentException("valid epoch and target fingerprint required");
+        }
+    }
 
     record RequestedAccess(
             UUID requestItemId,
