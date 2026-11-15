@@ -221,7 +221,7 @@ class GovernanceExceptionIntegrationTest {
                         requests,
                         catalog,
                         roles,
-                        effectiveAccess,
+                        (t, i, ids, from, until) -> effectiveAccess.currentEntitlementIds(t, i, ids, from),
                         exceptionService,
                         identities,
                         ids,

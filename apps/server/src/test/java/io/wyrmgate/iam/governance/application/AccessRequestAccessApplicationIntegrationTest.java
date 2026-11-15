@@ -159,7 +159,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                         facts,
                         boundaries,
                         ids,
-                        transactions);
+                        transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
         accessIntent = new AccessIntentCommandService(
                 assignmentRepository, assignmentCommands);
     }
@@ -544,11 +544,13 @@ class AccessRequestAccessApplicationIntegrationTest {
         assertThat(requestDerivedAssignmentCount(authorized.id())).isZero();
 
         currentEvaluator = (t, r, item) -> EligibilityResult.authorized(contextFor(t, r, item));
-        AccessIntentCommand crashAfterCommit = (t, request, admission, at) -> {
-            accessIntent.applyRequestedAccess(t, request, admission, at);
-            throw new IllegalStateException("simulated crash after Access commit");
-        };
-        assertThat(processor(crashAfterCommit, NOW.plusSeconds(9)).processAvailable().failed()).isEqualTo(1);
+        // Commit Access in the admission transaction, then simulate a worker dying before APPLIED.
+        var request = requestRepository.findRequest(tenant, authorized.accessRequestId()).orElseThrow();
+        var context = contextFor(tenant, request, authorized);
+        io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions).execute(tenant, beneficiary.id(), permit -> accessIntent.applyRequestedAccess(tenant,
+                new AccessIntentCommand.RequestedAccess(authorized.id(), beneficiary.id(), AccessIntentCommand.TargetKind.ENTITLEMENT,
+                        null, authorized.entitlementId(), AccessIntentCommand.PrincipalConstraintKind.ANY, null, authorized.validFrom(), authorized.validUntil()),
+                new AccessIntentCommand.Admission(context.identityEpoch(), context.targetFingerprint()), NOW.plusSeconds(9)));
         assertThat(requestDerivedAssignmentCount(authorized.id())).isEqualTo(1);
         currentEvaluator = (t, r, item) -> EligibilityResult.denied("policy_denied");
         assertThat(processor(accessIntent, NOW.plusSeconds(15)).processAvailable().processed()).isEqualTo(1);
@@ -628,7 +630,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                 requestRepository,
                 command, accessIntent, currentEvaluator,
                 new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedAccess),
-                transactions,
+                transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions),
                 Clock.fixed(now, ZoneOffset.UTC));
     }
 

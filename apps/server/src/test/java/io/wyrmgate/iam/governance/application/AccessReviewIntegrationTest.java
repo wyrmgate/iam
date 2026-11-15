@@ -150,7 +150,7 @@ class AccessReviewIntegrationTest {
                         (requestedTenant, assignment) -> { },
                         (requestedTenant, assignment, now) -> { },
                         ids,
-                        transactions);
+                        transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
         AccessReviewSnapshotQuery snapshots =
                 new AccessReviewSnapshotQueryService(
                         assignments);

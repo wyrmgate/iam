@@ -124,7 +124,7 @@ class CatalogAccessTargetAvailabilityIntegrationTest {
                 assignmentFacts,
                 (tenant, assignment, now) -> {},
                 ids,
-                transactions);
+                transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
 
         var reductionRepository =
                 new JdbcAccessTargetReductionRepository(jdbc);

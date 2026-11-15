@@ -159,7 +159,7 @@ class EffectiveAccessProcessingIntegrationTest {
                 new JdbcAccessAssignmentFactSink(outbox, ids),
                 new JdbcAccessAssignmentBoundaryScheduler(scheduledWork),
                 ids,
-                transactions);
+                transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
         effectiveQuery = new EffectiveAccessQueryService(
                 effectiveRepository,
                 identityReferences,

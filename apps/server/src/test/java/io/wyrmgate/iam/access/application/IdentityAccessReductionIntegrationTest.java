@@ -125,7 +125,7 @@ class IdentityAccessReductionIntegrationTest {
                                 outbox, ids),
                         (requestedTenant, assignment, now) -> { },
                         ids,
-                        transactions);
+                        transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
         reductions =
                 new JdbcIdentityAccessReductionRepository(
                         jdbc);

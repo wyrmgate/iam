@@ -220,7 +220,7 @@ class AccessApiIntegrationTest {
                         new JdbcAccessAssignmentBoundaryScheduler(
                                 scheduledWork),
                         ids,
-                        transactions);
+                        transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
         assignmentQueries =
                 new AccessAssignmentQueryService(
                         assignmentRepository);
