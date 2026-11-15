@@ -1,6 +1,8 @@
 package io.wyrmgate.iam.idp.session;
 
 import io.wyrmgate.iam.idp.runtime.IdpAttemptLimiter;
+import io.wyrmgate.iam.idp.federation.FederatedSubjectResolver;
+import io.wyrmgate.iam.integration.application.federation.FederationTrustQuery;
 import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
 import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
 import io.wyrmgate.iam.credential.application.CredentialAuthenticationService;
@@ -30,20 +32,25 @@ public class IdpBrowserSessionConfiguration {
     }
 
     @Bean
+    FederatedSubjectResolver federatedSubjectResolver(FederationTrustQuery trust,IdentityAuthenticationQuery identities,TenantOverviewQuery tenants){
+        return new FederatedSubjectResolver(trust,identities,tenants);
+    }
+
+    @Bean
     IdpBrowserSessionService idpBrowserSessionService(
             IdpBrowserSessionRepository sessions,
             IdentityAuthenticationQuery identities,
             TenantOverviewQuery tenants,
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
-            IdGenerator ids, IdpSecurityEvidence evidence) {
+            IdGenerator ids, IdpSecurityEvidence evidence,FederatedSubjectResolver federation) {
         return new IdpBrowserSessionService(
                 sessions,
                 identities,
                 tenants,
                 credentials,
                 tokens,
-                ids, evidence);
+                ids, evidence,federation);
     }
 
     @Bean

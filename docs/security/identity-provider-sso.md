@@ -92,3 +92,5 @@ ADR-0069 adds a short-lived browser-bound single-use interaction with typed orig
 ### Bounded authentication runtime (ADR-0070)
 
 Shared database-time admission counters, bounded governed Access evaluation, mandatory success Audit evidence, best-effort denial/revocation evidence, and bounded technical retention are implemented. See [protocol contracts](../api/idp-sso-contracts.md#runtime-admission-evidence-and-retention-adr-0070--v33). Ingress rate limiting and live load/retention/Audit availability acceptance remain operational requirements. Discovery advertises only implemented openid claim scope; profile/email registration compatibility is not claim release.
+
+ADR-0078/V38: existing browser session supports a mutually exclusive federated trust/link anchor, no synthetic Credential. Trust/link and Tenant/Identity/Principal revisions and proof expiry are revalidated on all session/code reads. Local password change remains local-only. Upstream callback activation is still separate.
