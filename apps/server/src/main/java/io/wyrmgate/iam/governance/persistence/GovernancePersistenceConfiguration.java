@@ -463,6 +463,19 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    io.wyrmgate.iam.governance.application.ExceptionExposureProcessingService exceptionExposureProcessingService(
+            GovernanceExceptionRepository exceptions,GovernanceExceptionQuery coverage,GovernancePolicyService policies,
+            AccessAdmissionConflictQuery access,GovernanceObservationReporter reporter,GovernanceFindingRepository findings,TransactionExecutor transactions){
+        return new io.wyrmgate.iam.governance.application.ExceptionExposureProcessingService(exceptions,coverage,policies,access,reporter,findings,transactions);
+    }
+
+    @Bean
+    io.wyrmgate.iam.governance.application.ExceptionExposureProcessingScheduler exceptionExposureProcessingScheduler(
+            GovernanceExceptionRepository exceptions,io.wyrmgate.iam.governance.application.ExceptionExposureProcessingService service){
+        return new io.wyrmgate.iam.governance.application.ExceptionExposureProcessingScheduler(exceptions,service);
+    }
+
+    @Bean
     GovernanceFindingRepository governanceFindingRepository(JdbcTemplate jdbc) {
         return new JdbcGovernanceFindingRepository(jdbc);
     }
