@@ -211,6 +211,7 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission PRINCIPAL_OBSERVATION_MAPPING_RETIRE =
             new AdministrativePermission("principal-observation-mapping", "retire");
 
+    public static final AdministrativePermission CONNECTOR_BINDING_RECONCILE = new AdministrativePermission("connector-binding","reconcile");
     public static final AdministrativePermission FEDERATION_TRUST_READ = new AdministrativePermission("federation-trust","read");
     public static final AdministrativePermission FEDERATION_TRUST_CREATE = new AdministrativePermission("federation-trust","create");
     public static final AdministrativePermission FEDERATION_TRUST_BIND_CLIENT = new AdministrativePermission("federation-trust","bind-client");
@@ -313,6 +314,7 @@ public final class AdministrativePermissions {
             CONNECTOR_BINDING_CREATE,
             CONNECTOR_BINDING_UPDATE,
             CONNECTOR_BINDING_DISABLE,
+            CONNECTOR_BINDING_RECONCILE,
             CONNECTOR_WORKER_READ,
             CONNECTOR_WORKER_CREATE,
             CONNECTOR_WORKER_UPDATE,

@@ -99,7 +99,7 @@ The agreed v3 layered architecture reconciliation is now represented durably by 
 - The first reconciled Identity backend migration is V13: Identity lifecycle transition mechanics reuse the framework-neutral lifecycle kernel while Identity retains its state/action graph, and the previously documented Organization/manager/membership/ownership model is now persisted as tenant-safe normalized authoritative state with temporal validity, typed provenance and optimistic revision. Public relationship APIs and source-driven relationship extraction remain separate future contracts.
 - [`architecture/layered-architecture.md`](architecture/layered-architecture.md) consolidates L1–L6 and Layer 6A–6I. The image-86 internal `Layer 6L` heading is treated as a labeling error; the reconciled area is 6I Runtime/Deployment/Availability/Recovery.
 
-The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0080 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
+The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0081 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
 
 OD-005 remains open until a concrete production provider environment implements the accepted ADR-0043 objectives and measured recovery/failover evidence proves them. OD-006 legacy migration/cutover remains open.
 
@@ -130,3 +130,5 @@ ADR-0078/V38 adds the existing browser session's mutually exclusive federated an
 ADR-0079/V39 adds explicitly enabled upstream OIDC continuation for a bound downstream client, one-use browser callback, pinned signature verification and federated session issuance. Live provider acceptance remains open.
 
 ADR-0080/V40 records late success without reopening expired mutation work and adds bounded forward recovery from confirmed grant effects. Manual recovery remains explicit when exact provenance is unavailable.
+
+ADR-0081/V41 adds explicit reconciliation scheduling and durable positive source delivery through Identity-owned source import commands; no automatic source absence trust.
