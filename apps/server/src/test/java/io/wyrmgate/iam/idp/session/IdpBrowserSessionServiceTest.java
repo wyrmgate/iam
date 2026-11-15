@@ -13,6 +13,8 @@ import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery.AuthenticationSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
+import io.wyrmgate.iam.tenancy.domain.TenantLifecycleState;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -43,6 +45,7 @@ class IdpBrowserSessionServiceTest {
         IdpBrowserSessionService service = new IdpBrowserSessionService(
                 repository,
                 identities,
+                activeTenants(),
                 credentials,
                 new IdpSessionTokenCodec(),
                 ids,
@@ -69,6 +72,7 @@ class IdpBrowserSessionServiceTest {
         IdpBrowserSessionService service = new IdpBrowserSessionService(
                 repository,
                 mock(IdentityAuthenticationQuery.class),
+                activeTenants(),
                 mock(CredentialAuthenticationService.class),
                 new IdpSessionTokenCodec(),
                 UUID::randomUUID,
@@ -91,7 +95,7 @@ class IdpBrowserSessionServiceTest {
         CredentialAuthenticationService credentials = mock(CredentialAuthenticationService.class);
         AuthenticationSubject subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
-        IdpBrowserSessionService service = new IdpBrowserSessionService(repository, identities, credentials,
+        IdpBrowserSessionService service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials,
                 new IdpSessionTokenCodec(), UUID::randomUUID);
         assertThatThrownBy(() -> service.establish(TENANT, subject,
                 new VerifiedCredential(UUID.randomUUID(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW))
@@ -115,6 +119,7 @@ class IdpBrowserSessionServiceTest {
         IdpBrowserSessionService service = new IdpBrowserSessionService(
                 repository,
                 identities,
+                activeTenants(),
                 credentials,
                 new IdpSessionTokenCodec(),
                 UUID::randomUUID,
@@ -135,7 +140,7 @@ class IdpBrowserSessionServiceTest {
         var subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
-        var service = new IdpBrowserSessionService(repository, identities, credentials, new IdpSessionTokenCodec(), UUID::randomUUID);
+        var service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials, new IdpSessionTokenCodec(), UUID::randomUUID);
         var established = service.establish(TENANT, subject, new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW);
         UUID id = established.context().sessionId();
         assertThat(service.revalidateAuthorizationCodeSession(TENANT, id, NOW.plusSeconds(60))).isPresent();
@@ -143,6 +148,40 @@ class IdpBrowserSessionServiceTest {
         assertThat(service.revalidateAuthorizationCodeSession(new TenantContext(UUID.randomUUID()), id, NOW.plusSeconds(60))).isEmpty();
         service.logout(TENANT, established.token(), NOW.plusSeconds(61));
         assertThat(service.revalidateAuthorizationCodeSession(TENANT, id, NOW.plusSeconds(62))).isEmpty();
+    }
+
+    @Test
+    void subjectOrTenantRevisionChangeCannotResurrectSession() {
+        var repository = new InMemorySessions();
+        var identities = mock(IdentityAuthenticationQuery.class);
+        var credentials = mock(CredentialAuthenticationService.class);
+        var tenants = activeTenants();
+        var subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
+        when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
+        when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
+        var service = new IdpBrowserSessionService(repository, identities, tenants, credentials, new IdpSessionTokenCodec(), UUID::randomUUID);
+        var proof = new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1);
+        var first = service.establish(TENANT, subject, proof, NOW);
+        // Even if reactivated before the next request, the old revision cannot authenticate.
+        var changed = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 3);
+        when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(changed));
+        assertThat(service.revalidateAuthorizationCodeSession(TENANT, first.context().sessionId(), NOW.plusSeconds(1))).isEmpty();
+        var second = service.establish(TENANT, changed, proof, NOW.plusSeconds(2));
+        when(tenants.find(TENANT.tenantId())).thenReturn(Optional.of(tenant(TenantLifecycleState.ACTIVE, 3)));
+        assertThat(service.resolve(TENANT, second.token(), NOW.plusSeconds(3))).isEmpty();
+        when(tenants.find(TENANT.tenantId())).thenReturn(Optional.of(tenant(TenantLifecycleState.SUSPENDED, 4)));
+        assertThatThrownBy(() -> service.establish(TENANT, changed, proof, NOW.plusSeconds(4)))
+                .isInstanceOf(IdpBrowserSessionService.InvalidCredentialProofException.class);
+    }
+
+    private static TenantOverviewQuery activeTenants() {
+        var tenants = mock(TenantOverviewQuery.class);
+        when(tenants.find(TENANT.tenantId())).thenReturn(Optional.of(tenant(TenantLifecycleState.ACTIVE, 1)));
+        return tenants;
+    }
+
+    private static TenantOverviewQuery.TenantSummary tenant(TenantLifecycleState state, long revision) {
+        return new TenantOverviewQuery.TenantSummary(TENANT.tenantId(), "test tenant", state, revision, NOW, NOW);
     }
 
     private static final class InMemorySessions implements IdpBrowserSessionRepository {
@@ -202,7 +241,8 @@ class IdpBrowserSessionServiceTest {
                 Instant revokedAt) {
             return new IdpBrowserSession(
                     current.id(), current.principalId(), current.identityId(),
-                    current.credentialId(), current.credentialRevision(), current.tokenHash(),
+                    current.credentialId(), current.credentialRevision(), current.tenantRevision(),
+                    current.principalRevision(), current.identityRevision(), current.tokenHash(),
                     current.createdAt(), lastSeenAt, idleExpiresAt,
                     current.absoluteExpiresAt(), revokedAt);
         }

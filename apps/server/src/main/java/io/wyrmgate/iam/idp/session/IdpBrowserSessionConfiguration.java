@@ -4,6 +4,7 @@ import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
 import io.wyrmgate.iam.credential.application.CredentialAuthenticationService;
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -30,12 +31,14 @@ public class IdpBrowserSessionConfiguration {
     IdpBrowserSessionService idpBrowserSessionService(
             IdpBrowserSessionRepository sessions,
             IdentityAuthenticationQuery identities,
+            TenantOverviewQuery tenants,
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
             IdGenerator ids) {
         return new IdpBrowserSessionService(
                 sessions,
                 identities,
+                tenants,
                 credentials,
                 tokens,
                 ids);
