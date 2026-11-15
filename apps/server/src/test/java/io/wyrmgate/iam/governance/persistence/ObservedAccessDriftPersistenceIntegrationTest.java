@@ -53,6 +53,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
     private static GovernanceFindingRepository findings;
     private static ObservedAccessDriftEvaluationService drift;
     private static GovernanceObservationProcessingService processor;
+    private static JdbcIntegrationObservedAccessFactSink observedAccessFacts;
     private static PrincipalCommandService principalCommands;
 
     @BeforeAll
@@ -71,7 +72,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 jdbc, objectMapper);
         observations = new JdbcIntegrationObservationRepository(jdbc);
         var outbox = new JdbcOutboxRepository(jdbc);
-        var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids);
+        observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(outbox, ids, jdbc);
         IntegrationAdministrationFactSink noFacts = new IntegrationAdministrationFactSink() {
             @Override
             public void connectorChanged(
@@ -122,9 +123,8 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         findings = new JdbcGovernanceFindingRepository(jdbc);
         var reporter = new GovernanceObservationReportingService(findings, ids, transactions);
         drift = new ObservedAccessDriftEvaluationService(
-                observations, principalReferences, reporter);
-        processor = new GovernanceObservationProcessingService(
-                outbox, drift, observations, objectMapper);
+                observations, principalReferences, reporter, findings);
+        processor = newProcessor();
     }
 
     @BeforeEach
@@ -217,7 +217,8 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         observedGrant(tenant, binding, grantRun, "grant-1", "u-1", "g-1");
         observedGrant(tenant, binding, grantRun, "grant-2", "u-2", "g-2");
 
-        drift.evaluate(tenant, binding, NOW);
+        trigger(tenant, binding, entitlementRun);
+        processAll();
         assertThat(openFindingTypes(tenant, binding))
                 .containsExactlyInAnyOrder(
                         "UNMAPPED_PROVIDER_ENTITLEMENT",
@@ -227,7 +228,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
 
         var mapped = mappingService.map(
                 tenant, binding, "g-1", entitlement, NOW.plusSeconds(1), ids.nextId());
-        drift.evaluate(tenant, binding, NOW.plusSeconds(2));
+        processAll();
 
         assertThat(openFindingTypes(tenant, binding))
                 .containsExactlyInAnyOrder(
@@ -240,7 +241,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
 
         mappingService.unmap(
                 tenant, mapped.id(), mapped.revision(), NOW.plusSeconds(3), ids.nextId());
-        drift.evaluate(tenant, binding, NOW.plusSeconds(4));
+        processAll();
 
         assertThat(openFindingTypes(tenant, binding))
                 .containsExactlyInAnyOrder(
@@ -278,7 +279,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 .doesNotContain("g-1")
                 .doesNotContain(entitlement.toString());
 
-        var mappedBatch = processor.processAvailable();
+        var mappedBatch = processAll();
         assertThat(mappedBatch.claimed()).isEqualTo(1);
         assertThat(mappedBatch.processed()).isEqualTo(1);
         assertThat(countOpenFindings(
@@ -287,7 +288,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
 
         var retired = mappingService.unmap(
                 tenant, mapped.id(), mapped.revision(), NOW.plusSeconds(1), ids.nextId());
-        var unmappedBatch = processor.processAvailable();
+        var unmappedBatch = processAll();
         assertThat(unmappedBatch.claimed()).isEqualTo(1);
         assertThat(unmappedBatch.processed()).isEqualTo(1);
         assertThat(countOpenFindings(
@@ -296,7 +297,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
 
         mappingService.map(
                 tenant, binding, "g-1", entitlement, NOW.plusSeconds(2), ids.nextId());
-        var remappedBatch = processor.processAvailable();
+        var remappedBatch = processAll();
         assertThat(remappedBatch.claimed()).isEqualTo(1);
         assertThat(remappedBatch.processed()).isEqualTo(1);
         assertThat(countOpenFindings(
@@ -331,7 +332,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         mappingService.map(
                 tenant, binding, "g-1", entitlement, NOW, ids.nextId());
 
-        var initial = processor.processAvailable();
+        var initial = processAll();
         assertThat(initial.claimed()).isEqualTo(1);
         assertThat(countOpenFindings(
                 tenant, binding, "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL", "grant-1"))
@@ -357,7 +358,7 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 ids.nextId());
         assertThat(mapped.principalId()).isEqualTo(principal.id());
 
-        var correlated = processor.processAvailable();
+        var correlated = processAll();
         assertThat(correlated.claimed()).isEqualTo(1);
         assertThat(correlated.processed()).isEqualTo(1);
         assertThat(countOpenFindings(
@@ -372,6 +373,78 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                 Integer.class,
                 tenant.tenantId());
         assertThat(assignments).isZero();
+    }
+
+    @Test
+    void boundedPagesResumeAndOnlyExactTrustedAbsenceResolvesFindings() {
+        TenantContext tenant = tenant("large-drift");
+        UUID application = application(tenant, "app");
+        UUID target = target(tenant, application, "prod");
+        UUID canonical = entitlement(tenant, application, target, "mapped");
+        UUID binding = binding(tenant, target);
+        UUID completeRun = reconciliation(tenant, binding, "ENTITLEMENT");
+        for (int i = 0; i < 205; i++) {
+            observedEntitlement(tenant, binding, completeRun, "g-" + String.format("%03d", i));
+        }
+        trigger(tenant, binding, completeRun);
+        assertThat(processor.processAvailable().processed()).isEqualTo(1);
+        assertThat(openFindingTypes(tenant, binding)).hasSize(100);
+
+        // New generation while continuation is outstanding; restart the processor.
+        mappingService.map(tenant, binding, "g-000", canonical, NOW.plusSeconds(1), ids.nextId());
+        processor = newProcessor();
+        processAll();
+        assertThat(openFindingTypes(tenant, binding)).hasSize(204);
+        assertThat(countFindings(tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-000"))
+                .isEqualTo(1);
+        assertThat(countOpenFindings(tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-000"))
+                .isZero();
+
+        // Defensively reject absent markers without exact COMPLETE coverage.
+        UUID partialRun = reconciliation(tenant, binding, "ENTITLEMENT", "PARTIAL");
+        jdbc.update("""
+                UPDATE integration.observed_entitlement
+                SET present = false, absent_at = ?, last_observed_run_id = ?
+                WHERE tenant_id = ? AND connector_binding_id = ? AND provider_stable_id = 'g-204'
+                """, Timestamp.from(NOW.plusSeconds(2)), partialRun, tenant.tenantId(), binding);
+        trigger(tenant, binding, partialRun);
+        processAll();
+        assertThat(countOpenFindings(tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-204"))
+                .isEqualTo(1);
+
+        UUID absentRun = reconciliation(tenant, binding, "ENTITLEMENT");
+        jdbc.update("""
+                UPDATE integration.observed_entitlement SET last_observed_run_id = ?
+                WHERE tenant_id = ? AND connector_binding_id = ? AND provider_stable_id = 'g-204'
+                """, absentRun, tenant.tenantId(), binding);
+        trigger(tenant, binding, absentRun);
+        processAll();
+        assertThat(countOpenFindings(tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-204"))
+                .isZero();
+        assertThat(openFindingTypes(tenant, binding)).hasSize(203);
+    }
+
+    private static GovernanceObservationProcessingService newProcessor() {
+        return new GovernanceObservationProcessingService(new JdbcOutboxRepository(jdbc), drift,
+                observations, new JdbcGovernanceObservationEvaluationRepository(jdbc),
+                transactions, ids, new ObjectMapper().findAndRegisterModules());
+    }
+
+    private static GovernanceObservationProcessingService.ProcessingBatchResult processAll() {
+        var first = processor.processAvailable();
+        assertThat(first.failed()).isZero();
+        for (int i = 0; i < 30; i++) {
+            var batch = processor.processAvailable();
+            assertThat(batch.failed()).isZero();
+            if (batch.claimed() == 0) return first;
+        }
+        throw new AssertionError("observation evaluation did not converge");
+    }
+
+    private static void trigger(TenantContext tenant, UUID binding, UUID run) {
+        transactions.required(() -> observedAccessFacts.inputChanged(tenant, binding,
+                io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink.SourceKind.RECONCILIATION_RUN,
+                run, 1, NOW, ids.nextId()));
     }
 
     private TenantContext tenant(String name) {
@@ -449,6 +522,11 @@ class ObservedAccessDriftPersistenceIntegrationTest {
 
     private UUID reconciliation(
             TenantContext tenant, UUID bindingId, String objectClass) {
+        return reconciliation(tenant, bindingId, objectClass, "COMPLETE");
+    }
+
+    private UUID reconciliation(
+            TenantContext tenant, UUID bindingId, String objectClass, String coverage) {
         UUID id = ids.nextId();
         jdbc.update("""
                 INSERT INTO integration.reconciliation_run (
@@ -458,11 +536,11 @@ class ObservedAccessDriftPersistenceIntegrationTest {
                     runtime_id, runtime_version, contract_id, contract_version,
                     correlation_id, revision, started_at, completed_at,
                     created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'SUCCEEDED', 'COMPLETE', 'COMPLETE',
+                VALUES (?, ?, ?, ?, ?, 'SUCCEEDED', ?, ?,
                         1, 'runtime.test', '1.0', 'test.group', 1,
                         ?, 1, ?, ?, ?, ?)
                 """,
-                id, tenant.tenantId(), bindingId, ids.nextId(), objectClass,
+                id, tenant.tenantId(), bindingId, ids.nextId(), objectClass, coverage, coverage,
                 ids.nextId(), Timestamp.from(NOW), Timestamp.from(NOW),
                 Timestamp.from(NOW), Timestamp.from(NOW));
         return id;

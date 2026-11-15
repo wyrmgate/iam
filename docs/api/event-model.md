@@ -87,3 +87,7 @@ independently, so one chain's retry cannot block the other. Assignment projectio
 atomically emit `access.desired-grant-refresh-requested` with the assignment ID/revision and
 touched Entitlement ID. All work propagates correlation/causation and re-reads current
 semantic state; unavailable evaluation retries. These are not public integration events.
+
+### Governance observation evaluation continuation
+
+`integration.observed-access-input-changed` advances the Integration-owned binding input generation in the same transaction as its observation/mapping change. Governance uses a durable checkpoint and `governance.observation-evaluation-page-requested` internal continuation to process at most 100 rows per work item. The worker re-reads current generation, serializes its own checkpoint, and atomically commits a page, continuation and acknowledgement. Replayed/older facts are triggers only. Positive findings and exact resolution are separate; no missing row in a page or partial coverage can imply resolution. This is not a public event or a grant/adoption command.

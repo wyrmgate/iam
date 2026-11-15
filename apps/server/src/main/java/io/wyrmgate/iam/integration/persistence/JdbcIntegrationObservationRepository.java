@@ -235,62 +235,112 @@ public final class JdbcIntegrationObservationRepository
     }
 
     @Override
-    public List<ObservedEntitlementFact> currentEntitlements(
-            TenantContext tenant, UUID connectorBindingId) {
+    public long currentGeneration(TenantContext tenant, UUID connectorBindingId) {
         return jdbc.query("""
-                SELECT o.connector_binding_id, o.provider_stable_id,
-                       m.entitlement_id, o.observed_at
-                FROM integration.observed_entitlement o
-                LEFT JOIN integration.entitlement_observation_mapping m
-                  ON m.tenant_id = o.tenant_id
-                 AND m.connector_binding_id = o.connector_binding_id
-                 AND m.provider_stable_id = o.provider_stable_id
-                 AND m.lifecycle_state = 'ACTIVE'
-                WHERE o.tenant_id = ? AND o.connector_binding_id = ? AND o.present
-                ORDER BY o.provider_stable_id
-                """,
-                (rs,row) -> new ObservedEntitlementFact(
-                        rs.getObject(1, UUID.class), rs.getString(2),
-                        rs.getObject(3, UUID.class), rs.getTimestamp(4).toInstant()),
-                tenant.tenantId(), connectorBindingId);
+                SELECT COALESCE(g.generation, 0)
+                FROM integration.connector_binding b
+                LEFT JOIN integration.observed_access_generation g
+                  ON g.tenant_id = b.tenant_id AND g.connector_binding_id = b.id
+                WHERE b.tenant_id = ? AND b.id = ?
+                """, (rs,n) -> rs.getLong(1), tenant.tenantId(), connectorBindingId)
+                .stream().findFirst().orElseThrow(() -> new IllegalArgumentException("unknown ConnectorBinding"));
+    }
+
+    private static final String ENTITLEMENTS = """
+            SELECT o.connector_binding_id, o.provider_stable_id, m.entitlement_id, o.observed_at,
+                   o.present, COALESCE(r.effective_completeness = 'COMPLETE'
+                       AND r.state = 'SUCCEEDED' AND r.scope_object_class = 'ENTITLEMENT', false)
+            FROM integration.observed_entitlement o
+            LEFT JOIN integration.entitlement_observation_mapping m
+              ON m.tenant_id = o.tenant_id AND m.connector_binding_id = o.connector_binding_id
+             AND m.provider_stable_id = o.provider_stable_id AND m.lifecycle_state = 'ACTIVE'
+            LEFT JOIN integration.reconciliation_run r
+              ON r.tenant_id = o.tenant_id AND r.connector_binding_id = o.connector_binding_id
+             AND r.id = o.last_observed_run_id
+            WHERE o.tenant_id = ? AND o.connector_binding_id = ?
+            """;
+
+    private static final String GRANTS = """
+            SELECT g.connector_binding_id, b.target_id, g.provider_stable_id,
+                   g.principal_provider_id, g.entitlement_provider_id,
+                   em.entitlement_id, pm.principal_id, g.observed_at,
+                   g.present, COALESCE(r.effective_completeness = 'COMPLETE'
+                       AND r.state = 'SUCCEEDED' AND r.scope_object_class = 'GRANT', false)
+            FROM integration.observed_grant g
+            JOIN integration.connector_binding b
+              ON b.tenant_id = g.tenant_id AND b.id = g.connector_binding_id
+             AND b.target_kind = 'APPLICATION_TARGET'
+            LEFT JOIN integration.entitlement_observation_mapping em
+              ON em.tenant_id = g.tenant_id AND em.connector_binding_id = g.connector_binding_id
+             AND em.provider_stable_id = g.entitlement_provider_id AND em.lifecycle_state = 'ACTIVE'
+            LEFT JOIN integration.principal_observation_mapping pm
+              ON pm.tenant_id = g.tenant_id AND pm.connector_binding_id = g.connector_binding_id
+             AND pm.provider_stable_id = g.principal_provider_id AND pm.lifecycle_state = 'ACTIVE'
+            LEFT JOIN integration.reconciliation_run r
+              ON r.tenant_id = g.tenant_id AND r.connector_binding_id = g.connector_binding_id
+             AND r.id = g.last_observed_run_id
+            WHERE g.tenant_id = ? AND g.connector_binding_id = ?
+            """;
+
+    @Override
+    public List<ObservedEntitlementFact> entitlementPage(
+            TenantContext tenant, UUID binding, String after, int limit) {
+        requirePageLimit(limit);
+        return jdbc.query(ENTITLEMENTS + """
+                 AND o.present AND (?::text IS NULL OR o.provider_stable_id > ?)
+                 ORDER BY o.provider_stable_id LIMIT ?
+                """, (rs,n) -> entitlementFact(rs), tenant.tenantId(), binding, after, after, limit);
     }
 
     @Override
-    public List<ObservedGrantFact> currentGrants(
-            TenantContext tenant, UUID connectorBindingId) {
-        return jdbc.query("""
-                SELECT g.connector_binding_id, b.target_id, g.provider_stable_id,
-                       g.principal_provider_id, g.entitlement_provider_id,
-                       em.entitlement_id, pm.principal_id, g.observed_at
-                FROM integration.observed_grant g
-                JOIN integration.connector_binding b
-                  ON b.tenant_id = g.tenant_id
-                 AND b.id = g.connector_binding_id
-                 AND b.target_kind = 'APPLICATION_TARGET'
-                LEFT JOIN integration.entitlement_observation_mapping em
-                  ON em.tenant_id = g.tenant_id
-                 AND em.connector_binding_id = g.connector_binding_id
-                 AND em.provider_stable_id = g.entitlement_provider_id
-                 AND em.lifecycle_state = 'ACTIVE'
-                LEFT JOIN integration.principal_observation_mapping pm
-                  ON pm.tenant_id = g.tenant_id
-                 AND pm.connector_binding_id = g.connector_binding_id
-                 AND pm.provider_stable_id = g.principal_provider_id
-                 AND pm.lifecycle_state = 'ACTIVE'
-                WHERE g.tenant_id = ? AND g.connector_binding_id = ? AND g.present
-                ORDER BY g.provider_stable_id
-                """,
-                (rs,row) -> new ObservedGrantFact(
-                        rs.getObject(1, UUID.class),
-                        rs.getObject(2, UUID.class),
-                        rs.getString(3),
-                        rs.getString(4),
-                        rs.getString(5),
-                        rs.getObject(6, UUID.class),
-                        rs.getObject(7, UUID.class),
-                        rs.getTimestamp(8).toInstant()),
-                tenant.tenantId(),
-                connectorBindingId);
+    public List<ObservedGrantFact> grantPage(
+            TenantContext tenant, UUID binding, String after, int limit) {
+        requirePageLimit(limit);
+        return jdbc.query(GRANTS + """
+                 AND g.present AND (?::text IS NULL OR g.provider_stable_id > ?)
+                 ORDER BY g.provider_stable_id LIMIT ?
+                """, (rs,n) -> grantFact(rs), tenant.tenantId(), binding, after, after, limit);
+    }
+
+    @Override
+    public Observation<ObservedEntitlementFact> entitlement(
+            TenantContext tenant, UUID binding, String providerId) {
+        return jdbc.query(ENTITLEMENTS + " AND o.provider_stable_id = ?",
+                (rs,n) -> rs.getBoolean(5)
+                        ? new Observation<>(Presence.PRESENT, entitlementFact(rs))
+                        : new Observation<ObservedEntitlementFact>(
+                                rs.getBoolean(6) ? Presence.TRUSTED_ABSENT : Presence.UNKNOWN, null),
+                tenant.tenantId(), binding, providerId).stream().findFirst()
+                .orElse(new Observation<>(Presence.UNKNOWN, null));
+    }
+
+    @Override
+    public Observation<ObservedGrantFact> grant(
+            TenantContext tenant, UUID binding, String providerId) {
+        return jdbc.query(GRANTS + " AND g.provider_stable_id = ?",
+                (rs,n) -> rs.getBoolean(9)
+                        ? new Observation<>(Presence.PRESENT, grantFact(rs))
+                        : new Observation<ObservedGrantFact>(
+                                rs.getBoolean(10) ? Presence.TRUSTED_ABSENT : Presence.UNKNOWN, null),
+                tenant.tenantId(), binding, providerId).stream().findFirst()
+                .orElse(new Observation<>(Presence.UNKNOWN, null));
+    }
+
+    private static ObservedEntitlementFact entitlementFact(java.sql.ResultSet rs)
+            throws java.sql.SQLException {
+        return new ObservedEntitlementFact(rs.getObject(1, UUID.class), rs.getString(2),
+                rs.getObject(3, UUID.class), rs.getTimestamp(4).toInstant());
+    }
+
+    private static ObservedGrantFact grantFact(java.sql.ResultSet rs)
+            throws java.sql.SQLException {
+        return new ObservedGrantFact(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
+                rs.getString(3), rs.getString(4), rs.getString(5), rs.getObject(6, UUID.class),
+                rs.getObject(7, UUID.class), rs.getTimestamp(8).toInstant());
+    }
+
+    private static void requirePageLimit(int limit) {
+        if (limit < 1 || limit > 101) throw new IllegalArgumentException("observation page limit");
     }
 
     @Override

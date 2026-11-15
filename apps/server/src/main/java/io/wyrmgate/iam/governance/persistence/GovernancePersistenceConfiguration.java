@@ -472,12 +472,17 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    io.wyrmgate.iam.governance.application.GovernanceObservationEvaluationRepository observationEvaluationRepository(JdbcTemplate jdbc) {
+        return new JdbcGovernanceObservationEvaluationRepository(jdbc);
+    }
+
+    @Bean
     ObservedAccessDriftEvaluationService observedAccessDriftEvaluationService(
             IntegrationObservedAccessQuery observedAccess,
             PrincipalObservationReferenceQuery principalReferences,
-            GovernanceObservationReporter reporter) {
+            GovernanceObservationReporter reporter, GovernanceFindingRepository findings) {
         return new ObservedAccessDriftEvaluationService(
-                observedAccess, principalReferences, reporter);
+                observedAccess, principalReferences, reporter, findings);
     }
 
     @Bean
@@ -485,9 +490,10 @@ public class GovernancePersistenceConfiguration {
             JdbcOutboxRepository outbox,
             ObservedAccessDriftEvaluationService drift,
             IntegrationObservedAccessQuery observedAccess,
-            ObjectMapper objectMapper) {
+            io.wyrmgate.iam.governance.application.GovernanceObservationEvaluationRepository checkpoints,
+            TransactionExecutor transactions, IdGenerator ids, ObjectMapper objectMapper) {
         return new GovernanceObservationProcessingService(
-                outbox, drift, observedAccess, objectMapper);
+                outbox, drift, observedAccess, checkpoints, transactions, ids, objectMapper);
     }
 
     @Bean

@@ -61,7 +61,7 @@ class ScimLocalExecutionIntegrationTest {
         tenants = new TenantTestFixture(jdbc, ids);
         json = new ObjectMapper().findAndRegisterModules();
         var observedAccessFacts = new JdbcIntegrationObservedAccessFactSink(
-                new JdbcOutboxRepository(jdbc), ids);
+                new JdbcOutboxRepository(jdbc), ids, jdbc);
         repository = new JdbcIntegrationRuntimeRepository(
                 jdbc, json, ids, observedAccessFacts);
         transactions = new SpringTransactionExecutor(
