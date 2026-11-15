@@ -66,9 +66,9 @@ public final class GovernancePolicyService {
             throw new IllegalArgumentException(
                     "approval plan is required when policy may require approval");
         }
-        if (!approvalPossible && normalizedPlan != null) {
+        if (!approvalPossible && normalizedRules.isEmpty() && normalizedPlan != null) {
             throw new IllegalArgumentException(
-                    "approval plan is only valid when policy may require approval");
+                    "approval plan requires request approval or an SoD exception rule");
         }
 
         return transactions.required(() -> {
@@ -289,9 +289,9 @@ public final class GovernancePolicyService {
             throw new IllegalArgumentException(
                     "policy version requires an approval plan");
         }
-        if (!approvalPossible && !snapshot.approvalStages().isEmpty()) {
+        if (!approvalPossible && snapshot.rules().isEmpty() && !snapshot.approvalStages().isEmpty()) {
             throw new IllegalArgumentException(
-                    "approval plan is not allowed when policy can never require approval");
+                    "approval plan requires request approval or an SoD exception rule");
         }
 
         int expectedOrdinal = 0;

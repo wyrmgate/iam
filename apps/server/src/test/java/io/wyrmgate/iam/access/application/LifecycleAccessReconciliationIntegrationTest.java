@@ -78,7 +78,7 @@ class LifecycleAccessReconciliationIntegrationTest {
                 (tenant, roleId) -> RoleExpansionQuery.Result.available(
                         roleId,
                         java.util.List.of(new RoleExpansionQuery.EntitlementPath(
-                                ids.nextId(), applicationTargetId, java.util.List.of(roleVersionId))));
+                                roleId, applicationTargetId, java.util.List.of(roleVersionId))));
         IdentityAccessReferenceQuery identityReferences = new IdentityAccessReferenceQuery() {
             @Override
             public boolean identityExists(TenantContext tenant, UUID identityId) {
@@ -874,14 +874,14 @@ class LifecycleAccessReconciliationIntegrationTest {
         @Override
         public boolean currentApprovalSatisfied(
                 TenantContext tenant, UUID identityId, UUID lifecycleRuleId,
-                AccessAssignment.TargetKind targetKind, UUID targetId) {
+                AccessAssignment.TargetKind targetKind, UUID targetId, Context context) {
             return satisfied;
         }
 
         @Override
         public void requestApproval(
                 TenantContext tenant, UUID identityId, UUID lifecycleRuleId,
-                AccessAssignment.TargetKind targetKind, UUID targetId, Instant at,
+                AccessAssignment.TargetKind targetKind, UUID targetId, Context context, Instant at,
                 UUID correlationId, UUID causationId) {
             requests++;
         }
@@ -902,7 +902,12 @@ class LifecycleAccessReconciliationIntegrationTest {
                 UUID correlationId,
                 UUID causationId) {
             calls++;
-            return decision;
+            if (decision.decision()!=Decision.AUTHORIZE && decision.decision()!=Decision.REQUIRE_APPROVAL) return decision;
+            String fingerprint=targetKind==AccessAssignment.TargetKind.ENTITLEMENT
+                    ? io.wyrmgate.iam.catalog.application.AccessTargetFingerprint.entitlement(targetId,applicationTargetId)
+                    : io.wyrmgate.iam.catalog.application.AccessTargetFingerprint.role(RoleExpansionQuery.Result.available(targetId,
+                            java.util.List.of(new RoleExpansionQuery.EntitlementPath(targetId,applicationTargetId,java.util.List.of(roleVersionId)))));
+            return new Result(decision.decision(),decision.code(),new MaterialContext(new UUID(0,1),fingerprint,"sha256:"+"b".repeat(64)));
         }
     }
 

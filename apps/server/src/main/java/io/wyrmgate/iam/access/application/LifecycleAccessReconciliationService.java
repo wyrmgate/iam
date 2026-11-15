@@ -188,11 +188,14 @@ public final class LifecycleAccessReconciliationService {
             if(decision.decision()==LifecycleAccessPrivilegeGuard.Decision.UNAVAILABLE){
                 return decision.code();
             }
+            if(decision.decision()==LifecycleAccessPrivilegeGuard.Decision.DENY) return null;
+            if(decision.context()==null) return "lifecycle_material_context_unavailable";
+            var approvalContext = new LifecycleAccessApprovalCommand.Context(latestContext.accessEligibilityEpoch(),latestPolicy.id(),decision.context());
             if(decision.decision()==LifecycleAccessPrivilegeGuard.Decision.REQUIRE_APPROVAL){
                 if(!approvals.currentApprovalSatisfied(
-                        tenant,identityId,rule.ruleId(),rule.targetKind(),rule.targetId())){
+                        tenant,identityId,rule.ruleId(),rule.targetKind(),rule.targetId(),approvalContext)){
                     approvals.requestApproval(
-                            tenant,identityId,rule.ruleId(),rule.targetKind(),rule.targetId(),
+                            tenant,identityId,rule.ruleId(),rule.targetKind(),rule.targetId(),approvalContext,
                             now,correlationId,causationId);
                     return null;
                 }
@@ -207,6 +210,7 @@ public final class LifecycleAccessReconciliationService {
                             rule.ruleId(),
                             identityId,
                             rule.targetId(),
+                            new AccessIntentCommand.Admission(approvalContext.identityEpoch(),decision.context().targetFingerprint()),
                             now,
                             correlationId,
                             causationId);
@@ -216,6 +220,7 @@ public final class LifecycleAccessReconciliationService {
                             rule.ruleId(),
                             identityId,
                             rule.targetId(),
+                            new AccessIntentCommand.Admission(approvalContext.identityEpoch(),decision.context().targetFingerprint()),
                             now,
                             correlationId,
                             causationId);

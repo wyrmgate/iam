@@ -283,6 +283,7 @@ final class GovernanceApiMutationService {
         }
         if (failure instanceof ApprovalCommandException approval
                 && ("approval_actor_not_approver".equals(approval.code())
+                    || "approval_actor_ineligible".equals(approval.code())
                     || "approval_self_decision_forbidden".equals(approval.code()))) {
             return AuditOutcome.DENIED;
         }

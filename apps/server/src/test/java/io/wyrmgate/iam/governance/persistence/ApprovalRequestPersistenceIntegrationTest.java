@@ -72,7 +72,7 @@ class ApprovalRequestPersistenceIntegrationTest {
                         new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), (requestedTenant, item) -> { }),
                         new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
-                transactions);
+                transactions, (t,approvalCase,actor)->{});
     }
 
     @BeforeEach

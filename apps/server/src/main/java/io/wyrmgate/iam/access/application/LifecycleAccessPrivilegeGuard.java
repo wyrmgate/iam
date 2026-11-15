@@ -26,7 +26,15 @@ public interface LifecycleAccessPrivilegeGuard {
         UNAVAILABLE
     }
 
-    record Result(Decision decision, String code) {
+    record MaterialContext(UUID governancePolicyVersionId, String targetFingerprint, String riskFingerprint) {
+        public MaterialContext {
+            Objects.requireNonNull(governancePolicyVersionId);
+            if (targetFingerprint == null || !targetFingerprint.matches("sha256:[0-9a-f]{64}") || riskFingerprint == null || !riskFingerprint.matches("sha256:[0-9a-f]{64}")) throw new IllegalArgumentException("invalid material lifecycle context");
+        }
+    }
+
+    record Result(Decision decision, String code, MaterialContext context) {
+        public Result(Decision decision, String code) { this(decision,code,null); }
         public Result {
             Objects.requireNonNull(decision, "decision");
             if (code == null || code.isBlank()) {

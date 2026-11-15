@@ -250,7 +250,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
                 approvalRepository,
                 resultSink,
                 ids,
-                transactions);
+                transactions, (t,approvalCase,actor)->{});
 
         activeEntitlements.clear();
         currentEffective.clear();
@@ -479,13 +479,15 @@ class GovernancePolicyRiskSoDIntegrationTest {
                 ids,
                 transactions);
 
+        var context = new io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand.Context(1, ids.nextId(),
+                new LifecycleAccessPrivilegeGuard.MaterialContext(active.id(),"sha256:"+"a".repeat(64),"sha256:"+"b".repeat(64)));
         service.requestApproval(
                 tenant, identityId, lifecycleRuleId,
-                AccessAssignment.TargetKind.ENTITLEMENT, requested,
+                AccessAssignment.TargetKind.ENTITLEMENT, requested, context,
                 NOW.plusSeconds(1), ids.nextId(), ids.nextId());
         service.requestApproval(
                 tenant, identityId, lifecycleRuleId,
-                AccessAssignment.TargetKind.ENTITLEMENT, requested,
+                AccessAssignment.TargetKind.ENTITLEMENT, requested, context,
                 NOW.plusSeconds(2), ids.nextId(), ids.nextId());
 
         assertThat(jdbc.queryForObject(
@@ -496,7 +498,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
                 Integer.class, tenant.tenantId())).isEqualTo(1);
         assertThat(service.currentApprovalSatisfied(
                 tenant, identityId, lifecycleRuleId,
-                AccessAssignment.TargetKind.ENTITLEMENT, requested)).isFalse();
+                AccessAssignment.TargetKind.ENTITLEMENT, requested, context)).isFalse();
 
         UUID caseId = jdbc.queryForObject(
                 "SELECT id FROM governance.approval_case WHERE tenant_id = ? AND subject_kind = 'LIFECYCLE_ACCESS_CANDIDATE'",
@@ -507,9 +509,13 @@ class GovernancePolicyRiskSoDIntegrationTest {
 
         assertThat(service.currentApprovalSatisfied(
                 tenant, identityId, lifecycleRuleId,
-                AccessAssignment.TargetKind.ENTITLEMENT, requested)).isTrue();
+                AccessAssignment.TargetKind.ENTITLEMENT, requested, context)).isTrue();
+        var changed = new io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand.Context(2, context.lifecyclePolicyVersionId(),context.governance());
+        assertThat(service.currentApprovalSatisfied(tenant,identityId,lifecycleRuleId,AccessAssignment.TargetKind.ENTITLEMENT,requested,changed)).isFalse();
+        service.requestApproval(tenant,identityId,lifecycleRuleId,AccessAssignment.TargetKind.ENTITLEMENT,requested,changed,NOW.plusSeconds(4),ids.nextId(),ids.nextId());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM governance.lifecycle_access_approval_candidate WHERE tenant_id = ?",Integer.class,tenant.tenantId())).isEqualTo(2);
         assertThat(jdbc.queryForObject(
-                "SELECT policy_version_id FROM governance.lifecycle_access_approval_candidate WHERE tenant_id = ?",
+                "SELECT DISTINCT policy_version_id FROM governance.lifecycle_access_approval_candidate WHERE tenant_id = ?",
                 UUID.class, tenant.tenantId())).isEqualTo(active.id());
     }
 

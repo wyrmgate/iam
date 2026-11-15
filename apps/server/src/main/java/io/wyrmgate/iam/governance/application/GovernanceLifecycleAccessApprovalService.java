@@ -39,14 +39,14 @@ public final class GovernanceLifecycleAccessApprovalService
     @Override
     public boolean currentApprovalSatisfied(
             TenantContext tenant, UUID identityId, UUID lifecycleRuleId,
-            AccessAssignment.TargetKind targetKind, UUID targetId) {
+            AccessAssignment.TargetKind targetKind, UUID targetId, Context context) {
         var snapshot=policies.findActiveSnapshot(tenant,PolicyKind.ACCESS_REQUEST).orElse(null);
-        if(snapshot==null || snapshot.approvalStages().isEmpty()) return false;
+        if(snapshot==null || snapshot.approvalStages().isEmpty() || !snapshot.version().id().equals(context.governance().governancePolicyVersionId())) return false;
         PlanSpec plan=plan(snapshot);
         String hash=ApprovalCaseStartService.contentHash(plan);
         Candidate candidate=candidates.findByContext(
                 tenant,identityId,lifecycleRuleId,targetKind,targetId,
-                snapshot.version().id(),hash).orElse(null);
+                snapshot.version().id(),hash,context).orElse(null);
         if(candidate==null) return false;
         return approvalRepository.findLatestBySubject(
                         tenant,SubjectKind.LIFECYCLE_ACCESS_CANDIDATE,candidate.id())
@@ -57,23 +57,24 @@ public final class GovernanceLifecycleAccessApprovalService
     @Override
     public void requestApproval(
             TenantContext tenant, UUID identityId, UUID lifecycleRuleId,
-            AccessAssignment.TargetKind targetKind, UUID targetId, Instant at,
+            AccessAssignment.TargetKind targetKind, UUID targetId, Context context, Instant at,
             UUID correlationId, UUID causationId) {
         var snapshot=policies.findActiveSnapshot(tenant,PolicyKind.ACCESS_REQUEST)
                 .orElseThrow(()->new IllegalStateException("mandatory governance policy unavailable"));
+        if(!snapshot.version().id().equals(context.governance().governancePolicyVersionId())) throw new IllegalStateException("Governance policy changed during lifecycle evaluation");
         PlanSpec plan=plan(snapshot);
         String hash=ApprovalCaseStartService.contentHash(plan);
         transactions.required(()->{
             Candidate candidate=candidates.findByContext(
                     tenant,identityId,lifecycleRuleId,targetKind,targetId,
-                    snapshot.version().id(),hash).orElseGet(()->{
+                    snapshot.version().id(),hash,context).orElseGet(()->{
                         Candidate created=new Candidate(
                                 ids.nextId(),identityId,lifecycleRuleId,targetKind,targetId,
-                                snapshot.version().id(),hash,correlationId,causationId,at);
+                                snapshot.version().id(),hash,context,correlationId,causationId,at);
                         candidates.insert(tenant,created);
                         return candidates.findByContext(
                                 tenant,identityId,lifecycleRuleId,targetKind,targetId,
-                                snapshot.version().id(),hash).orElse(created);
+                                snapshot.version().id(),hash,context).orElse(created);
                     });
             approvals.start(
                     tenant,SubjectKind.LIFECYCLE_ACCESS_CANDIDATE,candidate.id(),

@@ -88,7 +88,7 @@ Inbox pagination is deterministic by `createdAt + id`. Cursor transport follows
 ADR-0012: signed, tenant-bound, approver-Identity-bound, time-bounded and rotation-safe.
 
 Approval decision mutation uses ApprovalCase revision `ETag` / `If-Match` and
-causal `Idempotency-Key`. Decision evidence is append-only. Replaying the same
+causal `Idempotency-Key`. Decision evidence is append-only. ADR-0060 requires current access eligibility for the resolved approver on every new decision; a requester or beneficiary cannot decide their own case. Replaying the same
 idempotent request returns the current case; a conflicting use of the key is rejected.
 
 Approval evidence may be read only by the case initiator or a snapshotted approver.
@@ -233,7 +233,7 @@ The ADR-0018 exception lifecycle is now public through:
 - `GET /exceptions/{governanceExceptionId}`;
 - `POST /exceptions/{governanceExceptionId}:revoke`.
 
-The authenticated governed actor is always the requester; clients cannot assert a different requester identity. The request binds one subject Identity to one exact SoDRule of the current ACTIVE PolicyVersion, explicit validity, business reason, an immutable typed approval plan and optional predecessor for renewal. Approval/rejection still uses the reusable Approval API and remains evidence rather than Access authority.
+The authenticated governed actor is always the requester; clients cannot assert a different requester identity. The request binds one subject Identity to one exact SoDRule of the current ACTIVE PolicyVersion, explicit validity, business reason, an immutable typed approval plan and optional predecessor for renewal. Under ADR-0060, the submitted plan is only a compatibility assertion: it must match the active SoD rule PolicyVersion's configured plan, excluding the requester and beneficiary. A missing plan fails closed. Final approval revalidates the exact active policy and plan. Approval/rejection still uses the reusable Approval API and remains evidence rather than Access authority.
 
 Revoke is an explicit authority-reduction operation with If-Match and causal idempotency. Semantic expiration remains clock-based even if scheduler materialization is late. Exception mutation never writes Access persistence.
 

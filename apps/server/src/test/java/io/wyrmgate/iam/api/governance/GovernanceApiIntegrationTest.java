@@ -167,7 +167,7 @@ class GovernanceApiIntegrationTest {
                         new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedSink),
                         new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
-                transactions);
+                transactions, (t,approvalCase,actor)->{});
         approvalQueries =
                 new ApprovalQueryService(
                         approvalRepository);
@@ -274,7 +274,7 @@ class GovernanceApiIntegrationTest {
                 (requestedTenant, exception) -> { },
                 (requestedTenant, exception, scheduledAt) -> { },
                 ids,
-                transactions);
+                transactions, approvalRepository);
 
         mvc = mockMvc(
                 new AuditCommandService(

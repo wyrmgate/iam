@@ -57,6 +57,8 @@ class GovernanceExceptionIntegrationTest {
     private JdbcAccessRequestRepository requests;
     private GovernancePolicyEligibilityEvaluator evaluator;
 
+    private final Set<UUID> inactiveApprovers = new HashSet<>();
+
     private final Set<UUID> activeEntitlements =
             new HashSet<>();
     private final Set<UUID> currentEffective =
@@ -117,7 +119,9 @@ class GovernanceExceptionIntegrationTest {
                 public IdentityAccessStatus accessStatus(
                         TenantContext tenant,
                         UUID identityId) {
-                    return identityExists(tenant, identityId)
+                    return inactiveApprovers.contains(identityId)
+                            ? IdentityAccessStatus.notFound()
+                            : identityExists(tenant, identityId)
                             ? IdentityAccessStatus.eligible("ACTIVE", 1, 1)
                             : IdentityAccessStatus.notFound();
                 }
@@ -212,7 +216,7 @@ class GovernanceExceptionIntegrationTest {
                         new JdbcGovernanceExceptionBoundaryScheduler(
                                 scheduledWork),
                         ids,
-                        transactions);
+                        transactions, approvalRepository);
         requests = new JdbcAccessRequestRepository(jdbc);
         evaluator =
                 new GovernancePolicyEligibilityEvaluator(
@@ -256,7 +260,7 @@ class GovernanceExceptionIntegrationTest {
                                         new GovernanceExceptionApprovalResultSink(
                                                 exceptionService))),
                         ids,
-                        transactions);
+                        transactions, new io.wyrmgate.iam.governance.application.CurrentApprovalActorAuthority(identities,requests,exceptionRepository,new io.wyrmgate.iam.governance.persistence.JdbcLifecycleAccessApprovalCandidateRepository(jdbc)));
 
         activeEntitlements.clear();
         currentEffective.clear();
@@ -275,7 +279,7 @@ class GovernanceExceptionIntegrationTest {
                 "toxic-pair",
                 held,
                 requested,
-                NOW);
+                approver, NOW);
 
         GovernanceException exception =
                 exceptionService.request(
@@ -400,7 +404,7 @@ class GovernanceExceptionIntegrationTest {
                 "same-human-code",
                 held,
                 requested,
-                NOW);
+                approver, NOW);
         GovernanceException predecessor =
                 approveException(
                         subject,
@@ -464,7 +468,7 @@ class GovernanceExceptionIntegrationTest {
                         "same-human-code",
                         held,
                         requested,
-                        NOW.plusSeconds(20));
+                        approver, NOW.plusSeconds(20));
         assertThat(replacementRule.id())
                 .isNotEqualTo(firstRule.id());
 
@@ -506,30 +510,14 @@ class GovernanceExceptionIntegrationTest {
                 "approval-semantics",
                 left,
                 right,
-                NOW);
+                approver, NOW);
 
-        GovernanceException selfApproval =
-                exceptionService.request(
-                        tenant,
-                        subject,
-                        rule.id(),
-                        requester,
-                        "self approval forbidden",
-                        NOW,
-                        NOW.plusSeconds(100),
-                        null,
-                        plan(requester),
-                        NOW.plusSeconds(1));
-        assertThatThrownBy(() -> approvalCommands.decide(
-                tenant,
-                selfApproval.approvalCaseId(),
-                requester,
-                DecisionValue.APPROVE,
-                null,
-                1,
-                NOW.plusSeconds(2)))
-                .isInstanceOf(ApprovalCommandException.class)
-                .hasMessageContaining("Self-approval");
+        assertThatThrownBy(() -> exceptionService.request(tenant,subject,rule.id(),requester,
+                "caller-selected plan",NOW,NOW.plusSeconds(100),null,plan(requester),NOW.plusSeconds(1)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("must match");
+        assertThatThrownBy(() -> exceptionService.request(tenant,approver,rule.id(),requester,
+                "beneficiary-selected plan",NOW,NOW.plusSeconds(100),null,plan(approver),NOW.plusSeconds(1)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("beneficiary");
 
         GovernanceException rejected =
                 exceptionService.request(
@@ -543,6 +531,11 @@ class GovernanceExceptionIntegrationTest {
                         null,
                         plan(approver),
                         NOW.plusSeconds(3));
+        inactiveApprovers.add(approver);
+        assertThatThrownBy(() -> approvalCommands.decide(tenant,rejected.approvalCaseId(),approver,DecisionValue.APPROVE,null,1,NOW.plusSeconds(4)))
+                .isInstanceOf(ApprovalCommandException.class).hasMessageContaining("not currently eligible");
+        assertThat(approvalRepository.findCase(tenant,rejected.approvalCaseId()).orElseThrow().revision()).isEqualTo(1);
+        inactiveApprovers.remove(approver);
         approvalCommands.decide(
                 tenant,
                 rejected.approvalCaseId(),
@@ -597,8 +590,8 @@ class GovernanceExceptionIntegrationTest {
         UUID requested = entitlement();
         UUID subject = ids.nextId();
         UUID requester = ids.nextId();
-        UUID exceptionApprover = ids.nextId();
         UUID requestApprover = ids.nextId();
+        UUID exceptionApprover = requestApprover;
         currentEffective.add(held);
 
         SoDRule rule = activateRule(
@@ -690,7 +683,7 @@ class GovernanceExceptionIntegrationTest {
                 "short-lived",
                 left,
                 right,
-                NOW);
+                approver, NOW);
 
         GovernanceException approved =
                 approveException(
@@ -823,7 +816,7 @@ class GovernanceExceptionIntegrationTest {
     private SoDRule activateDenyRule(
             String code,
             UUID left,
-            UUID right,
+            UUID right, UUID approver,
             Instant at) {
         return activateRule(
                 code,
@@ -831,7 +824,7 @@ class GovernanceExceptionIntegrationTest {
                 right,
                 PolicyDecision.AUTHORIZE,
                 SoDAction.DENY,
-                null,
+                plan(approver),
                 at);
     }
 

@@ -15,6 +15,7 @@ public interface LifecycleAccessApprovalCandidateRepository {
             UUID targetId,
             UUID policyVersionId,
             String approvalPlanHash,
+            io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand.Context context,
             UUID correlationId,
             UUID causationId,
             Instant createdAt) {}
@@ -26,7 +27,7 @@ public interface LifecycleAccessApprovalCandidateRepository {
             AccessAssignment.TargetKind targetKind,
             UUID targetId,
             UUID policyVersionId,
-            String approvalPlanHash);
+            String approvalPlanHash, io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand.Context context);
 
     Optional<Candidate> findById(TenantContext tenant, UUID id);
 
