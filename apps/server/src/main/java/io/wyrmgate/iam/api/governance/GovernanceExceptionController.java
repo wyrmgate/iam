@@ -7,6 +7,7 @@ import io.wyrmgate.iam.administration.domain.AdministrativePermissions;
 import io.wyrmgate.iam.api.governance.GovernanceExceptionApiModels.GovernanceExceptionResource;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.governance.application.ApprovalModels.DecisionMode;
+import io.wyrmgate.iam.governance.application.ApprovalModels;
 import io.wyrmgate.iam.governance.application.ApprovalModels.PlanSpec;
 import io.wyrmgate.iam.governance.application.ApprovalModels.StageSpec;
 import io.wyrmgate.iam.governance.application.GovernanceExceptionService;
@@ -124,7 +125,7 @@ public final class GovernanceExceptionController {
         }
         Map<String,Object> m=stringMap(rm,cid);
         exact(m,Set.of("stages"),cid);
-        if(!(m.get("stages") instanceof List<?> items) || items.isEmpty() || items.size()>20){
+        if(!(m.get("stages") instanceof List<?> items) || items.isEmpty() || items.size()>ApprovalModels.MAX_STAGES){
             throw GovernanceApiException.validation(cid,"approvalPlan.stages","invalid_size","approvalPlan stages must contain 1 to 20 entries.");
         }
         List<StageSpec> stages=new ArrayList<>();
@@ -133,7 +134,7 @@ public final class GovernanceExceptionController {
             Map<String,Object> s=stringMap(sm,cid);
             exact(s,Set.of("decisionMode","approverIdentityIds"),cid);
             DecisionMode mode=enumValue(s.get("decisionMode"),DecisionMode.class,"decisionMode",cid);
-            if(!(s.get("approverIdentityIds") instanceof List<?> values) || values.isEmpty() || values.size()>100){
+            if(!(s.get("approverIdentityIds") instanceof List<?> values) || values.isEmpty() || values.size()>ApprovalModels.MAX_APPROVERS_PER_STAGE){
                 throw GovernanceApiException.validation(cid,"approverIdentityIds","invalid_size","approverIdentityIds must contain 1 to 100 entries.");
             }
             List<UUID> approvers=values.stream().map(v->uuid(v,"approverIdentityIds",cid)).toList();

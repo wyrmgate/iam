@@ -9,6 +9,7 @@ import io.wyrmgate.iam.api.governance.GovernancePolicyApiModels.PolicyVersionRes
 import io.wyrmgate.iam.api.governance.GovernancePolicyApiModels.SoDRuleResource;
 import io.wyrmgate.iam.api.security.ControlPlaneActorRequestContext;
 import io.wyrmgate.iam.governance.application.ApprovalModels.DecisionMode;
+import io.wyrmgate.iam.governance.application.ApprovalModels;
 import io.wyrmgate.iam.governance.application.ApprovalModels.PlanSpec;
 import io.wyrmgate.iam.governance.application.ApprovalModels.StageSpec;
 import io.wyrmgate.iam.governance.application.GovernancePolicyService;
@@ -183,7 +184,7 @@ public final class GovernancePolicyController {
         Map<String,Object> m=stringMap(rm,cid);
         exact(m,Set.of("stages"),cid);
         Object stagesRaw=m.get("stages");
-        if(!(stagesRaw instanceof List<?> items) || items.isEmpty() || items.size()>20){
+        if(!(stagesRaw instanceof List<?> items) || items.isEmpty() || items.size()>ApprovalModels.MAX_STAGES){
             throw GovernanceApiException.validation(cid,"approvalPlan.stages","invalid_size","approvalPlan stages must contain 1 to 20 entries.");
         }
         List<StageSpec> stages=new ArrayList<>();
@@ -193,7 +194,7 @@ public final class GovernancePolicyController {
             exact(s,Set.of("decisionMode","approverIdentityIds"),cid);
             DecisionMode mode=enumValue(s.get("decisionMode"),DecisionMode.class,"decisionMode",cid);
             Object idsRaw=s.get("approverIdentityIds");
-            if(!(idsRaw instanceof List<?> idItems) || idItems.isEmpty() || idItems.size()>100){
+            if(!(idsRaw instanceof List<?> idItems) || idItems.isEmpty() || idItems.size()>ApprovalModels.MAX_APPROVERS_PER_STAGE){
                 throw GovernanceApiException.validation(cid,"approverIdentityIds","invalid_size","approverIdentityIds must contain 1 to 100 entries.");
             }
             List<UUID> approvers=idItems.stream().map(x->uuid(x,"approverIdentityIds",cid)).toList();

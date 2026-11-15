@@ -78,6 +78,8 @@ Resources and operations:
 - `POST /approvals/{approvalCaseId}/approve`;
 - `POST /approvals/{approvalCaseId}/reject`.
 
+The reusable typed approval plan enforces at most 20 sequential stages and at most 100 distinct approver Identities per stage, matching existing public policy/exception transport limits. The bound applies to internal consumers as well; the kernel remains subject-neutral.
+
 The inbox is a read model over ApprovalCase, ApprovalPlan, ApprovalStage,
 ApprovalApprover and ApprovalDecision. It is not a new authoritative ApprovalTask
 aggregate.

@@ -8,6 +8,9 @@ import java.util.UUID;
 public final class ApprovalModels {
     private ApprovalModels() {}
 
+    public static final int MAX_STAGES = 20;
+    public static final int MAX_APPROVERS_PER_STAGE = 100;
+
     public enum SubjectKind {
         ACCESS_REQUEST_ITEM,
         ADMINISTRATIVE_ELEVATION,
@@ -120,8 +123,8 @@ public final class ApprovalModels {
         public StageSpec {
             Objects.requireNonNull(decisionMode, "decisionMode");
             approverIdentityIds = List.copyOf(approverIdentityIds);
-            if (approverIdentityIds.isEmpty()) {
-                throw new IllegalArgumentException("approval stage requires at least one approver");
+            if (approverIdentityIds.isEmpty() || approverIdentityIds.size() > MAX_APPROVERS_PER_STAGE) {
+                throw new IllegalArgumentException("approval stage requires 1 to " + MAX_APPROVERS_PER_STAGE + " approvers");
             }
             if (approverIdentityIds.stream().distinct().count()
                     != approverIdentityIds.size()) {
@@ -133,8 +136,8 @@ public final class ApprovalModels {
     public record PlanSpec(List<StageSpec> stages) {
         public PlanSpec {
             stages = List.copyOf(stages);
-            if (stages.isEmpty()) {
-                throw new IllegalArgumentException("approval plan requires at least one stage");
+            if (stages.isEmpty() || stages.size() > MAX_STAGES) {
+                throw new IllegalArgumentException("approval plan requires 1 to " + MAX_STAGES + " stages");
             }
         }
     }
