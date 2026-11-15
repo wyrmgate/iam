@@ -5,7 +5,9 @@
     "/.well-known/openid-configuration",
     "/oauth2/jwks",
     "/oauth2/authorize",
-    "/oauth2/token"
+    "/oauth2/token",
+    "/oauth2/federation/start",
+    "/oauth2/federation/callback"
   ],
   "exclude": []
 }

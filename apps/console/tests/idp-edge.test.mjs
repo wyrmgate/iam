@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { onRequest } from '../functions/[[path]].js';
 
 const routes = JSON.parse(await readFile(new URL('../public/_routes.json', import.meta.url), 'utf8'));
-const allowed = ['/.well-known/openid-configuration', '/oauth2/jwks', '/oauth2/authorize', '/oauth2/token'];
+const allowed = ['/.well-known/openid-configuration', '/oauth2/jwks', '/oauth2/authorize', '/oauth2/token', '/oauth2/federation/start', '/oauth2/federation/callback'];
 
 test('public protocol edge forwards exact paths and never follows relying-party redirects', async (t) => {
   assert.deepEqual(routes.include, ['/api/*', ...allowed]);

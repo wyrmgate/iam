@@ -194,7 +194,7 @@ The operational projection is implemented over the existing Integration schema. 
 
 ## Upstream authentication handoff (ADR-0071)
 
-Integration owns explicit tenant-bound FederationTrust and FederatedSubjectLink semantics; the typed semantic read/verification SPI lives in `integration.application.federation`. This is separate from ConnectorBinding observation mappings and Administration external control-plane actor binding. Concrete persistence/management, unique active subject links with revisioned retirement/remap, provider-specific OIDC/SAML verification, one-use callback/replay protection and federated browser-session activation are subsequent Integration work. Authentication consumes exact trust/link and current Tenant/Identity eligibility and never manufactures a local Credential. See [IdP contracts](idp-sso-contracts.md#federation-adapter-contract-adr-0071).
+Integration owns explicit tenant-bound FederationTrust and FederatedSubjectLink semantics; the typed semantic read/verification SPI lives in `integration.application.federation`. This is separate from ConnectorBinding observation mappings and Administration external control-plane actor binding. ADR-0077–0079 implement persistence/management, exact active links, narrow OIDC verification, one-use callback and federated session activation; SAML remains deferred. Authentication consumes exact trust/link and current Tenant/Identity eligibility and never manufactures a local Credential. See [IdP contracts](idp-sso-contracts.md#federation-adapter-contract-adr-0071).
 
 ## Exact provider realization (ADR-0072)
 
@@ -203,3 +203,5 @@ New grant provisioning requires both a present observed account explicitly mappe
 ## Federation administration (ADR-0077/V37)
 
 Dedicated read/create/retire permissions for `/api/v1/federation-trusts` and `/api/v1/federated-subject-links`. POST creates with Idempotency-Key; GET exact ID returns strong revision ETag; POST `/{id}:retire` requires If-Match and Idempotency-Key. Initial OIDC trust accepts issuer, audience, settings.authorizationEndpoint/tokenEndpoint/keyId/publicKeySpki (public RSA SPKI base64 only), HTTPS same-origin endpoints, public-client PKCE RS256 profile. Link accepts trustId, exactSubject, principalId; active unique same-tenant exact subject, eligible Principal through Identity query. Retire trust invalidates links logically; retire/create for remap/key replacement, history retained. No automatic upstream authentication activation.
+
+ADR-0079: `POST /api/v1/federation-trusts/{id}:bind-client` requires `federation-trust:bind-client`, If-Match, Idempotency-Key and body `{ "clientId": "..." }`. Resolves the current same-tenant interactive Catalog registration, binds once and advances trust revision. One active trust per registration; retirement/recreation for replacement. Binding requires mandatory Audit evidence. Public callback only enabled by deployment opt-in and allowed origin.

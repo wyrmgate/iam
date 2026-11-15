@@ -15,7 +15,7 @@
     -Server
   }
 
-  @server path /api/* /.well-known/openid-configuration /oauth2/jwks /oauth2/authorize /oauth2/token /actuator/health /actuator/health/*
+  @server path /api/* /.well-known/openid-configuration /oauth2/jwks /oauth2/authorize /oauth2/token /oauth2/federation/start /oauth2/federation/callback /actuator/health /actuator/health/*
   reverse_proxy @server {$IAM_SERVER_UPSTREAM:iam-server:8080}
 
   reverse_proxy {$IAM_CONSOLE_UPSTREAM:iam-console:8080}
