@@ -227,6 +227,44 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void missingBatchManifestAndOlderGenerationNeverInferAbsenceOrOverwriteNewerState() {
+        TenantContext tenant = tenant("generation-fence");
+        UUID binding = connector(tenant, "runtime.test", "1.0", true);
+        WorkerExternalSubject subject = new WorkerExternalSubject("https://issuer.example", "generation-worker");
+        worker(tenant, subject, binding, WorkerCapability.RECONCILE);
+        var service = service(revisionUnavailable());
+        var registration = repository.findEnabledByExternalSubject(subject).orElseThrow();
+        var session = service.establishSession(registration, "generation-pod", List.of(1),
+                List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.RECONCILE)));
+        UUID older = createReconciliation(tenant, binding, "runtime.test", "1.0", 1);
+        var oldLease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), older, oldLease.lease().leaseId(), oldLease.lease().leaseEpoch(),
+                List.of(observation("old-only", "Old")));
+        UUID newer = createReconciliation(tenant, binding, "runtime.test", "1.0", 1);
+        var newLease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), newer, newLease.lease().leaseId(), newLease.lease().leaseEpoch(),
+                List.of(observation("new-only", "New")));
+        service.complete(registration, session.id(), newer, newLease.lease().leaseId(), newLease.lease().leaseEpoch(),
+                success(ReconciliationCompleteness.COMPLETE));
+        service.complete(registration, session.id(), older, oldLease.lease().leaseId(), oldLease.lease().leaseEpoch(),
+                success(ReconciliationCompleteness.COMPLETE));
+        assertThat(effectiveCompleteness(older)).isEqualTo("UNKNOWN");
+        assertThat(present(tenant, binding, "new-only")).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM integration.observed_principal WHERE tenant_id=? AND provider_stable_id='old-only'",
+                Integer.class, tenant.tenantId())).isZero();
+        UUID incomplete = createReconciliation(tenant, binding, "runtime.test", "1.0", 1);
+        var lease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), incomplete, lease.lease().leaseId(), lease.lease().leaseEpoch(),
+                List.of(observation("partial-only", "Partial")));
+        var missing = new ConnectorWorkRepository.WorkCompletion("SUCCEEDED", null, null, null, null, null, null,
+                Map.of("observationBatchCount", 2), ReconciliationCompleteness.COMPLETE, null);
+        service.complete(registration, session.id(), incomplete, lease.lease().leaseId(), lease.lease().leaseEpoch(), missing);
+        assertThat(effectiveCompleteness(incomplete)).isEqualTo("UNKNOWN");
+        assertThat(present(tenant, binding, "new-only")).isTrue();
+        assertThat(present(tenant, binding, "partial-only")).isTrue();
+    }
+
+    @Test
     void observationAndCompletionReplayAreIdempotentButConflictsFail() {
         TenantContext tenant = tenant("replay");
         UUID binding = connector(tenant, "runtime.test", "1.0", true);
@@ -798,7 +836,8 @@ class IntegrationRuntimePersistenceIntegrationTest {
     private ConnectorWorkRepository.WorkCompletion success(ReconciliationCompleteness completeness) {
         return new ConnectorWorkRepository.WorkCompletion(
                 "SUCCEEDED", null, null, null, null, null, null,
-                Map.of(), completeness, "checkpoint-next");
+                completeness == ReconciliationCompleteness.COMPLETE ? Map.of("observationBatchCount", 1) : Map.of(),
+                completeness, completeness == ReconciliationCompleteness.COMPLETE ? null : "checkpoint-next");
     }
 
     private boolean present(TenantContext tenant, UUID binding, String providerStableId) {

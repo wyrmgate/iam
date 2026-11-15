@@ -126,3 +126,7 @@ The first runtime slice is intentionally bounded:
 ## Mutation lease uncertainty (ADR-0073)
 
 Expired RUNNING provisioning tasks are boundedly moved to existing BLOCKED with `provider_effect_unknown_after_lease_expiry`, not blindly re-leased. The actual provider effect may be unknown; no fabricated attempt is created. Completion/append serialize on the task/run before checking current lease; exact current-generation replay remains idempotent. Five completed retryable attempts block with `retry_budget_exhausted`; original provider outcomes remain evidence. Read-only reconciliation leases retain reclaim semantics. Explicit remediation and safe replay contracts are subsequent #524 work.
+
+## Full-scan completeness fence (ADR-0074 / V34)
+
+A COMPLETE report requires the existing compatible trusted discovery contract plus first lease, null start/end checkpoints, and integer `metadata.observationBatchCount` exactly matching persisted contiguous zero-based batches. Missing manifest or resumed/reclaimed traversal downgrades coverage; valid positive observations remain. Older generation or changed binding/connector revision never materializes current observations. SCIM local reports batch count and supports PRINCIPAL discovery on a group binding's own endpoint. This metadata convention preserves the closed v1 core wire shape; old adapters may continue positive observation but not destructive completeness. Bounded materialization and richer discovery scope remain #524 follow-up.
