@@ -36,6 +36,13 @@ public final class FederationAdministrationController {
         IdGenerator ids,ObjectMapper json){this.repo=repo;this.commands=commands;this.auth=auth;this.idem=idem;this.tx=tx;this.audit=audit;this.ids=ids;this.json=json;}
 
     record CreateTrust(String issuer,String audience,OidcTrustSettings settings){}
+    record BindClient(String clientId){}
+    @PostMapping("/federation-trusts/{id}:bind-client")
+    ResponseEntity<?> bindClient(@PathVariable UUID id,@RequestHeader("If-Match")String tag,@RequestHeader("Idempotency-Key")String key,@RequestBody BindClient body,HttpServletRequest request){
+        var a=ControlPlaneActorRequestContext.require(request);var c=IntegrationAdminApiRequestContext.resolve(request,ids);var now=Instant.now();long rev=revision(tag,c);
+        var result=mutate(a,AdministrativePermissions.FEDERATION_TRUST_BIND_CLIENT,"federation-trust",id,"bind-client",key,List.of(id,rev,body),c,now,()->commands.bindClient(a.tenant(),id,rev,body.clientId(),now),v->v.trust().id(),v->repo.findTrust(a.tenant(),v).orElseThrow());
+        return response(result,result.trust().revision(),c,HttpStatus.OK);
+    }
     record CreateLink(UUID trustId,String exactSubject,UUID principalId){
         @Override public String toString(){return "CreateLink[REDACTED]";}
     }
@@ -100,7 +107,7 @@ public final class FederationAdministrationController {
             }
             T result=command.get();UUID id=resultId.apply(result);
             // Creation expands authentication trust: mandatory evidence in the same transaction.
-            if("create".equals(action))audit.append(actor.tenant(),new AuditRecordDraft(ids.nextId(),now,actor.identityId(),type+":"+action,type,id,AuditOutcome.SUCCESS,correlation,null));
+            if(!"retire".equals(action))audit.append(actor.tenant(),new AuditRecordDraft(ids.nextId(),now,actor.identityId(),type+":"+action,type,id,AuditOutcome.SUCCESS,correlation,null));
             idem.complete(actor.tenant(),namespace,key,fingerprint,type,id,now);return result;
         });
         if("retire".equals(action))try{audit.append(actor.tenant(),new AuditRecordDraft(ids.nextId(),now,actor.identityId(),type+":"+action,type,resultId.apply(value),AuditOutcome.SUCCESS,correlation,null));}

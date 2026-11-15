@@ -15,8 +15,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public final class JdbcFederationTrustRepository implements FederationTrustRepository {
     private final JdbcTemplate jdbc;
     public JdbcFederationTrustRepository(JdbcTemplate jdbc){this.jdbc=jdbc;}
-    private static final String TRUST="SELECT tenant_id,id,revision,protocol,provider_key,issuer,audience,authorization_endpoint,token_endpoint,key_id,public_key_spki,lifecycle_state,created_at,updated_at,retired_at FROM integration.federation_trust";
+    private static final String TRUST="SELECT tenant_id,id,revision,protocol,provider_key,issuer,audience,authorization_endpoint,token_endpoint,key_id,public_key_spki,lifecycle_state,created_at,updated_at,retired_at,client_registration_id FROM integration.federation_trust";
     private static final String LINK="SELECT l.tenant_id,l.id,l.revision,l.trust_id,l.exact_subject,l.principal_id,l.lifecycle_state,l.created_at,l.updated_at,l.retired_at FROM integration.federated_subject_link l";
+    @Override public Optional<TrustRecord> activeForClient(TenantContext t,UUID client){return jdbc.query(TRUST+" WHERE tenant_id=? AND client_registration_id=? AND lifecycle_state='ACTIVE'",JdbcFederationTrustRepository::trust,t.tenantId(),client).stream().findFirst();}
+    @Override public TrustRecord bindClient(TenantContext t,UUID id,long revision,UUID client,Instant now){
+        try {if(jdbc.update("UPDATE integration.federation_trust SET client_registration_id=?,revision=revision+1,updated_at=? WHERE tenant_id=? AND id=? AND revision=? AND lifecycle_state='ACTIVE' AND client_registration_id IS NULL",client,Timestamp.from(now),t.tenantId(),id,revision)!=1)throw conflict(findTrust(t,id).isPresent());}
+        catch(DuplicateKeyException e){throw new IntegrationAdministrationException("federation_conflict","Client already has an active trust.");}
+        return findTrust(t,id).orElseThrow();
+    }
     @Override public Optional<TrustRecord> findTrust(TenantContext t,UUID id){return jdbc.query(TRUST+" WHERE tenant_id=? AND id=?",JdbcFederationTrustRepository::trust,t.tenantId(),id).stream().findFirst();}
     @Override public Optional<LinkRecord> findLink(TenantContext t,UUID id){return jdbc.query(LINK+" WHERE l.tenant_id=? AND l.id=?",JdbcFederationTrustRepository::link,t.tenantId(),id).stream().findFirst();}
     @Override public Optional<TrustRecord> lockActiveTrust(TenantContext t,UUID id){return jdbc.query(TRUST+" WHERE tenant_id=? AND id=? AND lifecycle_state='ACTIVE' FOR UPDATE",JdbcFederationTrustRepository::trust,t.tenantId(),id).stream().findFirst();}
@@ -61,7 +67,7 @@ public final class JdbcFederationTrustRepository implements FederationTrustRepos
     private static RuntimeException conflict(boolean exists){return new IntegrationAdministrationException(exists?"federation_stale":"not_found",exists?"Federation resource revision or lifecycle changed.":"Federation resource not found.");}
     private static TrustRecord trust(ResultSet rs,int row)throws SQLException {
         var v=new Trust(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getLong(3),Protocol.valueOf(rs.getString(4)),rs.getString(5),rs.getString(6),rs.getString(7));
-        return new TrustRecord(v,new OidcTrustSettings(rs.getString(8),rs.getString(9),rs.getString(10),rs.getString(11)),rs.getString(12),instant(rs,13),instant(rs,14),instant(rs,15));
+        return new TrustRecord(v,new OidcTrustSettings(rs.getString(8),rs.getString(9),rs.getString(10),rs.getString(11)),rs.getString(12),instant(rs,13),instant(rs,14),instant(rs,15),rs.getObject(16,UUID.class));
     }
     private static LinkRecord link(ResultSet rs,int row)throws SQLException {
         return new LinkRecord(new SubjectLink(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getLong(3),rs.getObject(4,UUID.class),rs.getString(5),rs.getObject(6,UUID.class)),rs.getString(7),instant(rs,8),instant(rs,9),instant(rs,10));

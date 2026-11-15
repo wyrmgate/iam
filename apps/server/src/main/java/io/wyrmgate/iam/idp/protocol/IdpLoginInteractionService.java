@@ -42,25 +42,23 @@ final class IdpLoginInteractionService {
     }
 
     Completed complete(String form, String browser, String key, char[] password, Instant now) {
+        var i = consume(form,browser,now);
+        var validated = current(i);
+        var established = login.authenticate(i.request().clientId(), i.targetId(), key, password, now)
+                .orElseThrow(() -> IdpProtocolService.ProtocolException.redirect("access_denied", validated.request().redirectUri(), validated.request().state()));
+        try { return new Completed(protocol.authorizeValidated(current(i), established.token(), now), established); }
+        catch (RuntimeException failure) { sessions.logout(established.token(), now); throw failure; }
+    }
+
+    IdpLoginInteractionRepository.Interaction consume(String form,String browser,Instant now){
         if (form == null || browser == null || !form.matches("[A-Za-z0-9_-]{43}") || !browser.matches("[A-Za-z0-9_-]{43}")) {
             throw IdpProtocolService.ProtocolException.direct("invalid_request");
         }
-        var i = interactions.consume(tokens.hash(form), tokens.hash(browser), now)
+        return interactions.consume(tokens.hash(form), tokens.hash(browser), now)
                 .orElseThrow(() -> IdpProtocolService.ProtocolException.direct("invalid_request"));
-        var validated = current(i);
-        var established = login.authenticate(i.request().clientId(), i.targetId(), key, password, now)
-                .orElseThrow(() -> IdpProtocolService.ProtocolException.redirect("access_denied",
-                        validated.request().redirectUri(), validated.request().state()));
-        try {
-            // Recheck after credential verification, not just before potentially expensive verification.
-            return new Completed(protocol.authorizeValidated(current(i), established.token(), now), established);
-        } catch (RuntimeException failure) {
-            sessions.logout(established.token(), now);
-            throw failure;
-        }
     }
 
-    private IdpProtocolService.ValidatedAuthorization current(IdpLoginInteractionRepository.Interaction i) {
+    IdpProtocolService.ValidatedAuthorization current(IdpLoginInteractionRepository.Interaction i) {
         // Reject retired, changed, or cross-tenant registration before any redirect.
         var client = clients.resolveActive(i.request().clientId()).orElseThrow(() ->
                 IdpProtocolService.ProtocolException.direct("invalid_request"));

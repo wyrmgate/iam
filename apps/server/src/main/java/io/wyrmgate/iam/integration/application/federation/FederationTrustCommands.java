@@ -17,9 +17,10 @@ public final class FederationTrustCommands {
     private final TenantOverviewQuery tenants;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
+    private final io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery clients;
     public FederationTrustCommands(FederationTrustRepository repository,IdentityAuthenticationQuery identities,
-            TenantOverviewQuery tenants,IdGenerator ids,TransactionExecutor transactions) {
-        this.repository=repository;this.identities=identities;this.tenants=tenants;this.ids=ids;this.transactions=transactions;
+            TenantOverviewQuery tenants,IdGenerator ids,TransactionExecutor transactions,io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery clients) {
+        this.repository=repository;this.identities=identities;this.tenants=tenants;this.ids=ids;this.transactions=transactions;this.clients=clients;
     }
     public FederationTrustRepository.TrustRecord createOidc(TenantContext tenant,String issuer,String audience,
             OidcTrustSettings settings,Instant now) {
@@ -30,6 +31,9 @@ public final class FederationTrustCommands {
             requireActiveTenant(tenant);
             return repository.insertTrust(tenant,trust,settings,now);
         });
+    }
+    public FederationTrustRepository.TrustRecord bindClient(TenantContext tenant,UUID id,long revision,String clientId,Instant now){
+        return transactions.required(()->{requireActiveTenant(tenant);var client=clients.resolveActive(clientId).filter(c->c.tenant().equals(tenant)&&clients.resolveAuthenticationTarget(c).isPresent()).orElseThrow(()->new IntegrationAdministrationException("client_not_found","Active same-tenant interactive client required."));return repository.bindClient(tenant,id,revision,client.registration().id(),now);});
     }
     public FederationTrustRepository.LinkRecord link(TenantContext tenant,UUID trustId,String exactSubject,UUID principalId,Instant now) {
         return transactions.required(()->{

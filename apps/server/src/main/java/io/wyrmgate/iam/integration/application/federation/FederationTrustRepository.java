@@ -7,8 +7,10 @@ import java.util.UUID;
 
 /** Integration-owned persistence port; links preserve exact historical interpretation. */
 public interface FederationTrustRepository extends FederationTrustQuery {
-    record TrustRecord(Trust trust,OidcTrustSettings settings,String lifecycleState,Instant createdAt,Instant updatedAt,Instant retiredAt) {}
+    record TrustRecord(Trust trust,OidcTrustSettings settings,String lifecycleState,Instant createdAt,Instant updatedAt,Instant retiredAt,UUID clientRegistrationId) {}
     record LinkRecord(SubjectLink link,String lifecycleState,Instant createdAt,Instant updatedAt,Instant retiredAt) {}
+    Optional<TrustRecord> activeForClient(TenantContext tenant,UUID clientRegistrationId);
+    TrustRecord bindClient(TenantContext tenant,UUID id,long revision,UUID clientRegistrationId,Instant now);
     Optional<TrustRecord> findTrust(TenantContext tenant,UUID id);
     Optional<LinkRecord> findLink(TenantContext tenant,UUID id);
     Optional<TrustRecord> lockActiveTrust(TenantContext tenant,UUID id);

@@ -11,5 +11,5 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class FederationPersistenceConfiguration {
     @Bean FederationTrustRepository federationTrustRepository(JdbcTemplate jdbc){return new JdbcFederationTrustRepository(jdbc);}
     @Bean FederationTrustCommands federationTrustCommands(FederationTrustRepository repo,IdentityAuthenticationQuery identity,
-            TenantOverviewQuery tenants,IdGenerator ids,TransactionExecutor tx){return new FederationTrustCommands(repo,identity,tenants,ids,tx);}
+            TenantOverviewQuery tenants,IdGenerator ids,TransactionExecutor tx,io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery clients){return new FederationTrustCommands(repo,identity,tenants,ids,tx,clients);}
 }

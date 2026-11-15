@@ -28,7 +28,7 @@ class FederationTrustPersistenceIntegrationTest {
         when(tenants.find(tenant.tenantId())).thenReturn(Optional.of(new TenantOverviewQuery.TenantSummary(tenant.tenantId(),"A",TenantLifecycleState.ACTIVE,1,now,now)));
         UUID principal=UUID.randomUUID(), identity=UUID.randomUUID();
         when(identities.eligibleSubject(tenant,principal)).thenReturn(Optional.of(new IdentityAuthenticationQuery.AuthenticationSubject(principal,identity,1,1)));
-        var commands=new FederationTrustCommands(repository,identities,tenants,UUID::randomUUID,tx);
+        var commands=new FederationTrustCommands(repository,identities,tenants,UUID::randomUUID,tx,mock(io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery.class));
         var k=KeyPairGenerator.getInstance("RSA");k.initialize(2048);
         var settings=new OidcTrustSettings("https://issuer.example/authorize","https://issuer.example/token","key",
             Base64.getEncoder().encodeToString(k.generateKeyPair().getPublic().getEncoded()));

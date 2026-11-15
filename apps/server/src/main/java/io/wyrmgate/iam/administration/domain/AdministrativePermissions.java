@@ -213,6 +213,7 @@ public final class AdministrativePermissions {
 
     public static final AdministrativePermission FEDERATION_TRUST_READ = new AdministrativePermission("federation-trust","read");
     public static final AdministrativePermission FEDERATION_TRUST_CREATE = new AdministrativePermission("federation-trust","create");
+    public static final AdministrativePermission FEDERATION_TRUST_BIND_CLIENT = new AdministrativePermission("federation-trust","bind-client");
     public static final AdministrativePermission FEDERATION_TRUST_RETIRE = new AdministrativePermission("federation-trust","retire");
     public static final AdministrativePermission FEDERATED_SUBJECT_LINK_READ = new AdministrativePermission("federated-subject-link","read");
     public static final AdministrativePermission FEDERATED_SUBJECT_LINK_CREATE = new AdministrativePermission("federated-subject-link","create");
@@ -325,6 +326,7 @@ public final class AdministrativePermissions {
             FEDERATION_TRUST_READ,
             FEDERATION_TRUST_CREATE,
             FEDERATION_TRUST_RETIRE,
+            FEDERATION_TRUST_BIND_CLIENT,
             FEDERATED_SUBJECT_LINK_READ,
             FEDERATED_SUBJECT_LINK_CREATE,
             FEDERATED_SUBJECT_LINK_RETIRE);
