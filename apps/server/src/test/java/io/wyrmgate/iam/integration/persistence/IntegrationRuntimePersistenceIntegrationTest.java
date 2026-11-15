@@ -72,6 +72,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
                     integration.reconciliation_principal_staging,
                     integration.reconciliation_observation_batch,
                     integration.reconciliation_run,
+                    integration.provisioning_effect_recovery,
                     integration.provisioning_attempt,
                     integration.provisioning_task_dependency,
                     integration.provisioning_task,
@@ -437,6 +438,16 @@ class IntegrationRuntimePersistenceIntegrationTest {
         assertThatThrownBy(() -> service.complete(registration, session.id(), taskId, lease.lease().leaseId(),
                 lease.lease().leaseEpoch(), success(ReconciliationCompleteness.UNKNOWN)))
                 .isInstanceOf(WorkerProtocolException.class);
+        var late=new ConnectorWorkRepository.WorkCompletion("SUCCEEDED",null,null,"provider-request",null,
+                "provider-object",null,Map.of(),null,null);
+        assertThat(service.complete(registration,session.id(),taskId,lease.lease().leaseId(),lease.lease().leaseEpoch(),late))
+                .isEqualTo(ConnectorWorkRepository.CompletionResult.ACCEPTED);
+        assertThat(service.complete(registration,session.id(),taskId,lease.lease().leaseId(),lease.lease().leaseEpoch(),late))
+                .isEqualTo(ConnectorWorkRepository.CompletionResult.REPLAY);
+        assertThat(taskState(taskId)).isEqualTo("BLOCKED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM integration.provisioning_effect_recovery WHERE tenant_id=?",
+                Integer.class,tenant.tenantId())).isEqualTo(1);
+        assertThat(service.claim(registration,session.id(),1,0)).isEmpty();
     }
 
     @Test

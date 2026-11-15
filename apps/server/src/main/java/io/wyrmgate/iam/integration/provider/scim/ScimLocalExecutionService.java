@@ -208,7 +208,8 @@ public final class ScimLocalExecutionService {
 
         // Obtain the immutable configuration snapshot under the current route/lease fence.
         ExecutionConfiguration configuration = transactions.required(()-> {
-            if(admission.check(candidate)!=ProvisioningAdmission.Decision.ADMIT)return null;
+            var current=work.leasedProvisioning(owner,leased.workId(),leased.lease().leaseId(),leased.lease().leaseEpoch());
+            if(current.isEmpty()||admission.check(current.get())!=ProvisioningAdmission.Decision.ADMIT)return null;
             work.renewLease(owner,leased.workId(),leased.lease().leaseId(),leased.lease().leaseEpoch(),clock.instant(),properties.effectiveLeaseDuration());
             return execution.findExecutionConfiguration(leased.tenant(),leased.connectorBindingId())
                     .filter(value->isCompatible(value,leased.contractId(),leased.contractVersion())).orElse(null);
