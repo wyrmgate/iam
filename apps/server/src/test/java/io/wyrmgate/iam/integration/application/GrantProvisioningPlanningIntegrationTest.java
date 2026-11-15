@@ -101,6 +101,7 @@ class GrantProvisioningPlanningIntegrationTest {
         UUID principalId = ids.nextId();
         UUID bindingId = mappedGroupBinding(
                 tenant, targetId, entitlementId, "group-1");
+        mappedPrincipal(tenant, activeBindingId(tenant, targetId), principalId, "provider-user-1");
 
         DesiredGrantState grant = desired.reconcileGrant(
                 tenant,
@@ -114,7 +115,7 @@ class GrantProvisioningPlanningIntegrationTest {
         facts.changed(tenant, grant);
 
         assertThat(provisioning.addTargets(
-                tenant, targetId, entitlementId, "provider-user-1"))
+                tenant, targetId, entitlementId, principalId))
                 .hasSize(1);
 
         var processor = processor(activePrincipal(
@@ -186,6 +187,7 @@ class GrantProvisioningPlanningIntegrationTest {
         UUID identityId = ids.nextId();
         UUID principalId = ids.nextId();
         mappedGroupBinding(tenant, targetId, entitlementId, "group-1");
+        mappedPrincipal(tenant, activeBindingId(tenant, targetId), principalId, "provider-user-1");
 
         DesiredGrantState unresolved = desired.reconcileGrant(
                 tenant,
@@ -232,6 +234,7 @@ class GrantProvisioningPlanningIntegrationTest {
         UUID principalId = ids.nextId();
         mappedGroupBinding(
                 tenant, targetId, entitlementId, "group-lost-principal");
+        mappedPrincipal(tenant, activeBindingId(tenant, targetId), principalId, "provider-user-lost");
 
         DesiredGrantState present = desired.reconcileGrant(
                 tenant,
@@ -295,6 +298,7 @@ class GrantProvisioningPlanningIntegrationTest {
         UUID identityId = ids.nextId();
         UUID principalId = ids.nextId();
         mappedGroupBinding(tenant, targetId, entitlementId, "group-1");
+        mappedPrincipal(tenant, activeBindingId(tenant, targetId), principalId, "provider-user-1");
 
         DesiredGrantState present = desired.reconcileGrant(
                 tenant,
@@ -370,6 +374,7 @@ class GrantProvisioningPlanningIntegrationTest {
         UUID principalId = ids.nextId();
         UUID bindingId = mappedGroupBinding(
                 tenant, targetId, entitlementId, "group-legacy");
+        mappedPrincipal(tenant, activeBindingId(tenant, targetId), principalId, "provider-user-legacy");
 
         DesiredGrantState present = desired.reconcileGrant(
                 tenant,
@@ -402,6 +407,7 @@ class GrantProvisioningPlanningIntegrationTest {
 
         // A current mutable observation mapping must not be used to reinterpret
         // historical task evidence that did not record the governed Principal ID.
+        jdbc.update("UPDATE integration.principal_observation_mapping SET lifecycle_state='RETIRED', retired_at=?, revision=revision+1 WHERE tenant_id=? AND connector_binding_id=?", Timestamp.from(NOW.plusSeconds(12)), tenant.tenantId(), bindingId);
         jdbc.update("""
                 INSERT INTO integration.principal_observation_mapping (
                     id, tenant_id, connector_binding_id,
@@ -450,6 +456,7 @@ class GrantProvisioningPlanningIntegrationTest {
         UUID principalId = ids.nextId();
         mappedGroupBinding(
                 tenant, targetId, entitlementId, "group-shared");
+        mappedPrincipal(tenant, activeBindingId(tenant, targetId), principalId, "provider-user-shared");
 
         DesiredGrantState any = desired.reconcileGrant(
                 tenant,
@@ -539,6 +546,7 @@ class GrantProvisioningPlanningIntegrationTest {
         UUID identityId = ids.nextId();
         UUID principalId = ids.nextId();
         mappedGroupBinding(tenant, targetId, entitlementId, "group-initial");
+        mappedPrincipal(tenant, activeBindingId(tenant, targetId), principalId, "provider-user");
         var present = desired.reconcileGrant(tenant, identityId, targetId, entitlementId,
                 "ANY", principalId, DesiredPresence.PRESENT, NOW);
         facts.changed(tenant, present);
@@ -583,6 +591,39 @@ class GrantProvisioningPlanningIntegrationTest {
         }
         assertThat(removeCount(tenant)).isEqualTo(206);
         assertThat(processor(references).processAvailable()).isZero();
+    }
+
+    @Test
+    void providerNativeKeyDoesNotAuthorizeAnUnmappedOrForeignBindingAccount() {
+        TenantContext tenant = tenant("binding-correlation");
+        UUID target = ids.nextId(), entitlement = ids.nextId(), principal = ids.nextId();
+        UUID first = mappedGroupBinding(tenant, target, entitlement, "group-one");
+        UUID second = mappedGroupBinding(tenant, target, entitlement, "group-two");
+        assertThat(provisioning.addTargets(tenant, target, entitlement, principal)).isEmpty();
+        mappedPrincipal(tenant, first, principal, "exact-provider-account");
+        mappedPrincipal(tenant, second, ids.nextId(), "exact-provider-account");
+        assertThat(provisioning.addTargets(tenant, target, entitlement, principal))
+                .singleElement().satisfies(route -> {
+                    assertThat(route.connectorBindingId()).isEqualTo(first);
+                    assertThat(route.providerPrincipalId()).isEqualTo("exact-provider-account");
+                });
+        mappedPrincipal(tenant, second, principal, "another-provider-account");
+        assertThat(provisioning.addTargets(tenant, target, entitlement, principal)).hasSize(2);
+    }
+
+    private void mappedPrincipal(TenantContext tenant, UUID binding, UUID principal, String provider) {
+        UUID run = jdbc.queryForObject("SELECT id FROM integration.reconciliation_run WHERE tenant_id=? AND connector_binding_id=? ORDER BY id LIMIT 1",
+                UUID.class, tenant.tenantId(), binding);
+        jdbc.update("""
+                INSERT INTO integration.observed_principal
+                    (id, tenant_id, connector_binding_id, provider_stable_id, observed_state, present, last_observed_run_id, observed_at)
+                VALUES (?, ?, ?, ?, '{}'::jsonb, true, ?, ?)
+                """, ids.nextId(), tenant.tenantId(), binding, provider, run, Timestamp.from(NOW));
+        jdbc.update("""
+                INSERT INTO integration.principal_observation_mapping
+                    (id, tenant_id, connector_binding_id, provider_stable_id, principal_id, lifecycle_state, revision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ?)
+                """, ids.nextId(), tenant.tenantId(), binding, provider, principal, Timestamp.from(NOW), Timestamp.from(NOW));
     }
 
     private int removeCount(TenantContext tenant) {

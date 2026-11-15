@@ -62,9 +62,10 @@ public final class GrantProvisioningPlannerService {
                 return PageResult.finished(PlanResult.RETRY);
             }
             var routes = provisioning.addTargets(tenant, grant.applicationTargetId(),
-                    grant.entitlementId(), principal.nativePrincipalKey());
+                    grant.entitlementId(), grant.principalId());
             if (routes.size() != 1) return PageResult.finished(PlanResult.RETRY);
-            addTarget = routes.getFirst().withPrincipalId(grant.principalId());
+            addTarget = routes.getFirst();
+            if (!grant.principalId().equals(addTarget.principalId())) return PageResult.finished(PlanResult.RETRY);
             add = task(grant, addTarget, "ADD_GRANT", null);
         }
 

@@ -69,6 +69,7 @@ public final class JdbcPrincipalProvisioningRepository
             TenantContext tenant,
             UUID applicationTargetId,
             UUID desiredPrincipalId,
+            UUID principalId,
             String providerPrincipalId) {
         LinkedHashMap<String,TechnicalPrincipalTarget> targets =
                 new LinkedHashMap<>();
@@ -89,8 +90,11 @@ public final class JdbcPrincipalProvisioningRepository
                   ON ci.tenant_id = b.tenant_id
                  AND ci.id = b.connector_instance_id
                  AND ci.lifecycle_state = 'ACTIVE'
+                JOIN integration.principal_observation_mapping pm
+                  ON pm.tenant_id = p.tenant_id AND pm.connector_binding_id = p.connector_binding_id
+                 AND pm.provider_stable_id = p.provider_stable_id AND pm.lifecycle_state = 'ACTIVE'
+                 AND pm.principal_id = ?
                 WHERE p.tenant_id = ?
-                  AND p.provider_stable_id = ?
                   AND p.present
                 ORDER BY b.id
                 """,
@@ -103,8 +107,8 @@ public final class JdbcPrincipalProvisioningRepository
                         rs.getString(6)),
                 applicationTargetId,
                 SCIM_PRINCIPAL_CONTRACT,
-                tenant.tenantId(),
-                providerPrincipalId)) {
+                principalId,
+                tenant.tenantId())) {
             targets.put(target.connectorBindingId() + "|" + target.providerPrincipalId(), target);
         }
 
@@ -140,6 +144,10 @@ public final class JdbcPrincipalProvisioningRepository
                   AND t.subject_id = ?
                   AND t.operation_type = 'UPSERT_PRINCIPAL'
                   AND a.provider_object_id = ?
+                  AND NOT EXISTS (SELECT 1 FROM integration.principal_observation_mapping pm
+                      WHERE pm.tenant_id = b.tenant_id AND pm.connector_binding_id = b.id
+                        AND pm.provider_stable_id = a.provider_object_id
+                        AND pm.lifecycle_state = 'ACTIVE' AND pm.principal_id <> ?)
                 ORDER BY a.completed_at DESC, t.id
                 """,
                 (rs,row) -> new TechnicalPrincipalTarget(
@@ -153,7 +161,7 @@ public final class JdbcPrincipalProvisioningRepository
                 SCIM_PRINCIPAL_CONTRACT,
                 tenant.tenantId(),
                 desiredPrincipalId,
-                providerPrincipalId)) {
+                providerPrincipalId, principalId)) {
             targets.put(target.connectorBindingId() + "|" + target.providerPrincipalId(), target);
         }
 

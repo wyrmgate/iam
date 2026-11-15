@@ -15,6 +15,7 @@ public interface PrincipalProvisioningRepository {
             TenantContext tenant,
             UUID applicationTargetId,
             UUID desiredPrincipalId,
+            UUID principalId,
             String providerPrincipalId);
 
     boolean createPlan(

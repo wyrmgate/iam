@@ -37,10 +37,10 @@ public final class JdbcGrantProvisioningRepository
             TenantContext tenant,
             UUID applicationTargetId,
             UUID entitlementId,
-            String providerPrincipalId) {
+            UUID principalId) {
         return jdbc.query("""
                 SELECT b.id, b.contract_id, b.contract_version,
-                       e.provider_stable_id, e.provider_version
+                       e.provider_stable_id, e.provider_version, pm.provider_stable_id
                 FROM integration.connector_binding b
                 JOIN integration.connector_instance ci
                   ON ci.tenant_id = b.tenant_id
@@ -56,11 +56,17 @@ public final class JdbcGrantProvisioningRepository
                  AND e.connector_binding_id = m.connector_binding_id
                  AND e.provider_stable_id = m.provider_stable_id
                  AND e.present
+                JOIN integration.principal_observation_mapping pm
+                  ON pm.tenant_id = b.tenant_id AND pm.connector_binding_id = b.id
+                 AND pm.principal_id = ? AND pm.lifecycle_state = 'ACTIVE'
+                JOIN integration.observed_principal op
+                  ON op.tenant_id = pm.tenant_id AND op.connector_binding_id = pm.connector_binding_id
+                 AND op.provider_stable_id = pm.provider_stable_id AND op.present
                 WHERE b.tenant_id = ?
                   AND b.target_kind = 'APPLICATION_TARGET'
                   AND b.target_id = ?
                   AND b.lifecycle_state = 'ACTIVE'
-                ORDER BY b.id, e.provider_stable_id
+                ORDER BY b.id, e.provider_stable_id, pm.provider_stable_id
                 LIMIT 2
                 """,
                 (rs,row) -> new TechnicalGrantTarget(
@@ -69,9 +75,10 @@ public final class JdbcGrantProvisioningRepository
                         rs.getInt(3),
                         rs.getString(4),
                         rs.getString(5),
-                        providerPrincipalId,
-                        null),
+                        rs.getString(6),
+                        principalId),
                 entitlementId,
+                principalId,
                 tenant.tenantId(),
                 applicationTargetId);
     }
