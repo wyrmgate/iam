@@ -57,6 +57,8 @@ class GovernanceExceptionIntegrationTest {
     private JdbcAccessRequestRepository requests;
     private GovernancePolicyEligibilityEvaluator evaluator;
 
+    private final Set<UUID> inactiveApprovers = new HashSet<>();
+
     private final Set<UUID> activeEntitlements =
             new HashSet<>();
     private final Set<UUID> currentEffective =
@@ -117,7 +119,9 @@ class GovernanceExceptionIntegrationTest {
                 public IdentityAccessStatus accessStatus(
                         TenantContext tenant,
                         UUID identityId) {
-                    return identityExists(tenant, identityId)
+                    return inactiveApprovers.contains(identityId)
+                            ? IdentityAccessStatus.notFound()
+                            : identityExists(tenant, identityId)
                             ? IdentityAccessStatus.eligible("ACTIVE", 1, 1)
                             : IdentityAccessStatus.notFound();
                 }
@@ -527,6 +531,11 @@ class GovernanceExceptionIntegrationTest {
                         null,
                         plan(approver),
                         NOW.plusSeconds(3));
+        inactiveApprovers.add(approver);
+        assertThatThrownBy(() -> approvalCommands.decide(tenant,rejected.approvalCaseId(),approver,DecisionValue.APPROVE,null,1,NOW.plusSeconds(4)))
+                .isInstanceOf(ApprovalCommandException.class).hasMessageContaining("not currently eligible");
+        assertThat(approvalRepository.findCase(tenant,rejected.approvalCaseId()).orElseThrow().revision()).isEqualTo(1);
+        inactiveApprovers.remove(approver);
         approvalCommands.decide(
                 tenant,
                 rejected.approvalCaseId(),
@@ -581,8 +590,8 @@ class GovernanceExceptionIntegrationTest {
         UUID requested = entitlement();
         UUID subject = ids.nextId();
         UUID requester = ids.nextId();
-        UUID exceptionApprover = ids.nextId();
         UUID requestApprover = ids.nextId();
+        UUID exceptionApprover = requestApprover;
         currentEffective.add(held);
 
         SoDRule rule = activateRule(
