@@ -63,6 +63,18 @@ class IdpInteractiveLoginServiceTest {
     }
 
     @Test
+    void oversizedLoginInputFailsBeforeLookupOrVerification() {
+        var clients = mock(SsoClientProtocolQuery.class);
+        var identities = mock(IdentityAuthenticationQuery.class);
+        var credentials = mock(CredentialAuthenticationService.class);
+        var sessions = mock(IdpBrowserSessionService.class);
+        var service = new IdpInteractiveLoginService(clients, identities, credentials, sessions);
+        assertThat(service.authenticate("client", UUID.randomUUID().toString(), "alice", new char[1025], Instant.now())).isEmpty();
+        assertThat(service.authenticate("client", UUID.randomUUID().toString(), "a".repeat(513), "secret".toCharArray(), Instant.now())).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(clients, identities, credentials, sessions);
+    }
+
+    @Test
     void invalidClientOrTargetFailsWithoutCredentialVerification() {
         SsoClientProtocolQuery clients = mock(SsoClientProtocolQuery.class);
         IdentityAuthenticationQuery identities = mock(IdentityAuthenticationQuery.class);

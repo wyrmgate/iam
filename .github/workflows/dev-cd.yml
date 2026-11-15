@@ -87,14 +87,16 @@ jobs:
         run: |
           set -euo pipefail
           node --check 'apps/console/functions/api/[[path]].js'
+          node --check 'apps/console/functions/[[path]].js'
           cmp apps/console/public/_routes.json apps/console/dist/_routes.json
           python - <<'PY'
           import json
           from pathlib import Path
 
           routes = json.loads(Path('apps/console/public/_routes.json').read_text())
-          if routes != {'version': 1, 'include': ['/api/*'], 'exclude': []}:
-              raise SystemExit('Pages Functions must be limited to /api/* so static routes stay static.')
+          expected = ['/api/*', '/.well-known/openid-configuration', '/oauth2/jwks', '/oauth2/authorize', '/oauth2/token']
+          if routes != {'version': 1, 'include': expected, 'exclude': []}:
+              raise SystemExit('Pages Functions must match the exact API and IdP protocol allowlist.')
 
           function = Path('apps/console/functions/api/[[path]].js').read_text()
           if 'IAM_BACKEND_ORIGIN' not in function:

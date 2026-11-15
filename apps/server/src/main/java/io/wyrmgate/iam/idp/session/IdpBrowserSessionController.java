@@ -13,6 +13,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -56,6 +58,7 @@ public class IdpBrowserSessionController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.PRAGMA, "no-cache")
+                .header(HttpHeaders.SET_COOKIE, csrfCookie(csrf.issue()).toString())
                 .body(Map.of(
                         "clientId", resolved.clientId(),
                         "applicationTargetId", resolved.applicationTargetId().toString()));
@@ -65,9 +68,15 @@ public class IdpBrowserSessionController {
             path = "/api/auth/login",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<?> login(@RequestBody LoginRequest request) {
+    ResponseEntity<?> login(@RequestBody LoginRequest request,
+            @CookieValue(name = CSRF_COOKIE, required = false) String csrfCookie,
+            @RequestHeader(name = CSRF_HEADER, required = false) String csrfHeader) {
         char[] password = request.password() == null ? new char[0] : request.password();
         try {
+            if (!csrf.matches(csrfCookie, csrfHeader)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).cacheControl(CacheControl.noStore())
+                        .body(Map.of("error", "csrf_failed"));
+            }
             var established = login.authenticate(
                     request.clientId(),
                     request.applicationTargetId(),
@@ -99,7 +108,7 @@ public class IdpBrowserSessionController {
             @CookieValue(
                     name = IdpAuthorizationController.BROWSER_SESSION_COOKIE,
                     required = false) String browserSessionToken) {
-        boolean authenticated = authentication != null
+        boolean authenticated = authentication instanceof PreAuthenticatedAuthenticationToken
                 && authentication.isAuthenticated()
                 && browserSessionToken != null
                 && !browserSessionToken.isBlank();
@@ -117,10 +126,16 @@ public class IdpBrowserSessionController {
     }
 
     @PostMapping(path = "/api/auth/logout")
-    ResponseEntity<Void> logout(
+    ResponseEntity<?> logout(
             @CookieValue(
                     name = IdpAuthorizationController.BROWSER_SESSION_COOKIE,
-                    required = false) String browserSessionToken) {
+                    required = false) String browserSessionToken,
+            @CookieValue(name = CSRF_COOKIE, required = false) String csrfCookie,
+            @RequestHeader(name = CSRF_HEADER, required = false) String csrfHeader) {
+        if (browserSessionToken != null && !browserSessionToken.isBlank() && !csrf.matches(csrfCookie, csrfHeader)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).cacheControl(CacheControl.noStore())
+                    .body(Map.of("error", "csrf_failed"));
+        }
         sessions.logout(browserSessionToken, Instant.now());
         return ResponseEntity.noContent()
                 .cacheControl(CacheControl.noStore())

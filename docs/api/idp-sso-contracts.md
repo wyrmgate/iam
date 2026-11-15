@@ -34,7 +34,7 @@ Authentication success, SSO token issuance, application access, federation verif
 
 ## OIDC/OAuth baseline
 
-Implemented public surfaces when `iam.idp.enabled=true`:
+Implemented public surfaces when `iam.idp.enabled=true` (ADR-0068 uses a public issuer origin without a non-root path, with exact same-origin proxy routing):
 
 - `GET /.well-known/openid-configuration`;
 - `GET /oauth2/jwks`;
@@ -63,9 +63,13 @@ Confidential-client authentication is not part of the implemented baseline even 
 
 ## Same-origin first-party browser interaction
 
+### `GET /api/auth/login-route`
+
+Returns the existing server-owned Console login route and sets a high-entropy Secure host-only SameSite=Strict CSRF cookie. ADR-0068 requires this cookie and the matching `X-Wyrmgate-CSRF` header at login; no pre-authentication tenant selector is trusted.
+
 ### `POST /api/auth/login`
 
-JSON input contains `clientId`, tenant-scoped `applicationTargetId`, native `principalKey`, and presented `password`. Password material is never persisted/logged. The response is deliberately non-enumerating: invalid client routing, target, Principal/Identity eligibility, credential state, and password proof all fail as `invalid_credentials`. Successful authentication always establishes a fresh opaque browser session.
+JSON input contains `clientId`, tenant-scoped `applicationTargetId`, native `principalKey`, and presented `password`. Password material is never persisted/logged. Login requires the pre-authentication CSRF proof; absent/mismatched proof returns 403. Input lengths are bounded (client ID 200, target UUID 36, native key 512, password 1024 characters). The response is deliberately non-enumerating: invalid client routing, target, Principal/Identity eligibility, credential state, and password proof all fail as `invalid_credentials`. Successful authentication always establishes a fresh opaque browser session.
 
 ### `GET /api/auth/session`
 

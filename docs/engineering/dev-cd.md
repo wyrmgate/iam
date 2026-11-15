@@ -43,7 +43,7 @@ The server container fails closed when `IAM_DEPLOYMENT_ENVIRONMENT=dev` and `IAM
 The console build and Pages Function routing contract remains:
 
 - `apps/console` builds the static application;
-- only `/api/*` is routed through `apps/console/functions/api/[[path]].js`;
+- `/api/*` is routed through `apps/console/functions/api/[[path]].js`; the exact public IdP protocol paths use `apps/console/functions/[[path]].js` and the same backend proxy (ADR-0068);
 - the Function reads server-side `IAM_BACKEND_ORIGIN`;
 - browser code must not receive a `VITE_IAM_BACKEND_ORIGIN` secret/configuration substitute.
 

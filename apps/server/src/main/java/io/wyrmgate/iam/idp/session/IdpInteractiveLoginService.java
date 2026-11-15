@@ -42,7 +42,8 @@ public final class IdpInteractiveLoginService {
         if (clientId == null || clientId.isBlank()
                 || applicationTargetId == null || applicationTargetId.isBlank()
                 || nativePrincipalKey == null || nativePrincipalKey.isBlank()
-                || password.length == 0) {
+                || clientId.length() > 200 || applicationTargetId.length() > 36
+                || nativePrincipalKey.length() > 512 || password.length == 0 || password.length > 1024) {
             return Optional.empty();
         }
 

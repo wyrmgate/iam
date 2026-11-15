@@ -11,7 +11,7 @@ This is a new activation of the current Railway service, not restoration of the 
 ```text
 Browser
   -> Cloudflare Pages static console
-  -> /api/* Pages Function
+  -> /api/* and exact public IdP protocol Pages Functions
   -> Railway Serverless iam-server
   -> Neon PostgreSQL
 ```
@@ -69,6 +69,7 @@ Configure Railway with:
 
 ```text
 IAM_IDP_ENABLED=true
+IAM_IDP_ISSUER=https://wyrmgate-iam-dev.pages.dev
 IAM_BOOTSTRAP_WEB_ENABLED=true
 IAM_BOOTSTRAP_WEB_SETUP_SECRET=<temporary random Railway secret, at least 32 characters>
 IAM_BOOTSTRAP_WEB_SESSION_TTL=PT15M
@@ -142,7 +143,7 @@ A retained historical database that recorded the withdrawn pre-release V70 carri
 8. Verify the deployed server reports healthy over the public Railway HTTPS origin.
 9. Verify `public.flyway_schema_history` begins with the active V1-V10 capability baseline (`V1__create_capability_schemas.sql` through `V10__audit_baseline.sql`), plus only legitimate later semantic migrations. It must not contain copied pre-rebaseline V1-V69 history or withdrawn V70.
 10. Verify the server is using non-production DEV data and that tenant isolation checks pass.
-11. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin.
+11. Configure Cloudflare Pages `IAM_BACKEND_ORIGIN` to the verified Railway DEV origin. Configure the public HTTPS origin as `IAM_IDP_ISSUER`; verify discovery advertises reachable same-origin authorization, token and JWKS endpoints, not the Railway implementation origin.
 12. Exercise the console `/api/*` path and confirm it reaches the intended DEV server rather than a stale/personal/production origin.
 13. Complete the first-run wizard and confirm the durable installation state reaches `SEALED`.
 14. Verify normal Console username/password login and representative protected tenant-owner operations after bootstrap is sealed.

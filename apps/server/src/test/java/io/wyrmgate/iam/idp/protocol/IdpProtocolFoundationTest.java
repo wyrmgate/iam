@@ -26,6 +26,8 @@ class IdpProtocolFoundationTest {
                 .hasMessageContaining("HTTPS");
         assertThatThrownBy(() -> new IdpProtocolProperties(true, "https://user@idp.example.test").requiredIssuer())
                 .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new IdpProtocolProperties(true, "https://idp.example.test/realm").requiredIssuer())
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("origin");
         assertThatThrownBy(() -> new IdpProtocolProperties(true, "https://idp.example.test?tenant=x").requiredIssuer())
                 .isInstanceOf(IllegalStateException.class);
     }
