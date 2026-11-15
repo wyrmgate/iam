@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.util.UriUtils;
+import java.net.URLEncoder;
 
 /** Public Authorization Code + PKCE adapter over current first-party sessions. */
 @RestController
@@ -181,6 +181,10 @@ public class IdpAuthorizationController {
                 .body(Map.of("error", error.error()));
     }
 
+    private static String encodeQueryParameter(String value, java.nio.charset.Charset charset) {
+        return URLEncoder.encode(value, charset).replace("+", "%20");
+    }
+
     private static URI redirect(String registeredRedirectUri, Map<String, String> parameters) {
         StringBuilder location = new StringBuilder(registeredRedirectUri);
         location.append(registeredRedirectUri.contains("?") ? '&' : '?');
@@ -188,10 +192,10 @@ public class IdpAuthorizationController {
         for (Map.Entry<String, String> parameter : parameters.entrySet()) {
             if (!first) location.append('&');
             first = false;
-            location.append(UriUtils.encodeQueryParam(
+            location.append(encodeQueryParameter(
                     parameter.getKey(), StandardCharsets.UTF_8));
             location.append('=');
-            location.append(UriUtils.encodeQueryParam(
+            location.append(encodeQueryParameter(
                     parameter.getValue(), StandardCharsets.UTF_8));
         }
         return URI.create(location.toString());
