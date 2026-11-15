@@ -47,6 +47,8 @@ class IdpInteractiveLoginServiceTest {
 
         when(clients.resolveActive("client-1"))
                 .thenReturn(Optional.of(new SsoClientProtocolQuery.ResolvedClient(tenant, registration)));
+        when(clients.resolveAuthenticationTarget(new SsoClientProtocolQuery.ResolvedClient(tenant, registration)))
+                .thenReturn(Optional.of(targetId));
         when(identities.resolveEligible(tenant, targetId, "alice"))
                 .thenReturn(Optional.of(subject));
         when(credentials.verifyPassword(eq(tenant), eq(principalId), any(char[].class), eq(now)))
@@ -57,7 +59,7 @@ class IdpInteractiveLoginServiceTest {
                 clients, identities, credentials, sessions);
 
         assertThat(service.authenticate(
-                "client-1", targetId.toString(), "alice", "correct horse".toCharArray(), now))
+                "client-1", targetId, "alice", "correct horse".toCharArray(), now))
                 .contains(established);
         verify(sessions).establish(tenant, subject, verified, now);
     }
@@ -69,8 +71,8 @@ class IdpInteractiveLoginServiceTest {
         var credentials = mock(CredentialAuthenticationService.class);
         var sessions = mock(IdpBrowserSessionService.class);
         var service = new IdpInteractiveLoginService(clients, identities, credentials, sessions);
-        assertThat(service.authenticate("client", UUID.randomUUID().toString(), "alice", new char[1025], Instant.now())).isEmpty();
-        assertThat(service.authenticate("client", UUID.randomUUID().toString(), "a".repeat(513), "secret".toCharArray(), Instant.now())).isEmpty();
+        assertThat(service.authenticate("client", UUID.randomUUID(), "alice", new char[1025], Instant.now())).isEmpty();
+        assertThat(service.authenticate("client", UUID.randomUUID(), "a".repeat(513), "secret".toCharArray(), Instant.now())).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(clients, identities, credentials, sessions);
     }
 
@@ -85,7 +87,7 @@ class IdpInteractiveLoginServiceTest {
                 clients, identities, credentials, sessions);
 
         assertThat(service.authenticate(
-                "unknown", "not-a-uuid", "alice", "secret".toCharArray(), Instant.now()))
+                "unknown", UUID.randomUUID(), "alice", "secret".toCharArray(), Instant.now()))
                 .isEmpty();
     }
 }

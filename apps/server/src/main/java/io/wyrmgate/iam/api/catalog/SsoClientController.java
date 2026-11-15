@@ -104,7 +104,7 @@ public class SsoClientController {
         UUID correlationId = CatalogApiRequestContext.resolveCorrelationId(request, ids);
         String key = requireIdempotencyKey(idempotencyKey, correlationId);
         Map<String, Object> parsed = exactAllowed(body,
-                Set.of("redirectUris", "allowedScopes", "requiresGovernedAccess"),
+                Set.of("redirectUris", "allowedScopes", "requiresGovernedAccess", "authenticationTargetId"),
                 Set.of("redirectUris"), correlationId);
         Set<String> redirectUris = stringSet(parsed.get("redirectUris"), "redirectUris", 20, 2048, correlationId);
         Set<SsoClientScope> scopes = parsed.containsKey("allowedScopes")
@@ -115,8 +115,8 @@ public class SsoClientController {
                 : true;
         AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
         SsoClientRegistration created = mutations.create(
-                actor, applicationId, redirectUris, scopes, requiresGovernedAccess,
-                key, fingerprint("create", applicationId, redirectUris, scopes, requiresGovernedAccess),
+                actor, applicationId, authenticationTarget(parsed, correlationId), redirectUris, scopes, requiresGovernedAccess,
+                key, fingerprint("create", applicationId, redirectUris, scopes, requiresGovernedAccess, authenticationTarget(parsed, correlationId)),
                 Instant.now(), correlationId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .header(HttpHeaders.ETAG, etag(created.revision()))
@@ -152,7 +152,7 @@ public class SsoClientController {
         long revision = parseIfMatch(ifMatch, correlationId);
         String key = requireIdempotencyKey(idempotencyKey, correlationId);
         Map<String, Object> parsed = exactAllowed(body,
-                Set.of("redirectUris", "allowedScopes", "requiresGovernedAccess"),
+                Set.of("redirectUris", "allowedScopes", "requiresGovernedAccess", "authenticationTargetId"),
                 Set.of("redirectUris", "allowedScopes", "requiresGovernedAccess"), correlationId);
         Set<String> redirectUris = stringSet(parsed.get("redirectUris"), "redirectUris", 20, 2048, correlationId);
         Set<SsoClientScope> scopes = scopes(parsed.get("allowedScopes"), correlationId);
@@ -160,9 +160,11 @@ public class SsoClientController {
                 parsed.get("requiresGovernedAccess"), "requiresGovernedAccess", correlationId);
         AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
         SsoClientRegistration updated = mutations.replace(
-                actor, registrationId, redirectUris, scopes, requiresGovernedAccess,
+                actor, registrationId, authenticationTarget(parsed, correlationId), parsed.containsKey("authenticationTargetId"),
+                redirectUris, scopes, requiresGovernedAccess,
                 revision, key,
-                fingerprint("update", registrationId, revision, redirectUris, scopes, requiresGovernedAccess),
+                fingerprint("update", registrationId, revision, redirectUris, scopes, requiresGovernedAccess,
+                        parsed.containsKey("authenticationTargetId"), authenticationTarget(parsed, correlationId)),
                 Instant.now(), correlationId);
         return ResponseEntity.ok()
                 .header(HttpHeaders.ETAG, etag(updated.revision()))
@@ -295,6 +297,15 @@ public class SsoClientController {
         return Set.copyOf(result);
     }
 
+    private static UUID authenticationTarget(Map<String, Object> parsed, UUID correlationId) {
+        Object value = parsed.get("authenticationTargetId");
+        if (value == null) return null;
+        if (value instanceof String text) {
+            try { return UUID.fromString(text); } catch (IllegalArgumentException invalid) { /* reject below */ }
+        }
+        throw CatalogApiException.validation(correlationId, "authenticationTargetId", "invalid", "An authentication target UUID is required.");
+    }
+
     private static boolean bool(Object value, String field, UUID correlationId) {
         if (!(value instanceof Boolean result)) throw CatalogApiException.validation(
                 correlationId, field, "type", field + " must be boolean.");
@@ -327,6 +338,7 @@ public class SsoClientController {
                 registration.id(),
                 registration.applicationId(),
                 registration.clientId(),
+                registration.authenticationTargetId(),
                 "PUBLIC",
                 true,
                 registration.redirectUris().stream().sorted().toList(),
@@ -342,6 +354,7 @@ public class SsoClientController {
             UUID id,
             UUID applicationId,
             String clientId,
+            UUID authenticationTargetId,
             String clientType,
             boolean pkceS256Required,
             List<String> redirectUris,

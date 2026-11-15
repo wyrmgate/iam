@@ -91,3 +91,12 @@ test('password change uses dedicated same-origin input, no selectors or idempote
   assert.deepEqual(JSON.parse(request.init.body), { currentPassword: 'old-password', newPassword: 'new-password-example' });
   assert.equal(request.init.headers.get('Idempotency-Key'), null);
 });
+
+
+test('Console login has only credential inputs; the server selects the authentication target', async (t) => {
+  const { signIn } = await import('../src/api.ts');
+  const captured = captureFetch(t, async () => jsonResponse({ authenticated: true }));
+  await signIn({ principalKey: 'alice', password: 'test-password' });
+  assert.equal(captured().url, '/api/auth/login');
+  assert.deepEqual(JSON.parse(captured().init.body), { principalKey: 'alice', password: 'test-password' });
+});

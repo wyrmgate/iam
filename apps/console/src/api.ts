@@ -54,11 +54,8 @@ export type CurrentAdministrativeAuthority = {
 };
 
 export type AuthSession = { authenticated: boolean };
-export type LoginRoute = {
-  clientId: string;
-  applicationTargetId: string;
-};
-export type LoginInput = LoginRoute & {
+export type LoginRoute = { available: boolean };
+export type LoginInput = {
   principalKey: string;
   password: string;
 };

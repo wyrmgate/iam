@@ -71,3 +71,9 @@ test('password change remains first-party session UX with dedicated secret input
   assert.match(signInGate, /state === 'external-mode'[\s\S]*<ShellChrome><App \/><\/ShellChrome>/);
   assert.doesNotMatch(signInGate, /localStorage|sessionStorage/);
 });
+
+
+test('login does not send client or target selectors', () => {
+  assert.match(signInGate, /signIn\(\{ principalKey, password \}\)/);
+  assert.doesNotMatch(signInGate, /\.\.\.loginRoute|applicationTargetId|clientId/);
+});

@@ -4,6 +4,8 @@ import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
 import io.wyrmgate.iam.idp.session.IdpBrowserSessionService;
+import io.wyrmgate.iam.idp.session.IdpInteractiveLoginService;
+import io.wyrmgate.iam.idp.session.IdpSessionTokenCodec;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,6 +21,18 @@ public class IdpProtocolRuntimeConfiguration {
     @Bean
     IdpAuthorizationCodeRepository idpAuthorizationCodeRepository(JdbcTemplate jdbc) {
         return new JdbcIdpAuthorizationCodeRepository(jdbc);
+    }
+
+    @Bean
+    IdpLoginInteractionRepository idpLoginInteractionRepository(JdbcTemplate jdbc) {
+        return new JdbcIdpLoginInteractionRepository(jdbc);
+    }
+
+    @Bean
+    IdpLoginInteractionService idpLoginInteractionService(IdpProtocolService protocol,
+            SsoClientProtocolQuery clients, IdpInteractiveLoginService login, IdpBrowserSessionService sessions,
+            IdpSessionTokenCodec tokens, IdpLoginInteractionRepository interactions) {
+        return new IdpLoginInteractionService(protocol, clients, login, sessions, tokens, interactions);
     }
 
     @Bean

@@ -82,7 +82,7 @@ export function SignInGate() {
     setBusy(true);
     setError(null);
     try {
-      const session = await signIn({ ...loginRoute, principalKey, password });
+      const session = await signIn({ principalKey, password });
       setPassword('');
       if (!session.authenticated) throw new Error('Authentication did not establish a session');
       setState('authenticated');

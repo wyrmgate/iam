@@ -34,6 +34,8 @@ public final class InstallationConsoleLoginRouteQuery implements ConsoleLoginRou
                 || !resolved.registration().applicationId().equals(plan.consoleApplicationId())) {
             return Optional.empty();
         }
-        return Optional.of(new Route(plan.consoleClientId(), plan.consoleTargetId()));
+        return protocolClients.resolveAuthenticationTarget(resolved)
+                .filter(plan.consoleTargetId()::equals)
+                .map(target -> new Route(plan.consoleClientId(), target));
     }
 }

@@ -15,6 +15,7 @@ public record SsoClientRegistration(
         UUID id,
         UUID applicationId,
         String clientId,
+        UUID authenticationTargetId,
         Set<String> redirectUris,
         Set<SsoClientScope> allowedScopes,
         boolean requiresGovernedAccess,
@@ -22,6 +23,13 @@ public record SsoClientRegistration(
         long revision,
         Instant createdAt,
         Instant updatedAt) {
+
+    public SsoClientRegistration(UUID id, UUID applicationId, String clientId, Set<String> redirectUris,
+            Set<SsoClientScope> allowedScopes, boolean requiresGovernedAccess, SsoClientLifecycleState lifecycleState,
+            long revision, Instant createdAt, Instant updatedAt) {
+        this(id, applicationId, clientId, null, redirectUris, allowedScopes, requiresGovernedAccess,
+                lifecycleState, revision, createdAt, updatedAt);
+    }
 
     public SsoClientRegistration {
         Objects.requireNonNull(id, "id");

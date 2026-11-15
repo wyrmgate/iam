@@ -18,10 +18,10 @@ class IdpBrowserSessionControllerTest {
         assertThat(controller.loginRoute().getHeaders().get("Set-Cookie")).singleElement()
                 .satisfies(cookie -> assertThat(cookie).contains("__Host-wyrmgate_csrf=", "Secure", "SameSite=Strict", "Path=/"));
         char[] password = "password-example".toCharArray();
-        assertThat(controller.login(new IdpBrowserSessionController.LoginRequest("client", "target", "alice", password), null, null)
+        assertThat(controller.login(new IdpBrowserSessionController.LoginRequest("alice", password), null, null, null)
                 .getStatusCode().value()).isEqualTo(403);
         assertThat(password).containsOnly((char) 0);
-        assertThat(controller.login(new IdpBrowserSessionController.LoginRequest("client", "target", "alice", "secret".toCharArray()), "bad", "bad")
+        assertThat(controller.login(new IdpBrowserSessionController.LoginRequest("alice", "secret".toCharArray()), "bad", "bad", null)
                 .getStatusCode().value()).isEqualTo(403);
         verifyNoInteractions(login, sessions);
     }
