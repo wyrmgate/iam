@@ -14,7 +14,7 @@ public interface GrantProvisioningRepository {
             TenantContext tenant,
             UUID applicationTargetId,
             UUID entitlementId,
-            String providerPrincipalId);
+            UUID principalId);
 
     /** At most pageSize + 1 distinct technical routes in route-key order. */
     List<CleanupTarget> cleanupTargetsPage(

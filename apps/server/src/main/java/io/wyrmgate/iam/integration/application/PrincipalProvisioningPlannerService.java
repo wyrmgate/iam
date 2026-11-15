@@ -92,7 +92,7 @@ public final class PrincipalProvisioningPlannerService {
                     tenant,
                     desiredPrincipal.applicationTargetId(),
                     desiredPrincipal.id(),
-                    existing.getFirst().nativePrincipalKey()));
+                    existing.getFirst().principalId(), existing.getFirst().nativePrincipalKey()));
             if (known.size() != 1) return null;
             return List.of(task(
                     desiredPrincipal,
@@ -142,12 +142,12 @@ public final class PrincipalProvisioningPlannerService {
                     tenant,
                     desiredPrincipal.applicationTargetId(),
                     desiredPrincipal.id(),
-                    principal.nativePrincipalKey()))) {
+                    principal.principalId(), principal.nativePrincipalKey()))) {
                 Map<String,Object> payload = new LinkedHashMap<>();
                 payload.put("identityId", desiredPrincipal.identityId().toString());
                 payload.put("applicationTargetId",
                         desiredPrincipal.applicationTargetId().toString());
-                payload.put("providerStableId", principal.nativePrincipalKey());
+                payload.put("providerStableId", target.providerPrincipalId());
                 if (target.providerVersion() != null) {
                     payload.put("providerVersion", target.providerVersion());
                 }
