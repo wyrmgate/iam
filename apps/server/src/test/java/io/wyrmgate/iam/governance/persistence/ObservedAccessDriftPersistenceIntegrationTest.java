@@ -55,6 +55,8 @@ class ObservedAccessDriftPersistenceIntegrationTest {
     private static GovernanceObservationProcessingService processor;
     private static JdbcIntegrationObservedAccessFactSink observedAccessFacts;
     private static PrincipalCommandService principalCommands;
+    private static io.wyrmgate.iam.governance.application.GovernancePolicyService policies;
+    private static io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentRepository assignments;
 
     @BeforeAll
     static void start() {
@@ -122,8 +124,15 @@ class ObservedAccessDriftPersistenceIntegrationTest {
 
         findings = new JdbcGovernanceFindingRepository(jdbc);
         var reporter = new GovernanceObservationReportingService(findings, ids, transactions);
-        drift = new ObservedAccessDriftEvaluationService(
-                observations, principalReferences, reporter, findings);
+        var identityRefs=new io.wyrmgate.iam.identity.application.IdentityAccessReferenceQueryService(identityRepository,principalRepository);
+        var roleRepo=new io.wyrmgate.iam.catalog.persistence.JdbcRoleRepository(jdbc);
+        var roles=new io.wyrmgate.iam.catalog.application.RoleExpansionQueryService(catalogRepository,roleRepo);
+        var availability=new io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQueryService(catalogRepository,roleRepo,roles);
+        assignments=new io.wyrmgate.iam.access.persistence.JdbcAccessAssignmentRepository(jdbc);
+        var semantics=new io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport(assignments,identityRefs,catalog,availability,roles);
+        var demand=new io.wyrmgate.iam.access.application.ExactTechnicalGrantDemandQueryService(assignments,identityRefs,catalog,availability,roles,semantics);
+        policies=new io.wyrmgate.iam.governance.application.GovernancePolicyService(new JdbcGovernancePolicyRepository(jdbc),catalog,identityRefs,ids,transactions);
+        drift = new ObservedAccessDriftEvaluationService(observations,principalReferences,reporter,findings,identityRefs,demand,policies);
         processor = newProcessor();
     }
 
@@ -422,6 +431,75 @@ class ObservedAccessDriftPersistenceIntegrationTest {
         assertThat(countOpenFindings(tenant, binding, "UNMAPPED_PROVIDER_ENTITLEMENT", "g-204"))
                 .isZero();
         assertThat(openFindingTypes(tenant, binding)).hasSize(203);
+    }
+
+    @Test
+    void mappedExcessAndCrossBindingSoDUseExactCurrentAuthorityAndTrustedAbsence(){
+        var tenant=tenant("mapped-finding");
+        UUID app=application(tenant,"app"),targetA=target(tenant,app,"left"),targetB=target(tenant,app,"right");
+        UUID left=entitlement(tenant,app,targetA,"left"),right=entitlement(tenant,app,targetB,"right");
+        UUID bindingA=binding(tenant,targetA),bindingB=binding(tenant,targetB);
+        UUID subject=ids.nextId();
+        new JdbcIdentityRepository(jdbc).insert(tenant,new io.wyrmgate.iam.identity.domain.Identity(subject,
+                io.wyrmgate.iam.identity.domain.IdentityType.PERSON,new io.wyrmgate.iam.identity.domain.IdentityProfile.PersonProfile(),
+                io.wyrmgate.iam.identity.domain.IdentityLifecycleState.ACTIVE,"Observed subject",1,NOW,NOW));
+        var principalA=principalCommands.create(tenant,targetA,"native-a",subject,NOW,ids.nextId(),null);
+        var principalB=principalCommands.create(tenant,targetB,"native-b",subject,NOW,ids.nextId(),null);
+        UUID ea=reconciliation(tenant,bindingA,"ENTITLEMENT"),eb=reconciliation(tenant,bindingB,"ENTITLEMENT");
+        UUID pa=reconciliation(tenant,bindingA,"PRINCIPAL"),pb=reconciliation(tenant,bindingB,"PRINCIPAL");
+        UUID ga=reconciliation(tenant,bindingA,"GRANT"),gb=reconciliation(tenant,bindingB,"GRANT");
+        observedEntitlement(tenant,bindingA,ea,"e");observedEntitlement(tenant,bindingB,eb,"e");
+        observedPrincipal(tenant,bindingA,pa,"p");observedPrincipal(tenant,bindingB,pb,"p");
+        observedGrant(tenant,bindingA,ga,"grant-a","p","e");observedGrant(tenant,bindingB,gb,"grant-b","p","e");
+        mappingService.map(tenant,bindingA,"e",left,NOW,ids.nextId());
+        mappingService.map(tenant,bindingB,"e",right,NOW,ids.nextId());
+        principalMappingService.map(tenant,bindingA,"p",principalA.id(),NOW,ids.nextId());
+        principalMappingService.map(tenant,bindingB,"p",principalB.id(),NOW,ids.nextId());
+        var draft=policies.createDraft(tenant,io.wyrmgate.iam.governance.domain.GovernancePolicyModels.PolicyKind.ACCESS_REQUEST,
+                io.wyrmgate.iam.governance.domain.GovernancePolicyModels.PolicyDecision.AUTHORIZE,
+                java.util.List.of(new io.wyrmgate.iam.governance.domain.GovernancePolicyModels.SoDRuleSpec("pair",left,right,
+                        io.wyrmgate.iam.governance.domain.GovernancePolicyModels.RiskSeverity.HIGH,
+                        io.wyrmgate.iam.governance.domain.GovernancePolicyModels.SoDAction.DENY)),null,NOW);
+        var ready=policies.markReady(tenant,draft.id(),draft.revision(),NOW);
+        policies.activate(tenant,ready.id(),ready.revision(),NOW);
+        processAll();
+        assertThat(openFindingTypes(tenant,bindingA)).containsExactlyInAnyOrder("EXCESS_OBSERVED_GRANT","OBSERVED_SOD_CONFLICT");
+        assertThat(openFindingTypes(tenant,bindingB)).containsExactlyInAnyOrder("EXCESS_OBSERVED_GRANT","OBSERVED_SOD_CONFLICT");
+        var sod=findings.findOpenPage(tenant,bindingA,null,10).stream().filter(f->f.findingType().equals("OBSERVED_SOD_CONFLICT")).findFirst().orElseThrow();
+        assertThat(sod.context().identityId()).isEqualTo(subject);
+        assertThat(sod.context().relatedBindingId()).isEqualTo(bindingB);
+        assertThat(sod.context().relatedPrincipalId()).isEqualTo(principalB.id());
+        var other=tenant("other-finding");
+        assertThat(findings.findById(other,sod.id())).isEmpty();
+
+        // No EffectiveAccess or DesiredGrant projection has been created.
+        assignments.insert(tenant,new io.wyrmgate.iam.access.domain.AccessAssignment(ids.nextId(),subject,1,
+                io.wyrmgate.iam.access.domain.AccessAssignment.TargetKind.ENTITLEMENT,null,left,
+                io.wyrmgate.iam.access.domain.AccessAssignment.PrincipalConstraintKind.SPECIFIC,principalA.id(),
+                io.wyrmgate.iam.access.domain.AccessAssignment.ProvenanceKind.MANUAL,null,
+                io.wyrmgate.iam.access.domain.AccessAssignment.LifecycleState.ACTIVE,null,null,1,NOW,NOW));
+        refresh(tenant);
+        assertThat(openFindingTypes(tenant,bindingA)).containsExactly("OBSERVED_SOD_CONFLICT");
+        assertThat(openFindingTypes(tenant,bindingB)).contains("EXCESS_OBSERVED_GRANT");
+
+        UUID partial=reconciliation(tenant,bindingB,"GRANT","PARTIAL");
+        jdbc.update("""
+                UPDATE integration.observed_grant SET present=false,absent_at=?,last_observed_run_id=?
+                WHERE tenant_id=? AND connector_binding_id=? AND provider_stable_id='grant-b'
+                """,Timestamp.from(NOW.plusSeconds(1)),partial,tenant.tenantId(),bindingB);
+        trigger(tenant,bindingB,partial);processAll();refresh(tenant);
+        assertThat(findings.findById(tenant,sod.id()).orElseThrow().lifecycleState()).isEqualTo("OPEN");
+        UUID complete=reconciliation(tenant,bindingB,"GRANT");
+        jdbc.update("UPDATE integration.observed_grant SET last_observed_run_id=? WHERE tenant_id=? AND connector_binding_id=? AND provider_stable_id='grant-b'",
+                complete,tenant.tenantId(),bindingB);
+        trigger(tenant,bindingB,complete);processAll();refresh(tenant);
+        assertThat(findings.findById(tenant,sod.id()).orElseThrow().lifecycleState()).isEqualTo("RESOLVED");
+    }
+
+    private static void refresh(TenantContext tenant){
+        jdbc.update("UPDATE governance.observation_evaluation SET updated_at=? WHERE tenant_id=?",Timestamp.from(NOW),tenant.tenantId());
+        assertThat(processor.refreshDue()).isPositive();
+        processAll();
     }
 
     private static GovernanceObservationProcessingService newProcessor() {

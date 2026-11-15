@@ -393,6 +393,35 @@ class GovernanceExceptionIntegrationTest {
     }
 
     @Test
+    void expiredExceptionExposureTracksCurrentUncoveredIntentWithoutRevocation(){
+        UUID left=entitlement(),right=entitlement(),subject=ids.nextId(),requester=ids.nextId(),approver=ids.nextId();
+        var rule=activateDenyRule("exposure",left,right,approver,NOW);
+        var exception=approveException(subject,rule.id(),requester,approver,NOW,NOW.plusSeconds(100),null);
+        currentEffective.addAll(Set.of(left,right));
+        var findings=new JdbcGovernanceFindingRepository(jdbc);
+        var exposure=new ExceptionExposureProcessingService(exceptionRepository,exceptionService,policyService,
+                (t,i,targets,from,until)->effectiveAccess.currentEntitlementIds(t,i,targets,from),
+                new GovernanceObservationReportingService(findings,ids,transactions),findings,transactions);
+        exposure.evaluate(tenant,exception.id(),NOW.plusSeconds(99));
+        assertThat(findings.findPage(tenant,FindingContext.State.OPEN,null,null,10)).isEmpty();
+        exposure.evaluate(tenant,exception.id(),NOW.plusSeconds(100));
+        var opened=findings.findPage(tenant,FindingContext.State.OPEN,null,null,10).getFirst();
+        assertThat(opened.findingType()).isEqualTo("EXPIRED_EXCEPTION_EXPOSURE");
+        assertThat(opened.context().exceptionId()).isEqualTo(exception.id());
+        assertThat(opened.context().sodRuleId()).isEqualTo(rule.id());
+        assertThat(opened.connectorBindingId()).isNull();
+        currentEffective.remove(right);
+        exposure.evaluate(tenant,exception.id(),NOW.plusSeconds(101));
+        assertThat(findings.findById(tenant,opened.id()).orElseThrow().lifecycleState()).isEqualTo("RESOLVED");
+        currentEffective.add(right);
+        exposure.evaluate(tenant,exception.id(),NOW.plusSeconds(102));
+        assertThat(findings.findById(tenant,opened.id()).orElseThrow().lifecycleState()).isEqualTo("OPEN");
+        approveException(subject,rule.id(),requester,approver,NOW.plusSeconds(100),NOW.plusSeconds(200),exception.id());
+        exposure.evaluate(tenant,exception.id(),NOW.plusSeconds(103));
+        assertThat(findings.findById(tenant,opened.id()).orElseThrow().lifecycleState()).isEqualTo("RESOLVED");
+    }
+
+    @Test
     void renewalCreatesNonOverlappingSuccessorAndOldRuleDoesNotCarryToNewPolicy() {
         UUID held = entitlement();
         UUID requested = entitlement();
