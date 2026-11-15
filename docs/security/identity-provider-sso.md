@@ -10,7 +10,7 @@ Identity owns governed subjects and Principal lifecycle; Credential owns authent
 
 ## First-party authentication
 
-Wyrmgate authenticates an existing governed Principal through Credential-owned PASSWORD authenticators. Tenant is first derived server-side from a globally unique active Catalog SSO `client_id`. The submitted ApplicationTarget ID and native Principal key are only tenant-scoped selectors; Identity requires the selected Principal and owning Identity to be ACTIVE. Credential independently verifies an effective authenticator for that Principal behind the secret-verifier boundary.
+Wyrmgate authenticates an existing governed Principal through Credential-owned PASSWORD authenticators. Tenant is first derived server-side from a globally unique active Catalog SSO `client_id`. The submitted ApplicationTarget ID and native Principal key are only tenant-scoped selectors; Identity requires the selected Principal and owning Identity to be ACTIVE. Credential independently verifies an effective authenticator for that Principal behind the secret-verifier boundary. ADR-0064 bounds password candidate lookup to eight effective candidates plus an overflow sentinel; overflow fails closed. Verification proof binds the trusted tenant, Principal, exact Credential ID and revision. Session establishment rechecks the current eligible subject and Credential before minting a session.
 
 All authentication failures are intentionally non-enumerating. Passwords and private verifier material never enter ordinary persistence, logs, audit, events, errors, URLs, or browser storage. There is no permanent built-in administrator password, hidden root credential, or wildcard superuser.
 
@@ -78,3 +78,7 @@ Audit may record data-minimized semantic evidence for authentication, session li
 6. explicit federation adapter/extension boundary, external JWT/OIDC compatibility, and retained JWKS verification-key overlap — implemented.
 
 Concrete upstream OIDC/SAML login providers and optional OAuth/OIDC extensions are future product slices, not incomplete baseline behavior. Each future activation requires its own explicit accepted contract and negative security coverage.
+
+### Local password change
+
+ADR-0064 permits only a current first-party browser session's exact local PASSWORD Credential to be changed through the dedicated same-origin `/api/auth/password/change` interaction (CSRF, current password reproof, new password 15–1024 characters). Local verifier replacement, old authoritative revocation and completed rotation are atomic; old Credential revision sessions fail closed. No password-derived request fingerprint or plaintext persistence, generic enrollment, reset, external provider call or ordinary Credential secret API is introduced. Existing administrative `rotate` remains a metadata plan.

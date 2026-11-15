@@ -19,6 +19,7 @@ CONNECTOR_WORKER_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/open
 INTEGRATION_ADMIN_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/integration-admin-v1.json"
 CREDENTIAL_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/credential-v1.json"
 AUDIT_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/audit-v1.json"
+PASSWORD_CHANGE_OPENAPI = ROOT / "apps/server/src/main/resources/contracts/openapi/idp-password-change-v1.json"
 
 
 def load_json(path: Path) -> dict:
@@ -666,6 +667,21 @@ def verify_audit_openapi(document: dict) -> None:
         )
 
 
+def verify_password_change_openapi(document: dict) -> None:
+    assert document.get("openapi", "").startswith("3.1.")
+    assert document["security"] == [{"browserSession": [], "csrfHeader": [], "csrfCookie": []}]
+    assert set(document["paths"]) == {"/password/change"}
+    operation = document["paths"]["/password/change"]["post"]
+    schema = operation["requestBody"]["content"]["application/json"]["schema"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == {"currentPassword", "newPassword"}
+    assert set(schema["properties"]) == {"currentPassword", "newPassword"}
+    assert all(p["writeOnly"] for p in schema["properties"].values())
+    assert set(operation["responses"]) == {"204", "400", "401", "403", "503"}
+    assert "content" not in operation["responses"]["204"]
+    assert "password" not in json.dumps(operation["responses"]).lower().replace("password change", "")
+
+
 def main() -> None:
     verify_openapi(load_json(OPENAPI))
     verify_asyncapi(load_json(ASYNCAPI))
@@ -673,6 +689,7 @@ def main() -> None:
     verify_integration_admin_openapi(load_json(INTEGRATION_ADMIN_OPENAPI))
     verify_credential_openapi(load_json(CREDENTIAL_OPENAPI))
     verify_audit_openapi(load_json(AUDIT_OPENAPI))
+    verify_password_change_openapi(load_json(PASSWORD_CHANGE_OPENAPI))
     print("API contracts verified")
 
 

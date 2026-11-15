@@ -77,10 +77,16 @@ public final class IdpBrowserSessionService {
         Objects.requireNonNull(subject, "subject");
         Objects.requireNonNull(credential, "credential");
         Objects.requireNonNull(now, "now");
-        if (!subject.principalId().equals(credential.principalId())) {
+        if (!tenant.tenantId().equals(credential.tenantId())
+                || !subject.principalId().equals(credential.principalId())) {
             throw new IllegalArgumentException("credential proof does not belong to authentication subject");
         }
 
+        if (identities.eligibleSubject(tenant, subject.principalId()).filter(subject::equals).isEmpty()
+                || !credentials.isStillValid(tenant, subject.principalId(), credential.credentialId(),
+                        credential.credentialRevision(), now)) {
+            throw new InvalidCredentialProofException();
+        }
         IdpSessionTokenCodec.IssuedToken issued = tokens.issue();
         Instant absoluteExpiry = now.plus(absoluteTimeout);
         Instant idleExpiry = minimum(now.plus(idleTimeout), absoluteExpiry);
@@ -137,6 +143,18 @@ public final class IdpBrowserSessionService {
                 .flatMap(located -> revalidate(located.tenant(), located.session(), now)
                         .map(context -> new ResolvedSession(located.tenant(), context)));
     }
+
+    /** Internal exact authenticator context for the dedicated current-session password change. */
+    Optional<PasswordChangeSubject> resolvePasswordChangeSubject(String rawToken, Instant now) {
+        return hash(rawToken).flatMap(sessions::findByTokenHash)
+                .flatMap(located -> revalidate(located.tenant(), located.session(), now)
+                        .map(context -> new PasswordChangeSubject(located.tenant(), context.identityId(),
+                                context.principalId(), located.session().credentialId(),
+                                located.session().credentialRevision())));
+    }
+
+    record PasswordChangeSubject(TenantContext tenant, UUID identityId, UUID principalId,
+                                 UUID credentialId, long credentialRevision) {}
 
     public void logout(
             TenantContext tenant,
@@ -220,6 +238,10 @@ public final class IdpBrowserSessionService {
 
     private static Instant minimum(Instant left, Instant right) {
         return left.isBefore(right) ? left : right;
+    }
+
+    static final class InvalidCredentialProofException extends IllegalStateException {
+        InvalidCredentialProofException() { super("authentication proof is no longer current"); }
     }
 
     public record ResolvedSession(TenantContext tenant, SessionContext context) {

@@ -145,7 +145,9 @@ public final class JdbcCredentialRepository
             TenantContext tenant,
             UUID principalId,
             CredentialKind kind,
-            Instant at) {
+            Instant at,
+            int limit) {
+        if (limit < 1 || limit > 100) throw new IllegalArgumentException("invalid credential query limit");
         return jdbc.query("""
                 SELECT id, principal_id, credential_kind,
                        secret_provider_type, secret_reference_key,
@@ -160,13 +162,15 @@ public final class JdbcCredentialRepository
                   AND (valid_from IS NULL OR valid_from <= ?)
                   AND (valid_until IS NULL OR valid_until > ?)
                 ORDER BY created_at DESC, id DESC
+                LIMIT ?
                 """,
                 (rs,row) -> credential(rs),
                 tenant.tenantId(),
                 principalId,
                 kind.name(),
                 Timestamp.from(at),
-                Timestamp.from(at));
+                Timestamp.from(at),
+                limit);
     }
 
     @Override

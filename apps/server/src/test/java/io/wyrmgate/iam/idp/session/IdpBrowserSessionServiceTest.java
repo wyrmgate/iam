@@ -48,7 +48,7 @@ class IdpBrowserSessionServiceTest {
                 ids,
                 Duration.ofMinutes(30),
                 Duration.ofHours(8));
-        VerifiedCredential verified = new VerifiedCredential(PRINCIPAL_ID, CREDENTIAL_ID, 6);
+        VerifiedCredential verified = new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 6);
 
         IdpBrowserSessionService.EstablishedSession first =
                 service.establish(TENANT, subject, verified, NOW);
@@ -76,11 +76,29 @@ class IdpBrowserSessionServiceTest {
                 Duration.ofHours(8));
         AuthenticationSubject subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         VerifiedCredential wrongPrincipal =
-                new VerifiedCredential(UUID.randomUUID(), CREDENTIAL_ID, 1);
+                new VerifiedCredential(TENANT.tenantId(), UUID.randomUUID(), CREDENTIAL_ID, 1);
 
         assertThatThrownBy(() -> service.establish(TENANT, subject, wrongPrincipal, NOW))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("credential proof does not belong to authentication subject");
+        assertThat(repository.byHash).isEmpty();
+    }
+
+    @Test
+    void establishmentRejectsProofForAnotherTenantOrStaleCredential() {
+        InMemorySessions repository = new InMemorySessions();
+        IdentityAuthenticationQuery identities = mock(IdentityAuthenticationQuery.class);
+        CredentialAuthenticationService credentials = mock(CredentialAuthenticationService.class);
+        AuthenticationSubject subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
+        when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
+        IdpBrowserSessionService service = new IdpBrowserSessionService(repository, identities, credentials,
+                new IdpSessionTokenCodec(), UUID::randomUUID);
+        assertThatThrownBy(() -> service.establish(TENANT, subject,
+                new VerifiedCredential(UUID.randomUUID(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.establish(TENANT, subject,
+                new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW))
+                .isInstanceOf(IdpBrowserSessionService.InvalidCredentialProofException.class);
         assertThat(repository.byHash).isEmpty();
     }
 
@@ -93,7 +111,7 @@ class IdpBrowserSessionServiceTest {
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         when(credentials.isStillValid(
                         eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class)))
-                .thenReturn(false);
+                .thenReturn(true, false);
         IdpBrowserSessionService service = new IdpBrowserSessionService(
                 repository,
                 identities,
@@ -103,7 +121,7 @@ class IdpBrowserSessionServiceTest {
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(10));
         IdpBrowserSessionService.EstablishedSession established = service.establish(
-                TENANT, subject, new VerifiedCredential(PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW);
+                TENANT, subject, new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW);
 
         assertThat(service.resolve(TENANT, established.token(), NOW.plusSeconds(1))).isEmpty();
         assertThat(repository.single().revokedAt()).isEqualTo(NOW.plusSeconds(1));

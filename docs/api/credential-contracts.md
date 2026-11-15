@@ -75,6 +75,6 @@ Database/framework/provider details and secret/private material are never part o
 
 ## Explicitly deferred
 
-This API does not add SecretProvider retrieval or execution, IAM-side raw secret generation/storage, provider-native credential creation/revocation, public internal rotation-step mutation, automatic rotation policy/scheduling, CredentialBinding concrete semantics, observed credential reconciliation, or Integration credential provisioning work classes.
+The separate ADR-0064 first-party local password change uses the existing private verifier adapter and is not an ordinary Credential resource mutation. This API does not add external SecretProvider retrieval or execution, IAM-side raw secret generation/storage, provider-native credential creation/revocation, public internal rotation-step mutation, automatic rotation policy/scheduling, CredentialBinding concrete semantics, observed credential reconciliation, or Integration credential provisioning work classes.
 
 Those require their own bounded implementation slices without changing Credential authority.

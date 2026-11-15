@@ -90,7 +90,7 @@ public class ControlPlaneSecurityConfiguration {
                                 "/api/auth/session",
                                 "/api/auth/logout")
                         .permitAll()
-                        .requestMatchers("/api/v1/**").authenticated()
+                        .requestMatchers("/api/auth/password/change", "/api/v1/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(entryPoint));
 
