@@ -554,6 +554,40 @@ class AccessReviewIntegrationTest {
         assertThat(assignments.findById(tenant,reviewed.id()).orElseThrow().lifecycleState()).isEqualTo(AccessAssignment.LifecycleState.REVOKED);
     }
 
+    @Test
+    void failedGenerationResumesFromCommittedCheckpointAndRejectsStaleWork(){
+        UUID subject=ids.nextId();
+        for(int i=0;i<205;i++) insertAssignment(subject,AccessAssignment.LifecycleState.ACTIVE,null,null,NOW.minusSeconds(500-i));
+        var draft=reviewService.createIdentityAccessCampaign(tenant,subject,ids.nextId(),NOW,NOW);
+        reviewService.startGeneration(tenant,draft.id(),draft.revision(),NOW.plusSeconds(1));
+        generation.processAvailable();
+        var checkpoint=reviews.findCampaign(tenant,draft.id()).orElseThrow();
+        var failed=reviews.failGeneration(tenant,draft.id(),checkpoint.revision(),"review_generation_failed",NOW.plusSeconds(2));
+        assertThat(failed.generatedItemCount()).isEqualTo(200);
+        var resumed=reviewService.startGeneration(tenant,draft.id(),failed.revision(),NOW.plusSeconds(3));
+        assertThat(resumed.generationAfterId()).isEqualTo(checkpoint.generationAfterId());
+        generation.processAvailable();
+        var active=reviews.findCampaign(tenant,draft.id()).orElseThrow();
+        assertThat(active.state()).isEqualTo(CampaignState.ACTIVE);
+        assertThat(active.generatedItemCount()).isEqualTo(205);
+    }
+
+    @Test
+    void failedRemediationRetainsCausalIdOnRetry(){
+        UUID subject=ids.nextId(),reviewer=ids.nextId();
+        var assignment=insertAssignment(subject,AccessAssignment.LifecycleState.ACTIVE,null,null,NOW.minusSeconds(1));
+        var campaign=startAndGenerate(subject,reviewer);
+        var item=reviews.findCampaignItemPage(tenant,campaign.id(),null,null,10).getFirst();
+        var decision=reviewService.decide(tenant,item.id(),reviewer,DecisionValue.REVOKE,null,item.revision(),NOW.plusSeconds(20));
+        var pending=decision.remediation();
+        var failed=reviews.completeRemediation(tenant,pending.id(),RemediationState.MANUAL_REQUIRED,"retry_exhausted",null,pending.revision(),NOW.plusSeconds(21));
+        var retried=reviewService.retryRemediation(tenant,failed.id(),failed.revision(),NOW.plusSeconds(22));
+        assertThat(retried.id()).isEqualTo(pending.id());
+        remediation.processAvailable();
+        assertThat(reviews.findRemediation(tenant,retried.id()).orElseThrow().state()).isEqualTo(RemediationState.APPLIED);
+        assertThat(assignments.findById(tenant,assignment.id()).orElseThrow().lifecycleState()).isEqualTo(AccessAssignment.LifecycleState.REVOKED);
+    }
+
     private ReviewCampaign startAndGenerate(
             UUID subject,
             UUID reviewer) {

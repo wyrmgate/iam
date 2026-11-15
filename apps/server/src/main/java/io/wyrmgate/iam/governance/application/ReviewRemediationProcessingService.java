@@ -87,8 +87,7 @@ public final class ReviewRemediationProcessingService {
                         var current=reviews.findRemediation(event.tenant(),event.event().aggregateId()).orElse(null);
                         if(current!=null && current.state()==RemediationState.PENDING
                                 && current.revision()==event.event().aggregateRevision()){
-                            Instant now=failedAt;
-                            reviews.completeRemediation(event.tenant(),current.id(),RemediationState.MANUAL_REQUIRED,"review_remediation_retry_exhausted",null,current.revision(),now);
+                            reviews.completeRemediation(event.tenant(),current.id(),RemediationState.MANUAL_REQUIRED,"review_remediation_retry_exhausted",null,current.revision(),failedAt);
                         }
                         return null;
                     });

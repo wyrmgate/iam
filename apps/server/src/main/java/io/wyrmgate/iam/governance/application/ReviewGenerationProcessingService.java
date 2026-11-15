@@ -100,8 +100,7 @@ public final class ReviewGenerationProcessingService {
                         var current=reviews.findCampaign(event.tenant(),event.event().aggregateId()).orElse(null);
                         if(current!=null && current.state()==CampaignState.GENERATING
                                 && current.revision()==event.event().aggregateRevision()){
-                            Instant now=failedAt;
-                            reviews.failGeneration(event.tenant(),current.id(),current.revision(),"review_generation_failed",now);
+                            reviews.failGeneration(event.tenant(),current.id(),current.revision(),"review_generation_failed",failedAt);
                         }
                         return null;
                     });
