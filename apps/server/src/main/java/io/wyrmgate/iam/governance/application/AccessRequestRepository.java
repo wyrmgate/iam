@@ -25,6 +25,12 @@ public interface AccessRequestRepository {
     List<RequestItem> findItems(
             TenantContext tenant, UUID requestId);
 
+    void recordAdmissionContext(TenantContext tenant, RequestItem item, RequestAdmissionContext context);
+
+    Optional<RequestAdmissionContext> findAdmissionContext(TenantContext tenant, UUID itemId, long itemRevision);
+
+    Optional<RequestAdmissionContext> findApprovalContext(TenantContext tenant, UUID itemId, UUID approvalCaseId);
+
     AccessRequest updateRequestState(
             TenantContext tenant,
             UUID requestId,

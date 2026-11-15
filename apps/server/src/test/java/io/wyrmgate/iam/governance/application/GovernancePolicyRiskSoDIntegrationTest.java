@@ -219,6 +219,8 @@ class GovernancePolicyRiskSoDIntegrationTest {
                         catalog,
                         roles,
                         effectiveAccess,
+                        (t, subject, rules, at) -> java.util.Map.of(),
+                        identities,
                         ids,
                         transactions,
                         Clock.fixed(
@@ -231,10 +233,8 @@ class GovernancePolicyRiskSoDIntegrationTest {
         AccessRequestApprovalResultSink resultSink =
                 new AccessRequestApprovalResultSink(
                         requests,
-                        (requestedTenant, item) -> { },
                         evaluator,
-                        approvalRepository,
-                        starter,
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, starter, (requestedTenant, item) -> { }),
                         new SubmittedRequestItemSink() {
                             @Override
                             public void submitted(
@@ -749,6 +749,22 @@ class GovernancePolicyRiskSoDIntegrationTest {
     }
 
     @Test
+    void sameApproverPlanCannotReuseApprovalAcrossPolicyVersionChange() {
+        UUID requested = entitlement();
+        UUID approver = ids.nextId();
+        activate(PolicyDecision.REQUIRE_APPROVAL, List.of(), plan(approver), NOW);
+        var commands = requestCommands();
+        var draft = commands.createDraft(tenant, ids.nextId(), ids.nextId(), List.of(item(requested)), NOW.plusSeconds(1));
+        var submitted = commands.submit(tenant, draft.request().id(), 1, NOW.plusSeconds(2));
+        var pending = commands.evaluateItem(tenant, submitted.items().getFirst().id(), 2, NOW.plusSeconds(3));
+        activate(PolicyDecision.REQUIRE_APPROVAL, List.of(), plan(approver), NOW.plusSeconds(4));
+        approvals.decide(tenant, pending.approvalCaseId(), approver, DecisionValue.APPROVE, null, 1, NOW.plusSeconds(5));
+        var replacement = requests.findItem(tenant, pending.id()).orElseThrow();
+        assertThat(replacement.state()).isEqualTo(ItemState.PENDING_APPROVAL);
+        assertThat(replacement.approvalCaseId()).isNotEqualTo(pending.approvalCaseId());
+    }
+
+    @Test
     void finalApprovalRevalidatesChangedPlanThenCurrentDeny() {
         UUID requested = entitlement();
         UUID firstApprover = ids.nextId();
@@ -858,13 +874,11 @@ class GovernancePolicyRiskSoDIntegrationTest {
 
     private AccessRequestCommandService requestCommands() {
         return new AccessRequestCommandService(
-                requests,
-                evaluator,
-                approvals,
-                new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
-                (requestedTenant, item) -> { },
-                ids,
-                transactions);
+                        requests,
+                        evaluator,
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), (requestedTenant, item) -> { }),
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
+                        ids, transactions);
     }
 
     private PolicyVersion activate(

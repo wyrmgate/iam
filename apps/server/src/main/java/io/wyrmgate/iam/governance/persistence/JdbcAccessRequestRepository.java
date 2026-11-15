@@ -7,6 +7,7 @@ import io.wyrmgate.iam.governance.application.AccessRequestModels.RequestItem;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.RequestState;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.TargetKind;
 import io.wyrmgate.iam.governance.application.AccessRequestRepository;
+import io.wyrmgate.iam.governance.application.RequestAdmissionContext;
 import io.wyrmgate.iam.platform.persistence.StaleWriteException;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
 import java.sql.ResultSet;
@@ -142,6 +143,44 @@ public final class JdbcAccessRequestRepository
                 (rs,row) -> itemRow(rs),
                 tenant.tenantId(),
                 requestId);
+    }
+
+    @Override
+    public void recordAdmissionContext(TenantContext tenant, RequestItem item, RequestAdmissionContext context) {
+        if (item.state() != ItemState.PENDING_APPROVAL && item.state() != ItemState.AUTHORIZED)
+            throw new IllegalArgumentException("admission context belongs to a positive decision");
+        jdbc.update("""
+                INSERT INTO governance.request_admission_context
+                  (tenant_id, request_item_id, item_revision, approval_case_id, identity_epoch,
+                   policy_version_id, target_fingerprint, risk_fingerprint, policy_evaluation_id, recorded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, tenant.tenantId(), item.id(), item.revision(), item.approvalCaseId(),
+                context.identityEpoch(), context.policyVersionId(), context.targetFingerprint(),
+                context.riskFingerprint(), context.policyEvaluationId(), Timestamp.from(item.updatedAt()));
+    }
+
+    @Override
+    public Optional<RequestAdmissionContext> findAdmissionContext(TenantContext tenant, UUID itemId, long itemRevision) {
+        return jdbc.query("""
+                SELECT identity_epoch, policy_version_id, target_fingerprint, risk_fingerprint, policy_evaluation_id
+                FROM governance.request_admission_context
+                WHERE tenant_id = ? AND request_item_id = ? AND item_revision = ?
+                """, (rs,n) -> admissionContext(rs), tenant.tenantId(), itemId, itemRevision).stream().findFirst();
+    }
+
+    @Override
+    public Optional<RequestAdmissionContext> findApprovalContext(TenantContext tenant, UUID itemId, UUID approvalCaseId) {
+        return jdbc.query("""
+                SELECT identity_epoch, policy_version_id, target_fingerprint, risk_fingerprint, policy_evaluation_id
+                FROM governance.request_admission_context
+                WHERE tenant_id = ? AND request_item_id = ? AND approval_case_id = ?
+                ORDER BY item_revision LIMIT 1
+                """, (rs,n) -> admissionContext(rs), tenant.tenantId(), itemId, approvalCaseId).stream().findFirst();
+    }
+
+    private static RequestAdmissionContext admissionContext(ResultSet rs) throws SQLException {
+        return new RequestAdmissionContext(rs.getLong(1), rs.getObject(2, UUID.class),
+                rs.getString(3), rs.getString(4), rs.getObject(5, UUID.class));
     }
 
     @Override

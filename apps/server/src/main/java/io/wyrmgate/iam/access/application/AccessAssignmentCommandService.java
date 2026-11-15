@@ -4,6 +4,7 @@ import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.access.domain.AccessAssignmentLifecycleDefinition;
 import io.wyrmgate.iam.access.domain.AccessAssignmentLifecycleDefinition.Action;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
+import io.wyrmgate.iam.catalog.application.AccessTargetFingerprint;
 import io.wyrmgate.iam.catalog.application.CatalogAccessTargetAvailabilityQuery;
 import io.wyrmgate.iam.catalog.domain.CatalogAccessTargetKind;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
@@ -74,6 +75,7 @@ public final class AccessAssignmentCommandService {
                 null,
                 null,
                 null,
+                null,
                 now);
     }
 
@@ -86,8 +88,10 @@ public final class AccessAssignmentCommandService {
             UUID specificPrincipalId,
             Instant validFrom,
             Instant validUntil,
+            AccessIntentCommand.Admission admission,
             Instant now) {
         Objects.requireNonNull(requestItemId, "requestItemId");
+        Objects.requireNonNull(admission, "admission");
         return createEntitlementAssignmentInternal(
                 tenant,
                 identityId,
@@ -100,6 +104,7 @@ public final class AccessAssignmentCommandService {
                 requestItemId,
                 null,
                 null,
+                admission,
                 now);
     }
 
@@ -124,6 +129,7 @@ public final class AccessAssignmentCommandService {
                 ruleId,
                 correlationId,
                 causationId,
+                null,
                 now);
     }
 
@@ -139,6 +145,7 @@ public final class AccessAssignmentCommandService {
             UUID provenanceRefId,
             UUID correlationId,
             UUID causationId,
+            AccessIntentCommand.Admission admission,
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(identityId, "identityId");
@@ -148,6 +155,9 @@ public final class AccessAssignmentCommandService {
 
         var identityStatus = requireAccessEligibleIdentity(
                 tenant, identityId);
+        if (admission != null && identityStatus.accessEligibilityEpoch() != admission.identityEpoch()) {
+            throw new AccessAssignmentCommandException("authorization_identity_epoch_stale", "Identity admission epoch changed.");
+        }
 
         var entitlementAvailability = catalogAvailability.currentAvailability(
                         tenant, CatalogAccessTargetKind.ENTITLEMENT, entitlementId)
@@ -175,6 +185,11 @@ public final class AccessAssignmentCommandService {
                     "application_target_retired",
                     "The Entitlement belongs to a retired ApplicationTarget.");
             case VALID -> { }
+        }
+
+        if (admission != null && !admission.targetFingerprint().equals(
+                AccessTargetFingerprint.entitlement(entitlementId, entitlement.applicationTargetId()))) {
+            throw new AccessAssignmentCommandException("authorization_target_changed", "Catalog meaning changed after authorization.");
         }
 
         if (principalConstraintKind
@@ -282,6 +297,7 @@ public final class AccessAssignmentCommandService {
                 null,
                 null,
                 null,
+                null,
                 now);
     }
 
@@ -294,8 +310,10 @@ public final class AccessAssignmentCommandService {
             UUID specificPrincipalId,
             Instant validFrom,
             Instant validUntil,
+            AccessIntentCommand.Admission admission,
             Instant now) {
         Objects.requireNonNull(requestItemId, "requestItemId");
+        Objects.requireNonNull(admission, "admission");
         return createRoleAssignmentInternal(
                 tenant,
                 identityId,
@@ -308,6 +326,7 @@ public final class AccessAssignmentCommandService {
                 requestItemId,
                 null,
                 null,
+                admission,
                 now);
     }
 
@@ -332,6 +351,7 @@ public final class AccessAssignmentCommandService {
                 ruleId,
                 correlationId,
                 causationId,
+                null,
                 now);
     }
 
@@ -347,6 +367,7 @@ public final class AccessAssignmentCommandService {
             UUID provenanceRefId,
             UUID correlationId,
             UUID causationId,
+            AccessIntentCommand.Admission admission,
             Instant now) {
         Objects.requireNonNull(tenant, "tenant");
         Objects.requireNonNull(identityId, "identityId");
@@ -356,6 +377,9 @@ public final class AccessAssignmentCommandService {
 
         var identityStatus = requireAccessEligibleIdentity(
                 tenant, identityId);
+        if (admission != null && identityStatus.accessEligibilityEpoch() != admission.identityEpoch()) {
+            throw new AccessAssignmentCommandException("authorization_identity_epoch_stale", "Identity admission epoch changed.");
+        }
 
         var roleAvailability = catalogAvailability.currentAvailability(
                         tenant, CatalogAccessTargetKind.ROLE, roleId)
@@ -376,6 +400,11 @@ public final class AccessAssignmentCommandService {
             throw new AccessAssignmentCommandException(
                     "role_not_assignable",
                     "The requested Role has no valid current expansion.");
+        }
+
+        if (admission != null && !admission.targetFingerprint().equals(
+                AccessTargetFingerprint.role(expansion))) {
+            throw new AccessAssignmentCommandException("authorization_target_changed", "Catalog meaning changed after authorization.");
         }
 
         if (principalConstraintKind

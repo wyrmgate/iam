@@ -223,6 +223,7 @@ class GovernanceExceptionIntegrationTest {
                         roles,
                         effectiveAccess,
                         exceptionService,
+                        identities,
                         ids,
                         transactions,
                         Clock.fixed(
@@ -243,10 +244,8 @@ class GovernanceExceptionIntegrationTest {
         AccessRequestApprovalResultSink requestResults =
                 new AccessRequestApprovalResultSink(
                         requests,
-                        (requestedTenant, item) -> { },
                         evaluator,
-                        approvalRepository,
-                        starter,
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, starter, (requestedTenant, item) -> { }),
                         submitted);
         approvalCommands =
                 new ApprovalCommandService(
@@ -625,11 +624,9 @@ class GovernanceExceptionIntegrationTest {
                 new AccessRequestCommandService(
                         requests,
                         evaluator,
-                        approvalCommands,
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), (requestedTenant, item) -> { }),
                         new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
-                        (requestedTenant, item) -> { },
-                        ids,
-                        transactions);
+                        ids, transactions);
         RequestDetail draft = commands.createDraft(
                 tenant,
                 requester,
@@ -796,11 +793,9 @@ class GovernanceExceptionIntegrationTest {
                 new AccessRequestCommandService(
                         requests,
                         evaluator,
-                        approvalCommands,
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), (requestedTenant, item) -> { }),
                         new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
-                        (requestedTenant, item) -> { },
-                        ids,
-                        transactions);
+                        ids, transactions);
         RequestDetail draft = commands.createDraft(
                 tenant,
                 ids.nextId(),

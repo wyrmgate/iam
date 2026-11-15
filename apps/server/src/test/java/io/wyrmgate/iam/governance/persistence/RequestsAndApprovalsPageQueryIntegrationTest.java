@@ -54,9 +54,11 @@ class RequestsAndApprovalsPageQueryIntegrationTest {
         requestRepository = new JdbcAccessRequestRepository(jdbc);
         approvals = new ApprovalCommandService(
                 approvalRepository,
-                new AccessRequestApprovalResultSink(requestRepository, (requestedTenant, item) -> { },
+                new AccessRequestApprovalResultSink(
+                        requestRepository,
                         (t, request, item) -> EligibilityResult.unavailable("not_evaluated_in_query_test"),
-                        approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), (requestedTenant, item) -> { }),
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
                 transactions);
         query = new JdbcRequestsAndApprovalsPageQuery(jdbc);
@@ -86,14 +88,11 @@ class RequestsAndApprovalsPageQueryIntegrationTest {
         UUID entitlementId = ids.nextId();
 
         AccessRequestCommandService requests = new AccessRequestCommandService(
-                requestRepository,
-                (requestedTenant, request, item) -> EligibilityResult.approvalRequired(
-                        new PlanSpec(List.of(new StageSpec(DecisionMode.ANY_ONE, List.of(approver))))),
-                approvals,
-                new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
-                (requestedTenant, authorizedItem) -> { },
-                ids,
-                transactions);
+                        requestRepository,
+                        (requestedTenant, request, item) -> EligibilityResult.approvalRequired(new PlanSpec(List.of(new StageSpec(DecisionMode.ANY_ONE, List.of(approver)))), io.wyrmgate.iam.testsupport.RequestAdmissionTestSupport.context()),
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), (requestedTenant, authorizedItem) -> { }),
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
+                        ids, transactions);
 
         var draft = requests.createDraft(
                 tenant,

@@ -2,6 +2,10 @@ package io.wyrmgate.iam.governance.application;
 
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
+import io.wyrmgate.iam.catalog.application.AccessTargetFingerprint;
+import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
+import io.wyrmgate.iam.platform.persistence.RequestFingerprint;
+import java.nio.charset.StandardCharsets;
 import io.wyrmgate.iam.catalog.application.RoleExpansionQuery;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.AccessRequest;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.EligibilityResult;
@@ -44,89 +48,27 @@ public final class GovernancePolicyEligibilityEvaluator
     private final RoleExpansionQuery roles;
     private final EffectiveAccessQuery effectiveAccess;
     private final GovernanceExceptionQuery exceptions;
+    private final IdentityAccessReferenceQuery identities;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
     private final Clock clock;
 
     public GovernancePolicyEligibilityEvaluator(
-            GovernancePolicyService policyService,
-            GovernancePolicyRepository policyRepository,
-            AccessRequestRepository requests,
-            CatalogAccessReferenceQuery catalog,
-            RoleExpansionQuery roles,
-            EffectiveAccessQuery effectiveAccess,
-            IdGenerator ids,
-            TransactionExecutor transactions) {
-        this(
-                policyService,
-                policyRepository,
-                requests,
-                catalog,
-                roles,
-                effectiveAccess,
-                (tenant, identityId, ruleIds, at) -> Map.of(),
-                ids,
-                transactions,
-                Clock.systemUTC());
-    }
-
-    public GovernancePolicyEligibilityEvaluator(
-            GovernancePolicyService policyService,
-            GovernancePolicyRepository policyRepository,
-            AccessRequestRepository requests,
-            CatalogAccessReferenceQuery catalog,
-            RoleExpansionQuery roles,
-            EffectiveAccessQuery effectiveAccess,
-            GovernanceExceptionQuery exceptions,
-            IdGenerator ids,
-            TransactionExecutor transactions) {
-        this(
-                policyService,
-                policyRepository,
-                requests,
-                catalog,
-                roles,
-                effectiveAccess,
-                exceptions,
-                ids,
-                transactions,
-                Clock.systemUTC());
+            GovernancePolicyService policyService, GovernancePolicyRepository policyRepository,
+            AccessRequestRepository requests, CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roles, EffectiveAccessQuery effectiveAccess,
+            GovernanceExceptionQuery exceptions, IdentityAccessReferenceQuery identities,
+            IdGenerator ids, TransactionExecutor transactions) {
+        this(policyService, policyRepository, requests, catalog, roles, effectiveAccess,
+                exceptions, identities, ids, transactions, Clock.systemUTC());
     }
 
     GovernancePolicyEligibilityEvaluator(
-            GovernancePolicyService policyService,
-            GovernancePolicyRepository policyRepository,
-            AccessRequestRepository requests,
-            CatalogAccessReferenceQuery catalog,
-            RoleExpansionQuery roles,
-            EffectiveAccessQuery effectiveAccess,
-            IdGenerator ids,
-            TransactionExecutor transactions,
-            Clock clock) {
-        this(
-                policyService,
-                policyRepository,
-                requests,
-                catalog,
-                roles,
-                effectiveAccess,
-                (tenant, identityId, ruleIds, at) -> Map.of(),
-                ids,
-                transactions,
-                clock);
-    }
-
-    GovernancePolicyEligibilityEvaluator(
-            GovernancePolicyService policyService,
-            GovernancePolicyRepository policyRepository,
-            AccessRequestRepository requests,
-            CatalogAccessReferenceQuery catalog,
-            RoleExpansionQuery roles,
-            EffectiveAccessQuery effectiveAccess,
-            GovernanceExceptionQuery exceptions,
-            IdGenerator ids,
-            TransactionExecutor transactions,
-            Clock clock) {
+            GovernancePolicyService policyService, GovernancePolicyRepository policyRepository,
+            AccessRequestRepository requests, CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roles, EffectiveAccessQuery effectiveAccess,
+            GovernanceExceptionQuery exceptions, IdentityAccessReferenceQuery identities,
+            IdGenerator ids, TransactionExecutor transactions, Clock clock) {
         this.policyService = Objects.requireNonNull(
                 policyService, "policyService");
         this.policyRepository = Objects.requireNonNull(
@@ -139,6 +81,7 @@ public final class GovernancePolicyEligibilityEvaluator
                 effectiveAccess, "effectiveAccess");
         this.exceptions = Objects.requireNonNull(
                 exceptions, "exceptions");
+        this.identities = Objects.requireNonNull(identities, "identities");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
@@ -163,6 +106,10 @@ public final class GovernancePolicyEligibilityEvaluator
         }
 
         Instant evaluatedAt = clock.instant();
+        var identity = identities.accessStatus(tenant, request.beneficiaryIdentityId());
+        if (identity.status() != IdentityAccessReferenceQuery.AccessStatus.ACCESS_ELIGIBLE) {
+            return EligibilityResult.denied("identity_not_access_eligible");
+        }
 
         Expansion current = expandRequested(
                 tenant, item);
@@ -258,6 +205,15 @@ public final class GovernancePolicyEligibilityEvaluator
                 conflicts.isEmpty(),
                 hasUncoveredConflict);
         PolicyDecision finalDecision = decision;
+        UUID evaluationId = ids.nextId();
+        String riskFingerprint = RequestFingerprint.sha256(conflicts.stream()
+                .map(conflict -> conflict.ruleId() + "|" + conflict.requestedEntitlementId() + "|"
+                        + conflict.conflictingEntitlementId() + "|" + conflict.source() + "|"
+                        + exceptionIds.get(conflict.ruleId()))
+                .sorted().collect(java.util.stream.Collectors.joining(";"))
+                .getBytes(StandardCharsets.UTF_8)).value();
+        var context = new RequestAdmissionContext(identity.accessEligibilityEpoch(), policy.version().id(),
+                current.fingerprint(), riskFingerprint, evaluationId);
 
         transactions.required(() -> {
             UUID riskId = ids.nextId();
@@ -290,7 +246,7 @@ public final class GovernancePolicyEligibilityEvaluator
             policyRepository.insertPolicyEvaluation(
                     tenant,
                     new PolicyEvaluation(
-                            ids.nextId(),
+                            evaluationId,
                             request.id(),
                             item.id(),
                             item.revision(),
@@ -308,12 +264,12 @@ public final class GovernancePolicyEligibilityEvaluator
                             AccessRequestModels
                                     .EligibilityOutcome.AUTHORIZED,
                             code,
-                            null);
+                            null, context);
             case DENY ->
                     EligibilityResult.denied(code);
             case REQUIRE_APPROVAL ->
                     EligibilityResult.approvalRequired(
-                            approvalPlan(policy));
+                            approvalPlan(policy), context);
         };
     }
 
@@ -332,7 +288,8 @@ public final class GovernancePolicyEligibilityEvaluator
                         "requested_entitlement_unavailable");
             }
             return Expansion.available(
-                    Set.of(item.entitlementId()));
+                    Set.of(item.entitlementId()), AccessTargetFingerprint.entitlement(
+                            item.entitlementId(), reference.applicationTargetId()));
         }
 
         var expansion =
@@ -350,7 +307,7 @@ public final class GovernancePolicyEligibilityEvaluator
                     path.entitlementId());
         }
         return Expansion.available(
-                Set.copyOf(entitlementIds));
+                Set.copyOf(entitlementIds), AccessTargetFingerprint.role(expansion));
     }
 
     private static Set<UUID> counterpartIds(
@@ -528,13 +485,13 @@ public final class GovernancePolicyEligibilityEvaluator
     private record Expansion(
             boolean available,
             Set<UUID> entitlementIds,
-            String failureCode) {
+            String failureCode, String fingerprint) {
         static Expansion available(
-                Set<UUID> entitlementIds) {
+                Set<UUID> entitlementIds, String fingerprint) {
             return new Expansion(
                     true,
                     Set.copyOf(entitlementIds),
-                    null);
+                    null, fingerprint);
         }
 
         static Expansion unavailable(
@@ -542,7 +499,7 @@ public final class GovernancePolicyEligibilityEvaluator
             return new Expansion(
                     false,
                     Set.of(),
-                    code);
+                    code, null);
         }
     }
 
