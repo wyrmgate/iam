@@ -135,7 +135,7 @@ function ReconciliationScheduler() {
   }
 
   async function schedule() {
-    if (!binding?.etag || pending) return;
+    if (!binding?.etag || !objectClass || pending) return;
     setPending(true);
     setMessage(null);
     setRun(null);
@@ -169,7 +169,7 @@ function ReconciliationScheduler() {
           <SelectInput label="Object class" value={objectClass} disabled={pending}
             options={binding.data.targetKind === 'SOURCE_SYSTEM' ? ['PRINCIPAL'] : ['PRINCIPAL', 'ENTITLEMENT', 'GRANT']}
             onChange={(event) => setObjectClass(event.target.value)} />
-          <Button variant="contained" disabled={pending || !!run} onClick={() => void schedule()}>
+          <Button variant="contained" disabled={pending || !objectClass || !!run} onClick={() => void schedule()}>
             {pending ? 'Working…' : 'Schedule full reconciliation'}
           </Button>
         </> : null}

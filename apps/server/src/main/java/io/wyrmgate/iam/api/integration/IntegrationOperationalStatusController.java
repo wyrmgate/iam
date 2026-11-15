@@ -276,6 +276,7 @@ public final class IntegrationOperationalStatusController {
         return new IntegrationOperationalApiModels.ProvisioningAttemptResource(
                 value.id(), value.taskId(), value.attemptNumber(), value.startedAt(),
                 value.completedAt(), value.outcome(), value.failureCategory(),
+                value.effectRecoveryState(), value.effectRecoveryReason(), value.effectRecoveryUpdatedAt(),
                 value.correlationId(), value.causationId());
     }
 
