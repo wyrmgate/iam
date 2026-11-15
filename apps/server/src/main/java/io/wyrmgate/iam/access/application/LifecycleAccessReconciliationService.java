@@ -170,6 +170,7 @@ public final class LifecycleAccessReconciliationService {
             var latestContext = identities.currentContext(tenant,identityId,keys);
             if (latestPolicy == null || !latestPolicy.equals(policy) || !"ACTIVE".equals(latestContext.lifecycleState())
                     || latestContext.accessEligibilityEpoch() != context.accessEligibilityEpoch() || !matches(rule,latestContext)) return "lifecycle_admission_context_changed";
+            if(assignments.lifecycleReviewSuppressed(tenant,identityId,latestContext.accessEligibilityEpoch(),rule.ruleId(),rule.targetKind(),rule.targetId())) return null;
             AccessAssignment existing=assignments.findCurrentLifecyclePolicyAssignment(
                     tenant,identityId,rule.ruleId()).orElse(null);
             if(existing!=null && sameTarget(existing,rule)){

@@ -47,6 +47,11 @@ public interface AccessAssignmentRepository {
     default Optional<AccessAssignment> findCurrentLifecyclePolicyAssignment(
             TenantContext tenant, UUID identityId, UUID ruleId) { return Optional.empty(); }
 
+    boolean suppressLifecycleReview(TenantContext tenant, AccessAssignment reviewed, UUID reviewRemediationId, Instant at);
+
+    boolean lifecycleReviewSuppressed(TenantContext tenant, UUID identityId, long identityEpoch,
+            UUID ruleId, AccessAssignment.TargetKind targetKind, UUID targetId);
+
     default List<AccessAssignment> findCurrentLifecyclePolicyAssignments(
             TenantContext tenant, UUID identityId) { return List.of(); }
 

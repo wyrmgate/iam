@@ -164,12 +164,12 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentRepository assignments,
             AccessAssignmentCommandService commands,
             AccessReviewRemediationRepository applications,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions, AccessAdmissionCoordinator coordinator) {
         return new AccessReviewRemediationCommandService(
                 assignments,
                 commands,
                 applications,
-                transactions);
+                transactions, coordinator);
     }
 
     @Bean

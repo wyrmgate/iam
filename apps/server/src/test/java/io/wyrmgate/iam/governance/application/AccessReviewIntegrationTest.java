@@ -162,7 +162,7 @@ class AccessReviewIntegrationTest {
                         assignments,
                         assignmentCommands,
                         applicationRepository,
-                        transactions);
+                        transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions));
         generation =
                 new ReviewGenerationProcessingService(
                         outbox,
@@ -536,6 +536,22 @@ class AccessReviewIntegrationTest {
                 WHERE tenant_id = ? AND review_campaign_id = ?
                 """, String.class, tenant.tenantId(), campaign.id()))
                 .containsExactlyInAnyOrder("MANUAL", "REQUEST_ITEM", "LIFECYCLE_POLICY_RULE");
+    }
+
+    @Test
+    void lifecycleReviewRevocationSuppressesOnlyExactCauseAndEpoch() {
+        UUID subject=ids.nextId(),rule=ids.nextId(),target=ids.nextId(),remediationId=ids.nextId();
+        var reviewed=new AccessAssignment(ids.nextId(),subject,1,AccessAssignment.TargetKind.ENTITLEMENT,null,target,
+                AccessAssignment.PrincipalConstraintKind.ANY,null,AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE,rule,
+                AccessAssignment.LifecycleState.ACTIVE,null,null,1,NOW.minusSeconds(1),NOW.minusSeconds(1));
+        assignments.insert(tenant,reviewed);
+        var result=accessRemediation.apply(tenant,remediationId,reviewed.id(),NOW);
+        assertThat(result.outcome()).isEqualTo(AccessReviewRemediationCommand.Outcome.APPLIED);
+        assertThat(assignments.lifecycleReviewSuppressed(tenant,subject,1,rule,AccessAssignment.TargetKind.ENTITLEMENT,target)).isTrue();
+        assertThat(assignments.lifecycleReviewSuppressed(tenant,subject,2,rule,AccessAssignment.TargetKind.ENTITLEMENT,target)).isFalse();
+        assertThat(assignments.lifecycleReviewSuppressed(tenant,subject,1,ids.nextId(),AccessAssignment.TargetKind.ENTITLEMENT,target)).isFalse();
+        assertThat(accessRemediation.apply(tenant,remediationId,reviewed.id(),NOW.plusSeconds(1))).isEqualTo(result);
+        assertThat(assignments.findById(tenant,reviewed.id()).orElseThrow().lifecycleState()).isEqualTo(AccessAssignment.LifecycleState.REVOKED);
     }
 
     private ReviewCampaign startAndGenerate(

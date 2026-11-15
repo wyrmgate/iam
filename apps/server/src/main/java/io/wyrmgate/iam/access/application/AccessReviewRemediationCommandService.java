@@ -20,18 +20,20 @@ public final class AccessReviewRemediationCommandService
     private final AccessAssignmentCommandService commands;
     private final AccessReviewRemediationRepository applications;
     private final TransactionExecutor transactions;
+    private final AccessAdmissionCoordinator coordinator;
 
     public AccessReviewRemediationCommandService(
             AccessAssignmentRepository assignments,
             AccessAssignmentCommandService commands,
             AccessReviewRemediationRepository applications,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions, AccessAdmissionCoordinator coordinator) {
         this.assignments = Objects.requireNonNull(
                 assignments, "assignments");
         this.commands = Objects.requireNonNull(
                 commands, "commands");
         this.applications = Objects.requireNonNull(
                 applications, "applications");
+        this.coordinator=Objects.requireNonNull(coordinator);
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
     }
@@ -49,6 +51,15 @@ public final class AccessReviewRemediationCommandService
                 accessAssignmentId, "accessAssignmentId");
         Objects.requireNonNull(now, "now");
 
+        // Immutable assignment identity selects the local fence. A replay of a
+        // historical result does not depend on present identity eligibility.
+        var reviewed=assignments.findById(tenant,accessAssignmentId).orElse(null);
+        if(reviewed!=null && reviewed.provenanceKind()==AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE)
+            return coordinator.execute(tenant,reviewed.identityId(),permit->applyCurrent(tenant,reviewRemediationId,accessAssignmentId,now));
+        return applyCurrent(tenant,reviewRemediationId,accessAssignmentId,now);
+    }
+
+    private Result applyCurrent(TenantContext tenant, UUID reviewRemediationId, UUID accessAssignmentId, Instant now) {
         return transactions.required(() -> {
             var replay = applications.find(
                     tenant, reviewRemediationId);
@@ -65,12 +76,28 @@ public final class AccessReviewRemediationCommandService
                     assignments.findById(
                             tenant, accessAssignmentId)
                             .orElse(null);
+            boolean suppressed=false;
+            if(current!=null && current.provenanceKind()==AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE){
+                suppressed=assignments.suppressLifecycleReview(tenant,current,reviewRemediationId,now);
+                // A successor of the exact same reviewed lifecycle cause may have
+                // been created before remediation arrived. Reduce it too, never a
+                // different target, epoch, or unrelated provenance.
+                var successor=assignments.findCurrentLifecyclePolicyAssignment(tenant,current.identityId(),current.provenanceRefId()).orElse(null);
+                if(successor!=null && !successor.id().equals(current.id())
+                        && successor.identityAccessEpoch()==current.identityAccessEpoch()
+                        && successor.targetKind()==current.targetKind()
+                        && Objects.equals(successor.roleId(),current.roleId())
+                        && Objects.equals(successor.entitlementId(),current.entitlementId())){
+                    commands.terminate(tenant,successor.id(),successor.revision(),now);
+                    suppressed=true;
+                }
+            }
             Result result;
             if (current == null
                     || isTerminal(current.lifecycleState())) {
                 result = new Result(
                         accessAssignmentId,
-                        Outcome.NO_ACTION_REQUIRED,
+                        suppressed ? Outcome.APPLIED : Outcome.NO_ACTION_REQUIRED,
                         current == null
                                 ? "NOT_FOUND"
                                 : current.lifecycleState().name());
