@@ -94,7 +94,7 @@ jobs:
           from pathlib import Path
 
           routes = json.loads(Path('apps/console/public/_routes.json').read_text())
-          expected = ['/api/*', '/.well-known/openid-configuration', '/oauth2/jwks', '/oauth2/authorize', '/oauth2/token']
+          expected = ['/api/*', '/.well-known/openid-configuration', '/oauth2/jwks', '/oauth2/authorize', '/oauth2/token', '/oauth2/federation/start', '/oauth2/federation/callback']
           if routes != {'version': 1, 'include': expected, 'exclude': []}:
               raise SystemExit('Pages Functions must match the exact API and IdP protocol allowlist.')
 
