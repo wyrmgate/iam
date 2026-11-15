@@ -557,6 +557,47 @@ class CredentialPersistenceIntegrationTest {
     }
 
     @Test
+    void rotationAdmissionWaitsForConcurrentRevocation() throws Exception {
+        Credential old = activeCredential(principal(), CredentialKind.API_KEY, "api/race");
+        UUID initiator = identity();
+        var locked = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var attempting = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var revocation = pool.submit(() -> transactions.required(() -> {
+                Credential revoked = credentials.revoke(tenant, old.id(), old.revision(), NOW.plusSeconds(1));
+                locked.countDown();
+                try {
+                    if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("test release timed out");
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return revoked;
+            }));
+            try {
+                assertThat(locked.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                var planning = pool.submit(() -> {
+                    attempting.countDown();
+                    return rotations.plan(tenant, old.id(), initiator, NOW.plusSeconds(2));
+                });
+                assertThat(attempting.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                release.countDown();
+                assertThat(revocation.get(10, java.util.concurrent.TimeUnit.SECONDS).state())
+                        .isEqualTo(CredentialState.REVOKED);
+                assertThatThrownBy(() -> planning.get(10, java.util.concurrent.TimeUnit.SECONDS))
+                        .isInstanceOf(java.util.concurrent.ExecutionException.class)
+                        .hasCauseInstanceOf(IllegalArgumentException.class);
+                assertThat(repository.findOpenRotation(tenant, old.id())).isEmpty();
+            } finally {
+                release.countDown();
+            }
+        }
+    }
+
+    @Test
     void localVerifierRequiresExactTenantAndCredentialOwnership() {
         var store = new io.wyrmgate.iam.credential.persistence.JdbcLocalPasswordVerifierStore(jdbc);
         UUID id = ids.nextId();
@@ -565,7 +606,7 @@ class CredentialPersistenceIntegrationTest {
         assertThat(store.matches(tenant, id, reference, password)).isTrue();
         assertThat(store.matches(new TenantContext(ids.nextId()), id, reference, password)).isFalse();
         assertThat(store.matches(tenant, ids.nextId(), reference, password)).isFalse();
-        java.util.Arrays.fill(password, '\\0');
+        java.util.Arrays.fill(password, (char) 0);
     }
 
     private Credential activeCredential(
