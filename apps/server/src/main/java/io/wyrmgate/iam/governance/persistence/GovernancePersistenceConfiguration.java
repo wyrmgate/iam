@@ -320,9 +320,10 @@ public class GovernancePersistenceConfiguration {
             ApprovalRepository approvals,
             ApprovalResultSink resultSink,
             IdGenerator ids,
-            TransactionExecutor transactions) {
-        return new ApprovalCommandService(
-                approvals, resultSink, ids, transactions);
+            TransactionExecutor transactions, IdentityAccessReferenceQuery identities, AccessRequestRepository requests,
+            GovernanceExceptionRepository exceptions, LifecycleAccessApprovalCandidateRepository candidates) {
+        return new ApprovalCommandService(approvals, resultSink, ids, transactions,
+                new io.wyrmgate.iam.governance.application.CurrentApprovalActorAuthority(identities,requests,exceptions,candidates));
     }
 
     @Bean

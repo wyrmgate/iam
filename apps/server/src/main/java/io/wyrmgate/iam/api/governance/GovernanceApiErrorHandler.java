@@ -28,6 +28,7 @@ public class GovernanceApiErrorHandler {
     private static final Set<String> APPROVAL_FORBIDDEN =
             Set.of(
                     "approval_actor_not_approver",
+                    "approval_actor_ineligible",
                     "approval_self_decision_forbidden");
 
     private final IdGenerator ids;

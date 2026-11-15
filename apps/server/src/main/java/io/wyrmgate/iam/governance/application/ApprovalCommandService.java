@@ -27,17 +27,19 @@ public final class ApprovalCommandService {
     private final ApprovalCaseStartService starter;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
+    private final ApprovalActorAuthority authority;
 
     public ApprovalCommandService(
             ApprovalRepository repository,
             ApprovalResultSink resultSink,
             IdGenerator ids,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions, ApprovalActorAuthority authority) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.resultSink = Objects.requireNonNull(resultSink, "resultSink");
         this.starter = new ApprovalCaseStartService(repository, ids, transactions);
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.authority = Objects.requireNonNull(authority, "authority");
     }
 
     public ApprovalCase start(
@@ -132,6 +134,7 @@ public final class ApprovalCommandService {
                         expectedRevision);
             }
 
+            authority.requireCurrent(tenant,current,approverIdentityId);
             repository.insertDecision(
                     tenant,
                     new ApprovalDecision(

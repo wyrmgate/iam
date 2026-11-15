@@ -122,6 +122,17 @@ public final class GovernanceExceptionService
                         "GovernanceException may only target an active SoD rule");
             }
 
+            var configured = policies.findApprovalStages(tenant,version.id()).stream()
+                    .map(stage -> new StageSpec(stage.decisionMode(),policies.findApprovalApprovers(tenant,stage.id()).stream()
+                            .map(approver -> approver.approverIdentityId()).toList())).toList();
+            if(configured.isEmpty()) throw new IllegalArgumentException("active SoD rule policy has no configured exception approval plan");
+            PlanSpec authoritativePlan = new PlanSpec(configured);
+            if(!ApprovalCaseStartService.contentHash(authoritativePlan).equals(ApprovalCaseStartService.contentHash(approvalPlan)))
+                throw new IllegalArgumentException("exception approval plan must match the active rule policy plan");
+            if(authoritativePlan.stages().stream().flatMap(stage -> stage.approverIdentityIds().stream())
+                    .anyMatch(actor -> actor.equals(subjectIdentityId) || actor.equals(requesterIdentityId)))
+                throw new IllegalArgumentException("exception approval plan cannot include the requester or beneficiary");
+
             if (predecessorExceptionId != null) {
                 GovernanceException predecessor =
                         exceptions.findById(
@@ -158,7 +169,7 @@ public final class GovernanceExceptionService
                             SubjectKind.GOVERNANCE_EXCEPTION,
                             exceptionId,
                             requesterIdentityId,
-                            approvalPlan,
+                            authoritativePlan,
                             now);
             GovernanceException exception =
                     new GovernanceException(
@@ -272,6 +283,17 @@ public final class GovernanceExceptionService
                 return null;
             }
 
+            var rule=policies.findRule(tenant,current.sodRuleId()).orElseThrow();
+            var version=policies.findVersion(tenant,rule.policyVersionId()).orElseThrow();
+            // A superseded rule or a legacy caller-selected plan cannot acquire new waiver authority.
+            var stages=policies.findApprovalStages(tenant,version.id());
+            var configured=stages.stream().map(stage -> new StageSpec(stage.decisionMode(),policies.findApprovalApprovers(tenant,stage.id()).stream()
+                    .map(approver -> approver.approverIdentityId()).toList())).toList();
+            if(version.state()!=VersionState.ACTIVE || configured.isEmpty()) {
+                var rejected=exceptions.updateState(tenant,current.id(),LifecycleState.REJECTED,current.revision(),approvalCase.updatedAt(),null,approvalCase.updatedAt(),null,null);
+                changes.changed(tenant,rejected);
+                return null;
+            }
             GovernanceException approved =
                     exceptions.updateState(
                             tenant,
