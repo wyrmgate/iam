@@ -10,8 +10,8 @@ public interface GovernanceFindingRepository {
 
     Optional<GovernanceFinding> findByKey(TenantContext tenant, String findingKey);
 
-    List<GovernanceFinding> findOpenByBinding(
-            TenantContext tenant, UUID connectorBindingId);
+    List<GovernanceFinding> findOpenPage(
+            TenantContext tenant, UUID connectorBindingId, String afterFindingKey, int limit);
 
     GovernanceFinding insert(
             TenantContext tenant,

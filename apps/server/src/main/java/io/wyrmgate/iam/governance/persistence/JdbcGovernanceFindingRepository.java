@@ -34,8 +34,9 @@ public final class JdbcGovernanceFindingRepository implements GovernanceFindingR
     }
 
     @Override
-    public List<GovernanceFinding> findOpenByBinding(
-            TenantContext tenant, UUID connectorBindingId) {
+    public List<GovernanceFinding> findOpenPage(
+            TenantContext tenant, UUID connectorBindingId, String afterFindingKey, int limit) {
+        if (limit < 1 || limit > 101) throw new IllegalArgumentException("finding page limit");
         return jdbc.query("""
                 SELECT id, finding_key, finding_type, subject_kind,
                        connector_binding_id, provider_stable_id,
@@ -45,8 +46,10 @@ public final class JdbcGovernanceFindingRepository implements GovernanceFindingR
                 FROM governance.finding
                 WHERE tenant_id = ? AND connector_binding_id = ?
                   AND lifecycle_state = 'OPEN'
-                ORDER BY finding_key
-                """, (rs,row) -> row(rs), tenant.tenantId(), connectorBindingId);
+                  AND (?::text IS NULL OR finding_key > ?)
+                ORDER BY finding_key LIMIT ?
+                """, (rs,row) -> row(rs), tenant.tenantId(), connectorBindingId,
+                afterFindingKey, afterFindingKey, limit);
     }
 
     @Override

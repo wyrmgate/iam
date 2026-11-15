@@ -33,39 +33,27 @@ public final class GovernanceObservationReportingService
     }
 
     @Override
-    public void report(
-            TenantContext tenant,
-            UUID connectorBindingId,
-            Set<ObservationCondition> currentConditions,
-            Instant observedAt) {
+    public void observe(TenantContext tenant, UUID connectorBindingId,
+                        ObservationCondition condition, Instant observedAt) {
         transactions.required(() -> {
-            Map<String,ObservationCondition> byKey = new LinkedHashMap<>();
-            for (ObservationCondition condition : currentConditions) {
-                String key = findingKey(connectorBindingId, condition);
-                byKey.put(key, condition);
-                GovernanceFinding existing = findings.findByKey(tenant, key).orElse(null);
-                if (existing == null) {
-                    findings.insert(
-                            tenant, ids.nextId(), key,
-                            condition.findingType(), condition.subjectKind(),
-                            connectorBindingId, condition.providerStableId(),
-                            condition.relatedProviderStableId(), observedAt);
-                } else if ("RESOLVED".equals(existing.lifecycleState())) {
-                    findings.reopen(
-                            tenant, existing.id(), existing.revision(), observedAt);
-                } else {
-                    findings.touchOpen(
-                            tenant, existing.id(), existing.revision(), observedAt);
-                }
+            String key = findingKey(connectorBindingId, condition);
+            GovernanceFinding existing = findings.findByKey(tenant, key).orElse(null);
+            if (existing == null) {
+                findings.insert(tenant, ids.nextId(), key, condition.findingType(),
+                        condition.subjectKind(), connectorBindingId, condition.providerStableId(),
+                        condition.relatedProviderStableId(), observedAt);
+            } else if ("RESOLVED".equals(existing.lifecycleState())) {
+                findings.reopen(tenant, existing.id(), existing.revision(), observedAt);
+            } else {
+                findings.touchOpen(tenant, existing.id(), existing.revision(), observedAt);
             }
-            for (GovernanceFinding open :
-                    findings.findOpenByBinding(tenant, connectorBindingId)) {
-                if (!byKey.containsKey(open.findingKey())) {
-                    findings.resolve(
-                            tenant, open.id(), open.revision(), observedAt);
-                }
-            }
-            return null;
+        });
+    }
+
+    @Override
+    public void resolve(TenantContext tenant, GovernanceFinding finding, Instant observedAt) {
+        transactions.required(() -> {
+            findings.resolve(tenant, finding.id(), finding.revision(), observedAt);
         });
     }
 
