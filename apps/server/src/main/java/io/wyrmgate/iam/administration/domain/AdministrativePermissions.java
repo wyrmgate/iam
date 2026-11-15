@@ -211,6 +211,13 @@ public final class AdministrativePermissions {
     public static final AdministrativePermission PRINCIPAL_OBSERVATION_MAPPING_RETIRE =
             new AdministrativePermission("principal-observation-mapping", "retire");
 
+    public static final AdministrativePermission FEDERATION_TRUST_READ = new AdministrativePermission("federation-trust","read");
+    public static final AdministrativePermission FEDERATION_TRUST_CREATE = new AdministrativePermission("federation-trust","create");
+    public static final AdministrativePermission FEDERATION_TRUST_RETIRE = new AdministrativePermission("federation-trust","retire");
+    public static final AdministrativePermission FEDERATED_SUBJECT_LINK_READ = new AdministrativePermission("federated-subject-link","read");
+    public static final AdministrativePermission FEDERATED_SUBJECT_LINK_CREATE = new AdministrativePermission("federated-subject-link","create");
+    public static final AdministrativePermission FEDERATED_SUBJECT_LINK_RETIRE = new AdministrativePermission("federated-subject-link","retire");
+
     /** ADR-0011 narrow bootstrap set for externally authenticated deployments. */
     public static final Set<AdministrativePermission> INITIAL_TENANT_ADMIN = Set.of(
             MANAGE_AUTHORIZATION,
@@ -314,7 +321,13 @@ public final class AdministrativePermissions {
             ENTITLEMENT_OBSERVATION_MAPPING_RETIRE,
             PRINCIPAL_OBSERVATION_MAPPING_READ,
             PRINCIPAL_OBSERVATION_MAPPING_CREATE,
-            PRINCIPAL_OBSERVATION_MAPPING_RETIRE);
+            PRINCIPAL_OBSERVATION_MAPPING_RETIRE,
+            FEDERATION_TRUST_READ,
+            FEDERATION_TRUST_CREATE,
+            FEDERATION_TRUST_RETIRE,
+            FEDERATED_SUBJECT_LINK_READ,
+            FEDERATED_SUBJECT_LINK_CREATE,
+            FEDERATED_SUBJECT_LINK_RETIRE);
 
     private AdministrativePermissions() {
     }

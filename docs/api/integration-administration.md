@@ -199,3 +199,7 @@ Integration owns explicit tenant-bound FederationTrust and FederatedSubjectLink 
 ## Exact provider realization (ADR-0072)
 
 New grant provisioning requires both a present observed account explicitly mapped to the governed Principal and a present observed entitlement mapped to the Catalog Entitlement in the same active binding. No native Principal key fallback. Multiple eligible routes deny; historical reduction retains exact prior evidence under ADR-0056. Existing account operations resolve exact binding mappings or compatible successful account-provisioning provenance. No automatic mapping backfill. Claim/execution fencing and repair remain subsequent #524 slices.
+
+## Federation administration (ADR-0077/V37)
+
+Dedicated read/create/retire permissions for `/api/v1/federation-trusts` and `/api/v1/federated-subject-links`. POST creates with Idempotency-Key; GET exact ID returns strong revision ETag; POST `/{id}:retire` requires If-Match and Idempotency-Key. Initial OIDC trust accepts issuer, audience, settings.authorizationEndpoint/tokenEndpoint/keyId/publicKeySpki (public RSA SPKI base64 only), HTTPS same-origin endpoints, public-client PKCE RS256 profile. Link accepts trustId, exactSubject, principalId; active unique same-tenant exact subject, eligible Principal through Identity query. Retire trust invalidates links logically; retire/create for remap/key replacement, history retained. No automatic upstream authentication activation.
