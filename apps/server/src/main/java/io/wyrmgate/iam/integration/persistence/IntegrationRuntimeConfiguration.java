@@ -225,6 +225,12 @@ public class IntegrationRuntimeConfiguration {
     }
 
     @Bean
+    ReconciliationMaterializationScheduler reconciliationMaterializationScheduler(
+            JdbcIntegrationRuntimeRepository repository, TransactionExecutor transactions) {
+        return new ReconciliationMaterializationScheduler(repository,transactions);
+    }
+
+    @Bean
     ProvisioningLeaseRecoveryScheduler provisioningLeaseRecoveryScheduler(
             JdbcIntegrationRuntimeRepository repository, TransactionExecutor transactions) {
         return new ProvisioningLeaseRecoveryScheduler(repository, transactions);

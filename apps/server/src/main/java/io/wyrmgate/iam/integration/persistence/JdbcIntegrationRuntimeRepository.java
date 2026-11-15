@@ -302,7 +302,7 @@ public final class JdbcIntegrationRuntimeRepository
                  AND sx.runtime_id = ci.runtime_id AND sx.runtime_version = ci.runtime_version
                  AND sx.contract_id = r.contract_id AND sx.contract_version = r.contract_version
                 WHERE r.tenant_id = ?
-                  AND r.state = 'RUNNING'
+                  AND r.state = 'RUNNING' AND r.completion_lease_epoch IS NULL
                   AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= ?)
                   AND b.lifecycle_state = 'ACTIVE' AND ci.lifecycle_state = 'ACTIVE'
                   AND NOT EXISTS (
@@ -412,7 +412,7 @@ public final class JdbcIntegrationRuntimeRepository
                   AND r.contract_version = ?
                   AND b.contract_id = r.contract_id
                   AND b.contract_version = r.contract_version
-                  AND r.state = 'RUNNING'
+                  AND r.state = 'RUNNING' AND r.completion_lease_epoch IS NULL
                   AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= ?)
                   AND b.lifecycle_state = 'ACTIVE'
                   AND ci.lifecycle_state = 'ACTIVE'
@@ -574,7 +574,7 @@ public final class JdbcIntegrationRuntimeRepository
         String scope = jdbc.queryForObject("""
                 SELECT scope_object_class
                 FROM integration.reconciliation_run
-                WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
+                WHERE tenant_id = ? AND id = ? AND state = 'RUNNING' AND completion_lease_epoch IS NULL
                 """, String.class, session.tenant().tenantId(), workId);
         if (scope == null) {
             throw new WorkerProtocolException("work_not_running", "reconciliation run is not running");
@@ -952,7 +952,7 @@ public final class JdbcIntegrationRuntimeRepository
         boolean newerFinalized = Boolean.TRUE.equals(jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM integration.reconciliation_run newer
                     WHERE newer.tenant_id=? AND newer.connector_binding_id=? AND newer.scope_object_class=?
-                      AND newer.scan_generation > ? AND newer.completed_at IS NOT NULL)
+                      AND newer.scan_generation > ? AND (newer.completed_at IS NOT NULL OR newer.completion_lease_epoch IS NOT NULL))
                 """, Boolean.class, session.tenant().tenantId(), run.bindingId(), run.objectClass(), run.generation()));
         boolean materialize = current != null && current.compatible() && run.generation() != null && !newerFinalized;
         boolean trustedComplete = "SUCCEEDED".equals(completion.outcome())
@@ -966,47 +966,120 @@ public final class JdbcIntegrationRuntimeRepository
                     ? ReconciliationCompleteness.PARTIAL
                     : ReconciliationCompleteness.UNKNOWN);
 
-        if (materialize) switch (run.objectClass()) {
-            case "PRINCIPAL" -> materializePrincipals(
-                    session, runId, run.bindingId(), effective, now);
-            case "ENTITLEMENT" -> materializeEntitlements(
-                    session, runId, run.bindingId(), effective, now);
-            case "GRANT" -> materializeGrants(
-                    session, runId, run.bindingId(), effective, now);
-            default -> throw new WorkerProtocolException(
-                    "unsupported_object_class", "unsupported reconciliation object class");
-        }
-
         String state = switch (completion.outcome()) {
             case "SUCCEEDED" -> "SUCCEEDED";
             case "FAILED_RETRYABLE", "FAILED_FINAL" -> "FAILED";
             case "SUPERSEDED", "SKIPPED" -> "CANCELLED";
-            default -> throw new WorkerProtocolException(
-                    "invalid_outcome", "unsupported work outcome");
+            default -> throw new WorkerProtocolException("invalid_outcome", "unsupported work outcome");
         };
         jdbc.update("""
                 UPDATE integration.reconciliation_run
-                SET state = ?, reported_coverage = ?, effective_completeness = ?,
-                    checkpoint_end = ?, failure_code = ?, completion_lease_epoch = ?,
-                    completion_fingerprint = ?, completed_at = ?, updated_at = ?,
-                    revision = revision + 1
-                WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
-                """,
-                state, reported.name(), effective.name(), completion.nextCheckpoint(),
-                materialize ? completion.providerErrorCode() : "reconciliation_scope_stale", leaseEpoch, fingerprint,
-                Timestamp.from(now), Timestamp.from(now),
+                SET reported_coverage=?, checkpoint_end=?, failure_code=?, completion_lease_epoch=?,
+                    completion_fingerprint=?, materialization_outcome=?, materialization_coverage=?,
+                    materialization_phase='POSITIVE', updated_at=?, revision=revision+1
+                WHERE tenant_id=? AND id=? AND state='RUNNING' AND completion_lease_epoch IS NULL
+                """, reported.name(), completion.nextCheckpoint(), materialize ? completion.providerErrorCode() : "reconciliation_scope_stale",
+                leaseEpoch, fingerprint, state, effective.name(), Timestamp.from(now),
                 session.tenant().tenantId(), runId);
-        if (materialize && ("ENTITLEMENT".equals(run.objectClass()) || "GRANT".equals(run.objectClass()))) {
-            observedAccessFacts.inputChanged(
-                    session.tenant(),
-                    run.bindingId(),
-                    IntegrationObservedAccessFactSink.SourceKind.RECONCILIATION_RUN,
-                    runId,
-                    run.revision() + 1,
-                    now,
-                    run.correlationId());
-        }
+        // First bounded step preserves immediate small-run completion; large runs continue durably.
+        if (materialize) materializeStep(session.tenant(), runId, now);
+        else finalizeMaterialization(session.tenant(), runId, false, now);
         return CompletionResult.ACCEPTED;
+    }
+
+    /** One bounded transaction, scheduled repeatedly by the Integration-owned process timer. */
+    public boolean materializeNext(Instant now) {
+        record Pending(UUID tenantId, UUID runId) {}
+        var pending = jdbc.query("""
+                SELECT tenant_id,id FROM integration.reconciliation_run
+                WHERE state='RUNNING' AND materialization_phase IS NOT NULL
+                ORDER BY updated_at,id LIMIT 1 FOR UPDATE SKIP LOCKED
+                """, (rs,row) -> new Pending(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class)));
+        if (pending.isEmpty()) return false;
+        var next = pending.getFirst();
+        materializeStep(new TenantContext(next.tenantId()),next.runId(),now);
+        return true;
+    }
+
+    private static final int MATERIALIZATION_PAGE = 200;
+
+    private void materializeStep(TenantContext tenant, UUID runId, Instant now) {
+        record Pending(UUID binding, String objectClass, String phase, String cursor, String coverage,
+                       long generation, long bindingRevision, long connectorRevision, long configurationVersion,
+                       String runtime, String runtimeVersion, String contract, int contractVersion) {}
+        Pending run = jdbc.queryForObject("""
+                SELECT connector_binding_id,scope_object_class,materialization_phase,materialization_cursor,
+                       materialization_coverage,scan_generation,binding_revision,connector_revision,
+                       configuration_version,runtime_id,runtime_version,contract_id,contract_version
+                FROM integration.reconciliation_run WHERE tenant_id=? AND id=? AND state='RUNNING'
+                FOR UPDATE
+                """, (rs,row) -> new Pending(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),
+                rs.getString(4),rs.getString(5),rs.getLong(6),rs.getLong(7),rs.getLong(8),rs.getLong(9),
+                rs.getString(10),rs.getString(11),rs.getString(12),rs.getInt(13)), tenant.tenantId(),runId);
+        if (run == null || run.phase()==null) return;
+        Boolean compatible = jdbc.queryForObject("""
+                SELECT b.lifecycle_state='ACTIVE' AND ci.lifecycle_state='ACTIVE'
+                   AND b.revision=? AND ci.revision=? AND ci.configuration_version=?
+                   AND ci.runtime_id=? AND ci.runtime_version=? AND b.contract_id=? AND b.contract_version=?
+                FROM integration.connector_binding b JOIN integration.connector_instance ci
+                  ON ci.tenant_id=b.tenant_id AND ci.id=b.connector_instance_id
+                WHERE b.tenant_id=? AND b.id=? FOR UPDATE OF b,ci
+                """, Boolean.class,run.bindingRevision(),run.connectorRevision(),run.configurationVersion(),
+                run.runtime(),run.runtimeVersion(),run.contract(),run.contractVersion(),tenant.tenantId(),run.binding());
+        boolean newer = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM integration.reconciliation_run
+                WHERE tenant_id=? AND connector_binding_id=? AND scope_object_class=? AND scan_generation>?
+                  AND (completed_at IS NOT NULL OR completion_lease_epoch IS NOT NULL))
+                """,Boolean.class,tenant.tenantId(),run.binding(),run.objectClass(),run.generation()));
+        if (!Boolean.TRUE.equals(compatible) || newer) {
+            finalizeMaterialization(tenant,runId,false,now);
+            return;
+        }
+        if ("POSITIVE".equals(run.phase())) {
+            String cursor = switch(run.objectClass()) {
+                case "PRINCIPAL" -> materializePrincipals(tenant,runId,run.binding(),run.cursor());
+                case "ENTITLEMENT" -> materializeEntitlements(tenant,runId,run.binding(),run.cursor());
+                case "GRANT" -> materializeGrants(tenant,runId,run.binding(),run.cursor());
+                default -> throw new IllegalStateException("unsupported observation class");
+            };
+            if (cursor != null) {
+                jdbc.update("UPDATE integration.reconciliation_run SET materialization_cursor=?,updated_at=? WHERE tenant_id=? AND id=?",
+                        cursor,Timestamp.from(now),tenant.tenantId(),runId);
+                return;
+            }
+            if (!"COMPLETE".equals(run.coverage())) {
+                finalizeMaterialization(tenant,runId,true,now);
+                return;
+            }
+            jdbc.update("UPDATE integration.reconciliation_run SET materialization_phase='ABSENCE',materialization_cursor=NULL,updated_at=? WHERE tenant_id=? AND id=?",
+                    Timestamp.from(now),tenant.tenantId(),runId);
+        }
+        int removed = markUnseenAbsent(run.objectClass(),tenant.tenantId(),run.binding(),runId,now);
+        if (removed < MATERIALIZATION_PAGE) finalizeMaterialization(tenant,runId,true,now);
+        else jdbc.update("UPDATE integration.reconciliation_run SET updated_at=? WHERE tenant_id=? AND id=?",
+                Timestamp.from(now),tenant.tenantId(),runId);
+    }
+
+    private void finalizeMaterialization(TenantContext tenant, UUID runId, boolean current, Instant now) {
+        record Finalized(UUID binding,String objectClass,long revision,UUID correlation) {}
+        var finished=jdbc.query("""
+                UPDATE integration.reconciliation_run SET state=materialization_outcome,
+                    effective_completeness=CASE WHEN ? THEN materialization_coverage ELSE 'UNKNOWN' END,
+                    failure_code=CASE WHEN ? THEN failure_code ELSE 'reconciliation_scope_stale' END,
+                    materialization_phase=NULL,materialization_cursor=NULL,materialization_outcome=NULL,
+                    materialization_coverage=NULL,completed_at=?,updated_at=?,revision=revision+1
+                WHERE tenant_id=? AND id=? AND state='RUNNING' AND materialization_phase IS NOT NULL
+                RETURNING connector_binding_id,scope_object_class,revision,correlation_id
+                """,(rs,row)->new Finalized(rs.getObject(1,UUID.class),rs.getString(2),rs.getLong(3),rs.getObject(4,UUID.class)),
+                current,current,Timestamp.from(now),Timestamp.from(now),tenant.tenantId(),runId);
+        if (!finished.isEmpty()) {
+            var result=finished.getFirst();
+            // Even abandoned partial materialization may have produced positive observations.
+            if ("ENTITLEMENT".equals(result.objectClass()) || "GRANT".equals(result.objectClass())) {
+                observedAccessFacts.inputChanged(tenant,result.binding(),
+                        IntegrationObservedAccessFactSink.SourceKind.RECONCILIATION_RUN,runId,result.revision(),now,result.correlation());
+            }
+        }
     }
 
     private boolean hasCompleteBatchManifest(TenantContext tenant, UUID runId, Map<String,Object> metadata) {
@@ -1020,24 +1093,25 @@ public final class JdbcIntegrationRuntimeRepository
                 """, Boolean.class, expected, expected, tenant.tenantId(), runId));
     }
 
-    private void materializePrincipals(
-            WorkerSession session,
+    private String materializePrincipals(
+            TenantContext tenant,
             UUID runId,
             UUID bindingId,
-            ReconciliationCompleteness effective,
-            Instant now) {
+            String cursor) {
         record Row(String stableId, String version, String state, Instant observedAt) {}
         List<Row> staged = jdbc.query("""
                 SELECT provider_stable_id, provider_version, observed_state::text, observed_at
                 FROM integration.reconciliation_principal_staging
                 WHERE tenant_id = ? AND reconciliation_run_id = ?
-                ORDER BY provider_stable_id
+                  AND (?::varchar IS NULL OR provider_stable_id > ?)
+                ORDER BY provider_stable_id LIMIT 201
                 """,
                 (rs,row) -> new Row(
                         rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getTimestamp(4).toInstant()),
-                session.tenant().tenantId(), runId);
-        for (Row row : staged) {
+                tenant.tenantId(), runId, cursor, cursor);
+        var page = staged.subList(0,Math.min(MATERIALIZATION_PAGE,staged.size()));
+        for (Row row : page) {
             jdbc.update("""
                     INSERT INTO integration.observed_principal (
                         id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
@@ -1051,36 +1125,32 @@ public final class JdbcIntegrationRuntimeRepository
                         observed_at = EXCLUDED.observed_at,
                         absent_at = NULL
                     """,
-                    ids.nextId(), session.tenant().tenantId(), bindingId,
+                    ids.nextId(), tenant.tenantId(), bindingId,
                     row.stableId(), row.version(), row.state(),
                     runId, Timestamp.from(row.observedAt()));
         }
-        if (effective == ReconciliationCompleteness.COMPLETE) {
-            markUnseenAbsent(
-                    "observed_principal",
-                    "reconciliation_principal_staging",
-                    session.tenant().tenantId(), bindingId, runId, now);
-        }
+        return staged.size() > MATERIALIZATION_PAGE ? page.getLast().stableId() : null;
     }
 
-    private void materializeEntitlements(
-            WorkerSession session,
+    private String materializeEntitlements(
+            TenantContext tenant,
             UUID runId,
             UUID bindingId,
-            ReconciliationCompleteness effective,
-            Instant now) {
+            String cursor) {
         record Row(String stableId, String version, String state, Instant observedAt) {}
         List<Row> staged = jdbc.query("""
                 SELECT provider_stable_id, provider_version, observed_state::text, observed_at
                 FROM integration.reconciliation_entitlement_staging
                 WHERE tenant_id = ? AND reconciliation_run_id = ?
-                ORDER BY provider_stable_id
+                  AND (?::varchar IS NULL OR provider_stable_id > ?)
+                ORDER BY provider_stable_id LIMIT 201
                 """,
                 (rs,row) -> new Row(
                         rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getTimestamp(4).toInstant()),
-                session.tenant().tenantId(), runId);
-        for (Row row : staged) {
+                tenant.tenantId(), runId, cursor, cursor);
+        var page = staged.subList(0,Math.min(MATERIALIZATION_PAGE,staged.size()));
+        for (Row row : page) {
             jdbc.update("""
                     INSERT INTO integration.observed_entitlement (
                         id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
@@ -1094,24 +1164,18 @@ public final class JdbcIntegrationRuntimeRepository
                         observed_at = EXCLUDED.observed_at,
                         absent_at = NULL
                     """,
-                    ids.nextId(), session.tenant().tenantId(), bindingId,
+                    ids.nextId(), tenant.tenantId(), bindingId,
                     row.stableId(), row.version(), row.state(),
                     runId, Timestamp.from(row.observedAt()));
         }
-        if (effective == ReconciliationCompleteness.COMPLETE) {
-            markUnseenAbsent(
-                    "observed_entitlement",
-                    "reconciliation_entitlement_staging",
-                    session.tenant().tenantId(), bindingId, runId, now);
-        }
+        return staged.size() > MATERIALIZATION_PAGE ? page.getLast().stableId() : null;
     }
 
-    private void materializeGrants(
-            WorkerSession session,
+    private String materializeGrants(
+            TenantContext tenant,
             UUID runId,
             UUID bindingId,
-            ReconciliationCompleteness effective,
-            Instant now) {
+            String cursor) {
         record Row(
                 String stableId,
                 String version,
@@ -1125,13 +1189,15 @@ public final class JdbcIntegrationRuntimeRepository
                        observed_state::text, observed_at
                 FROM integration.reconciliation_grant_staging
                 WHERE tenant_id = ? AND reconciliation_run_id = ?
-                ORDER BY provider_stable_id
+                  AND (?::varchar IS NULL OR provider_stable_id > ?)
+                ORDER BY provider_stable_id LIMIT 201
                 """,
                 (rs,row) -> new Row(
                         rs.getString(1), rs.getString(2), rs.getString(3),
                         rs.getString(4), rs.getString(5), rs.getTimestamp(6).toInstant()),
-                session.tenant().tenantId(), runId);
-        for (Row row : staged) {
+                tenant.tenantId(), runId, cursor, cursor);
+        var page = staged.subList(0,Math.min(MATERIALIZATION_PAGE,staged.size()));
+        for (Row row : page) {
             jdbc.update("""
                     INSERT INTO integration.observed_grant (
                         id, tenant_id, connector_binding_id, provider_stable_id, provider_version,
@@ -1150,38 +1216,35 @@ public final class JdbcIntegrationRuntimeRepository
                         observed_at = EXCLUDED.observed_at,
                         absent_at = NULL
                     """,
-                    ids.nextId(), session.tenant().tenantId(), bindingId,
+                    ids.nextId(), tenant.tenantId(), bindingId,
                     row.stableId(), row.version(),
                     row.principalProviderId(), row.entitlementProviderId(), row.state(),
                     runId, Timestamp.from(row.observedAt()));
         }
-        if (effective == ReconciliationCompleteness.COMPLETE) {
-            markUnseenAbsent(
-                    "observed_grant",
-                    "reconciliation_grant_staging",
-                    session.tenant().tenantId(), bindingId, runId, now);
-        }
+        return staged.size() > MATERIALIZATION_PAGE ? page.getLast().stableId() : null;
     }
 
-    private void markUnseenAbsent(
-            String observedTable,
-            String stagingTable,
-            UUID tenantId,
-            UUID bindingId,
-            UUID runId,
-            Instant now) {
-        jdbc.update("""
-                UPDATE integration.%s o
-                SET present = false, absent_at = ?, last_observed_run_id = ?
-                WHERE o.tenant_id = ? AND o.connector_binding_id = ? AND o.present
-                  AND NOT EXISTS (
-                      SELECT 1 FROM integration.%s s
-                      WHERE s.tenant_id = o.tenant_id
-                        AND s.reconciliation_run_id = ?
-                        AND s.provider_stable_id = o.provider_stable_id
-                  )
-                """.formatted(observedTable, stagingTable),
-                Timestamp.from(now), runId, tenantId, bindingId, runId);
+    private int markUnseenAbsent(String objectClass, UUID tenantId, UUID bindingId, UUID runId, Instant now) {
+        String suffix = switch(objectClass) {
+            case "PRINCIPAL" -> "principal";
+            case "ENTITLEMENT" -> "entitlement";
+            case "GRANT" -> "grant";
+            default -> throw new IllegalArgumentException("unsupported observation class");
+        };
+        String match = "GRANT".equals(objectClass)
+                ? "s.principal_provider_id=o.principal_provider_id AND s.entitlement_provider_id=o.entitlement_provider_id"
+                : "s.provider_stable_id=o.provider_stable_id";
+        return jdbc.update("""
+                WITH unseen AS (
+                    SELECT o.id FROM integration.observed_%s o
+                    WHERE o.tenant_id=? AND o.connector_binding_id=? AND o.present
+                      AND NOT EXISTS (SELECT 1 FROM integration.reconciliation_%s_staging s
+                        WHERE s.tenant_id=o.tenant_id AND s.reconciliation_run_id=? AND %s)
+                    ORDER BY o.id LIMIT 200 FOR UPDATE OF o
+                )
+                UPDATE integration.observed_%s o SET present=false,absent_at=?,last_observed_run_id=?
+                FROM unseen WHERE o.id=unseen.id AND o.tenant_id=?
+                """.formatted(suffix,suffix,match,suffix),tenantId,bindingId,runId,Timestamp.from(now),runId,tenantId);
     }
 
     private static String requiredObservationText(Map<String,Object> state, String key) {

@@ -227,6 +227,36 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void largeReconciliationPersistsProgressAndFinalizesInBoundedTransactions() {
+        TenantContext tenant=tenant("large-materialization");
+        UUID binding=connector(tenant,"runtime.test","1.0",true);
+        WorkerExternalSubject subject=new WorkerExternalSubject("https://issuer.example","large-worker");
+        worker(tenant,subject,binding,WorkerCapability.RECONCILE);
+        var service=service(revisionUnavailable());
+        var registration=repository.findEnabledByExternalSubject(subject).orElseThrow();
+        var session=service.establishSession(registration,"large-pod",List.of(1),
+                List.of(runtimeAdvertisement("runtime.test","1.0",WorkerCapability.RECONCILE)));
+        UUID run=createReconciliation(tenant,binding,"runtime.test","1.0",1);
+        var lease=service.claim(registration,session.id(),1,0).getFirst();
+        var observations=java.util.stream.IntStream.range(0,401)
+                .mapToObj(n->observation("p-"+String.format("%04d",n),"P")).toList();
+        append(service,registration,session.id(),run,lease.lease().leaseId(),lease.lease().leaseEpoch(),observations);
+        var result=success(ReconciliationCompleteness.COMPLETE);
+        assertThat(service.complete(registration,session.id(),run,lease.lease().leaseId(),lease.lease().leaseEpoch(),result))
+                .isEqualTo(ConnectorWorkRepository.CompletionResult.ACCEPTED);
+        assertThat(effectiveCompleteness(run)).isEqualTo("UNKNOWN");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM integration.observed_principal WHERE tenant_id=?",Integer.class,tenant.tenantId())).isEqualTo(200);
+        assertThat(service.claim(registration,session.id(),1,0)).isEmpty();
+        assertThat(service.complete(registration,session.id(),run,lease.lease().leaseId(),lease.lease().leaseEpoch(),result))
+                .isEqualTo(ConnectorWorkRepository.CompletionResult.REPLAY);
+        assertThat(transactions.required(()->repository.materializeNext(Instant.now()))).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM integration.observed_principal WHERE tenant_id=?",Integer.class,tenant.tenantId())).isEqualTo(400);
+        assertThat(transactions.required(()->repository.materializeNext(Instant.now()))).isTrue();
+        assertThat(effectiveCompleteness(run)).isEqualTo("COMPLETE");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM integration.observed_principal WHERE tenant_id=?",Integer.class,tenant.tenantId())).isEqualTo(401);
+    }
+
+    @Test
     void missingBatchManifestAndOlderGenerationNeverInferAbsenceOrOverwriteNewerState() {
         TenantContext tenant = tenant("generation-fence");
         UUID binding = connector(tenant, "runtime.test", "1.0", true);

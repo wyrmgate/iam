@@ -130,3 +130,7 @@ Expired RUNNING provisioning tasks are boundedly moved to existing BLOCKED with 
 ## Full-scan completeness fence (ADR-0074 / V34)
 
 A COMPLETE report requires the existing compatible trusted discovery contract plus first lease, null start/end checkpoints, and integer `metadata.observationBatchCount` exactly matching persisted contiguous zero-based batches. Missing manifest or resumed/reclaimed traversal downgrades coverage; valid positive observations remain. Older generation or changed binding/connector revision never materializes current observations. SCIM local reports batch count and supports PRINCIPAL discovery on a group binding's own endpoint. This metadata convention preserves the closed v1 core wire shape; old adapters may continue positive observation but not destructive completeness. Bounded materialization and richer discovery scope remain #524 follow-up.
+
+## Bounded materialization (ADR-0075 / V35)
+
+Completion accepts provider evidence and closes discovery; a RUNNING run with pending materialization reports UNKNOWN until positive and (when verified COMPLETE) absence pages finish. Each transaction processes at most 200 positive rows and 200 absence rows. Exact completion replay remains valid; no new discovery claim or append after acceptance. A durable scheduler advances pages; current configuration/generation is rechecked every step. Final outcome, coverage and downstream fact commit together. Poll operational run status for final materialization.
