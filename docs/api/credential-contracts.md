@@ -28,10 +28,13 @@ A public CredentialRotation read model contains the stable rotation ID, old Cred
 | POST /api/v1/credentials/{credentialId}:rotate | credential:rotate | required Idempotency-Key; creates a new rotation aggregate |
 | GET /api/v1/credentials/{credentialId}/rotations | credential-rotation:read | signed deterministic cursor |
 | GET /api/v1/credential-rotations/{rotationId} | credential-rotation:read | returns revision ETag |
+| POST /api/v1/credential-rotations/{rotationId}:cancel | credential:rotate (old Credential scope) | required If-Match + Idempotency-Key |
 
 These permissions are default-deny and are intentionally not added to INITIAL_TENANT_ADMIN.
 
 There is no public arbitrary lifecycle/status patch. There is no public manual activate operation: future activation requires the scheduled transition to ACTIVE at or after validFrom. A due SCHEDULED Credential is not effective until activation commits; expiry is effective at validUntil regardless of scheduler delay. SCHEDULED may be revoked or compromised, and COMPROMISED may be revoked while preserving compromisedAt.
+
+ADR-0065 adds cancellation of an unstarted `PLANNED` rotation only, with no replacement attached. `CANCELLED` is terminal and immutable, releases the open-plan slot, and leaves Credential authority untouched. No request fields or provider-cleanup assertion. The old Credential may already be ineffective. Authorize against the old Credential even on replay; audit records the old Credential target. A started rotation requires separate forward recovery, not cancellation or reset.
 
 There are no public operations that advance CREATING_REPLACEMENT, DISTRIBUTING, VERIFYING, CUTOVER_COMPLETE, REVOKING_OLD or failure process steps. Those states exist so later typed SecretProvider/Integration execution can resume safely. Exposing manual process-state mutation now would pretend deferred provider work had occurred.
 

@@ -557,6 +557,52 @@ class CredentialPersistenceIntegrationTest {
     }
 
     @Test
+    void plannedCancellationReleasesSlotAndRetainsImmutableHistory() {
+        Credential old = activeCredential(principal(), CredentialKind.API_KEY, "api/cancel");
+        UUID initiator = identity();
+        var plan = rotations.plan(tenant, old.id(), initiator, NOW);
+        var cancelled = rotations.cancelPlan(tenant, plan.id(), plan.revision(), NOW.plusSeconds(1));
+        assertThat(cancelled.state()).isEqualTo(RotationState.CANCELLED);
+        assertThat(cancelled.completedAt()).isEqualTo(NOW.plusSeconds(1));
+        assertThat(cancelled.failureCode()).isNull();
+        assertThat(repository.findCredential(tenant, old.id()).orElseThrow()).isEqualTo(old);
+        assertThat(repository.findOpenRotation(tenant, old.id())).isEmpty();
+        assertThatThrownBy(() -> rotations.beginReplacement(tenant, plan.id(), cancelled.revision(), NOW.plusSeconds(2)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> rotations.cancelPlan(tenant, plan.id(), plan.revision(), NOW.plusSeconds(2)))
+                .isInstanceOf(io.wyrmgate.iam.platform.persistence.StaleWriteException.class);
+        var retry = rotations.plan(tenant, old.id(), initiator, NOW.plusSeconds(2));
+        var started = rotations.beginReplacement(tenant, retry.id(), retry.revision(), NOW.plusSeconds(3));
+        assertThatThrownBy(() -> rotations.cancelPlan(tenant, started.id(), started.revision(), NOW.plusSeconds(4)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void unsafeOldAndReplacementStopRoutineProgressButNotRevocation() {
+        UUID principal = principal();
+        UUID initiator = identity();
+        Credential old = activeCredential(principal, CredentialKind.API_KEY, "api/unsafe-old");
+        var plan = rotations.plan(tenant, old.id(), initiator, NOW);
+        credentials.revoke(tenant, old.id(), old.revision(), NOW.plusSeconds(1));
+        assertThatThrownBy(() -> rotations.beginReplacement(tenant, plan.id(), plan.revision(), NOW.plusSeconds(2)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(rotations.cancelPlan(tenant, plan.id(), plan.revision(), NOW.plusSeconds(2)).state())
+                .isEqualTo(RotationState.CANCELLED);
+        Credential another = activeCredential(principal, CredentialKind.API_KEY, "api/another-old");
+        Credential replacement = activeCredential(principal, CredentialKind.API_KEY, "api/another-new");
+        var first = rotations.plan(tenant, another.id(), initiator, NOW);
+        var creating = rotations.beginReplacement(tenant, first.id(), first.revision(), NOW);
+        var distributing = rotations.attachReplacement(tenant, creating.id(), replacement.id(), creating.revision(), NOW);
+        var verifying = rotations.markDistributed(tenant, distributing.id(), distributing.revision(), NOW);
+        var cutover = rotations.markVerified(tenant, verifying.id(), verifying.revision(), NOW);
+        credentials.revoke(tenant, replacement.id(), replacement.revision(), NOW.plusSeconds(1));
+        assertThatThrownBy(() -> rotations.beginOldRevocation(tenant, cutover.id(), cutover.revision(), NOW.plusSeconds(2)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(credentials.revoke(tenant, another.id(), another.revision(), NOW.plusSeconds(2)).state())
+                .isEqualTo(CredentialState.REVOKED);
+    }
+
+    @Test
     void rotationAdmissionWaitsForConcurrentRevocation() throws Exception {
         Credential old = activeCredential(principal(), CredentialKind.API_KEY, "api/race");
         UUID initiator = identity();
@@ -632,6 +678,9 @@ class CredentialPersistenceIntegrationTest {
         assertThat(change.change(tenant, actor, principal, oldId, 1, "wrong".toCharArray(), newPassword, at)).isEmpty();
         assertThat(change.change(tenant, actor, principal, oldId, 1, oldPassword, oldPassword, at)).isEmpty();
         assertThat(repository.findOpenRotation(tenant, oldId)).isEmpty();
+        var blockingPlan = rotations.plan(tenant, oldId, actor, at);
+        assertThat(change.change(tenant, actor, principal, oldId, 1, oldPassword, newPassword, at)).isEmpty();
+        rotations.cancelPlan(tenant, blockingPlan.id(), blockingPlan.revision(), at);
         assertThat(auth.verifyPassword(tenant, principal, oldPassword, at)).isPresent();
         var result = change.change(tenant, actor, principal, oldId, 1, oldPassword, newPassword, at).orElseThrow();
         assertThat(result.state()).isEqualTo(RotationState.COMPLETED);

@@ -255,6 +255,36 @@ final class CredentialApiMutationService {
         }
     }
 
+    CredentialRotation cancelRotation(AuthenticatedAdministrativeActor actor, UUID rotationId,
+            long expectedRevision, String key, RequestFingerprint fingerprint, Instant now, UUID correlationId) {
+        UUID credentialId = repository.findRotation(actor.tenant(), rotationId)
+                .orElseThrow(() -> CredentialApiException.notFound(correlationId)).oldCredentialId();
+        try {
+            CredentialRotation result = transactions.required(() -> {
+                require(actor, AdministrativePermissions.CREDENTIAL_ROTATE,
+                        new AdministrativeResource("credential", credentialId), now, correlationId);
+                Registration registration = register(actor, "api.credential.cancel-rotation.v1", key, fingerprint, now);
+                if (registration.kind() == RegistrationKind.REPLAY) {
+                    return replayRotation(actor, registration, correlationId);
+                }
+                CredentialRotation cancelled;
+                try {
+                    cancelled = rotations.cancelPlan(actor.tenant(), rotationId, expectedRevision, now);
+                } catch (IllegalStateException invalid) {
+                    throw invalidState(correlationId);
+                }
+                complete(actor, "api.credential.cancel-rotation.v1", key, fingerprint,
+                        "credential-rotation", cancelled.id(), now);
+                return cancelled;
+            });
+            recordOutcome(actor, credentialId, "credential:cancel-rotation", AuditOutcome.SUCCESS, now, correlationId);
+            return result;
+        } catch (RuntimeException failure) {
+            recordOutcome(actor, credentialId, "credential:cancel-rotation", auditOutcome(failure), now, correlationId);
+            throw failure;
+        }
+    }
+
     private Credential lifecycle(
             AuthenticatedAdministrativeActor actor,
             UUID credentialId,

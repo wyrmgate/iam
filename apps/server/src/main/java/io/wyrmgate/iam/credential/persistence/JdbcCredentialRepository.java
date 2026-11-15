@@ -334,7 +334,7 @@ public final class JdbcCredentialRepository
                   AND old_credential_id = ?
                   AND process_state NOT IN (
                       'COMPLETED','FAILED',
-                      'MANUAL_REQUIRED','FAILED_REMEDIATION')
+                      'MANUAL_REQUIRED','FAILED_REMEDIATION','CANCELLED')
                 ORDER BY created_at DESC, id DESC
                 LIMIT 1
                 """,
