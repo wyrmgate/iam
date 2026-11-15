@@ -227,6 +227,44 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void missingBatchManifestAndOlderGenerationNeverInferAbsenceOrOverwriteNewerState() {
+        TenantContext tenant = tenant("generation-fence");
+        UUID binding = connector(tenant, "runtime.test", "1.0", true);
+        WorkerExternalSubject subject = new WorkerExternalSubject("https://issuer.example", "generation-worker");
+        worker(tenant, subject, binding, WorkerCapability.RECONCILE);
+        var service = service(revisionUnavailable());
+        var registration = repository.findEnabledByExternalSubject(subject).orElseThrow();
+        var session = service.establishSession(registration, "generation-pod", List.of(1),
+                List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.RECONCILE)));
+        UUID older = createReconciliation(tenant, binding, "runtime.test", "1.0", 1);
+        var oldLease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), older, oldLease.lease().leaseId(), oldLease.lease().leaseEpoch(),
+                List.of(observation("old-only", "Old")));
+        UUID newer = createReconciliation(tenant, binding, "runtime.test", "1.0", 1);
+        var newLease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), newer, newLease.lease().leaseId(), newLease.lease().leaseEpoch(),
+                List.of(observation("new-only", "New")));
+        service.complete(registration, session.id(), newer, newLease.lease().leaseId(), newLease.lease().leaseEpoch(),
+                success(ReconciliationCompleteness.COMPLETE));
+        service.complete(registration, session.id(), older, oldLease.lease().leaseId(), oldLease.lease().leaseEpoch(),
+                success(ReconciliationCompleteness.COMPLETE));
+        assertThat(effectiveCompleteness(older)).isEqualTo("UNKNOWN");
+        assertThat(present(tenant, binding, "new-only")).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM integration.observed_principal WHERE tenant_id=? AND provider_stable_id='old-only'",
+                Integer.class, tenant.tenantId())).isZero();
+        UUID incomplete = createReconciliation(tenant, binding, "runtime.test", "1.0", 1);
+        var lease = service.claim(registration, session.id(), 1, 0).getFirst();
+        append(service, registration, session.id(), incomplete, lease.lease().leaseId(), lease.lease().leaseEpoch(),
+                List.of(observation("partial-only", "Partial")));
+        var missing = new ConnectorWorkRepository.WorkCompletion("SUCCEEDED", null, null, null, null, null, null,
+                Map.of("observationBatchCount", 2), ReconciliationCompleteness.COMPLETE, null);
+        service.complete(registration, session.id(), incomplete, lease.lease().leaseId(), lease.lease().leaseEpoch(), missing);
+        assertThat(effectiveCompleteness(incomplete)).isEqualTo("UNKNOWN");
+        assertThat(present(tenant, binding, "new-only")).isTrue();
+        assertThat(present(tenant, binding, "partial-only")).isTrue();
+    }
+
+    @Test
     void observationAndCompletionReplayAreIdempotentButConflictsFail() {
         TenantContext tenant = tenant("replay");
         UUID binding = connector(tenant, "runtime.test", "1.0", true);
@@ -341,6 +379,34 @@ class IntegrationRuntimePersistenceIntegrationTest {
         assertThat(unavailableService.claim(registration, unavailableSession.id(), 1, 0)).isEmpty();
         assertThat(taskState(unavailableTask)).isEqualTo("READY");
         assertThat(leaseCount(tenant, unavailableTask)).isZero();
+    }
+
+    @Test
+    void expiredMutationIsBlockedAsUncertainAndNeverBlindlyReplayed() {
+        TenantContext tenant = tenant("expired-mutation");
+        UUID binding = connector(tenant, "runtime.test", "1.0", true);
+        WorkerExternalSubject subject = new WorkerExternalSubject("https://issuer.example", "expired-worker");
+        worker(tenant, subject, binding, WorkerCapability.PROVISION);
+        var registration = repository.findEnabledByExternalSubject(subject).orElseThrow();
+        UUID taskId = createProvisioning(tenant, binding, "DESIRED_GRANT", ids.nextId(), 6);
+        var service = service((t, kind, id) -> Freshness.current(6));
+        var session = service.establishSession(registration, "pod-expired", List.of(1),
+                List.of(runtimeAdvertisement("runtime.test", "1.0", WorkerCapability.PROVISION)));
+        var lease = service.claim(registration, session.id(), 1, 0).getFirst();
+        assertThat(transactions.required(() -> repository.blockExpiredProvisioning(100, Instant.now()))).isZero();
+        jdbc.update("UPDATE platform.connector_work_lease SET claimed_at=?, lease_expires_at=?, updated_at=? WHERE tenant_id=? AND work_id=?",
+                Timestamp.from(NOW), Timestamp.from(NOW.plusSeconds(1)), Timestamp.from(NOW.plusSeconds(1)), tenant.tenantId(), taskId);
+        // Preserve a valid lease timestamp constraint for the simulated worker loss.
+        assertThat(transactions.required(() -> repository.blockExpiredProvisioning(100, Instant.now()))).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT state FROM integration.provisioning_task WHERE tenant_id=? AND id=?",
+                String.class, tenant.tenantId(), taskId)).isEqualTo("BLOCKED");
+        assertThat(jdbc.queryForObject("SELECT failure_code FROM integration.provisioning_task WHERE tenant_id=? AND id=?",
+                String.class, tenant.tenantId(), taskId)).isEqualTo("provider_effect_unknown_after_lease_expiry");
+        assertThat(service.claim(registration, session.id(), 1, 0)).isEmpty();
+        assertThat(transactions.required(() -> repository.blockExpiredProvisioning(100, Instant.now()))).isZero();
+        assertThatThrownBy(() -> service.complete(registration, session.id(), taskId, lease.lease().leaseId(),
+                lease.lease().leaseEpoch(), success(ReconciliationCompleteness.UNKNOWN)))
+                .isInstanceOf(WorkerProtocolException.class);
     }
 
     @Test
@@ -770,7 +836,8 @@ class IntegrationRuntimePersistenceIntegrationTest {
     private ConnectorWorkRepository.WorkCompletion success(ReconciliationCompleteness completeness) {
         return new ConnectorWorkRepository.WorkCompletion(
                 "SUCCEEDED", null, null, null, null, null, null,
-                Map.of(), completeness, "checkpoint-next");
+                completeness == ReconciliationCompleteness.COMPLETE ? Map.of("observationBatchCount", 1) : Map.of(),
+                completeness, completeness == ReconciliationCompleteness.COMPLETE ? null : "checkpoint-next");
     }
 
     private boolean present(TenantContext tenant, UUID binding, String providerStableId) {

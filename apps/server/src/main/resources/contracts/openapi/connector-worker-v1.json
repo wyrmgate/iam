@@ -730,7 +730,7 @@
           },
           "metadata": {
             "type": "object",
-            "description": "Bounded non-secret connector-edge result metadata. Raw provider response bodies, stack traces and private credential material are forbidden."
+            "description": "Bounded non-secret connector-edge result metadata. COMPLETE reconciliation requires integer observationBatchCount matching persisted contiguous batches (ADR-0074). Raw provider response bodies, stack traces and private credential material are forbidden."
           }
         }
       }

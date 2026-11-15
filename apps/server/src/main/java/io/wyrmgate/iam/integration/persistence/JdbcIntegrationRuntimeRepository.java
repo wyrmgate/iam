@@ -504,6 +504,15 @@ public final class JdbcIntegrationRuntimeRepository
     public LeasedConnectorWork leaseReconciliation(
             WorkerSession session, ReconciliationCandidate c, Instant now, Duration duration) {
         WorkerLease lease = lease(session, WorkKind.RECONCILE, c.runId(), now, duration);
+        jdbc.update("""
+                UPDATE integration.reconciliation_run r SET
+                    scan_generation=nextval('integration.reconciliation_scan_generation_seq'),
+                    binding_revision=b.revision, connector_revision=ci.revision
+                FROM integration.connector_binding b JOIN integration.connector_instance ci
+                    ON ci.tenant_id=b.tenant_id AND ci.id=b.connector_instance_id
+                WHERE r.tenant_id=? AND r.id=? AND r.scan_generation IS NULL
+                  AND b.tenant_id=r.tenant_id AND b.id=r.connector_binding_id
+                """, c.tenantId(), c.runId());
         return new LeasedConnectorWork(
                 c.runId(), c.operationId(), lease, new TenantContext(c.tenantId()),
                 c.connectorBindingId(), WorkKind.RECONCILE, c.contractId(), c.contractVersion(),
@@ -560,6 +569,7 @@ public final class JdbcIntegrationRuntimeRepository
             WorkerSession session, UUID workId, UUID leaseId, long leaseEpoch,
             UUID batchId, int sequence, String requestFingerprint,
             List<ProviderObservation> observations, Instant now) {
+        lockProcess(session.tenant(), WorkKind.RECONCILE, workId);
         requireCurrentLease(session, WorkKind.RECONCILE, workId, leaseId, leaseEpoch, now, true);
         String scope = jdbc.queryForObject("""
                 SELECT scope_object_class
@@ -682,9 +692,51 @@ public final class JdbcIntegrationRuntimeRepository
                 session.tenant().tenantId(), workId, session.id(), leaseId, leaseEpoch);
         if (kinds.isEmpty()) throw staleLease();
         WorkKind kind = WorkKind.valueOf(kinds.getFirst());
+        lockProcess(session.tenant(), kind, workId);
+        // Serialize completion/replay against reclaim, expiry handling and observation append.
+        requireCurrentLease(session, kind, workId, leaseId, leaseEpoch, now, false);
         return kind == WorkKind.PROVISION
                 ? completeProvisioning(session, workId, leaseId, leaseEpoch, completion, completionFingerprint, now)
                 : completeReconciliation(session, workId, leaseId, leaseEpoch, completion, completionFingerprint, now);
+    }
+
+    private void lockProcess(TenantContext tenant, WorkKind kind, UUID workId) {
+        String table = kind == WorkKind.PROVISION ? "provisioning_task" : "reconciliation_run";
+        if (jdbc.query("SELECT id FROM integration." + table + " WHERE tenant_id=? AND id=? FOR UPDATE",
+                (rs,row) -> rs.getObject(1, UUID.class), tenant.tenantId(), workId).isEmpty()) {
+            throw new WorkerProtocolException("work_not_found", "work does not exist");
+        }
+    }
+
+    /** Expiry is uncertainty, not proof that the provider call did not happen. */
+    public int blockExpiredProvisioning(int limit, Instant now) {
+        if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be 1..200");
+        record Candidate(UUID tenantId, UUID taskId) {}
+        var candidates = jdbc.query("""
+                SELECT t.tenant_id, t.id FROM integration.provisioning_task t
+                WHERE t.state='RUNNING' AND NOT EXISTS (
+                    SELECT 1 FROM platform.connector_work_lease l
+                    WHERE l.tenant_id=t.tenant_id AND l.work_kind='PROVISION' AND l.work_id=t.id
+                      AND l.lease_expires_at > ?)
+                ORDER BY t.updated_at, t.id LIMIT ? FOR UPDATE OF t SKIP LOCKED
+                """, (rs,row) -> new Candidate(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)),
+                Timestamp.from(now), limit);
+        int blocked = 0;
+        for (var c : candidates) {
+            // Lock current lease after the task; a concurrent renewal may have extended it.
+            var expires = jdbc.query("""
+                    SELECT lease_expires_at FROM platform.connector_work_lease
+                    WHERE tenant_id=? AND work_kind='PROVISION' AND work_id=? FOR UPDATE
+                    """, (rs,row) -> rs.getTimestamp(1).toInstant(), c.tenantId(), c.taskId());
+            if (!expires.isEmpty() && expires.getFirst().isAfter(now)) continue;
+            blocked += jdbc.update("""
+                    UPDATE integration.provisioning_task SET state='BLOCKED',
+                        failure_code='provider_effect_unknown_after_lease_expiry', next_attempt_at=NULL,
+                        revision=revision+1, updated_at=GREATEST(updated_at, ?)
+                    WHERE tenant_id=? AND id=? AND state='RUNNING'
+                    """, Timestamp.from(now), c.tenantId(), c.taskId());
+        }
+        return blocked;
     }
 
     private CompletionResult completeProvisioning(
@@ -752,6 +804,11 @@ public final class JdbcIntegrationRuntimeRepository
             case "SKIPPED" -> "SKIPPED";
             default -> throw new WorkerProtocolException("invalid_outcome", "unsupported work outcome");
         };
+        String failureCode = completion.providerErrorCode();
+        if ("FAILED_RETRYABLE".equals(state) && task.attempt() >= 5) {
+            state = "BLOCKED";
+            failureCode = "retry_budget_exhausted";
+        }
         Instant next = "FAILED_RETRYABLE".equals(state)
                 ? now.plusSeconds(completion.retryAfterSeconds() == null ? 30 : completion.retryAfterSeconds())
                 : null;
@@ -762,7 +819,7 @@ public final class JdbcIntegrationRuntimeRepository
                 WHERE tenant_id = ? AND id = ?
                 """,
                 state, next == null ? null : Timestamp.from(next),
-                completion.providerErrorCode(), Timestamp.from(now),
+                failureCode, Timestamp.from(now),
                 session.tenant().tenantId(), taskId);
 
         Object identityValue = task.payload().get("identityId");
@@ -835,18 +892,20 @@ public final class JdbcIntegrationRuntimeRepository
                 String contractId,
                 int contractVersion,
                 long revision,
-                UUID correlationId) {}
+                UUID correlationId,
+                Long generation, Long bindingRevision, Long connectorRevision, String checkpointStart) {}
         Run run = jdbc.queryForObject("""
                 SELECT connector_binding_id, scope_object_class, configuration_version,
                        runtime_id, runtime_version, contract_id, contract_version,
-                       revision, correlation_id
+                       revision, correlation_id, scan_generation, binding_revision, connector_revision, checkpoint_start
                 FROM integration.reconciliation_run
                 WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
                 """,
                 (rs,row) -> new Run(
                         rs.getObject(1, UUID.class), rs.getString(2), rs.getLong(3),
                         rs.getString(4), rs.getString(5), rs.getString(6), rs.getInt(7),
-                        rs.getLong(8), rs.getObject(9, UUID.class)),
+                        rs.getLong(8), rs.getObject(9, UUID.class), rs.getObject(10, Long.class),
+                        rs.getObject(11, Long.class), rs.getObject(12, Long.class), rs.getString(13)),
                 session.tenant().tenantId(), runId);
         if (run == null) {
             throw new WorkerProtocolException("work_not_running", "reconciliation run is not running");
@@ -861,8 +920,15 @@ public final class JdbcIntegrationRuntimeRepository
             default -> throw new WorkerProtocolException(
                     "unsupported_object_class", "unsupported reconciliation object class");
         };
-        Boolean contractStillTrusted = jdbc.queryForObject("""
-                SELECT (
+        // Serialize finalization within a binding and fence configuration changes.
+        // A later generation may complete first; an older generation must never overwrite it.
+        record Current(boolean compatible, boolean completeSupported) {}
+        Current current = jdbc.queryForObject("""
+                SELECT (b.contract_id = ? AND b.contract_version = ?
+                    AND ci.configuration_version = ? AND ci.runtime_id = ? AND ci.runtime_version = ?
+                    AND b.revision = ? AND ci.revision = ?
+                    AND b.lifecycle_state = 'ACTIVE' AND ci.lifecycle_state = 'ACTIVE'),
+                (
                     CASE ?
                         WHEN 'supports_complete_principal_discovery'
                             THEN b.supports_complete_principal_discovery
@@ -872,34 +938,35 @@ public final class JdbcIntegrationRuntimeRepository
                             THEN b.supports_complete_grant_discovery
                         ELSE false
                     END
-                    AND b.contract_id = ?
-                    AND b.contract_version = ?
-                    AND ci.configuration_version = ?
-                    AND ci.runtime_id = ?
-                    AND ci.runtime_version = ?
-                    AND b.lifecycle_state = 'ACTIVE'
-                    AND ci.lifecycle_state = 'ACTIVE'
                 )
                 FROM integration.connector_binding b
                 JOIN integration.connector_instance ci
                   ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
                 WHERE b.tenant_id = ? AND b.id = ?
+                FOR UPDATE OF b, ci
                 """,
-                Boolean.class,
-                completenessColumn,
+                (rs,row) -> new Current(rs.getBoolean(1), rs.getBoolean(2)),
                 run.contractId(), run.contractVersion(), run.configurationVersion(),
-                run.runtimeId(), run.runtimeVersion(),
-                session.tenant().tenantId(), run.bindingId());
+                run.runtimeId(), run.runtimeVersion(), run.bindingRevision(), run.connectorRevision(),
+                completenessColumn, session.tenant().tenantId(), run.bindingId());
+        boolean newerFinalized = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM integration.reconciliation_run newer
+                    WHERE newer.tenant_id=? AND newer.connector_binding_id=? AND newer.scope_object_class=?
+                      AND newer.scan_generation > ? AND newer.completed_at IS NOT NULL)
+                """, Boolean.class, session.tenant().tenantId(), run.bindingId(), run.objectClass(), run.generation()));
+        boolean materialize = current != null && current.compatible() && run.generation() != null && !newerFinalized;
         boolean trustedComplete = "SUCCEEDED".equals(completion.outcome())
                 && reported == ReconciliationCompleteness.COMPLETE
-                && Boolean.TRUE.equals(contractStillTrusted);
+                && materialize && current.completeSupported()
+                && leaseEpoch == 1 && run.checkpointStart() == null && completion.nextCheckpoint() == null
+                && hasCompleteBatchManifest(session.tenant(), runId, completion.metadata());
         ReconciliationCompleteness effective = trustedComplete
                 ? ReconciliationCompleteness.COMPLETE
-                : (reported == ReconciliationCompleteness.PARTIAL
+                : (materialize && reported == ReconciliationCompleteness.PARTIAL
                     ? ReconciliationCompleteness.PARTIAL
                     : ReconciliationCompleteness.UNKNOWN);
 
-        switch (run.objectClass()) {
+        if (materialize) switch (run.objectClass()) {
             case "PRINCIPAL" -> materializePrincipals(
                     session, runId, run.bindingId(), effective, now);
             case "ENTITLEMENT" -> materializeEntitlements(
@@ -926,10 +993,10 @@ public final class JdbcIntegrationRuntimeRepository
                 WHERE tenant_id = ? AND id = ? AND state = 'RUNNING'
                 """,
                 state, reported.name(), effective.name(), completion.nextCheckpoint(),
-                completion.providerErrorCode(), leaseEpoch, fingerprint,
+                materialize ? completion.providerErrorCode() : "reconciliation_scope_stale", leaseEpoch, fingerprint,
                 Timestamp.from(now), Timestamp.from(now),
                 session.tenant().tenantId(), runId);
-        if ("ENTITLEMENT".equals(run.objectClass()) || "GRANT".equals(run.objectClass())) {
+        if (materialize && ("ENTITLEMENT".equals(run.objectClass()) || "GRANT".equals(run.objectClass()))) {
             observedAccessFacts.inputChanged(
                     session.tenant(),
                     run.bindingId(),
@@ -940,6 +1007,17 @@ public final class JdbcIntegrationRuntimeRepository
                     run.correlationId());
         }
         return CompletionResult.ACCEPTED;
+    }
+
+    private boolean hasCompleteBatchManifest(TenantContext tenant, UUID runId, Map<String,Object> metadata) {
+        Object count = metadata == null ? null : metadata.get("observationBatchCount");
+        if (!(count instanceof Number number)) return false;
+        long expected = number.longValue();
+        if (expected < 0 || expected > Integer.MAX_VALUE || number.doubleValue() != expected) return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT count(*) = ? AND (count(*)=0 OR (min(sequence)=0 AND max(sequence)=?-1))
+                FROM integration.reconciliation_observation_batch WHERE tenant_id=? AND reconciliation_run_id=?
+                """, Boolean.class, expected, expected, tenant.tenantId(), runId));
     }
 
     private void materializePrincipals(
@@ -1125,6 +1203,7 @@ public final class JdbcIntegrationRuntimeRepository
                 WHERE tenant_id = ? AND work_kind = ? AND work_id = ?
                   AND execution_owner_id = ?
                   AND lease_id = ? AND lease_epoch = ?
+                FOR UPDATE
                 """,
                 (rs,row) -> new LeaseRow(
                         rs.getTimestamp(1).toInstant(),

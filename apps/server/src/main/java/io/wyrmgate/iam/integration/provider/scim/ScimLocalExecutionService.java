@@ -316,7 +316,8 @@ public final class ScimLocalExecutionService {
             ReconciliationCompleteness coverage;
             String nextCheckpoint;
             String objectClass = text(leased.payload(), "objectClass");
-            if (ScimPrincipalProviderAdapter.CONTRACT_ID.equals(leased.contractId())) {
+            if (ScimPrincipalProviderAdapter.CONTRACT_ID.equals(leased.contractId())
+                    || (ScimGroupProviderAdapter.CONTRACT_ID.equals(leased.contractId()) && "PRINCIPAL".equals(objectClass))) {
                 if (!"PRINCIPAL".equals(objectClass)) {
                     throw new IllegalArgumentException(
                             "principal contract requires PRINCIPAL reconciliation scope");
@@ -358,8 +359,8 @@ public final class ScimLocalExecutionService {
             }
 
             complete(owner, leased, new WorkCompletion(
-                    "SUCCEEDED", null, null, null, null, null, null, Map.of(),
-                    coverage, nextCheckpoint));
+                    "SUCCEEDED", null, null, null, null, null, null,
+                    Map.of("observationBatchCount", sequence.get()), coverage, nextCheckpoint));
         } catch (ScimProviderException provider) {
             complete(owner, leased, providerCompletion(
                     provider, ReconciliationCompleteness.UNKNOWN, leased.checkpoint()));
