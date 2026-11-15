@@ -208,6 +208,15 @@ public final class JdbcPrincipalProvisioningRepository
                     Timestamp.from(now),
                     Timestamp.from(now));
             if (inserted == 0) continue;
+            int pinned = jdbc.update("""
+                    UPDATE integration.provisioning_job j SET planned_binding_revision=b.revision,
+                        planned_connector_revision=ci.revision, planned_configuration_version=ci.configuration_version
+                    FROM integration.connector_binding b JOIN integration.connector_instance ci
+                      ON ci.tenant_id=b.tenant_id AND ci.id=b.connector_instance_id
+                    WHERE j.tenant_id=? AND j.id=? AND b.tenant_id=j.tenant_id AND b.id=j.connector_binding_id
+                      AND b.lifecycle_state='ACTIVE' AND ci.lifecycle_state='ACTIVE'
+                    """,tenant.tenantId(),jobId);
+            if (pinned != 1) throw new IllegalStateException("provisioning route unavailable during planning");
             createdAny = true;
 
             for (TaskSpec task : entry.getValue()) {

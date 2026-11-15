@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ConnectorWorkRepository {
@@ -17,6 +18,8 @@ public interface ConnectorWorkRepository {
     List<ReconciliationCandidate> lockReconciliationCandidates(
             WorkerSession session, int limit, Instant now);
     void supersedeProvisioning(UUID tenantId, UUID taskId, long expectedRevision, Instant now);
+    void blockUnleasedProvisioning(ProvisioningCandidate candidate,Instant now);
+    Optional<ProvisioningCandidate> leasedProvisioning(WorkerSession session,UUID workId,UUID leaseId,long epoch);
     LeasedConnectorWork leaseProvisioning(
             WorkerSession session, ProvisioningCandidate candidate, Instant now, Duration duration);
     LeasedConnectorWork leaseReconciliation(
