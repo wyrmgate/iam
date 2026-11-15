@@ -282,6 +282,18 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    io.wyrmgate.iam.governance.application.RequestTerminationService requestTerminationService(
+            AccessRequestRepository requests, ApprovalRepository approvals, AccessIntentApplicationQuery replay, AccessAdmissionCoordinator coordinator){
+        return new io.wyrmgate.iam.governance.application.RequestTerminationService(requests,approvals,replay,coordinator);
+    }
+
+    @Bean
+    io.wyrmgate.iam.governance.application.RequestExpiryProcessingScheduler requestExpiryProcessingScheduler(
+            AccessRequestRepository requests, io.wyrmgate.iam.governance.application.RequestTerminationService termination){
+        return new io.wyrmgate.iam.governance.application.RequestExpiryProcessingScheduler(requests,termination);
+    }
+
+    @Bean
     RequestAdmissionDecisionService requestAdmissionDecisionService(
             AccessRequestRepository requests, ApprovalRepository approvals,
             ApprovalCaseStartService starter, AuthorizedAccessIntentSink authorizedAccess) {

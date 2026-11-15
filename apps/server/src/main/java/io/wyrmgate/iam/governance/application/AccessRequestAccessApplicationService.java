@@ -165,7 +165,7 @@ public final class AccessRequestAccessApplicationService {
         if (item.state() == ItemState.APPLIED) {
             return;
         }
-        if (item.state() != ItemState.AUTHORIZED) {
+        if (item.state() != ItemState.AUTHORIZED || item.revision() != event.aggregateRevision()) {
             return;
         }
 

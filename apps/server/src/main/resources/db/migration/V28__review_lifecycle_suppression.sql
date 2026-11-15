@@ -13,3 +13,6 @@ CREATE TABLE access.lifecycle_review_suppression (
     UNIQUE(tenant_id,review_remediation_id)
 );
 COMMENT ON TABLE access.lifecycle_review_suppression IS 'Access-owned exact lifecycle cause suppression after review revocation; epoch/target scoped.';
+
+CREATE INDEX governance_request_item_due_expiry_idx ON governance.request_item(valid_until,tenant_id,id)
+ WHERE valid_until IS NOT NULL AND state IN ('SUBMITTED','EVALUATING','PENDING_APPROVAL','AUTHORIZED');
