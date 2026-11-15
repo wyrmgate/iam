@@ -1355,6 +1355,89 @@
           }
         }
       }
+    },
+    "/governance/findings": {
+      "get": {
+        "operationId": "listGovernanceFindings",
+        "summary": "Read tenant-scoped Governance findings",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FindingState"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/FindingLimit"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Finding page",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceFindingPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/findings/{findingId}": {
+      "get": {
+        "operationId": "getGovernanceFinding",
+        "summary": "Read one typed Governance finding",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FindingId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Finding",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernanceFinding"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1480,6 +1563,38 @@
           "format": "uuid"
         },
         "description": "Stable GovernanceException identifier."
+      },
+      "FindingId": {
+        "name": "findingId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "FindingState": {
+        "name": "state",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "OPEN",
+            "RESOLVED"
+          ]
+        }
+      },
+      "FindingLimit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        }
       }
     },
     "headers": {
@@ -3005,6 +3120,194 @@
           },
           "approvalPlan": {
             "$ref": "#/components/schemas/GovernanceApprovalPlanInput"
+          }
+        }
+      },
+      "GovernanceFindingContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "identityId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "principalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "entitlementId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "applicationTargetId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "sodRuleId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "relatedBindingId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "relatedPrincipalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "relatedEntitlementId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "exceptionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "GovernanceFinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "findingType",
+          "subjectKind",
+          "state",
+          "context",
+          "firstObservedAt",
+          "lastObservedAt",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "findingType": {
+            "type": "string",
+            "enum": [
+              "UNMAPPED_PROVIDER_ENTITLEMENT",
+              "UNMAPPED_PROVIDER_GRANT_ENTITLEMENT",
+              "UNRESOLVED_PROVIDER_GRANT_PRINCIPAL",
+              "EXCESS_OBSERVED_GRANT",
+              "OBSERVED_SOD_CONFLICT",
+              "EXPIRED_EXCEPTION_EXPOSURE"
+            ]
+          },
+          "subjectKind": {
+            "type": "string",
+            "enum": [
+              "OBSERVED_ENTITLEMENT",
+              "OBSERVED_GRANT",
+              "GOVERNANCE_EXCEPTION"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "RESOLVED"
+            ]
+          },
+          "connectorBindingId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "providerStableId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relatedProviderStableId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "context": {
+            "$ref": "#/components/schemas/GovernanceFindingContext"
+          },
+          "firstObservedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastObservedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "GovernanceFindingPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GovernanceFinding"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }

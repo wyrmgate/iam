@@ -26,6 +26,21 @@ public final class JdbcGovernanceExceptionRepository
     }
 
     @Override
+    public List<ExposureCandidate> findExpiredExposurePage(Instant at,ExposureCandidate after,int limit){
+        if(limit<1 || limit>100) throw new IllegalArgumentException("exception exposure page limit");
+        String sql="""
+                SELECT tenant_id,id,valid_until FROM governance.governance_exception
+                WHERE lifecycle_state IN ('APPROVED','EXPIRED') AND valid_until<=?
+                """;
+        var mapper=(org.springframework.jdbc.core.RowMapper<ExposureCandidate>)(rs,n)->new ExposureCandidate(
+                new TenantContext(rs.getObject(1,UUID.class)),rs.getObject(2,UUID.class),rs.getTimestamp(3).toInstant());
+        String order=" ORDER BY valid_until,tenant_id,id LIMIT ?";
+        if(after==null) return jdbc.query(sql+order,mapper,Timestamp.from(at),limit);
+        return jdbc.query(sql+" AND (valid_until,tenant_id,id)>(?,?,?)"+order,mapper,Timestamp.from(at),
+                Timestamp.from(after.validUntil()),after.tenant().tenantId(),after.exceptionId(),limit);
+    }
+
+    @Override
     public void insert(
             TenantContext tenant,
             GovernanceException exception) {

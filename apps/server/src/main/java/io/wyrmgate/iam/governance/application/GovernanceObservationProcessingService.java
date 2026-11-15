@@ -56,6 +56,21 @@ public final class GovernanceObservationProcessingService {
         this.clock = Objects.requireNonNull(clock);
     }
 
+    /** Re-evaluate material context even when the provider input generation did not change. */
+    public int refreshDue(){
+        Instant now=clock.instant();
+        return transactions.required(()->{
+            var due=checkpoints.lockCompletedDue(now.minus(Duration.ofMinutes(5)),50);
+            for(var entry:due){
+                var next=checkpoints.advance(entry.tenant(),entry.binding(),entry.checkpoint(),Phase.ENTITLEMENTS,null,now);
+                UUID eventId=ids.nextId();
+                outbox.append(entry.tenant(),new OutboxEvent(eventId,CONTINUATION,1,
+                        "governance-observation-evaluation",entry.binding(),next.revision(),now,eventId,null,"{}"),now);
+            }
+            return due.size();
+        });
+    }
+
     public ProcessingBatchResult processAvailable() {
         var claimed = outbox.claimPending(Set.of(
                 IntegrationObservedAccessFactSink.OBSERVED_ACCESS_INPUT_CHANGED, CONTINUATION),

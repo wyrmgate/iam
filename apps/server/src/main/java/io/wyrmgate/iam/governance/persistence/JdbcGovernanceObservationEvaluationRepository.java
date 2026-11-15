@@ -43,6 +43,19 @@ public final class JdbcGovernanceObservationEvaluationRepository
     }
 
     @Override
+    public java.util.List<DueEvaluation> lockCompletedDue(Instant before,int limit){
+        if(limit<1 || limit>100) throw new IllegalArgumentException("refresh limit");
+        return jdbc.query("""
+                SELECT tenant_id,connector_binding_id,source_generation,phase,after_key,revision
+                FROM governance.observation_evaluation
+                WHERE phase='COMPLETED' AND updated_at<=?
+                ORDER BY updated_at,tenant_id,connector_binding_id LIMIT ? FOR UPDATE SKIP LOCKED
+                """,(rs,n)->new DueEvaluation(new TenantContext(rs.getObject(1,UUID.class)),rs.getObject(2,UUID.class),
+                        new Checkpoint(rs.getLong(3),Phase.valueOf(rs.getString(4)),rs.getString(5),rs.getLong(6))),
+                Timestamp.from(before),limit);
+    }
+
+    @Override
     public Checkpoint advance(TenantContext tenant, UUID binding, Checkpoint current,
                               Phase phase, String afterKey, Instant now) {
         int changed = jdbc.update("""

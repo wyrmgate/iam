@@ -946,6 +946,27 @@ class GovernanceApiIntegrationTest {
     }
 
     @Test
+    void findingsReadRequiresPermissionAndBindsCursorToState() throws Exception {
+        var repo=new io.wyrmgate.iam.governance.persistence.JdbcGovernanceFindingRepository(jdbc);
+        var reporter=new io.wyrmgate.iam.governance.application.GovernanceObservationReportingService(repo,ids,transactions);
+        UUID binding=ids.nextId();
+        for(int i=0;i<2;i++) reporter.observe(tenant,binding,new io.wyrmgate.iam.governance.application.GovernanceObservationReporter.ObservationCondition(
+                "UNMAPPED_PROVIDER_ENTITLEMENT","OBSERVED_ENTITLEMENT","provider-"+i,null),Instant.now());
+        var result=mvc.perform(get("/api/v1/governance/findings").requestAttr(ACTOR_ATTRIBUTE,requester)
+                .param("state","OPEN").param("limit","1")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1)).andReturn();
+        var body=new com.fasterxml.jackson.databind.ObjectMapper().readTree(result.getResponse().getContentAsString());
+        String cursor=body.get("nextCursor").asText();
+        UUID finding=UUID.fromString(body.get("items").get(0).get("id").asText());
+        mvc.perform(get("/api/v1/governance/findings").requestAttr(ACTOR_ATTRIBUTE,requester)
+                .param("state","RESOLVED").param("cursor",cursor)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/governance/findings/{id}",finding).requestAttr(ACTOR_ATTRIBUTE,requester))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.findingType").value("UNMAPPED_PROVIDER_ENTITLEMENT"));
+        mockMvc(new AuditCommandService(new JdbcAuditRecordRepository(jdbc),transactions,Clock.systemUTC()),policyAuthorization(false)).perform(get("/api/v1/governance/findings").requestAttr(ACTOR_ATTRIBUTE,requester))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void auditFailureDoesNotRewriteSuccessfulRequestOutcome()
             throws Exception {
         SecurityAuditPort unavailableAudit =
@@ -1032,8 +1053,11 @@ class GovernanceApiIntegrationTest {
                         exceptionMutations,
                         policyAuthorization,
                         ids);
+        var findingController=new GovernanceFindingController(
+                new io.wyrmgate.iam.governance.application.GovernanceFindingQueryService(new io.wyrmgate.iam.governance.persistence.JdbcGovernanceFindingRepository(jdbc)),
+                policyAuthorization,cursorCodec(),ids);
         return MockMvcBuilders
-                .standaloneSetup(controller, policyController, exceptionController)
+                .standaloneSetup(controller, policyController, exceptionController,findingController)
                 .setControllerAdvice(
                         new GovernanceApiErrorHandler(ids))
                 .build();

@@ -16,6 +16,11 @@ public interface PrincipalObservationReferenceQuery {
             UUID principalId,
             UUID applicationTargetId);
 
+    /** Bounded stable-ID enumeration for Identity-scoped observation comparisons. */
+    default java.util.List<UUID> principalIds(TenantContext tenant,UUID identityId,UUID after,int limit){
+        throw new IllegalStateException("principal observation subject query unavailable");
+    }
+
     enum Validation {
         VALID,
         NOT_FOUND,

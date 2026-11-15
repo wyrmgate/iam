@@ -13,6 +13,9 @@ public final class GovernanceObservationProcessingScheduler {
         this.service = Objects.requireNonNull(service, "service");
     }
 
+    @Scheduled(fixedDelayString = "${iam.governance.observation-refresh.poll-interval:PT1M}")
+    public void refreshDue(){service.refreshDue();}
+
     @Scheduled(fixedDelayString = "${iam.governance.observation-processing.poll-interval:PT1S}")
     public void processAvailable() {
         service.processAvailable();

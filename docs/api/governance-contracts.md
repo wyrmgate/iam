@@ -2,8 +2,7 @@
 
 ## Purpose
 
-This document defines the first public Governance control-plane contract for
-self-service AccessRequest submission and reusable approval work.
+This document defines the public Governance control-plane contract for self-service AccessRequest, reusable approval, review, policy, exception and findings operations.
 
 Machine-readable contract:
 
@@ -56,7 +55,7 @@ state and invokes the existing eligibility evaluator. Duplicate or stale facts a
 Mandatory evaluator unavailability leaves the item `EVALUATING` and the durable work
 is retried. The production evaluator uses the active immutable ACCESS_REQUEST
 PolicyVersion, current Role expansion, original sibling RequestItem intent and a bounded
-Access-owned current-EffectiveAccess query. Completed RiskAssessment, SoDConflict and
+Access-owned authoritative current and overlapping validity intent query (ADR-0059). Completed RiskAssessment, SoDConflict and
 PolicyEvaluation records are immutable evidence. Successful evaluation may produce
 `DENIED`, `AUTHORIZED`, or `PENDING_APPROVAL`.
 
@@ -112,9 +111,9 @@ The public API preserves the existing separation:
 
 - `AUTHORIZED`: Governance requirements succeeded and durable Access application remains pending.
 - `APPLIED`: Access accepted the authoritative AccessAssignment.
-- `CANCELLED`: an already-authorized item can no longer be applied because a permanent current
+- `CANCELLED`: an unapplied item is explicitly cancelled, or can no longer be applied because a permanent current
   Access precondition is invalid, such as an ineligible Identity or terminally unavailable target.
-- `EXPIRED`: the authorized item's requested validity ended before Access could accept it.
+- `EXPIRED`: the submitted item's requested validity ended before Access could accept it.
 - none of these states means provider provisioning succeeded.
 
 The authorized-intent consumer classifies Access application failure semantically. Temporary
@@ -241,7 +240,7 @@ Permissions are `governance-exception:read|create|revoke`, default-deny and outs
 
 ### Material request authorization (ADR-0058, V25)
 
-Positive RequestItem decisions retain immutable admission context at the item revision. Approval reuse requires unchanged material context and plan hash. Completed approval evidence survives evaluator outage. Before first application, Governance revalidates current policy and context; Access compares the expected Identity epoch and Catalog target fingerprint. A previously committed causal result is recovered first. Changed material context may require successor approval; stale Identity epoch or missing historical context cancels an unapplied item; unavailable evaluation retries without new authority. Concurrent independent admissions remain GOV-V3-03.
+Positive RequestItem decisions retain immutable admission context at the item revision. Approval reuse requires unchanged material context and plan hash. Completed approval evidence survives evaluator outage. Before first application, Governance revalidates current policy and context; Access compares the expected Identity epoch and Catalog target fingerprint. A previously committed causal result is recovered first. Changed material context may require successor approval; stale Identity epoch or missing historical context cancels an unapplied item; unavailable evaluation retries without new authority. ADR-0059 (V26) serializes independent privilege-increasing Access admissions locally per tenant and Identity, checks authoritative overlapping entitlement intent within the fence, and fails closed when mandatory evaluation is unavailable. Reductions do not depend on that evaluator.
 
 ### Review recovery (ADR-0061)
 
@@ -250,3 +249,7 @@ Positive RequestItem decisions retain immutable admission context at the item re
 ### Request cancellation and expiry (ADR-0061)
 
 `POST /access-requests/{requestId}/cancel` is requester-owned, revision-guarded and idempotent. It cancels outstanding DRAFT/SUBMITTED/EVALUATING/PENDING_APPROVAL/AUTHORIZED items and closes exact pending approval cases. Under the Access admission fence a committed causal result is recovered as APPLIED before cancellation. An APPLIED item is never revoked by request cancellation or expiry. The envelope CANCELLED state means no further request work, not that previously applied assignments were removed. A bounded Governance expiry scan materializes EXPIRED for outstanding submitted items at validUntil; draft expiry is evaluated on submission/evaluation. No evaluator or provider operation is required for cancellation/expiry.
+
+### Typed findings (ADR-0062)
+
+`GET /findings` accepts optional OPEN/RESOLVED state, signed tenant/state-bound cursor and limit 1–100. `GET /findings/{id}` reads exact tenant-scoped evidence with revision ETag. Both require governance-finding:read (collection or exact resource scope). Responses expose normalized typed context; no provider payload or secrets. Findings include EXCESS_OBSERVED_GRANT, OBSERVED_SOD_CONFLICT and EXPIRED_EXCEPTION_EXPOSURE alongside legacy observation conditions. Excess demand is checked against bounded current authoritative intent, not absence from a projection. Observed SoD preserves the exact anchor and counterpart witness even if waived. Exception exposure is authoritative current intent after validUntil without effective renewal, not provider cleanup. Resolution requires exact current evidence; partial absence and unavailable dependencies retain prior findings. Periodic bounded refresh covers material changes without new provider input.

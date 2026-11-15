@@ -344,6 +344,21 @@ public final class JdbcIntegrationObservationRepository
     }
 
     @Override
+    public List<ObservedGrantFact> mappedGrantWitnesses(TenantContext tenant,java.util.Set<UUID> principalIds,java.util.Set<UUID> entitlementIds){
+        if(principalIds.isEmpty() || entitlementIds.isEmpty()) return List.of();
+        if(principalIds.size()>1000 || entitlementIds.size()>1000) throw new IllegalArgumentException("mapped witness budget");
+        String principals=String.join(",",java.util.Collections.nCopies(principalIds.size(),"?"));
+        String entitlements=String.join(",",java.util.Collections.nCopies(entitlementIds.size(),"?"));
+        String sql=GRANTS.replace("SELECT g.connector_binding_id","SELECT DISTINCT ON (em.entitlement_id) g.connector_binding_id")
+                .replace("WHERE g.tenant_id = ? AND g.connector_binding_id = ?","WHERE g.tenant_id = ?")
+                +" AND g.present AND b.lifecycle_state='ACTIVE' AND pm.principal_id IN ("+principals+") AND em.entitlement_id IN ("+entitlements+")"
+                +" ORDER BY em.entitlement_id,g.connector_binding_id,g.provider_stable_id";
+        java.util.List<Object> args=new java.util.ArrayList<>();
+        args.add(tenant.tenantId());args.addAll(principalIds);args.addAll(entitlementIds);
+        return jdbc.query(sql,(rs,n)->grantFact(rs),args.toArray());
+    }
+
+    @Override
     public List<UUID> activeApplicationTargetBindings(
             TenantContext tenant, UUID applicationTargetId) {
         return jdbc.query("""

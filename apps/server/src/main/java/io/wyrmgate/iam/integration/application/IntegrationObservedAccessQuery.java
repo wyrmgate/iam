@@ -20,6 +20,10 @@ public interface IntegrationObservedAccessQuery {
     Observation<ObservedGrantFact> grant(
             TenantContext tenant, UUID connectorBindingId, String providerId);
 
+    /** One deterministic present mapped grant witness per requested Entitlement across bindings. */
+    List<ObservedGrantFact> mappedGrantWitnesses(TenantContext tenant, java.util.Set<UUID> principalIds,
+            java.util.Set<UUID> entitlementIds);
+
     List<UUID> activeApplicationTargetBindings(
             TenantContext tenant, UUID applicationTargetId);
 

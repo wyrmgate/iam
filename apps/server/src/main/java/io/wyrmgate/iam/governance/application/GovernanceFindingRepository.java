@@ -10,6 +10,10 @@ public interface GovernanceFindingRepository {
 
     Optional<GovernanceFinding> findByKey(TenantContext tenant, String findingKey);
 
+    Optional<GovernanceFinding> findById(TenantContext tenant, UUID id);
+
+    List<GovernanceFinding> findPage(TenantContext tenant, FindingContext.State state, Instant afterCreatedAt, UUID afterId,int limit);
+
     List<GovernanceFinding> findOpenPage(
             TenantContext tenant, UUID connectorBindingId, String afterFindingKey, int limit);
 
@@ -22,7 +26,7 @@ public interface GovernanceFindingRepository {
             UUID connectorBindingId,
             String providerStableId,
             String relatedProviderStableId,
-            Instant observedAt);
+            Instant observedAt, FindingContext context);
 
     GovernanceFinding touchOpen(
             TenantContext tenant, UUID id, long expectedRevision, Instant observedAt);
@@ -47,5 +51,5 @@ public interface GovernanceFindingRepository {
             Instant resolvedAt,
             long revision,
             Instant createdAt,
-            Instant updatedAt) {}
+            Instant updatedAt, FindingContext context) {}
 }

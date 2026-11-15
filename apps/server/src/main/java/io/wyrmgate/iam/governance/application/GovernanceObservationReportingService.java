@@ -38,7 +38,7 @@ public final class GovernanceObservationReportingService
             if (existing == null) {
                 findings.insert(tenant, ids.nextId(), key, condition.findingType(),
                         condition.subjectKind(), connectorBindingId, condition.providerStableId(),
-                        condition.relatedProviderStableId(), observedAt);
+                        condition.relatedProviderStableId(), observedAt,condition.context());
             } else if ("RESOLVED".equals(existing.lifecycleState())) {
                 findings.reopen(tenant, existing.id(), existing.revision(), observedAt);
             } else {
@@ -58,11 +58,17 @@ public final class GovernanceObservationReportingService
             UUID connectorBindingId, ObservationCondition condition) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            update(digest, connectorBindingId.toString());
+            update(digest, connectorBindingId==null?null:connectorBindingId.toString());
             update(digest, condition.findingType());
             update(digest, condition.subjectKind());
             update(digest, condition.providerStableId());
             update(digest, condition.relatedProviderStableId());
+            var context=condition.context();
+            if(!context.equals(FindingContext.EMPTY)){
+                for(UUID id:new UUID[]{context.identityId(),context.principalId(),context.entitlementId(),context.applicationTargetId(),
+                        context.sodRuleId(),context.relatedBindingId(),context.relatedPrincipalId(),context.relatedEntitlementId(),context.exceptionId()})
+                    update(digest,id==null?null:id.toString());
+            }
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is unavailable", impossible);

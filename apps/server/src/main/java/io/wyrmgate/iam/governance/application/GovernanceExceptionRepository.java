@@ -10,6 +10,9 @@ import java.util.UUID;
 
 public interface GovernanceExceptionRepository {
 
+    record ExposureCandidate(TenantContext tenant, UUID exceptionId, Instant validUntil) {}
+    List<ExposureCandidate> findExpiredExposurePage(Instant at,ExposureCandidate after,int limit);
+
     void insert(
             TenantContext tenant,
             GovernanceException exception);

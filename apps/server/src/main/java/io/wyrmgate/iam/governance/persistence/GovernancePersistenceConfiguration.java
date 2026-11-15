@@ -463,8 +463,26 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    io.wyrmgate.iam.governance.application.ExceptionExposureProcessingService exceptionExposureProcessingService(
+            GovernanceExceptionRepository exceptions,GovernanceExceptionQuery coverage,GovernancePolicyService policies,
+            AccessAdmissionConflictQuery access,GovernanceObservationReporter reporter,GovernanceFindingRepository findings,TransactionExecutor transactions){
+        return new io.wyrmgate.iam.governance.application.ExceptionExposureProcessingService(exceptions,coverage,policies,access,reporter,findings,transactions);
+    }
+
+    @Bean
+    io.wyrmgate.iam.governance.application.ExceptionExposureProcessingScheduler exceptionExposureProcessingScheduler(
+            GovernanceExceptionRepository exceptions,io.wyrmgate.iam.governance.application.ExceptionExposureProcessingService service){
+        return new io.wyrmgate.iam.governance.application.ExceptionExposureProcessingScheduler(exceptions,service);
+    }
+
+    @Bean
     GovernanceFindingRepository governanceFindingRepository(JdbcTemplate jdbc) {
         return new JdbcGovernanceFindingRepository(jdbc);
+    }
+
+    @Bean
+    io.wyrmgate.iam.governance.application.GovernanceFindingQueryService governanceFindingQueryService(GovernanceFindingRepository findings){
+        return new io.wyrmgate.iam.governance.application.GovernanceFindingQueryService(findings);
     }
 
     @Bean
@@ -485,9 +503,9 @@ public class GovernancePersistenceConfiguration {
     ObservedAccessDriftEvaluationService observedAccessDriftEvaluationService(
             IntegrationObservedAccessQuery observedAccess,
             PrincipalObservationReferenceQuery principalReferences,
-            GovernanceObservationReporter reporter, GovernanceFindingRepository findings) {
-        return new ObservedAccessDriftEvaluationService(
-                observedAccess, principalReferences, reporter, findings);
+            GovernanceObservationReporter reporter, GovernanceFindingRepository findings, IdentityAccessReferenceQuery identities,
+            io.wyrmgate.iam.access.application.ExactTechnicalGrantDemandQuery demand, GovernancePolicyService policies) {
+        return new ObservedAccessDriftEvaluationService(observedAccess, principalReferences, reporter, findings,identities,demand,policies);
     }
 
     @Bean

@@ -41,14 +41,14 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`security/control-plane-authentication.md`](security/control-plane-authentication.md) — external/federated and first-party control-plane authentication and bootstrap.
 - [`security/first-run-web-setup.md`](security/first-run-web-setup.md) — secured first-run web setup adapter.
 - [`security/identity-provider-sso.md`](security/identity-provider-sso.md) — first-party authentication, federation and SSO security boundary.
-- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0056.
+- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0062.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event semantics.
 - [`api/idp-sso-contracts.md`](api/idp-sso-contracts.md) — OIDC/OAuth/JWKS/session/claim/secret-boundary implementation contract.
 - [`api/identity-contracts.md`](api/identity-contracts.md) — Identity/Principal and source-policy public contracts.
 - [`api/catalog-contracts.md`](api/catalog-contracts.md) — Application/ApplicationTarget/Entitlement/Role contracts.
 - [`api/access-contracts.md`](api/access-contracts.md) — AccessAssignment and EffectiveAccess contracts.
-- [`api/governance-contracts.md`](api/governance-contracts.md) — AccessRequest/Approval/Review/Policy/Exception contracts.
+- [`api/governance-contracts.md`](api/governance-contracts.md) — AccessRequest/Approval/Review/Policy/Exception/Finding contracts.
 - [`api/credential-contracts.md`](api/credential-contracts.md) — Credential metadata/lifecycle/rotation contract.
 - [`api/integration-administration.md`](api/integration-administration.md) — ConnectorInstance/Binding/worker administration contract.
 - [`api/connector-worker-protocol.md`](api/connector-worker-protocol.md) — remote connector-worker v1 protocol.
@@ -94,9 +94,10 @@ The agreed v3 layered architecture reconciliation is now represented durably by 
 - ADR-0054 tightens Catalog Entitlement semantics: every Entitlement now references exactly one ApplicationTarget, provider-native identifiers remain Integration mapping/observation provenance, and the current RoleVersion lifecycle is `DRAFT -> READY -> ACTIVE -> SUPERSEDED`. V16 implements the persistence contraction.
 - ADR-0055 fences AccessAssignment admission by Identity eligibility epoch and defines current SPECIFIC Principal compatibility.
 - ADR-0056 keeps desired access causes explainable while coalescing technical provider-grant removal across all current desired causes.
+- ADR-0057 bounds Role composition and expansion. ADR-0058 through ADR-0062 reconcile Governance v3: immutable material request authorization, local authoritative Access admission serialization, current approval authority, recoverable review/cancellation/expiry, and typed observed-access and exception-exposure findings. V24–V29 implement the corresponding observation, admission, lifecycle and finding persistence changes. See [Governance contracts](api/governance-contracts.md) and [#503](https://github.com/wyrmgate/iam/issues/503) for verification and DEV acceptance status.
 - The first reconciled Identity backend migration is V13: Identity lifecycle transition mechanics reuse the framework-neutral lifecycle kernel while Identity retains its state/action graph, and the previously documented Organization/manager/membership/ownership model is now persisted as tenant-safe normalized authoritative state with temporal validity, typed provenance and optimistic revision. Public relationship APIs and source-driven relationship extraction remain separate future contracts.
 - [`architecture/layered-architecture.md`](architecture/layered-architecture.md) consolidates L1–L6 and Layer 6A–6I. The image-86 internal `Layer 6L` heading is treated as a labeling error; the reconciled area is 6I Runtime/Deployment/Availability/Recovery.
 
-The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0056 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
+The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0062 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
 
 OD-005 remains open until a concrete production provider environment implements the accepted ADR-0043 objectives and measured recovery/failover evidence proves them. OD-006 legacy migration/cutover remains open.
