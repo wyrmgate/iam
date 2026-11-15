@@ -28,7 +28,7 @@ The bounded ADR-0042 runtime baseline is implemented. The first-party IdP remain
 - Administration owns IAM administrative authority and external control-plane subject binding.
 - Audit owns immutable data-minimized security evidence.
 - Platform owns short-lived protocol/session/signing mechanics behind semantic ports.
-- Integration/provider adapters own provider-specific federation transport and verification behavior.
+- Integration owns federation trust and exact subject links; provider adapters own provider-specific transport and verification behavior (ADR-0071).
 
 Authentication success, SSO token issuance, application access, federation verification, and Administration authorization are separate decisions.
 
@@ -38,7 +38,7 @@ Implemented public surfaces when `iam.idp.enabled=true` (ADR-0068 uses a public 
 
 - `GET /.well-known/openid-configuration`;
 - `GET /oauth2/jwks`;
-- `GET /oauth2/authorize`;
+- `GET /oauth2/authorize` and `POST /oauth2/authorize` (browser-bound interactive continuation);
 - `POST /oauth2/token`.
 
 The baseline is Authorization Code with `code_challenge_method=S256`. Redirect URIs are exact registered strings; wildcard/prefix matching is prohibited. `state` is an opaque bounded client correlation value. Optional `nonce` is carried into the ID token. Authorization codes are 256-bit random values, single-use, five minutes by default, and only SHA-256 digests are persisted. Refresh tokens are not issued. ADR-0066 requires fresh exact session/subject/Credential and governed application access checks at redemption, after the one-use code is consumed and all original bindings are validated. Missing or denied context returns invalid_grant; unavailable mandatory checks return temporarily_unavailable. No code is restored. Token exchange does not extend browser idle expiry.
@@ -49,13 +49,13 @@ Unknown or retired clients and invalid redirect URIs produce direct errors; the 
 
 Unauthenticated protocol and login routing starts from a server-generated globally unique Catalog `client_id`. `SsoClientProtocolQuery` resolves that identifier to an active registration and authoritative `TenantContext`. Browser-supplied Tenant headers, claims, query parameters, state, nonce, and target identifiers never become authoritative Tenant input.
 
-For local interactive login, the browser supplies an `applicationTargetId` and native Principal key only as tenant-scoped lookup selectors. Identity performs the lookup inside the server-derived Tenant and requires an ACTIVE Principal correlated to an ACTIVE Identity. Credential then verifies an effective PASSWORD authenticator for that exact Principal.
+For local interactive login, Catalog resolves the configured active authentication target from the registered client. The browser supplies only a native Principal key and presented password; Console client and target are selected from the sealed installation route. Identity performs the lookup inside the server-derived Tenant and requires an ACTIVE Principal correlated to an ACTIVE Identity. Credential then verifies an effective PASSWORD authenticator for that exact Principal.
 
 A future upstream federation provider must likewise map a cryptographically verified external subject to governed Principal/Identity/Tenant state server-side. Provider-native tenant claims are never authoritative routing input.
 
 ## Governed client registration
 
-`SsoClientRegistration` remains Catalog-owned authoritative configuration. The implemented public-client baseline uses server-generated globally unique client IDs, no client secret, mandatory S256 PKCE, exact redirect URI registration, `openid` plus optional `profile`/`email` scope, and `ACTIVE -> RETIRED` lifecycle. Protocol resolution requires both the registration and parent Application to remain active.
+`SsoClientRegistration` remains Catalog-owned authoritative configuration. The implemented public-client baseline uses server-generated globally unique client IDs, no client secret, mandatory S256 PKCE, exact redirect URI registration, `openid` as the implemented claim scope (Catalog retains `profile`/`email` registration and compatibility acceptance without attribute release), and `ACTIVE -> RETIRED` lifecycle. Protocol resolution requires both the registration and parent Application to remain active.
 
 Management endpoints remain under `/api/v1/applications/{applicationId}/sso-clients` and `/api/v1/sso-clients/**` with tenant binding and revision semantics. Runtime OpenAPI is available under `/api/openapi`.
 
@@ -69,7 +69,7 @@ Returns only availability of the sealed server-owned Console login route and set
 
 ### `POST /api/auth/login`
 
-JSON input contains only native `principalKey` and presented `password`. ADR-0069 removes public client/target selectors. The sealed Console registration and Catalog-owned authentication target are resolved server-side. Password material is never persisted/logged. Login requires the pre-authentication CSRF proof; absent/mismatched proof returns 403. Input lengths are bounded (client ID 200, target UUID 36, native key 512, password 1024 characters). The response is deliberately non-enumerating: invalid client routing, target, Principal/Identity eligibility, credential state, and password proof all fail as `invalid_credentials`. Successful authentication always establishes a fresh opaque browser session.
+JSON input contains only native `principalKey` and presented `password`. ADR-0069 removes public client/target selectors. The sealed Console registration and Catalog-owned authentication target are resolved server-side. Password material is never persisted/logged. Login requires the pre-authentication CSRF proof; absent/mismatched proof returns 403. Input lengths are bounded (native key 512, password 1024 characters). The response is deliberately non-enumerating: invalid client routing, target, Principal/Identity eligibility, credential state, and password proof all fail as `invalid_credentials`. Successful authentication always establishes a fresh opaque browser session.
 
 ### `GET /api/auth/session`
 
@@ -95,20 +95,13 @@ The session contains no `AdministrativePermission`, AccessAssignment, applicatio
 
 If external bearer authentication (`iam.auth.enabled=true`) is also enabled, an explicit bearer header takes precedence and follows validated issuer/audience plus external-subject binding. External provider groups, roles, scopes, tenant claims, or arbitrary claims do not automatically become Wyrmgate administrative authority.
 
-## Federation adapter contract
+## Federation adapter contract (ADR-0071)
 
-`FederatedAuthenticationAdapter<R>` is the explicit upstream federation SPI. Each implementation declares:
+The Integration-owned `FederationTrustQuery` provides current active tenant-bound trust and exact stable subject links, not provider observation or Administration actor bindings. The typed `FederatedAuthenticationAdapter<R>` receives a server-selected `VerificationContext` (exact trust ID/revision, protocol, issuer/audience, provider key, Tenant, browser-bound interaction ID and expiry) plus its concrete protocol request. Cryptographic verification, nonce/request/audience binding and durable one-use replay consumption must succeed before it returns a `VerifiedFederatedSubject`. Proof contains the exact context, stable external subject and bounded authentication time/expiry, never a raw assertion, token or claims bag.
 
-- a stable provider key;
-- `OIDC` or `SAML` protocol family;
-- a provider-specific concrete request type;
-- a cryptographic verification operation that returns only `VerifiedFederatedSubject`.
+Authentication's `FederatedSubjectResolver` matches exact context, re-reads the active trust and exact subject link, then checks ACTIVE Tenant and current Identity/Principal eligibility. The resulting typed `FederatedAuthenticationAnchor` pins their revisions and IDs and proof expiry. Revalidation rejects retirement, remapping, revision changes, expiry and unavailable reads. No fake Credential, automatic account creation, email/username fallback or implicit Access/Administration authority.
 
-`VerifiedFederatedSubject` contains exact external `(issuer, subject)` and authentication time. It does not expose provider groups/roles/scopes/tenant claims/native attribute bags to core authority code. The provider-specific typed request and all network/metadata/key/assertion/token processing remain behind the adapter.
-
-`FederationAdapterRegistry` contains only explicitly wired adapters, rejects duplicate or invalid provider keys, and exposes descriptors rather than an untyped invocation API. An empty registry enables no upstream provider. Merely adding an OAuth/SAML library does not activate federation.
-
-A concrete provider endpoint and mapping flow must be accepted separately before use; it must map verified external subject to governed Principal/Identity/Tenant semantics server-side and must not convert provider claims directly into Access or Administration authority.
+The old unbound adapter result and its dependency on Administration's ExternalAuthenticationSubject have been removed. The existing external bearer control-plane transport remains unchanged. Registry descriptors do not enable providers. Concrete trust/link persistence, administrative operations, protocol-specific callback/replay implementation and federated browser-session activation belong to the subsequent Integration slice; current persisted browser sessions remain local PASSWORD sessions only. No upstream callback endpoint is exposed.
 
 ## Session bounds and invalidation
 
@@ -122,7 +115,7 @@ Public token subject is:
 
 ID tokens contain only issuer, subject, audience, issue/expiry times, authentication time, and optional nonce. Access tokens contain only issuer, subject, audience, issue/expiry times, client ID, and granted scope string. Tokens never automatically expose Administration state, raw AccessAssignment collections, unrestricted canonical attributes, provider observations, Credential/secret references, or raw internal Tenant/Identity/Principal IDs.
 
-Signing private keys remain behind Platform `SigningKeyProvider`. `verificationKeys()` exposes public material only. JWKS requires the current signing key to be present, rejects duplicate verification key IDs, publishes current first, then retained verification keys deterministically. `FileSigningKeyProvider` uses configured additional verification public-key paths for overlap; this permits old-token verification during bounded key rotation without exposing retired private keys.
+Signing private keys remain behind Platform `SigningKeyProvider`. `verificationKeys()` exposes public material only. JWKS requires the exact current signing key material and algorithm to match a published verification key; signing also verifies the emitted signature against that key before release. JWKS rejects duplicate verification key IDs, publishes current first, then retained verification keys deterministically. `FileSigningKeyProvider` uses configured additional verification public-key paths for overlap; this permits old-token verification during bounded key rotation without exposing retired private keys.
 
 ## Explicitly deferred extensions
 
@@ -147,3 +140,7 @@ ADR-0068 exposes the existing local password-change endpoint through the first-p
 `GET /oauth2/authorize` validates the complete request, reuses a valid session by default, returns `login_required` for `prompt=none` without a session, and requires fresh proof for `prompt=login`. Unsupported prompt values and `max_age` are rejected. Missing local target binding cannot start a local interaction. The no-store same-origin HTML form contains only an opaque single-use proof; a separate Secure HttpOnly Strict cookie binds the browser. POST to the same path consumes the five-minute interaction once, checks the exact client revision/target again, verifies local proof and issues a code using the existing current-state authorization flow. No raw interaction proofs are persisted. Invalid credentials end the attempt; restart authorization. No external provider is activated.
 
 Catalog SSO create/replace accepts optional `authenticationTargetId` (null disables local interactive login; omission on replace preserves the existing binding). The target must belong to the same Tenant and be active with an active parent Application. V32 backfills only the exact installation Console binding. Other registrations require explicit configuration for interactive login.
+
+## Runtime admission, evidence and retention (ADR-0070 / V33)
+
+Shared atomic PostgreSQL counters use database time: 120 local login attempts per Tenant/minute, ten attempts per known Principal/five minutes, and 120 interaction starts per Tenant/minute. No raw usernames or passwords are counter keys. Saturation denies generically and is not a business account lockout. Ingress volumetric controls remain required. Governed Access checks may inspect at most ten pages of 200 entitlements and require active targets; overflow or unavailable/non-progressing evaluation denies issuance rather than treating incomplete coverage as absence. Audit success evidence is required before releasing a session, code or token; admitted denials and revocations use best-effort evidence and cannot obstruct security reduction. Runtime cleanup is bounded to 200 records per class per minute: expired interactions, expired/consumed codes after one hour, revoked/expired sessions after 24 hours (only after referencing codes are removed), and expired rate counters after 24 hours. Audit evidence is independently retained. Discovery advertises openid and actual minimal ID-token claims; profile/email metadata remains compatible without releasing those attributes. No immediate revocation of already-issued stateless JWTs.

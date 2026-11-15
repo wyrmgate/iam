@@ -191,3 +191,7 @@ The projection is structurally data-minimized. Public responses intentionally ex
 Only normalized states, normalized failure category/code where already modeled, semantic subject/contract references, timing, revisions, and correlation/causation identifiers are exposed. The browser receives no claim/renew/complete operation and cannot invoke the internal connector-worker execution protocol through this surface.
 
 The operational projection is implemented over the existing Integration schema. It introduces no new persistence authority and requires no data migration.
+
+## Upstream authentication handoff (ADR-0071)
+
+Integration owns explicit tenant-bound FederationTrust and FederatedSubjectLink semantics; the typed semantic read/verification SPI lives in `integration.application.federation`. This is separate from ConnectorBinding observation mappings and Administration external control-plane actor binding. Concrete persistence/management, unique active subject links with revisioned retirement/remap, provider-specific OIDC/SAML verification, one-use callback/replay protection and federated browser-session activation are subsequent Integration work. Authentication consumes exact trust/link and current Tenant/Identity eligibility and never manufactures a local Credential. See [IdP contracts](idp-sso-contracts.md#federation-adapter-contract-adr-0071).
