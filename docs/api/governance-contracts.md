@@ -195,6 +195,8 @@ Campaign, per-campaign item and reviewer-inbox paging use ADR-0012 signed cursor
 to tenant plus the relevant campaign/reviewer context. V34 adds only the indexes needed
 for those bounded query paths; it adds no new review business state.
 
+V23 extends immutable ReviewItem provenance to include `LIFECYCLE_POLICY_RULE` with a required rule reference, alongside `MANUAL` and `REQUEST_ITEM`. Review snapshots preserve the actual AccessAssignment provenance without granting mutation authority.
+
 Governance still owns ReviewCampaign, ReviewItem, immutable ReviewDecision and
 ReviewRemediation. Campaign generation continues to use the Access-owned semantic
 `AccessReviewSnapshotQuery`; Governance never reads Access persistence. `KEEP` creates

@@ -517,6 +517,27 @@ class AccessReviewIntegrationTest {
                 .isZero();
     }
 
+    @Test
+    void reviewGenerationPreservesAllAssignmentProvenanceKinds() {
+        UUID subject = ids.nextId();
+        for (var provenance : AccessAssignment.ProvenanceKind.values()) {
+            assignments.insert(tenant, new AccessAssignment(
+                    ids.nextId(), subject, 1, AccessAssignment.TargetKind.ENTITLEMENT,
+                    null, ids.nextId(), AccessAssignment.PrincipalConstraintKind.ANY, null,
+                    provenance, provenance == AccessAssignment.ProvenanceKind.MANUAL ? null : ids.nextId(),
+                    AccessAssignment.LifecycleState.ACTIVE, null, null, 1,
+                    NOW.minusSeconds(1), NOW.minusSeconds(1)));
+        }
+        ReviewCampaign campaign = startAndGenerate(subject, ids.nextId());
+        assertThat(campaign.state()).isEqualTo(CampaignState.ACTIVE);
+        assertThat(campaign.generatedItemCount()).isEqualTo(3);
+        assertThat(jdbc.queryForList("""
+                SELECT provenance_kind FROM governance.review_item
+                WHERE tenant_id = ? AND review_campaign_id = ?
+                """, String.class, tenant.tenantId(), campaign.id()))
+                .containsExactlyInAnyOrder("MANUAL", "REQUEST_ITEM", "LIFECYCLE_POLICY_RULE");
+    }
+
     private ReviewCampaign startAndGenerate(
             UUID subject,
             UUID reviewer) {

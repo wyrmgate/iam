@@ -861,6 +861,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
                 requests,
                 evaluator,
                 approvals,
+                new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
                 (requestedTenant, item) -> { },
                 ids,
                 transactions);
