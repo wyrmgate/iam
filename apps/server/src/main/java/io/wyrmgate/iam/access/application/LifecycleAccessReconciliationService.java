@@ -43,6 +43,7 @@ public final class LifecycleAccessReconciliationService {
     private final LifecycleAccessPrivilegeGuard guard;
     private final LifecycleAccessApprovalCommand approvals;
     private final Clock clock;
+    private final AccessAdmissionCoordinator coordinator;
 
     public LifecycleAccessReconciliationService(
             JdbcOutboxRepository outbox,
@@ -51,8 +52,8 @@ public final class LifecycleAccessReconciliationService {
             AccessAssignmentCommandService commands,
             IdentityLifecycleAccessQuery identities,
             LifecycleAccessPrivilegeGuard guard,
-            LifecycleAccessApprovalCommand approvals) {
-        this(outbox,policies,assignments,commands,identities,guard,approvals,Clock.systemUTC());
+            LifecycleAccessApprovalCommand approvals, AccessAdmissionCoordinator coordinator) {
+        this(outbox,policies,assignments,commands,identities,guard,approvals,coordinator,Clock.systemUTC());
     }
 
     LifecycleAccessReconciliationService(
@@ -62,7 +63,7 @@ public final class LifecycleAccessReconciliationService {
             AccessAssignmentCommandService commands,
             IdentityLifecycleAccessQuery identities,
             LifecycleAccessPrivilegeGuard guard,
-            LifecycleAccessApprovalCommand approvals,
+            LifecycleAccessApprovalCommand approvals, AccessAdmissionCoordinator coordinator,
             Clock clock) {
         this.outbox=Objects.requireNonNull(outbox);
         this.policies=Objects.requireNonNull(policies);
@@ -72,6 +73,7 @@ public final class LifecycleAccessReconciliationService {
         this.guard=Objects.requireNonNull(guard);
         this.approvals=Objects.requireNonNull(approvals);
         this.clock=Objects.requireNonNull(clock);
+        this.coordinator=Objects.requireNonNull(coordinator);
     }
 
     public BatchResult processAvailable() {
@@ -163,10 +165,15 @@ public final class LifecycleAccessReconciliationService {
         }
 
         for(var rule:desired.values()){
+            String retry = coordinator.execute(tenant,identityId,permit -> {
+            var latestPolicy = policies.findActive(tenant).orElse(null);
+            var latestContext = identities.currentContext(tenant,identityId,keys);
+            if (latestPolicy == null || !latestPolicy.equals(policy) || !"ACTIVE".equals(latestContext.lifecycleState())
+                    || latestContext.accessEligibilityEpoch() != context.accessEligibilityEpoch() || !matches(rule,latestContext)) return "lifecycle_admission_context_changed";
             AccessAssignment existing=assignments.findCurrentLifecyclePolicyAssignment(
                     tenant,identityId,rule.ruleId()).orElse(null);
             if(existing!=null && sameTarget(existing,rule)){
-                continue;
+                return null;
             }
 
             var decision=guard.evaluate(
@@ -179,7 +186,7 @@ public final class LifecycleAccessReconciliationService {
                     correlationId,
                     causationId);
             if(decision.decision()==LifecycleAccessPrivilegeGuard.Decision.UNAVAILABLE){
-                throw new IllegalStateException(decision.code());
+                return decision.code();
             }
             if(decision.decision()==LifecycleAccessPrivilegeGuard.Decision.REQUIRE_APPROVAL){
                 if(!approvals.currentApprovalSatisfied(
@@ -187,10 +194,10 @@ public final class LifecycleAccessReconciliationService {
                     approvals.requestApproval(
                             tenant,identityId,rule.ruleId(),rule.targetKind(),rule.targetId(),
                             now,correlationId,causationId);
-                    continue;
+                    return null;
                 }
             }else if(decision.decision()!=LifecycleAccessPrivilegeGuard.Decision.AUTHORIZE){
-                continue;
+                return null;
             }
 
             try{
@@ -221,12 +228,15 @@ public final class LifecycleAccessReconciliationService {
                 // terminal Catalog target can never authorize a new assignment.
                 // A later policy version/input change may reconcile again; this
                 // current input must not retry forever.
-                continue;
+                return null;
             }catch(AccessAssignmentProvenanceConflictException race){
                 AccessAssignment replay=assignments.findCurrentLifecyclePolicyAssignment(
                         tenant,identityId,rule.ruleId()).orElseThrow(()->race);
                 if(!sameTarget(replay,rule)) throw race;
             }
+            return null;
+            });
+            if (retry != null) throw new IllegalStateException(retry);
         }
     }
 

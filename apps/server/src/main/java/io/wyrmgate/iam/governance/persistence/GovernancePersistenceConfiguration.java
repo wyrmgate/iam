@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.access.application.AccessIntentApplicationQuery;
 import io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService;
-import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
+import io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery;
+import io.wyrmgate.iam.access.application.AccessAdmissionCoordinator;
+import io.wyrmgate.iam.access.application.AccessPrivilegeIncreaseGuard;
+import io.wyrmgate.iam.governance.application.GovernanceAccessPrivilegeIncreaseGuard;
 import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
 import io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand;
 import io.wyrmgate.iam.access.application.AccessReviewSnapshotQuery;
@@ -158,7 +161,7 @@ public class GovernancePersistenceConfiguration {
             GovernancePolicyService policyService,
             CatalogAccessReferenceQuery catalog,
             RoleExpansionQuery roleExpansion,
-            EffectiveAccessQuery effectiveAccess,
+            AccessAdmissionConflictQuery effectiveAccess,
             GovernanceExceptionQuery exceptions,
             LifecycleAccessEvaluationEvidenceSink evidence,
             IdGenerator ids) {
@@ -179,7 +182,7 @@ public class GovernancePersistenceConfiguration {
             AccessRequestRepository requests,
             CatalogAccessReferenceQuery catalog,
             RoleExpansionQuery roleExpansion,
-            EffectiveAccessQuery effectiveAccess,
+            AccessAdmissionConflictQuery effectiveAccess,
             GovernanceExceptionQuery exceptions,
             IdentityAccessReferenceQuery identities,
             IdGenerator ids,
@@ -355,14 +358,20 @@ public class GovernancePersistenceConfiguration {
     AccessRequestAccessApplicationService accessRequestAccessApplicationService(
             JdbcOutboxRepository outbox, AccessRequestRepository requests, AccessIntentCommand access,
             AccessIntentApplicationQuery replay, AccessRequestEligibilityEvaluator evaluator,
-            RequestAdmissionDecisionService decisions, TransactionExecutor transactions) {
-        return new AccessRequestAccessApplicationService(outbox, requests, access, replay, evaluator, decisions, transactions);
+            RequestAdmissionDecisionService decisions, TransactionExecutor transactions, AccessAdmissionCoordinator coordinator) {
+        return new AccessRequestAccessApplicationService(outbox, requests, access, replay, evaluator, decisions, transactions, coordinator);
     }
 
     @Bean
     AccessRequestAccessApplicationScheduler accessRequestAccessApplicationScheduler(
             AccessRequestAccessApplicationService service) {
         return new AccessRequestAccessApplicationScheduler(service);
+    }
+
+    @Bean
+    AccessPrivilegeIncreaseGuard accessPrivilegeIncreaseGuard(GovernancePolicyService policies, CatalogAccessReferenceQuery catalog,
+            RoleExpansionQuery roles, AccessAdmissionConflictQuery conflicts, GovernanceExceptionQuery exceptions) {
+        return new GovernanceAccessPrivilegeIncreaseGuard(policies, catalog, roles, conflicts, exceptions);
     }
 
     @Bean

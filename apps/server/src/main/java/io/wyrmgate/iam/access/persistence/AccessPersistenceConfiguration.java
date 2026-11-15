@@ -7,6 +7,10 @@ import io.wyrmgate.iam.access.application.AccessTargetReductionProcessingService
 import io.wyrmgate.iam.access.application.AccessTargetReductionRepository;
 import io.wyrmgate.iam.access.application.AccessTargetReductionWorkSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
+import io.wyrmgate.iam.access.application.AccessAdmissionCoordinator;
+import io.wyrmgate.iam.access.application.AccessPrivilegeIncreaseGuard;
+import io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery;
+import io.wyrmgate.iam.access.application.AccessAdmissionConflictQueryService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
 import io.wyrmgate.iam.access.application.AccessAssignmentQueryService;
@@ -72,6 +76,18 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
+    AccessAdmissionCoordinator accessAdmissionCoordinator(JdbcTemplate jdbc, TransactionExecutor transactions) {
+        return new AccessAdmissionCoordinator(new JdbcAccessAdmissionLockRepository(jdbc), transactions);
+    }
+
+    @Bean
+    AccessAdmissionConflictQuery accessAdmissionConflictQuery(AccessAssignmentRepository assignments,
+            IdentityAccessReferenceQuery identities, CatalogAccessTargetAvailabilityQuery catalog,
+            RoleExpansionQuery roles, EffectiveAccessSemanticSupport semantics) {
+        return new AccessAdmissionConflictQueryService(assignments, identities, catalog, roles, semantics);
+    }
+
+    @Bean
     AccessAssignmentCommandService accessAssignmentCommandService(
             AccessAssignmentRepository repository,
             IdentityAccessReferenceQuery identityReferences,
@@ -81,7 +97,7 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentFactSink facts,
             AccessAssignmentBoundaryScheduler boundaries,
             IdGenerator idGenerator,
-            TransactionExecutor transactionExecutor) {
+            TransactionExecutor transactionExecutor, AccessAdmissionCoordinator coordinator, AccessPrivilegeIncreaseGuard privilegeGuard) {
         return new AccessAssignmentCommandService(
                 repository,
                 identityReferences,
@@ -91,7 +107,7 @@ public class AccessPersistenceConfiguration {
                 facts,
                 boundaries,
                 idGenerator,
-                transactionExecutor);
+                transactionExecutor, coordinator, privilegeGuard);
     }
 
     @Bean
@@ -120,9 +136,9 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentCommandService commands,
             IdentityLifecycleAccessQuery identities,
             LifecycleAccessPrivilegeGuard guard,
-            LifecycleAccessApprovalCommand approvals) {
+            LifecycleAccessApprovalCommand approvals, AccessAdmissionCoordinator coordinator) {
         return new LifecycleAccessReconciliationService(
-                outbox, policies, assignments, commands, identities, guard, approvals);
+                outbox, policies, assignments, commands, identities, guard, approvals, coordinator);
     }
 
     @Bean

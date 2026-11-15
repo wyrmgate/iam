@@ -1,6 +1,6 @@
 package io.wyrmgate.iam.governance.application;
 
-import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
+import io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery;
 import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
 import io.wyrmgate.iam.access.domain.AccessAssignment;
 import io.wyrmgate.iam.catalog.application.CatalogAccessReferenceQuery;
@@ -25,7 +25,7 @@ public final class GovernanceLifecycleAccessPrivilegeGuard
     private final GovernancePolicyService policies;
     private final CatalogAccessReferenceQuery catalog;
     private final RoleExpansionQuery roles;
-    private final EffectiveAccessQuery effectiveAccess;
+    private final AccessAdmissionConflictQuery effectiveAccess;
     private final GovernanceExceptionQuery exceptions;
     private final LifecycleAccessEvaluationEvidenceSink evidence;
     private final IdGenerator ids;
@@ -34,7 +34,7 @@ public final class GovernanceLifecycleAccessPrivilegeGuard
             GovernancePolicyService policies,
             CatalogAccessReferenceQuery catalog,
             RoleExpansionQuery roles,
-            EffectiveAccessQuery effectiveAccess,
+            AccessAdmissionConflictQuery effectiveAccess,
             GovernanceExceptionQuery exceptions,
             LifecycleAccessEvaluationEvidenceSink evidence,
             IdGenerator ids) {
@@ -101,7 +101,7 @@ public final class GovernanceLifecycleAccessPrivilegeGuard
             }
             Set<UUID> current=counterpartIds.isEmpty()
                     ? Set.of()
-                    : effectiveAccess.currentEntitlementIds(tenant,identityId,counterpartIds,at);
+                    : effectiveAccess.overlappingEntitlementIds(tenant,identityId,counterpartIds,at,null);
 
             List<SoDRule> conflicts=new ArrayList<>();
             for(SoDRule rule:snapshot.rules()){

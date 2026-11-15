@@ -28,6 +28,8 @@ public final class AccessAssignmentCommandService {
     private final AccessAssignmentBoundaryScheduler boundaries;
     private final IdGenerator ids;
     private final TransactionExecutor transactions;
+    private final AccessAdmissionCoordinator admissionCoordinator;
+    private final AccessPrivilegeIncreaseGuard privilegeGuard;
 
     public AccessAssignmentCommandService(
             AccessAssignmentRepository assignments,
@@ -38,7 +40,8 @@ public final class AccessAssignmentCommandService {
             AccessAssignmentFactSink facts,
             AccessAssignmentBoundaryScheduler boundaries,
             IdGenerator ids,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions, AccessAdmissionCoordinator admissionCoordinator,
+            AccessPrivilegeIncreaseGuard privilegeGuard) {
         this.assignments = Objects.requireNonNull(assignments, "assignments");
         this.identityReferences = Objects.requireNonNull(
                 identityReferences, "identityReferences");
@@ -52,6 +55,8 @@ public final class AccessAssignmentCommandService {
         this.boundaries = Objects.requireNonNull(boundaries, "boundaries");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.admissionCoordinator = Objects.requireNonNull(admissionCoordinator);
+        this.privilegeGuard = Objects.requireNonNull(privilegeGuard);
     }
 
     public AccessAssignment createEntitlementAssignment(
@@ -63,7 +68,7 @@ public final class AccessAssignmentCommandService {
             Instant validFrom,
             Instant validUntil,
             Instant now) {
-        return createEntitlementAssignmentInternal(
+        return admissionCoordinator.execute(tenant, identityId, permit -> createEntitlementAssignmentInternal(
                 tenant,
                 identityId,
                 entitlementId,
@@ -76,10 +81,10 @@ public final class AccessAssignmentCommandService {
                 null,
                 null,
                 null,
-                now);
+                now));
     }
 
-    public AccessAssignment createRequestedEntitlementAssignment(
+    AccessAssignment createRequestedEntitlementAssignment(
             TenantContext tenant,
             UUID requestItemId,
             UUID identityId,
@@ -92,6 +97,7 @@ public final class AccessAssignmentCommandService {
             Instant now) {
         Objects.requireNonNull(requestItemId, "requestItemId");
         Objects.requireNonNull(admission, "admission");
+        admissionCoordinator.requireActive(tenant, identityId);
         return createEntitlementAssignmentInternal(
                 tenant,
                 identityId,
@@ -108,7 +114,7 @@ public final class AccessAssignmentCommandService {
                 now);
     }
 
-    public AccessAssignment createLifecyclePolicyEntitlementAssignment(
+    AccessAssignment createLifecyclePolicyEntitlementAssignment(
             TenantContext tenant,
             UUID ruleId,
             UUID identityId,
@@ -117,6 +123,7 @@ public final class AccessAssignmentCommandService {
             UUID correlationId,
             UUID causationId) {
         Objects.requireNonNull(ruleId, "ruleId");
+        admissionCoordinator.requireActive(tenant, identityId);
         return createEntitlementAssignmentInternal(
                 tenant,
                 identityId,
@@ -242,6 +249,11 @@ public final class AccessAssignmentCommandService {
                     "validUntil must be after validFrom.");
         }
 
+        if (provenanceKind == AccessAssignment.ProvenanceKind.MANUAL) {
+            privilegeGuard.requireAllowed(tenant, identityId, AccessAssignment.TargetKind.ENTITLEMENT, entitlementId,
+                    AccessTargetFingerprint.entitlement(entitlementId, entitlement.applicationTargetId()), validFrom != null && validFrom.isAfter(now) ? validFrom : now, validUntil, now);
+        }
+
         AccessAssignment.LifecycleState lifecycleState =
                 validFrom != null && validFrom.isAfter(now)
                         ? AccessAssignment.LifecycleState.SCHEDULED
@@ -285,7 +297,7 @@ public final class AccessAssignmentCommandService {
             Instant validFrom,
             Instant validUntil,
             Instant now) {
-        return createRoleAssignmentInternal(
+        return admissionCoordinator.execute(tenant, identityId, permit -> createRoleAssignmentInternal(
                 tenant,
                 identityId,
                 roleId,
@@ -298,10 +310,10 @@ public final class AccessAssignmentCommandService {
                 null,
                 null,
                 null,
-                now);
+                now));
     }
 
-    public AccessAssignment createRequestedRoleAssignment(
+    AccessAssignment createRequestedRoleAssignment(
             TenantContext tenant,
             UUID requestItemId,
             UUID identityId,
@@ -314,6 +326,7 @@ public final class AccessAssignmentCommandService {
             Instant now) {
         Objects.requireNonNull(requestItemId, "requestItemId");
         Objects.requireNonNull(admission, "admission");
+        admissionCoordinator.requireActive(tenant, identityId);
         return createRoleAssignmentInternal(
                 tenant,
                 identityId,
@@ -330,7 +343,7 @@ public final class AccessAssignmentCommandService {
                 now);
     }
 
-    public AccessAssignment createLifecyclePolicyRoleAssignment(
+    AccessAssignment createLifecyclePolicyRoleAssignment(
             TenantContext tenant,
             UUID ruleId,
             UUID identityId,
@@ -339,6 +352,7 @@ public final class AccessAssignmentCommandService {
             UUID correlationId,
             UUID causationId) {
         Objects.requireNonNull(ruleId, "ruleId");
+        admissionCoordinator.requireActive(tenant, identityId);
         return createRoleAssignmentInternal(
                 tenant,
                 identityId,
@@ -466,6 +480,11 @@ public final class AccessAssignmentCommandService {
                     "validUntil must be after validFrom.");
         }
 
+        if (provenanceKind == AccessAssignment.ProvenanceKind.MANUAL) {
+            privilegeGuard.requireAllowed(tenant, identityId, AccessAssignment.TargetKind.ROLE, roleId,
+                    AccessTargetFingerprint.role(expansion), validFrom != null && validFrom.isAfter(now) ? validFrom : now, validUntil, now);
+        }
+
         AccessAssignment.LifecycleState lifecycleState =
                 validFrom != null && validFrom.isAfter(now)
                         ? AccessAssignment.LifecycleState.SCHEDULED
@@ -513,7 +532,9 @@ public final class AccessAssignmentCommandService {
             UUID assignmentId,
             long expectedRevision,
             Instant now) {
-        return transition(tenant, assignmentId, expectedRevision, now, Action.RESUME);
+        var assignment = current(tenant, assignmentId, expectedRevision);
+        return admissionCoordinator.execute(tenant, assignment.identityId(), permit ->
+                transition(tenant, assignmentId, expectedRevision, now, Action.RESUME));
     }
 
     public AccessAssignment cancel(
@@ -543,6 +564,21 @@ public final class AccessAssignmentCommandService {
             AccessAssignment current = current(tenant, assignmentId, expectedRevision);
             if (action == Action.RESUME) {
                 requireCurrentIdentityEpoch(tenant, current);
+                UUID target = current.targetKind() == AccessAssignment.TargetKind.ROLE ? current.roleId() : current.entitlementId();
+                var availability = catalogAvailability.currentAvailability(tenant, CatalogAccessTargetKind.valueOf(current.targetKind().name()), target);
+                if (availability.isEmpty() || !availability.get().assignable()) throw new AccessAssignmentCommandException("target_not_assignable", "Assignment target is not assignable.");
+                String fingerprint;
+                if (current.targetKind() == AccessAssignment.TargetKind.ROLE) {
+                    var expansion = roleExpansion.expandCurrent(tenant, target);
+                    if (expansion.status() != RoleExpansionQuery.Status.AVAILABLE || expansion.paths().isEmpty()) throw new AccessAssignmentCommandException("role_not_assignable", "Role expansion unavailable.");
+                    fingerprint = AccessTargetFingerprint.role(expansion);
+                } else {
+                    var ref = catalogReferences.resolveActiveEntitlement(tenant, target);
+                    if (ref.status() != CatalogAccessReferenceQuery.Status.VALID) throw new AccessAssignmentCommandException("target_not_assignable", "Entitlement unavailable.");
+                    fingerprint = AccessTargetFingerprint.entitlement(target, ref.applicationTargetId());
+                }
+                privilegeGuard.requireAllowed(tenant, current.identityId(), current.targetKind(), target, fingerprint,
+                        current.validFrom() != null && current.validFrom().isAfter(now) ? current.validFrom() : now, current.validUntil(), now);
             }
             AccessAssignment.LifecycleState next;
             try {

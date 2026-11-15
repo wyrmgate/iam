@@ -218,7 +218,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
                         requests,
                         catalog,
                         roles,
-                        effectiveAccess,
+                        (t, i, ids, from, until) -> effectiveAccess.currentEntitlementIds(t, i, ids, from),
                         (t, subject, rules, at) -> java.util.Map.of(),
                         identities,
                         ids,
@@ -390,7 +390,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
                         policyService,
                         catalog,
                         roles,
-                        effectiveAccess,
+                        (t, i, ids, from, until) -> effectiveAccess.currentEntitlementIds(t, i, ids, from),
                         (requestedTenant, subjectIdentityId, ruleIds, at) -> Map.of(),
                         new JdbcLifecycleAccessEvaluationEvidenceSink(jdbc),
                         ids);

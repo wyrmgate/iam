@@ -96,7 +96,7 @@ public final class EffectiveAccessSemanticSupport {
                 && status.accessEligibilityEpoch() == assignment.identityAccessEpoch();
     }
 
-    private boolean specificDirectCompatible(
+    boolean specificDirectCompatible(
             TenantContext tenant, AccessAssignment assignment) {
         if (assignment.principalConstraintKind()
                 != AccessAssignment.PrincipalConstraintKind.SPECIFIC) return true;
@@ -111,7 +111,7 @@ public final class EffectiveAccessSemanticSupport {
                 && entitlement.applicationTargetId().equals(principal.applicationTargetId());
     }
 
-    private boolean specificRoleCompatible(
+    boolean specificRoleCompatible(
             TenantContext tenant,
             AccessAssignment assignment,
             RoleExpansionQuery.Result expansion) {

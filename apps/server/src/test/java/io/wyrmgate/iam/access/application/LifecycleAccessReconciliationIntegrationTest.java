@@ -122,11 +122,11 @@ class LifecycleAccessReconciliationIntegrationTest {
                 new JdbcAccessAssignmentBoundaryScheduler(
                         new JdbcScheduledWorkRepository(jdbc, ids)),
                 ids,
-                transactions);
+                transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
         policyService = new LifecycleAccessPolicyService(
                 policies, identityPolicy, catalog, roles, ids, transactions);
         reconciler = new LifecycleAccessReconciliationService(
-                outbox, policies, assignments, commands, identityPolicy, guard, approval);
+                outbox, policies, assignments, commands, identityPolicy, guard, approval, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions));
 }
 
     @BeforeEach

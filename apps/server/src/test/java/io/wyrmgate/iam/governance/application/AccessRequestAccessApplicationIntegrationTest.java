@@ -84,6 +84,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
     private static JdbcAccessAssignmentRepository assignmentRepository;
     private static AccessIntentCommandService accessIntent;
+    private static io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery conflicts;
 
     private TenantContext tenant;
     private JdbcAccessRequestRepository requestRepository;
@@ -159,7 +160,9 @@ class AccessRequestAccessApplicationIntegrationTest {
                         facts,
                         boundaries,
                         ids,
-                        transactions);
+                        transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions), io.wyrmgate.iam.testsupport.AdmissionTestSupport.allowForFixture());
+        conflicts = new io.wyrmgate.iam.access.application.AccessAdmissionConflictQueryService(assignmentRepository, identityReferences, catalogAvailability, roleExpansion,
+                new io.wyrmgate.iam.access.application.EffectiveAccessSemanticSupport(assignmentRepository, identityReferences, new CatalogQueryService(catalogRepository), catalogAvailability, roleExpansion));
         accessIntent = new AccessIntentCommandService(
                 assignmentRepository, assignmentCommands);
     }
@@ -544,11 +547,13 @@ class AccessRequestAccessApplicationIntegrationTest {
         assertThat(requestDerivedAssignmentCount(authorized.id())).isZero();
 
         currentEvaluator = (t, r, item) -> EligibilityResult.authorized(contextFor(t, r, item));
-        AccessIntentCommand crashAfterCommit = (t, request, admission, at) -> {
-            accessIntent.applyRequestedAccess(t, request, admission, at);
-            throw new IllegalStateException("simulated crash after Access commit");
-        };
-        assertThat(processor(crashAfterCommit, NOW.plusSeconds(9)).processAvailable().failed()).isEqualTo(1);
+        // Commit Access in the admission transaction, then simulate a worker dying before APPLIED.
+        var request = requestRepository.findRequest(tenant, authorized.accessRequestId()).orElseThrow();
+        var context = contextFor(tenant, request, authorized);
+        io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions).execute(tenant, beneficiary.id(), permit -> accessIntent.applyRequestedAccess(tenant,
+                new AccessIntentCommand.RequestedAccess(authorized.id(), beneficiary.id(), AccessIntentCommand.TargetKind.ENTITLEMENT,
+                        null, authorized.entitlementId(), AccessIntentCommand.PrincipalConstraintKind.ANY, null, authorized.validFrom(), authorized.validUntil()),
+                new AccessIntentCommand.Admission(context.identityEpoch(), context.targetFingerprint()), NOW.plusSeconds(9)));
         assertThat(requestDerivedAssignmentCount(authorized.id())).isEqualTo(1);
         currentEvaluator = (t, r, item) -> EligibilityResult.denied("policy_denied");
         assertThat(processor(accessIntent, NOW.plusSeconds(15)).processAvailable().processed()).isEqualTo(1);
@@ -594,6 +599,37 @@ class AccessRequestAccessApplicationIntegrationTest {
         assertThat(requestDerivedAssignmentCount(authorized.id())).isZero();
     }
 
+    @Test
+    void independentConcurrentAdmissionsCannotBothPassAnOverlappingConflict() throws Exception {
+        var beneficiary = identity("Concurrent subject");
+        var left = entitlement().entitlementId();
+        var right = entitlement().entitlementId();
+        var from = NOW.plusSeconds(3600);
+        var until = from.plusSeconds(3600);
+        var coordinator = io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions);
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        java.util.function.BiFunction<java.util.UUID,java.util.UUID,Boolean> admit = (target,counterpart) ->
+                coordinator.execute(tenant, beneficiary.id(), permit -> {
+                    if (conflicts.overlappingEntitlementIds(tenant, beneficiary.id(), java.util.Set.of(counterpart), from, until).contains(counterpart)) return false;
+                    var reference = new CatalogQueryService(catalogRepository).resolveActiveEntitlement(tenant,target);
+                    accessIntent.applyRequestedAccess(tenant,new AccessIntentCommand.RequestedAccess(ids.nextId(),beneficiary.id(),
+                            AccessIntentCommand.TargetKind.ENTITLEMENT,null,target,AccessIntentCommand.PrincipalConstraintKind.ANY,null,from,until),
+                            new AccessIntentCommand.Admission(identityReferences.accessStatus(tenant,beneficiary.id()).accessEligibilityEpoch(),
+                                    io.wyrmgate.iam.catalog.application.AccessTargetFingerprint.entitlement(target,reference.applicationTargetId())), NOW);
+                    return true;
+                });
+        try (var workers = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = workers.submit(() -> { gate.await(); return admit.apply(left,right); });
+            var second = workers.submit(() -> { gate.await(); return admit.apply(right,left); });
+            gate.countDown();
+            assertThat(java.util.List.of(first.get(15,java.util.concurrent.TimeUnit.SECONDS),second.get(15,java.util.concurrent.TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true,false);
+        }
+        assertThat(conflicts.overlappingEntitlementIds(tenant,beneficiary.id(),java.util.Set.of(left,right),from,until)).hasSize(1);
+        assertThat(conflicts.overlappingEntitlementIds(tenant,beneficiary.id(),java.util.Set.of(left,right),until,until.plusSeconds(1))).isEmpty();
+        assertThat(conflicts.overlappingEntitlementIds(tenant,beneficiary.id(),java.util.Set.of(left,right),NOW,from)).isEmpty();
+    }
+
     private RequestAdmissionContext contextFor(TenantContext t, AccessRequestModels.AccessRequest request,
                                                AccessRequestModels.RequestItem item) {
         var ref = new CatalogQueryService(catalogRepository).resolveActiveEntitlement(t, item.entitlementId());
@@ -628,7 +664,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                 requestRepository,
                 command, accessIntent, currentEvaluator,
                 new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedAccess),
-                transactions,
+                transactions, io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions),
                 Clock.fixed(now, ZoneOffset.UTC));
     }
 
@@ -681,7 +717,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
     private TargetEntitlement entitlement() {
         String suffix = ids.nextId().toString()
-                .substring(0, 8);
+                .substring(24);
         var application = catalog.createApplication(
                 tenant,
                 "app-" + suffix,

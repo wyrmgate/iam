@@ -271,6 +271,32 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
     }
 
     @Override
+    public List<AccessAssignment> findAdmissionPage(TenantContext tenant, UUID identityId, long identityEpoch,
+            java.util.Set<UUID> entitlementIds, Instant from, Instant until,
+            Instant afterCreatedAt, UUID afterId, int limit) {
+        if (limit < 1 || limit > 200 || entitlementIds.isEmpty() || entitlementIds.size() > 2000)
+            throw new IllegalArgumentException("invalid admission page bounds");
+        String sql = baseSelect() + """
+                 WHERE tenant_id = ? AND identity_id = ? AND identity_access_epoch = ?
+                   AND lifecycle_state IN ('ACTIVE','SCHEDULED')
+                   AND (valid_until IS NULL OR valid_until > ?)
+                   AND (?::timestamptz IS NULL OR valid_from IS NULL OR valid_from < ?)
+                   AND (target_kind = 'ROLE' OR entitlement_id IN (
+                """ + String.join(",", java.util.Collections.nCopies(entitlementIds.size(), "?")) + "))";
+        List<Object> args = new ArrayList<>();
+        args.add(tenant.tenantId()); args.add(identityId); args.add(identityEpoch);
+        args.add(Timestamp.from(from)); args.add(timestamp(until)); args.add(timestamp(until));
+        args.addAll(entitlementIds);
+        if (afterCreatedAt != null) {
+            sql += " AND (created_at, id) > (?, ?)";
+            args.add(Timestamp.from(afterCreatedAt)); args.add(afterId);
+        }
+        sql += " ORDER BY created_at, id LIMIT ?";
+        args.add(limit);
+        return jdbc.query(sql, (rs,n) -> assignment(rs), args.toArray());
+    }
+
+    @Override
     public List<AccessAssignment> findReviewPage(
             TenantContext tenant, UUID identityId, Instant snapshotAt,
             Instant afterCreatedAt, UUID afterId, int limit) {
