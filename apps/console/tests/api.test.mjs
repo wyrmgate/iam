@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ApiError, createIdempotencyKey, getIdentity, listIdentities, mutationHeaders, transitionIdentity } from '../src/api.ts';
+import { ApiError, changeLocalPassword, createIdempotencyKey, getIdentity, listIdentities, mutationHeaders, transitionIdentity } from '../src/api.ts';
 import { captureFetch, installFetch, jsonResponse } from './helpers/http.mjs';
 
 test('idempotency keys are causal, unique, and contract-sized', () => {
@@ -78,4 +78,16 @@ test('403 remains a server authorization decision with correlation context', asy
       && error.status === 403
       && error.correlationId === '00000000-0000-0000-0000-000000000099',
   );
+});
+
+
+test('password change uses dedicated same-origin input, no selectors or idempotency replay', async (t) => {
+  const capturedRequest = captureFetch(t, async () => new Response(null, { status: 204 }));
+  await changeLocalPassword('old-password', 'new-password-example');
+  const request = capturedRequest();
+  assert.equal(request.url, '/api/auth/password/change');
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.init.credentials, 'same-origin');
+  assert.deepEqual(JSON.parse(request.init.body), { currentPassword: 'old-password', newPassword: 'new-password-example' });
+  assert.equal(request.init.headers.get('Idempotency-Key'), null);
 });

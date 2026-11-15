@@ -187,3 +187,7 @@ This ledger is operational coordination documentation only. In a conflict, use t
 ### Credential v3 cancellation UI coordination (#513)
 
 Capability-local follow-up on the accepted ADR-0065 cancellation operation: branch `codex/credential-v3-rotation-closure`, initially stacked on #515, scoped to `CredentialsWorkspace.tsx` and its focused source-contract test. Existing SemanticWorkspace action, ETag, idempotency and confirmation primitives are consumed unchanged; no shared public UI lock, routing, theme or authentication changes. No internal rotation step or password-change form is introduced. Implementation and verification are tracked in #513; merge/CI evidence will be recorded there. No live DEV UI verification is claimed.
+
+### Authentication v3 shared session UI coordination (#517)
+
+AUTH-V3-03 owns the temporary `SignInGate.tsx` / `ShellChrome.tsx` session-experience lock on `codex/auth-v3-public-edge-login` (stacked on subject-session-fencing / #519). Scope: dedicated first-party password-change form and session menu action; consume existing primitives and same-origin API client unchanged apart from the dedicated method. No global theme, navigation registry, domain authority or generic secret-management UI changes. No parallel shared-shell edits while this PR is active. Exact-head Console tests/typecheck/build and repository gates required; live DEV acceptance separate. Lock releases after verified merge.

@@ -230,6 +230,10 @@ export async function signIn(input: LoginInput): Promise<AuthSession> {
   return (await apiRequest<AuthSession>(`${API_ROOT}/auth/login`, { method: 'POST', body: input })).data;
 }
 
+export async function changeLocalPassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiRequest<void>(`${API_ROOT}/auth/password/change`, { method: 'POST', body: { currentPassword, newPassword } });
+}
+
 export async function signOut(): Promise<void> {
   await apiRequest<void>(`${API_ROOT}/auth/logout`, { method: 'POST' });
 }
