@@ -146,9 +146,12 @@ public final class ObservedAccessDriftEvaluationService {
             var other=observedAccess.grant(tenant,c.relatedBindingId(),finding.relatedProviderStableId());
             if(other.presence()==Presence.UNKNOWN) return false;
             if(other.presence()==Presence.TRUSTED_ABSENT) return true;
-            return !Objects.equals(other.fact().mappedPrincipalId(),c.relatedPrincipalId())
-                    || !Objects.equals(other.fact().mappedEntitlementId(),c.relatedEntitlementId())
-                    || !mappedForIdentity(tenant,other.fact(),c.identityId());
+            if(!Objects.equals(other.fact().mappedPrincipalId(),c.relatedPrincipalId())
+                    || !Objects.equals(other.fact().mappedEntitlementId(),c.relatedEntitlementId())) return true;
+            var related=identities.principal(tenant,c.relatedPrincipalId());
+            if(related.status()==IdentityAccessReferenceQuery.Status.NOT_FOUND) return false;
+            return !Objects.equals(related.identityId(),c.identityId())
+                    || !Objects.equals(related.applicationTargetId(),other.fact().applicationTargetId());
         }
         return !Objects.equals(grantCondition(tenant,grant),condition(finding));
     }
