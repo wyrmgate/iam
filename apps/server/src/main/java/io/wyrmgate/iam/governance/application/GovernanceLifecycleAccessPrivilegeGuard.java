@@ -70,9 +70,10 @@ public final class GovernanceLifecycleAccessPrivilegeGuard
             policyVersionId=snapshot.version().id();
 
             Set<UUID> targetEntitlements=new LinkedHashSet<>();
+            String targetFingerprint;
             if(targetKind==AccessAssignment.TargetKind.ENTITLEMENT){
-                if(catalog.resolveActiveEntitlement(tenant,targetId).status()
-                        != CatalogAccessReferenceQuery.Status.VALID){
+                var reference=catalog.resolveActiveEntitlement(tenant,targetId);
+                if(reference.status() != CatalogAccessReferenceQuery.Status.VALID){
                     return record(
                             tenant, identityId, lifecycleRuleId, policyVersionId,
                             targetKind, targetId,
@@ -80,6 +81,7 @@ public final class GovernanceLifecycleAccessPrivilegeGuard
                             List.of(), at, correlationId, causationId);
                 }
                 targetEntitlements.add(targetId);
+                targetFingerprint=io.wyrmgate.iam.catalog.application.AccessTargetFingerprint.entitlement(targetId,reference.applicationTargetId());
             }else{
                 var expansion=roles.expandCurrent(tenant,targetId);
                 if(expansion.status()!=RoleExpansionQuery.Status.AVAILABLE || expansion.paths().isEmpty()){
@@ -90,6 +92,7 @@ public final class GovernanceLifecycleAccessPrivilegeGuard
                             List.of(), at, correlationId, causationId);
                 }
                 expansion.paths().forEach(path->targetEntitlements.add(path.entitlementId()));
+                targetFingerprint=io.wyrmgate.iam.catalog.application.AccessTargetFingerprint.role(expansion);
             }
 
             Set<UUID> counterpartIds=new LinkedHashSet<>();
@@ -135,13 +138,17 @@ public final class GovernanceLifecycleAccessPrivilegeGuard
                 if(conflict.action()==SoDAction.REQUIRE_APPROVAL) approval=true;
             }
 
+            String riskFingerprint=io.wyrmgate.iam.platform.persistence.RequestFingerprint.sha256(conflictEvidence.stream()
+                    .map(conflict -> conflict.sodRuleId()+"|"+conflict.governanceExceptionId())
+                    .sorted().collect(java.util.stream.Collectors.joining(";")).getBytes(java.nio.charset.StandardCharsets.UTF_8)).value();
+            var context=new MaterialContext(policyVersionId,targetFingerprint,riskFingerprint);
             Result result;
             if(deny){
                 result=new Result(Decision.DENY,"sod_denied");
             }else if(approval){
-                result=new Result(Decision.REQUIRE_APPROVAL,"sod_approval_required");
+                result=new Result(Decision.REQUIRE_APPROVAL,"sod_approval_required",context);
             }else{
-                result=Result.authorize();
+                result=new Result(Decision.AUTHORIZE,"authorized",context);
             }
             return record(
                     tenant, identityId, lifecycleRuleId, policyVersionId,

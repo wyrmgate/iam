@@ -119,10 +119,12 @@ public final class AccessAssignmentCommandService {
             UUID ruleId,
             UUID identityId,
             UUID entitlementId,
+            AccessIntentCommand.Admission admission,
             Instant now,
             UUID correlationId,
             UUID causationId) {
         Objects.requireNonNull(ruleId, "ruleId");
+        Objects.requireNonNull(admission, "admission");
         admissionCoordinator.requireActive(tenant, identityId);
         return createEntitlementAssignmentInternal(
                 tenant,
@@ -136,7 +138,7 @@ public final class AccessAssignmentCommandService {
                 ruleId,
                 correlationId,
                 causationId,
-                null,
+                admission,
                 now);
     }
 
@@ -348,10 +350,12 @@ public final class AccessAssignmentCommandService {
             UUID ruleId,
             UUID identityId,
             UUID roleId,
+            AccessIntentCommand.Admission admission,
             Instant now,
             UUID correlationId,
             UUID causationId) {
         Objects.requireNonNull(ruleId, "ruleId");
+        Objects.requireNonNull(admission, "admission");
         admissionCoordinator.requireActive(tenant, identityId);
         return createRoleAssignmentInternal(
                 tenant,
@@ -365,7 +369,7 @@ public final class AccessAssignmentCommandService {
                 ruleId,
                 correlationId,
                 causationId,
-                null,
+                admission,
                 now);
     }
 
