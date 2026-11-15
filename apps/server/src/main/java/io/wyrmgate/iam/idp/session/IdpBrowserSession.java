@@ -11,6 +11,9 @@ public record IdpBrowserSession(
         UUID identityId,
         UUID credentialId,
         long credentialRevision,
+        Long tenantRevision,
+        Long principalRevision,
+        Long identityRevision,
         String tokenHash,
         Instant createdAt,
         Instant lastSeenAt,
@@ -31,6 +34,12 @@ public record IdpBrowserSession(
         if (credentialRevision < 1) {
             throw new IllegalArgumentException("credentialRevision must be positive");
         }
+        if ((tenantRevision != null && tenantRevision < 1)
+                || (principalRevision != null && principalRevision < 1)
+                || (identityRevision != null && identityRevision < 1)
+                || (revokedAt == null && (tenantRevision == null || principalRevision == null || identityRevision == null))) {
+            throw new IllegalArgumentException("usable session requires positive establishing revisions");
+        }
         if (tokenHash.length() != 64) {
             throw new IllegalArgumentException("tokenHash must be a SHA-256 hex digest");
         }
@@ -45,6 +54,7 @@ public record IdpBrowserSession(
     public boolean usableAt(Instant at) {
         Objects.requireNonNull(at, "at");
         return revokedAt == null
+                && !at.isBefore(createdAt)
                 && at.isBefore(idleExpiresAt)
                 && at.isBefore(absoluteExpiresAt);
     }

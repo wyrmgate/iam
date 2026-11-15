@@ -23,10 +23,10 @@ public final class JdbcIdpBrowserSessionRepository
         jdbc.update("""
                 INSERT INTO platform.idp_browser_session (
                     id, tenant_id, principal_id, identity_id,
-                    credential_id, credential_revision, token_hash,
+                    credential_id, credential_revision, tenant_revision, principal_revision, identity_revision, token_hash,
                     created_at, last_seen_at, idle_expires_at,
                     absolute_expires_at, revoked_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 session.id(),
                 tenant.tenantId(),
@@ -34,6 +34,7 @@ public final class JdbcIdpBrowserSessionRepository
                 session.identityId(),
                 session.credentialId(),
                 session.credentialRevision(),
+                session.tenantRevision(), session.principalRevision(), session.identityRevision(),
                 session.tokenHash(),
                 Timestamp.from(session.createdAt()),
                 Timestamp.from(session.lastSeenAt()),
@@ -48,7 +49,7 @@ public final class JdbcIdpBrowserSessionRepository
             String tokenHash) {
         return jdbc.query("""
                 SELECT id, principal_id, identity_id,
-                       credential_id, credential_revision, token_hash,
+                       credential_id, credential_revision, tenant_revision, principal_revision, identity_revision, token_hash,
                        created_at, last_seen_at, idle_expires_at,
                        absolute_expires_at, revoked_at
                 FROM platform.idp_browser_session
@@ -65,7 +66,7 @@ public final class JdbcIdpBrowserSessionRepository
     public Optional<LocatedSession> findByTokenHash(String tokenHash) {
         return jdbc.query("""
                 SELECT tenant_id, id, principal_id, identity_id,
-                       credential_id, credential_revision, token_hash,
+                       credential_id, credential_revision, tenant_revision, principal_revision, identity_revision, token_hash,
                        created_at, last_seen_at, idle_expires_at,
                        absolute_expires_at, revoked_at
                 FROM platform.idp_browser_session
@@ -83,7 +84,7 @@ public final class JdbcIdpBrowserSessionRepository
     public Optional<IdpBrowserSession> findById(TenantContext tenant, UUID sessionId) {
         return jdbc.query("""
                 SELECT id, principal_id, identity_id,
-                       credential_id, credential_revision, token_hash,
+                       credential_id, credential_revision, tenant_revision, principal_revision, identity_revision, token_hash,
                        created_at, last_seen_at, idle_expires_at,
                        absolute_expires_at, revoked_at
                 FROM platform.idp_browser_session
@@ -140,6 +141,9 @@ public final class JdbcIdpBrowserSessionRepository
                 rs.getObject("identity_id", UUID.class),
                 rs.getObject("credential_id", UUID.class),
                 rs.getLong("credential_revision"),
+                rs.getObject("tenant_revision", Long.class),
+                rs.getObject("principal_revision", Long.class),
+                rs.getObject("identity_revision", Long.class),
                 rs.getString("token_hash"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("last_seen_at").toInstant(),

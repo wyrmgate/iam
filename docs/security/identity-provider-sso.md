@@ -86,3 +86,7 @@ ADR-0064 permits only a current first-party browser session's exact local PASSWO
 ### Authorization-code redemption freshness (ADR-0066)
 
 Revalidate the original tenant-scoped session, exact subject and effective Credential revision and current governed application access (when required) after code consumption and client/redirect/PKCE binding checks, before signing. Missing/denied context fails closed; unavailable mandatory evaluation produces no token. Exchange is not browser activity. Session touches are monotonic and reject expired/revoked rows. Previously issued stateless JWTs are not retroactively revoked.
+
+### Establishing subject revisions (ADR-0067)
+
+First-party sessions bind the active Tenant and exact Principal, Identity and Credential revisions. Current eligibility and exact revisions are checked on every resolution and code redemption. Any mismatch permanently invalidates the session, including suspend/reactivate cycles. Profile-only revision changes may force reauthentication until a narrower security epoch is defined. V31 revokes pre-upgrade sessions without inventing establishing revisions; trusted installation verification remains separate and may operate during PROVISIONING.

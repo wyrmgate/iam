@@ -108,7 +108,7 @@ A concrete provider endpoint and mapping flow must be accepted separately before
 
 ## Session bounds and invalidation
 
-Browser sessions default to 30 minutes idle and 8 hours absolute. Resolution fails closed and opportunistically revokes the session when it is expired/revoked, Principal or Identity is no longer eligible, the establishing Credential no longer belongs to the Principal, Credential lifecycle/temporal validity changes, or the exact Credential revision changes. Logout is server-side invalidation, not merely cookie deletion. Browser activity updates are monotonic and cannot revive an expired or revoked session. Existing stateless JWTs remain bounded by their expiry; no online revocation is implied.
+Browser sessions default to 30 minutes idle and 8 hours absolute. ADR-0067 binds ACTIVE Tenant revision and exact establishing Principal/Identity revisions in addition to the Credential revision. Any revision change forces reauthentication, even after reactivation; this conservatively includes profile-only edits. V31 revokes pre-upgrade sessions without fabricated revision history. Resolution fails closed and opportunistically revokes the session when it is expired/revoked, Principal or Identity is no longer eligible, the establishing Credential no longer belongs to the Principal, Credential lifecycle/temporal validity changes, or the exact Credential revision changes. Logout is server-side invalidation, not merely cookie deletion. Browser activity updates are monotonic and cannot revive an expired or revoked session. Existing stateless JWTs remain bounded by their expiry; no online revocation is implied.
 
 ## Subjects, claims, signing, and rotation
 

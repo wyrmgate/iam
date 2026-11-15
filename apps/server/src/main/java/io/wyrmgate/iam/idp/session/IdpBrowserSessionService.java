@@ -6,6 +6,8 @@ import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery.AuthenticationSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
+import io.wyrmgate.iam.tenancy.domain.TenantLifecycleState;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -25,6 +27,7 @@ public final class IdpBrowserSessionService {
 
     private final IdpBrowserSessionRepository sessions;
     private final IdentityAuthenticationQuery identities;
+    private final TenantOverviewQuery tenants;
     private final CredentialAuthenticationService credentials;
     private final IdpSessionTokenCodec tokens;
     private final IdGenerator ids;
@@ -34,12 +37,14 @@ public final class IdpBrowserSessionService {
     public IdpBrowserSessionService(
             IdpBrowserSessionRepository sessions,
             IdentityAuthenticationQuery identities,
+            TenantOverviewQuery tenants,
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
             IdGenerator ids) {
         this(
                 sessions,
                 identities,
+                tenants,
                 credentials,
                 tokens,
                 ids,
@@ -50,6 +55,7 @@ public final class IdpBrowserSessionService {
     public IdpBrowserSessionService(
             IdpBrowserSessionRepository sessions,
             IdentityAuthenticationQuery identities,
+            TenantOverviewQuery tenants,
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
             IdGenerator ids,
@@ -57,6 +63,7 @@ public final class IdpBrowserSessionService {
             Duration absoluteTimeout) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.identities = Objects.requireNonNull(identities, "identities");
+        this.tenants = Objects.requireNonNull(tenants, "tenants");
         this.credentials = Objects.requireNonNull(credentials, "credentials");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.ids = Objects.requireNonNull(ids, "ids");
@@ -82,6 +89,7 @@ public final class IdpBrowserSessionService {
             throw new IllegalArgumentException("credential proof does not belong to authentication subject");
         }
 
+        long tenantRevision = activeTenantRevision(tenant).orElseThrow(InvalidCredentialProofException::new);
         if (identities.eligibleSubject(tenant, subject.principalId()).filter(subject::equals).isEmpty()
                 || !credentials.isStillValid(tenant, subject.principalId(), credential.credentialId(),
                         credential.credentialRevision(), now)) {
@@ -96,6 +104,7 @@ public final class IdpBrowserSessionService {
                 subject.identityId(),
                 credential.credentialId(),
                 credential.credentialRevision(),
+                tenantRevision, subject.principalRevision(), subject.identityRevision(),
                 issued.hash(),
                 now,
                 now,
@@ -203,10 +212,16 @@ public final class IdpBrowserSessionService {
             return Optional.empty();
         }
 
+        if (activeTenantRevision(tenant).filter(revision -> revision.equals(session.tenantRevision())).isEmpty()) {
+            revokeQuietly(tenant, session.id(), now);
+            return Optional.empty();
+        }
         Optional<AuthenticationSubject> subject = identities.eligibleSubject(
                 tenant, session.principalId());
         if (subject.isEmpty()
                 || !subject.get().identityId().equals(session.identityId())
+                || !Objects.equals(session.principalRevision(), subject.get().principalRevision())
+                || !Objects.equals(session.identityRevision(), subject.get().identityRevision())
                 || !credentials.isStillValid(
                         tenant,
                         session.principalId(),
@@ -237,6 +252,12 @@ public final class IdpBrowserSessionService {
                 session.createdAt(),
                 idleExpiry,
                 session.absoluteExpiresAt()));
+    }
+
+    private Optional<Long> activeTenantRevision(TenantContext tenant) {
+        return tenants.find(tenant.tenantId())
+                .filter(current -> current.lifecycleState() == TenantLifecycleState.ACTIVE)
+                .map(TenantOverviewQuery.TenantSummary::revision);
     }
 
     private Optional<String> hash(String rawToken) {
