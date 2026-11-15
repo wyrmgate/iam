@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.governance.application;
 
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandException;
+import io.wyrmgate.iam.access.application.AccessAdmissionCoordinator;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
 import io.wyrmgate.iam.access.application.AccessIntentApplicationQuery;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.EligibilityOutcome;
@@ -69,6 +70,7 @@ public final class AccessRequestAccessApplicationService {
     private final RequestAdmissionDecisionService decisions;
     private final TransactionExecutor transactions;
     private final Clock clock;
+    private final AccessAdmissionCoordinator coordinator;
 
     public AccessRequestAccessApplicationService(
             JdbcOutboxRepository outbox,
@@ -77,12 +79,12 @@ public final class AccessRequestAccessApplicationService {
             AccessIntentApplicationQuery replay,
             AccessRequestEligibilityEvaluator evaluator,
             RequestAdmissionDecisionService decisions,
-            TransactionExecutor transactions) {
+            TransactionExecutor transactions, AccessAdmissionCoordinator coordinator) {
         this(
                 outbox,
                 requests,
                 access, replay, evaluator, decisions,
-                transactions,
+                transactions, coordinator,
                 Clock.systemUTC());
     }
 
@@ -93,7 +95,7 @@ public final class AccessRequestAccessApplicationService {
             AccessIntentApplicationQuery replay,
             AccessRequestEligibilityEvaluator evaluator,
             RequestAdmissionDecisionService decisions,
-            TransactionExecutor transactions,
+            TransactionExecutor transactions, AccessAdmissionCoordinator coordinator,
             Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.requests = Objects.requireNonNull(requests, "requests");
@@ -104,6 +106,7 @@ public final class AccessRequestAccessApplicationService {
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.coordinator = Objects.requireNonNull(coordinator);
     }
 
     public ProcessingBatchResult processAvailable() {
@@ -181,12 +184,15 @@ public final class AccessRequestAccessApplicationService {
                         ? AccessIntentCommand.PrincipalConstraintKind.ANY : AccessIntentCommand.PrincipalConstraintKind.SPECIFIC,
                 item.specificPrincipalId(), item.validFrom(), item.validUntil());
 
+        AccessIntentCommand.Result applied = coordinator.execute(claimed.tenant(), request.beneficiaryIdentityId(), permit -> {
+        RequestItem lockedItem = requests.findItem(claimed.tenant(), item.id()).orElseThrow();
+        if (lockedItem.state() != ItemState.AUTHORIZED || lockedItem.revision() != item.revision()) return null;
         // A historical Access commit must be recovered before any new evaluation.
         AccessIntentCommand.Result application = replay.findApplied(claimed.tenant(), requested).orElse(null);
         if (application == null) {
             if (item.validUntil() != null && !item.validUntil().isAfter(now)) {
                 recordTerminalApplicationOutcome(claimed, item, ItemState.EXPIRED, "validity_already_ended", now);
-                return;
+                return null;
             }
             var eligibility = RequestAdmissionDecisionService.evaluate(evaluator, claimed.tenant(), request, item);
             if (eligibility.outcome() == EligibilityOutcome.UNAVAILABLE) {
@@ -199,7 +205,7 @@ public final class AccessRequestAccessApplicationService {
             });
             // A changed material decision publishes a successor authorization fact, or
             // transitions to a terminal/pending-approval state. Do not apply the old revision.
-            if (current.state() != ItemState.AUTHORIZED || current.revision() != item.revision()) return;
+            if (current.state() != ItemState.AUTHORIZED || current.revision() != item.revision()) return null;
             var context = eligibility.context();
             try {
                 application = access.applyRequestedAccess(claimed.tenant(), requested,
@@ -208,10 +214,13 @@ public final class AccessRequestAccessApplicationService {
                 ItemState terminal = terminalState(rejected.code());
                 if (terminal == null) throw rejected;
                 recordTerminalApplicationOutcome(claimed, item, terminal, rejected.code(), now);
-                return;
+                return null;
             }
         }
-        AccessIntentCommand.Result applied = application;
+        return application;
+        });
+        if (applied == null) return;
+
 
         transactions.required(() -> {
             RequestItem current = requests.findItem(

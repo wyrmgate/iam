@@ -136,9 +136,9 @@ public class AccessPersistenceConfiguration {
             AccessAssignmentCommandService commands,
             IdentityLifecycleAccessQuery identities,
             LifecycleAccessPrivilegeGuard guard,
-            LifecycleAccessApprovalCommand approvals) {
+            LifecycleAccessApprovalCommand approvals, AccessAdmissionCoordinator coordinator) {
         return new LifecycleAccessReconciliationService(
-                outbox, policies, assignments, commands, identities, guard, approvals);
+                outbox, policies, assignments, commands, identities, guard, approvals, coordinator);
     }
 
     @Bean
