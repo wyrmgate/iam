@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.idp.session;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import io.wyrmgate.iam.audit.application.AuditRecordDraft;
 import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.audit.domain.AuditOutcome;
@@ -108,6 +109,10 @@ public final class IdpPasswordChangeController {
     }
 
     public record PasswordChangeRequest(char[] currentPassword, char[] newPassword) {
+        @JsonAnySetter
+        public void rejectUnknown(String name, Object ignored) {
+            throw new IllegalArgumentException("unexpected password change field");
+        }
         @Override public String toString() { return "PasswordChangeRequest[REDACTED]"; }
     }
 }

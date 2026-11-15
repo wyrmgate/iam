@@ -648,6 +648,38 @@ class CredentialPersistenceIntegrationTest {
         java.util.Arrays.fill(newPassword, (char) 0);
     }
 
+    @Test
+    void failedLocalReplacementRollsBackVerifierAndRotationWithoutRevokingOld() {
+        UUID principal = principal();
+        UUID actor = identity();
+        UUID oldId = ids.nextId();
+        var store = new io.wyrmgate.iam.credential.persistence.JdbcLocalPasswordVerifierStore(jdbc);
+        char[] oldPassword = "old-password-example".toCharArray();
+        char[] newPassword = "replacement-password-example".toCharArray();
+        var ref = store.ensure(tenant, oldId, oldPassword, NOW);
+        repository.insertCredential(tenant, new Credential(oldId, principal, CredentialKind.PASSWORD,
+                ref, CredentialState.ACTIVE, null, null, 1, NOW, NOW, null, null, null));
+        var authentication = org.mockito.Mockito.mock(io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery.class);
+        org.mockito.Mockito.when(authentication.eligibleSubject(tenant, principal)).thenReturn(java.util.Optional.of(
+                new io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery.AuthenticationSubject(principal, actor, 1, 1)));
+        PasswordSecretEnrollment failed = (scope, id, password, now) -> {
+            store.ensure(scope, id, password, now);
+            throw new IllegalStateException("simulated local failure after verifier insert");
+        };
+        var change = new LocalPasswordChangeService(repository, credentials, rotations,
+                new JdbcCredentialBoundaryScheduler(scheduledWork), authentication, failed, store, ids, transactions);
+        assertThatThrownBy(() -> change.change(tenant, actor, principal, oldId, 1, oldPassword, newPassword, NOW.plusSeconds(1)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(repository.findCredential(tenant, oldId).orElseThrow().state()).isEqualTo(CredentialState.ACTIVE);
+        assertThat(repository.listRotations(tenant, oldId, null, 10)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM credential.local_password_verifier WHERE tenant_id = ?",
+                Integer.class, tenant.tenantId())).isEqualTo(1);
+        assertThat(new CredentialAuthenticationService(repository, List.of(store))
+                .verifyPassword(tenant, principal, oldPassword, NOW.plusSeconds(1))).isPresent();
+        java.util.Arrays.fill(oldPassword, (char) 0);
+        java.util.Arrays.fill(newPassword, (char) 0);
+    }
+
     private Credential activeCredential(
             UUID principalId,
             CredentialKind kind,

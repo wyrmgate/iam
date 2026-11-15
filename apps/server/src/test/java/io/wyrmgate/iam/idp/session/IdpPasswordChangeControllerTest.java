@@ -45,6 +45,21 @@ class IdpPasswordChangeControllerTest {
     }
 
     @Test
+    void rejectsUnknownSelectorsWithoutInvokingChange() throws Exception {
+        var changes = mock(LocalPasswordChangeService.class);
+        var controller = new IdpPasswordChangeController(mock(IdpBrowserSessionService.class), changes,
+                mock(SecurityAuditPort.class), UUID::randomUUID);
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/auth/password/change")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"currentPassword\":\"old-password\",\"newPassword\":\"new-password-example\",\"principalId\":\"foreign\"}"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("old-password"))));
+        verifyNoInteractions(changes);
+    }
+
+    @Test
     void nonBrowserAuthenticationCannotInvokeLocalPasswordChange() {
         var sessions = mock(IdpBrowserSessionService.class);
         var changes = mock(LocalPasswordChangeService.class);

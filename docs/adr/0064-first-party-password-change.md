@@ -15,4 +15,4 @@ Credential v3 (#513) keeps the five credential kinds as metadata and separates l
 - External rotation, CredentialBinding, automated rotation policy, MFA, password recovery and confidential SSO client secrets remain deferred until concrete contracts are accepted.
 
 ## Consequences
-No new aggregate or migration is required for the local atomic path. The dedicated local adapter must share the Credential transaction; an external adapter cannot be substituted into this atomic path. The first slice implements bounded proof/session fencing; a subsequent slice implements the local password change operation and its API/security tests. Neither claims external provider acceptance.
+No new aggregate or migration is required for the local atomic path. The dedicated local adapter must share the Credential transaction; an external adapter cannot be substituted into this atomic path. The implementation comprises bounded proof/session fencing, the local password change operation and its API/security tests. Neither claims external provider acceptance.
