@@ -2,6 +2,8 @@ package io.wyrmgate.iam.governance.application;
 
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandException;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
+import io.wyrmgate.iam.access.application.AccessIntentApplicationQuery;
+import io.wyrmgate.iam.governance.application.AccessRequestModels.EligibilityOutcome;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.ItemState;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.PrincipalConstraintKind;
 import io.wyrmgate.iam.governance.application.AccessRequestModels.RequestItem;
@@ -42,6 +44,7 @@ public final class AccessRequestAccessApplicationService {
     private static final Set<String> TERMINAL_CANCELLED_CODES = Set.of(
             "identity_not_found",
             "identity_not_access_eligible",
+            "authorization_identity_epoch_stale",
             "entitlement_not_found",
             "entitlement_retired",
             "application_target_retired",
@@ -61,6 +64,9 @@ public final class AccessRequestAccessApplicationService {
     private final JdbcOutboxRepository outbox;
     private final AccessRequestRepository requests;
     private final AccessIntentCommand access;
+    private final AccessIntentApplicationQuery replay;
+    private final AccessRequestEligibilityEvaluator evaluator;
+    private final RequestAdmissionDecisionService decisions;
     private final TransactionExecutor transactions;
     private final Clock clock;
 
@@ -68,11 +74,14 @@ public final class AccessRequestAccessApplicationService {
             JdbcOutboxRepository outbox,
             AccessRequestRepository requests,
             AccessIntentCommand access,
+            AccessIntentApplicationQuery replay,
+            AccessRequestEligibilityEvaluator evaluator,
+            RequestAdmissionDecisionService decisions,
             TransactionExecutor transactions) {
         this(
                 outbox,
                 requests,
-                access,
+                access, replay, evaluator, decisions,
                 transactions,
                 Clock.systemUTC());
     }
@@ -81,11 +90,17 @@ public final class AccessRequestAccessApplicationService {
             JdbcOutboxRepository outbox,
             AccessRequestRepository requests,
             AccessIntentCommand access,
+            AccessIntentApplicationQuery replay,
+            AccessRequestEligibilityEvaluator evaluator,
+            RequestAdmissionDecisionService decisions,
             TransactionExecutor transactions,
             Clock clock) {
         this.outbox = Objects.requireNonNull(outbox, "outbox");
         this.requests = Objects.requireNonNull(requests, "requests");
         this.access = Objects.requireNonNull(access, "access");
+        this.replay = Objects.requireNonNull(replay, "replay");
+        this.evaluator = Objects.requireNonNull(evaluator, "evaluator");
+        this.decisions = Objects.requireNonNull(decisions, "decisions");
         this.transactions = Objects.requireNonNull(
                 transactions, "transactions");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -157,38 +172,46 @@ public final class AccessRequestAccessApplicationService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "AccessRequest does not exist"));
 
-        AccessIntentCommand.Result application;
-        try {
-            application = access.applyRequestedAccess(
-                    claimed.tenant(),
-                    new AccessIntentCommand.RequestedAccess(
-                            item.id(),
-                            request.beneficiaryIdentityId(),
-                            item.targetKind() == TargetKind.ROLE
-                                    ? AccessIntentCommand.TargetKind.ROLE
-                                    : AccessIntentCommand.TargetKind.ENTITLEMENT,
-                            item.roleId(),
-                            item.entitlementId(),
-                            item.principalConstraintKind()
-                                    == PrincipalConstraintKind.ANY
-                                    ? AccessIntentCommand.PrincipalConstraintKind.ANY
-                                    : AccessIntentCommand.PrincipalConstraintKind.SPECIFIC,
-                            item.specificPrincipalId(),
-                            item.validFrom(),
-                            item.validUntil()),
-                    now);
-        } catch (AccessAssignmentCommandException rejected) {
-            ItemState terminal = terminalState(rejected.code());
-            if (terminal == null) {
-                throw rejected;
+        var requested = new AccessIntentCommand.RequestedAccess(
+                item.id(), request.beneficiaryIdentityId(),
+                item.targetKind() == TargetKind.ROLE
+                        ? AccessIntentCommand.TargetKind.ROLE : AccessIntentCommand.TargetKind.ENTITLEMENT,
+                item.roleId(), item.entitlementId(),
+                item.principalConstraintKind() == PrincipalConstraintKind.ANY
+                        ? AccessIntentCommand.PrincipalConstraintKind.ANY : AccessIntentCommand.PrincipalConstraintKind.SPECIFIC,
+                item.specificPrincipalId(), item.validFrom(), item.validUntil());
+
+        // A historical Access commit must be recovered before any new evaluation.
+        AccessIntentCommand.Result application = replay.findApplied(claimed.tenant(), requested).orElse(null);
+        if (application == null) {
+            if (item.validUntil() != null && !item.validUntil().isAfter(now)) {
+                recordTerminalApplicationOutcome(claimed, item, ItemState.EXPIRED, now);
+                return;
             }
-            recordTerminalApplicationOutcome(
-                    claimed,
-                    item,
-                    terminal,
-                    now);
-            return;
+            var eligibility = RequestAdmissionDecisionService.evaluate(evaluator, claimed.tenant(), request, item);
+            if (eligibility.outcome() == EligibilityOutcome.UNAVAILABLE) {
+                throw new IllegalStateException("current mandatory admission evaluation unavailable");
+            }
+            var current = transactions.required(() -> {
+                RequestItem latest = requests.findItem(claimed.tenant(), item.id()).orElseThrow();
+                if (latest.state() != ItemState.AUTHORIZED || latest.revision() != item.revision()) return latest;
+                return decisions.finish(claimed.tenant(), request, latest, eligibility, now);
+            });
+            // A changed material decision publishes a successor authorization fact, or
+            // transitions to a terminal/pending-approval state. Do not apply the old revision.
+            if (current.state() != ItemState.AUTHORIZED || current.revision() != item.revision()) return;
+            var context = eligibility.context();
+            try {
+                application = access.applyRequestedAccess(claimed.tenant(), requested,
+                        new AccessIntentCommand.Admission(context.identityEpoch(), context.targetFingerprint()), now);
+            } catch (AccessAssignmentCommandException rejected) {
+                ItemState terminal = terminalState(rejected.code());
+                if (terminal == null) throw rejected;
+                recordTerminalApplicationOutcome(claimed, item, terminal, now);
+                return;
+            }
         }
+        AccessIntentCommand.Result applied = application;
 
         transactions.required(() -> {
             RequestItem current = requests.findItem(
@@ -197,7 +220,7 @@ public final class AccessRequestAccessApplicationService {
                     .orElseThrow(() -> new IllegalStateException(
                             "RequestItem disappeared during access application"));
             if (current.state() == ItemState.APPLIED) {
-                if (!application.accessAssignmentId().equals(
+                if (!applied.accessAssignmentId().equals(
                         current.accessAssignmentId())) {
                     throw new IllegalStateException(
                             "RequestItem is APPLIED to a different AccessAssignment");
@@ -205,14 +228,14 @@ public final class AccessRequestAccessApplicationService {
                 return current;
             }
             if (current.state() != ItemState.AUTHORIZED) {
-                return current;
+                throw new IllegalStateException("committed Access result requires Governance reconciliation");
             }
             return requests.updateItemState(
                     claimed.tenant(),
                     current.id(),
                     ItemState.APPLIED,
                     current.approvalCaseId(),
-                    application.accessAssignmentId(),
+                    applied.accessAssignmentId(),
                     current.evaluationCode(),
                     current.revision(),
                     now);

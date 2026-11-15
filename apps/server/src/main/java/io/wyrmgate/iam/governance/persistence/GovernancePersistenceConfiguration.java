@@ -2,6 +2,8 @@ package io.wyrmgate.iam.governance.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.access.application.AccessIntentCommand;
+import io.wyrmgate.iam.access.application.AccessIntentApplicationQuery;
+import io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.access.application.LifecycleAccessPrivilegeGuard;
 import io.wyrmgate.iam.access.application.LifecycleAccessApprovalCommand;
@@ -277,20 +279,17 @@ public class GovernancePersistenceConfiguration {
     }
 
     @Bean
+    RequestAdmissionDecisionService requestAdmissionDecisionService(
+            AccessRequestRepository requests, ApprovalRepository approvals,
+            ApprovalCaseStartService starter, AuthorizedAccessIntentSink authorizedAccess) {
+        return new RequestAdmissionDecisionService(requests, approvals, starter, authorizedAccess);
+    }
+
+    @Bean
     AccessRequestApprovalResultSink accessRequestApprovalResultSink(
-            AccessRequestRepository requests,
-            AuthorizedAccessIntentSink authorizedAccess,
-            AccessRequestEligibilityEvaluator evaluator,
-            ApprovalRepository approvals,
-            ApprovalCaseStartService starter,
-            SubmittedRequestItemSink submittedItems) {
-        return new AccessRequestApprovalResultSink(
-                requests,
-                authorizedAccess,
-                evaluator,
-                approvals,
-                starter,
-                submittedItems);
+            AccessRequestRepository requests, AccessRequestEligibilityEvaluator evaluator,
+            RequestAdmissionDecisionService decisions, SubmittedRequestItemSink submittedItems) {
+        return new AccessRequestApprovalResultSink(requests, evaluator, decisions, submittedItems);
     }
 
     @Bean
@@ -331,26 +330,10 @@ public class GovernancePersistenceConfiguration {
 
     @Bean
     AccessRequestCommandService accessRequestCommandService(
-            AccessRequestRepository requests,
-            ObjectProvider<AccessRequestEligibilityEvaluator> evaluators,
-            ApprovalCommandService approvals,
-            SubmittedRequestItemSink submittedItems,
-            AuthorizedAccessIntentSink authorizedAccess,
-            IdGenerator ids,
-            TransactionExecutor transactions) {
-        AccessRequestEligibilityEvaluator evaluator =
-                evaluators.getIfAvailable(() ->
-                        (tenant, request, item) ->
-                                EligibilityResult.unavailable(
-                                        "mandatory_evaluator_unavailable"));
-        return new AccessRequestCommandService(
-                requests,
-                evaluator,
-                approvals,
-                submittedItems,
-                authorizedAccess,
-                ids,
-                transactions);
+            AccessRequestRepository requests, AccessRequestEligibilityEvaluator evaluator,
+            RequestAdmissionDecisionService decisions, SubmittedRequestItemSink submittedItems,
+            IdGenerator ids, TransactionExecutor transactions) {
+        return new AccessRequestCommandService(requests, evaluator, decisions, submittedItems, ids, transactions);
     }
 
     @Bean
@@ -370,12 +353,10 @@ public class GovernancePersistenceConfiguration {
 
     @Bean
     AccessRequestAccessApplicationService accessRequestAccessApplicationService(
-            JdbcOutboxRepository outbox,
-            AccessRequestRepository requests,
-            AccessIntentCommand access,
-            TransactionExecutor transactions) {
-        return new AccessRequestAccessApplicationService(
-                outbox, requests, access, transactions);
+            JdbcOutboxRepository outbox, AccessRequestRepository requests, AccessIntentCommand access,
+            AccessIntentApplicationQuery replay, AccessRequestEligibilityEvaluator evaluator,
+            RequestAdmissionDecisionService decisions, TransactionExecutor transactions) {
+        return new AccessRequestAccessApplicationService(outbox, requests, access, replay, evaluator, decisions, transactions);
     }
 
     @Bean
