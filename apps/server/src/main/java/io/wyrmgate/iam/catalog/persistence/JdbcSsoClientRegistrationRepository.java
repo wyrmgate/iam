@@ -31,12 +31,12 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
     public void insert(TenantContext tenant, SsoClientRegistration registration) {
         jdbc.update("""
                 INSERT INTO catalog.sso_client_registration (
-                    id, tenant_id, application_id, client_id, requires_governed_access,
+                    id, tenant_id, application_id, client_id, authentication_target_id, requires_governed_access,
                     lifecycle_state, revision, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 registration.id(), tenant.tenantId(), registration.applicationId(), registration.clientId(),
-                registration.requiresGovernedAccess(), registration.lifecycleState().name(), registration.revision(),
+                registration.authenticationTargetId(), registration.requiresGovernedAccess(), registration.lifecycleState().name(), registration.revision(),
                 Timestamp.from(registration.createdAt()), Timestamp.from(registration.updatedAt()));
         insertRedirectUris(tenant, registration.id(), registration.redirectUris());
         insertScopes(tenant, registration.id(), registration.allowedScopes());
@@ -45,7 +45,7 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
     @Override
     public Optional<SsoClientRegistration> find(TenantContext tenant, UUID registrationId) {
         return jdbc.query("""
-                SELECT id, application_id, client_id, requires_governed_access,
+                SELECT id, application_id, client_id, authentication_target_id, requires_governed_access,
                        lifecycle_state, revision, created_at, updated_at
                 FROM catalog.sso_client_registration
                 WHERE tenant_id = ? AND id = ?
@@ -56,7 +56,7 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
     @Override
     public Optional<SsoClientRegistration> findActiveByClientId(TenantContext tenant, String clientId) {
         return jdbc.query("""
-                SELECT id, application_id, client_id, requires_governed_access,
+                SELECT id, application_id, client_id, authentication_target_id, requires_governed_access,
                        lifecycle_state, revision, created_at, updated_at
                 FROM catalog.sso_client_registration
                 WHERE tenant_id = ? AND client_id = ? AND lifecycle_state = 'ACTIVE'
@@ -67,7 +67,7 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
     @Override
     public Optional<ResolvedClient> findActiveProtocolClient(String clientId) {
         return jdbc.query("""
-                SELECT tenant_id, id, application_id, client_id, requires_governed_access,
+                SELECT tenant_id, id, application_id, client_id, authentication_target_id, requires_governed_access,
                        lifecycle_state, revision, created_at, updated_at
                 FROM catalog.sso_client_registration
                 WHERE client_id = ? AND lifecycle_state = 'ACTIVE'
@@ -83,7 +83,7 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
             TenantContext tenant, UUID applicationId, PagePosition after, int limit) {
         if (after == null) {
             return jdbc.query("""
-                    SELECT id, application_id, client_id, requires_governed_access,
+                    SELECT id, application_id, client_id, authentication_target_id, requires_governed_access,
                            lifecycle_state, revision, created_at, updated_at
                     FROM catalog.sso_client_registration
                     WHERE tenant_id = ? AND application_id = ?
@@ -92,7 +92,7 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
                     """, (rs, row) -> map(tenant, rs), tenant.tenantId(), applicationId, limit);
         }
         return jdbc.query("""
-                SELECT id, application_id, client_id, requires_governed_access,
+                SELECT id, application_id, client_id, authentication_target_id, requires_governed_access,
                        lifecycle_state, revision, created_at, updated_at
                 FROM catalog.sso_client_registration
                 WHERE tenant_id = ? AND application_id = ?
@@ -107,6 +107,7 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
     public SsoClientRegistration replaceConfiguration(
             TenantContext tenant,
             UUID registrationId,
+            UUID authenticationTargetId,
             Set<String> redirectUris,
             Set<SsoClientScope> allowedScopes,
             boolean requiresGovernedAccess,
@@ -114,9 +115,9 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
             Instant now) {
         int affected = jdbc.update("""
                 UPDATE catalog.sso_client_registration
-                SET requires_governed_access = ?, revision = revision + 1, updated_at = ?
+                SET authentication_target_id = ?, requires_governed_access = ?, revision = revision + 1, updated_at = ?
                 WHERE tenant_id = ? AND id = ? AND revision = ? AND lifecycle_state = 'ACTIVE'
-                """, requiresGovernedAccess, Timestamp.from(now), tenant.tenantId(), registrationId, expectedRevision);
+                """, authenticationTargetId, requiresGovernedAccess, Timestamp.from(now), tenant.tenantId(), registrationId, expectedRevision);
         OptimisticUpdate.requireSingleRow(affected, "catalog-sso-client", registrationId, expectedRevision);
         jdbc.update("DELETE FROM catalog.sso_client_redirect_uri WHERE tenant_id = ? AND sso_client_registration_id = ?",
                 tenant.tenantId(), registrationId);
@@ -148,6 +149,7 @@ public final class JdbcSsoClientRegistrationRepository implements SsoClientRegis
                 id,
                 rs.getObject("application_id", UUID.class),
                 rs.getString("client_id"),
+                rs.getObject("authentication_target_id", UUID.class),
                 loadRedirectUris(tenant, id),
                 loadScopes(tenant, id),
                 rs.getBoolean("requires_governed_access"),

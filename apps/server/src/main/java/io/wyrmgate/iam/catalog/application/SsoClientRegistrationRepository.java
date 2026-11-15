@@ -28,6 +28,7 @@ public interface SsoClientRegistrationRepository {
     SsoClientRegistration replaceConfiguration(
             TenantContext tenant,
             UUID registrationId,
+            UUID authenticationTargetId,
             Set<String> redirectUris,
             Set<SsoClientScope> allowedScopes,
             boolean requiresGovernedAccess,

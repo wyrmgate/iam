@@ -59,6 +59,7 @@ final class SsoClientApiMutationService {
     SsoClientRegistration create(
             AuthenticatedAdministrativeActor actor,
             UUID applicationId,
+            UUID authenticationTargetId,
             Set<String> redirectUris,
             Set<SsoClientScope> scopes,
             boolean requiresGovernedAccess,
@@ -76,7 +77,7 @@ final class SsoClientApiMutationService {
                 return replay(actor, registration, correlationId);
             }
             SsoClientRegistration created = service.create(
-                    actor.tenant(), applicationId, redirectUris, scopes, requiresGovernedAccess, now);
+                    actor.tenant(), applicationId, authenticationTargetId, redirectUris, scopes, requiresGovernedAccess, now);
             idempotency.complete(
                     actor.tenant(), "api.catalog.sso-client.create.v1", idempotencyKey, fingerprint,
                     RESOURCE_TYPE, created.id(), now);
@@ -87,6 +88,8 @@ final class SsoClientApiMutationService {
     SsoClientRegistration replace(
             AuthenticatedAdministrativeActor actor,
             UUID registrationId,
+            UUID authenticationTargetId,
+            boolean replaceAuthenticationTarget,
             Set<String> redirectUris,
             Set<SsoClientScope> scopes,
             boolean requiresGovernedAccess,
@@ -104,9 +107,11 @@ final class SsoClientApiMutationService {
             if (registration.kind() == RegistrationKind.REPLAY) {
                 return replay(actor, registration, correlationId);
             }
-            SsoClientRegistration updated = service.replaceConfiguration(
-                    actor.tenant(), registrationId, redirectUris, scopes,
-                    requiresGovernedAccess, expectedRevision, now);
+            SsoClientRegistration updated = replaceAuthenticationTarget
+                    ? service.replaceConfiguration(actor.tenant(), registrationId, authenticationTargetId, redirectUris, scopes,
+                            requiresGovernedAccess, expectedRevision, now)
+                    : service.replaceConfiguration(actor.tenant(), registrationId, redirectUris, scopes,
+                            requiresGovernedAccess, expectedRevision, now);
             idempotency.complete(
                     actor.tenant(), "api.catalog.sso-client.update.v1", idempotencyKey, fingerprint,
                     RESOURCE_TYPE, updated.id(), now);

@@ -158,6 +158,7 @@ public final class InstallationBootstrapService {
                         plan.consoleSsoRegistrationId(),
                         plan.consoleClientId(),
                         plan.consoleApplicationId(),
+                        plan.consoleTargetId(),
                         Set.of(plan.consoleRedirectUri()),
                         Set.of(SsoClientScope.OPENID, SsoClientScope.PROFILE, SsoClientScope.EMAIL),
                         false,

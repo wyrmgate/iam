@@ -16,6 +16,9 @@ public interface SsoClientProtocolQuery {
 
     Optional<ResolvedClient> resolveActive(String clientId);
 
+    /** Catalog-owned active local authentication target; absent means no interactive login route. */
+    default Optional<java.util.UUID> resolveAuthenticationTarget(ResolvedClient client) { return Optional.empty(); }
+
     record ResolvedClient(TenantContext tenant, SsoClientRegistration registration) {
         public ResolvedClient {
             Objects.requireNonNull(tenant, "tenant");

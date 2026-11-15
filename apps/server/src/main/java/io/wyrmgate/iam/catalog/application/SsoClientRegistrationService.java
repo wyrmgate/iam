@@ -34,9 +34,15 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
         this.transactions = Objects.requireNonNull(transactions, "transactions");
     }
 
+    public SsoClientRegistration create(TenantContext tenant, UUID applicationId, Set<String> redirectUris,
+            Set<SsoClientScope> allowedScopes, boolean requiresGovernedAccess, Instant now) {
+        return create(tenant, applicationId, null, redirectUris, allowedScopes, requiresGovernedAccess, now);
+    }
+
     public SsoClientRegistration create(
             TenantContext tenant,
             UUID applicationId,
+            UUID authenticationTargetId,
             Set<String> redirectUris,
             Set<SsoClientScope> allowedScopes,
             boolean requiresGovernedAccess,
@@ -46,6 +52,7 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
                 ids.nextId(),
                 "wc_" + ids.nextId().toString().replace("-", ""),
                 applicationId,
+                authenticationTargetId,
                 redirectUris,
                 allowedScopes,
                 requiresGovernedAccess,
@@ -54,11 +61,19 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
     }
 
     /** Idempotent Catalog-owned registration for the fresh-install Console client. */
+    public SsoClientRegistration ensureInstallationClient(TenantContext tenant, UUID registrationId, String clientId,
+            UUID applicationId, Set<String> redirectUris, Set<SsoClientScope> allowedScopes,
+            boolean requiresGovernedAccess, Instant now) {
+        return ensureInstallationClient(tenant, registrationId, clientId, applicationId, null, redirectUris,
+                allowedScopes, requiresGovernedAccess, now);
+    }
+
     public SsoClientRegistration ensureInstallationClient(
             TenantContext tenant,
             UUID registrationId,
             String clientId,
             UUID applicationId,
+            UUID authenticationTargetId,
             Set<String> redirectUris,
             Set<SsoClientScope> allowedScopes,
             boolean requiresGovernedAccess,
@@ -68,6 +83,7 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
                 registrationId,
                 clientId,
                 applicationId,
+                authenticationTargetId,
                 redirectUris,
                 allowedScopes,
                 requiresGovernedAccess,
@@ -80,6 +96,7 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
             UUID registrationId,
             String clientId,
             UUID applicationId,
+            UUID authenticationTargetId,
             Set<String> redirectUris,
             Set<SsoClientScope> allowedScopes,
             boolean requiresGovernedAccess,
@@ -94,10 +111,12 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
             if (application.lifecycleState() != CatalogLifecycleState.ACTIVE) {
                 throw new IllegalArgumentException("application is retired");
             }
+            requireActiveAuthenticationTarget(tenant, authenticationTargetId);
             SsoClientRegistration desired = new SsoClientRegistration(
                     registrationId,
                     applicationId,
                     clientId,
+                    authenticationTargetId,
                     redirectUris,
                     allowedScopes,
                     requiresGovernedAccess,
@@ -133,15 +152,25 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
             SsoClientRegistration desired) {
         return existing.applicationId().equals(desired.applicationId())
                 && existing.clientId().equals(desired.clientId())
+                && Objects.equals(existing.authenticationTargetId(), desired.authenticationTargetId())
                 && existing.redirectUris().equals(desired.redirectUris())
                 && existing.allowedScopes().equals(desired.allowedScopes())
                 && existing.requiresGovernedAccess() == desired.requiresGovernedAccess()
                 && existing.lifecycleState() == SsoClientLifecycleState.ACTIVE;
     }
 
+    public SsoClientRegistration replaceConfiguration(TenantContext tenant, UUID registrationId,
+            Set<String> redirectUris, Set<SsoClientScope> allowedScopes, boolean requiresGovernedAccess,
+            long expectedRevision, Instant now) {
+        var current = registrations.find(tenant, registrationId).orElseThrow();
+        return replaceConfiguration(tenant, registrationId, current.authenticationTargetId(), redirectUris,
+                allowedScopes, requiresGovernedAccess, expectedRevision, now);
+    }
+
     public SsoClientRegistration replaceConfiguration(
             TenantContext tenant,
             UUID registrationId,
+            UUID authenticationTargetId,
             Set<String> redirectUris,
             Set<SsoClientScope> allowedScopes,
             boolean requiresGovernedAccess,
@@ -149,12 +178,14 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
             Instant now) {
         SsoClientRegistration current = registrations.find(tenant, registrationId)
                 .orElseThrow(() -> new IllegalArgumentException("SSO client registration does not exist"));
+        requireActiveAuthenticationTarget(tenant, authenticationTargetId);
         new SsoClientRegistration(
-                current.id(), current.applicationId(), current.clientId(), redirectUris, allowedScopes,
+                current.id(), current.applicationId(), current.clientId(), authenticationTargetId, redirectUris, allowedScopes,
                 requiresGovernedAccess, current.lifecycleState(), current.revision(), current.createdAt(), now);
         return transactions.required(() -> registrations.replaceConfiguration(
                 tenant,
                 registrationId,
+                authenticationTargetId,
                 redirectUris,
                 allowedScopes,
                 requiresGovernedAccess,
@@ -192,6 +223,26 @@ public final class SsoClientRegistrationService implements SsoClientProtocolQuer
                                 resolved.tenant(), resolved.registration().applicationId())
                         .filter(application -> application.lifecycleState() == CatalogLifecycleState.ACTIVE)
                         .isPresent());
+    }
+
+    private void requireActiveAuthenticationTarget(TenantContext tenant, UUID targetId) {
+        if (targetId != null && !activeAuthenticationTarget(tenant, targetId)) {
+            throw new IllegalArgumentException("authentication target is not active in tenant");
+        }
+    }
+
+    private boolean activeAuthenticationTarget(TenantContext tenant, UUID targetId) {
+        return catalog.findTarget(tenant, targetId)
+                .filter(target -> target.lifecycleState() == CatalogLifecycleState.ACTIVE)
+                .flatMap(target -> catalog.findApplication(tenant, target.applicationId()))
+                .filter(application -> application.lifecycleState() == CatalogLifecycleState.ACTIVE).isPresent();
+    }
+
+    @Override
+    public Optional<UUID> resolveAuthenticationTarget(ResolvedClient client) {
+        UUID target = client.registration().authenticationTargetId();
+        return target != null && activeAuthenticationTarget(client.tenant(), target)
+                ? Optional.of(target) : Optional.empty();
     }
 
     public Page list(
