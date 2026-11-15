@@ -52,7 +52,8 @@ public final class CredentialAuthenticationService {
                 CredentialSecretVerifier verifier = uniqueVerifier(
                         credential.secretReference().providerType());
                 if (verifier != null
-                        && verifier.matches(credential.secretReference(), privateCopy)) {
+                        && verifier.matches(tenant, credential.id(), credential.secretReference(), privateCopy)
+                        && isStillValid(tenant, principalId, credential.id(), credential.revision(), at)) {
                     return Optional.of(new VerifiedCredential(
                             principalId, credential.id(), credential.revision()));
                 }

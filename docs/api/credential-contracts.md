@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-The first public Credential control-plane slice implements the still-open Credential portion of OD-003 under accepted ADR-0020, ADR-0005, ADR-0008 and ADR-0012.
+The first public Credential control-plane slice implements the still-open Credential portion of OD-003 under accepted ADR-0020, ADR-0005, ADR-0008 and ADR-0012, as clarified by ADR-0063.
 
 Credential remains authoritative for authentication-instrument metadata and durable CredentialRotation process state. Principal remains Identity-owned. This HTTP surface does not make Credential a secret vault and does not expose provider execution as a synchronous API concern.
 
@@ -31,7 +31,7 @@ A public CredentialRotation read model contains the stable rotation ID, old Cred
 
 These permissions are default-deny and are intentionally not added to INITIAL_TENANT_ADMIN.
 
-There is no public arbitrary lifecycle/status patch. There is no public manual activate operation: future activation is governed by validFrom; semantic effectiveness does not wait for the scheduler, while Platform scheduled work may materialize the state boundary.
+There is no public arbitrary lifecycle/status patch. There is no public manual activate operation: future activation requires the scheduled transition to ACTIVE at or after validFrom. A due SCHEDULED Credential is not effective until activation commits; expiry is effective at validUntil regardless of scheduler delay. SCHEDULED may be revoked or compromised, and COMPROMISED may be revoked while preserving compromisedAt.
 
 There are no public operations that advance CREATING_REPLACEMENT, DISTRIBUTING, VERIFYING, CUTOVER_COMPLETE, REVOKING_OLD or failure process steps. Those states exist so later typed SecretProvider/Integration execution can resume safely. Exposing manual process-state mutation now would pretend deferred provider work had occurred.
 
@@ -39,7 +39,7 @@ Public Credential create, revoke, compromise and rotate attempts append data-min
 
 ## Principal boundary
 
-Credential creation validates the referenced Principal through the Identity-owned semantic Principal query. Credential does not read or mutate Identity persistence and V32 deliberately has no cross-capability database foreign key to identity.principal.
+Credential creation validates the referenced Principal through the Identity-owned semantic Principal query. Credential does not read or mutate Identity persistence and the active V7 Credential baseline deliberately has no cross-capability database foreign key to identity.principal.
 
 A missing or foreign-tenant Principal is rejected. Provider observations never create Credential or Principal authority through this API.
 
@@ -55,11 +55,13 @@ Credential lifecycle mutations depend on current authoritative state and require
 
 Retryable state-changing operations use a causal Idempotency-Key. The durable platform idempotency record stores a request fingerprint, not the request payload. Replaying the same key and fingerprint returns the same resulting resource. Reusing a key with materially different input returns HTTP 409 idempotency_conflict.
 
-Starting routine rotation creates a separate CredentialRotation aggregate and therefore does not use the old Credential's If-Match. The operation re-reads the old Credential, requires it to be semantically effective ACTIVE, permits only one open routine rotation, derives the initiator from the authenticated governed actor, and is protected by causal idempotency plus the existing database uniqueness invariant.
+Starting routine rotation creates a separate CredentialRotation aggregate and therefore does not use the old Credential's If-Match. The operation locks and re-reads the old Credential within the authoritative transaction, requires it to be semantically effective ACTIVE, permits only one open routine rotation, derives the initiator from the authenticated governed actor, and is protected by causal idempotency plus the existing database uniqueness invariant.
+
+Replacement attachment requires the same Principal and kind, a distinct Credential ID and a distinct opaque SecretReference. Reference inequality alone does not prove independent secret material; concrete execution must establish this. Terminal rotation outcomes remain immutable, including MANUAL_REQUIRED. No provider execution is implied by metadata transitions.
 
 ## Pagination
 
-Credential listing is deliberately scoped to one Principal. Ordering is immutable: createdAt ASC, id ASC. V35 adds the supporting tenant_id + principal_id + created_at + id index.
+Credential listing is deliberately scoped to one Principal. Ordering is immutable: createdAt ASC, id ASC. The active V7 Credential baseline contains the supporting tenant_id + principal_id + created_at + id index.
 
 Rotation history listing is scoped to one old Credential and ordered createdAt DESC, id DESC.
 

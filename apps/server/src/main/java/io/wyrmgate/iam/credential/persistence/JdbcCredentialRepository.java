@@ -77,6 +77,21 @@ public final class JdbcCredentialRepository
     }
 
     @Override
+    public Optional<Credential> lockCredential(TenantContext tenant, UUID credentialId) {
+        return jdbc.query("""
+                SELECT id, principal_id, credential_kind,
+                       secret_provider_type, secret_reference_key,
+                       lifecycle_state, valid_from, valid_until,
+                       revision, created_at, updated_at,
+                       compromised_at, revoked_at, expired_at
+                FROM credential.credential
+                WHERE tenant_id = ? AND id = ?
+                FOR UPDATE
+                """, (rs, row) -> credential(rs), tenant.tenantId(), credentialId)
+                .stream().findFirst();
+    }
+
+    @Override
     public List<Credential> listCredentials(
             TenantContext tenant,
             UUID principalId,

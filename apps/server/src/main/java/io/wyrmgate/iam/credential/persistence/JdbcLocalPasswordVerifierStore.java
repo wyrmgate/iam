@@ -108,12 +108,18 @@ public final class JdbcLocalPasswordVerifierStore
     }
 
     @Override
-    public boolean matches(SecretReference reference, char[] presentedSecret) {
+    public boolean matches(TenantContext tenant, UUID credentialId,
+                           SecretReference reference, char[] presentedSecret) {
+        Objects.requireNonNull(tenant, "tenant");
+        Objects.requireNonNull(credentialId, "credentialId");
         Objects.requireNonNull(reference, "reference");
         Objects.requireNonNull(presentedSecret, "presentedSecret");
-        if (!supports(reference.providerType())) return false;
+        if (!supports(reference.providerType())
+                || !credentialId.toString().equals(reference.referenceKey())) return false;
         StoredVerifier stored = find(reference.referenceKey());
-        return stored != null && matchesStored(stored, presentedSecret);
+        return stored != null && stored.tenantId().equals(tenant.tenantId())
+                && stored.credentialId().equals(credentialId)
+                && matchesStored(stored, presentedSecret);
     }
 
     private StoredVerifier find(String referenceKey) {
