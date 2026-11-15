@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.idp.session;
 
+import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.credential.application.CredentialAuthenticationService;
 import io.wyrmgate.iam.credential.application.CredentialAuthenticationService.VerifiedCredential;
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
@@ -31,6 +33,7 @@ public final class IdpBrowserSessionService {
     private final CredentialAuthenticationService credentials;
     private final IdpSessionTokenCodec tokens;
     private final IdGenerator ids;
+    private final IdpSecurityEvidence evidence;
     private final Duration idleTimeout;
     private final Duration absoluteTimeout;
 
@@ -40,7 +43,7 @@ public final class IdpBrowserSessionService {
             TenantOverviewQuery tenants,
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
-            IdGenerator ids) {
+            IdGenerator ids, IdpSecurityEvidence evidence) {
         this(
                 sessions,
                 identities,
@@ -48,6 +51,7 @@ public final class IdpBrowserSessionService {
                 credentials,
                 tokens,
                 ids,
+                evidence,
                 DEFAULT_IDLE_TIMEOUT,
                 DEFAULT_ABSOLUTE_TIMEOUT);
     }
@@ -59,6 +63,7 @@ public final class IdpBrowserSessionService {
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
             IdGenerator ids,
+            IdpSecurityEvidence evidence,
             Duration idleTimeout,
             Duration absoluteTimeout) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
@@ -67,6 +72,7 @@ public final class IdpBrowserSessionService {
         this.credentials = Objects.requireNonNull(credentials, "credentials");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.ids = Objects.requireNonNull(ids, "ids");
+        this.evidence = Objects.requireNonNull(evidence, "evidence");
         this.idleTimeout = requirePositive(idleTimeout, "idleTimeout");
         this.absoluteTimeout = requirePositive(absoluteTimeout, "absoluteTimeout");
         if (idleTimeout.compareTo(absoluteTimeout) > 0) {
@@ -112,6 +118,13 @@ public final class IdpBrowserSessionService {
                 absoluteExpiry,
                 null);
         sessions.insert(tenant, session);
+        try {
+            evidence.required(tenant, subject.identityId(), "authentication:session-established", "idp-session",
+                    session.id(), session.id(), null, now);
+        } catch (RuntimeException unavailable) {
+            sessions.revoke(tenant, session.id(), now);
+            throw unavailable;
+        }
         return new EstablishedSession(
                 issued.value(),
                 new SessionContext(
@@ -184,7 +197,7 @@ public final class IdpBrowserSessionService {
         Optional<String> tokenHash = hash(rawToken);
         if (tokenHash.isEmpty()) return;
         sessions.findByTokenHash(tenant, tokenHash.orElseThrow())
-                .ifPresent(session -> revokeQuietly(tenant, session.id(), now));
+                .ifPresent(session -> revokeQuietly(tenant, session, now));
     }
 
     /** Revokes a session while deriving Tenant only from the opaque token digest. */
@@ -194,7 +207,7 @@ public final class IdpBrowserSessionService {
         if (tokenHash.isEmpty()) return;
         sessions.findByTokenHash(tokenHash.orElseThrow())
                 .ifPresent(located -> revokeQuietly(
-                        located.tenant(), located.session().id(), now));
+                        located.tenant(), located.session(), now));
     }
 
     private Optional<SessionContext> revalidate(
@@ -208,12 +221,12 @@ public final class IdpBrowserSessionService {
             Instant now, boolean browserActivity) {
         if (now.isBefore(session.createdAt())) return Optional.empty();
         if (!session.usableAt(now)) {
-            revokeQuietly(tenant, session.id(), now);
+            revokeQuietly(tenant, session, now);
             return Optional.empty();
         }
 
         if (activeTenantRevision(tenant).filter(revision -> revision.equals(session.tenantRevision())).isEmpty()) {
-            revokeQuietly(tenant, session.id(), now);
+            revokeQuietly(tenant, session, now);
             return Optional.empty();
         }
         Optional<AuthenticationSubject> subject = identities.eligibleSubject(
@@ -228,7 +241,7 @@ public final class IdpBrowserSessionService {
                         session.credentialId(),
                         session.credentialRevision(),
                         now)) {
-            revokeQuietly(tenant, session.id(), now);
+            revokeQuietly(tenant, session, now);
             return Optional.empty();
         }
 
@@ -269,8 +282,11 @@ public final class IdpBrowserSessionService {
         }
     }
 
-    private void revokeQuietly(TenantContext tenant, UUID sessionId, Instant now) {
-        sessions.revoke(tenant, sessionId, now);
+    private void revokeQuietly(TenantContext tenant, IdpBrowserSession session, Instant now) {
+        if (sessions.revoke(tenant, session.id(), now)) {
+            evidence.bestEffort(tenant, session.identityId(), "authentication:session-revoked", "idp-session",
+                    session.id(), AuditOutcome.SUCCESS, session.id(), null, now);
+        }
     }
 
     private static Duration requirePositive(Duration value, String name) {

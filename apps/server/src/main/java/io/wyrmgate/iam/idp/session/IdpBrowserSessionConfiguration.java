@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.idp.session;
 
+import io.wyrmgate.iam.idp.runtime.IdpAttemptLimiter;
+import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
 import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
 import io.wyrmgate.iam.credential.application.CredentialAuthenticationService;
 import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
@@ -34,14 +36,14 @@ public class IdpBrowserSessionConfiguration {
             TenantOverviewQuery tenants,
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
-            IdGenerator ids) {
+            IdGenerator ids, IdpSecurityEvidence evidence) {
         return new IdpBrowserSessionService(
                 sessions,
                 identities,
                 tenants,
                 credentials,
                 tokens,
-                ids);
+                ids, evidence);
     }
 
     @Bean
@@ -49,7 +51,7 @@ public class IdpBrowserSessionConfiguration {
             SsoClientProtocolQuery clients,
             IdentityAuthenticationQuery identities,
             CredentialAuthenticationService credentials,
-            IdpBrowserSessionService sessions) {
-        return new IdpInteractiveLoginService(clients, identities, credentials, sessions);
+            IdpBrowserSessionService sessions, IdpAttemptLimiter limiter, IdpSecurityEvidence evidence, IdGenerator ids) {
+        return new IdpInteractiveLoginService(clients, identities, credentials, sessions, limiter, evidence, ids);
     }
 }

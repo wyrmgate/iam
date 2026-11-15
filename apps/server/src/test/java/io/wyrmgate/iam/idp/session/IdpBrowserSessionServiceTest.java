@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.idp.session;
 
+import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,6 +50,7 @@ class IdpBrowserSessionServiceTest {
                 credentials,
                 new IdpSessionTokenCodec(),
                 ids,
+                mock(IdpSecurityEvidence.class),
                 Duration.ofMinutes(30),
                 Duration.ofHours(8));
         VerifiedCredential verified = new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 6);
@@ -76,6 +78,7 @@ class IdpBrowserSessionServiceTest {
                 mock(CredentialAuthenticationService.class),
                 new IdpSessionTokenCodec(),
                 UUID::randomUUID,
+                mock(IdpSecurityEvidence.class),
                 Duration.ofMinutes(30),
                 Duration.ofHours(8));
         AuthenticationSubject subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
@@ -96,7 +99,7 @@ class IdpBrowserSessionServiceTest {
         AuthenticationSubject subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         IdpBrowserSessionService service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials,
-                new IdpSessionTokenCodec(), UUID::randomUUID);
+                new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class));
         assertThatThrownBy(() -> service.establish(TENANT, subject,
                 new VerifiedCredential(UUID.randomUUID(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -123,6 +126,7 @@ class IdpBrowserSessionServiceTest {
                 credentials,
                 new IdpSessionTokenCodec(),
                 UUID::randomUUID,
+                mock(IdpSecurityEvidence.class),
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(10));
         IdpBrowserSessionService.EstablishedSession established = service.establish(
@@ -140,7 +144,7 @@ class IdpBrowserSessionServiceTest {
         var subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
-        var service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials, new IdpSessionTokenCodec(), UUID::randomUUID);
+        var service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials, new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class));
         var established = service.establish(TENANT, subject, new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW);
         UUID id = established.context().sessionId();
         assertThat(service.revalidateAuthorizationCodeSession(TENANT, id, NOW.plusSeconds(60))).isPresent();
@@ -159,7 +163,7 @@ class IdpBrowserSessionServiceTest {
         var subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
-        var service = new IdpBrowserSessionService(repository, identities, tenants, credentials, new IdpSessionTokenCodec(), UUID::randomUUID);
+        var service = new IdpBrowserSessionService(repository, identities, tenants, credentials, new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class));
         var proof = new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1);
         var first = service.establish(TENANT, subject, proof, NOW);
         // Even if reactivated before the next request, the old revision cannot authenticate.

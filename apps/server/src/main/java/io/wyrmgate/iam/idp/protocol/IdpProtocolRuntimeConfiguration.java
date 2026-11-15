@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.idp.protocol;
 
+import io.wyrmgate.iam.idp.runtime.IdpAttemptLimiter;
+import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
 import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
@@ -31,8 +33,8 @@ public class IdpProtocolRuntimeConfiguration {
     @Bean
     IdpLoginInteractionService idpLoginInteractionService(IdpProtocolService protocol,
             SsoClientProtocolQuery clients, IdpInteractiveLoginService login, IdpBrowserSessionService sessions,
-            IdpSessionTokenCodec tokens, IdpLoginInteractionRepository interactions) {
-        return new IdpLoginInteractionService(protocol, clients, login, sessions, tokens, interactions);
+            IdpSessionTokenCodec tokens, IdpLoginInteractionRepository interactions, IdpAttemptLimiter limiter) {
+        return new IdpLoginInteractionService(protocol, clients, login, sessions, tokens, interactions, limiter);
     }
 
     @Bean
@@ -57,8 +59,8 @@ public class IdpProtocolRuntimeConfiguration {
             IdpApplicationAccessQuery applicationAccess,
             IdpAuthorizationCodeRepository authorizationCodes,
             IdpTokenIssuer tokens,
-            IdGenerator ids) {
+            IdGenerator ids, IdpSecurityEvidence evidence) {
         return new IdpProtocolService(
-                clients, sessions, applicationAccess, authorizationCodes, tokens, ids);
+                clients, sessions, applicationAccess, authorizationCodes, tokens, ids, evidence);
     }
 }

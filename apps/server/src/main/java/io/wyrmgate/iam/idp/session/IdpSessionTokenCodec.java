@@ -31,8 +31,8 @@ public final class IdpSessionTokenCodec {
     }
 
     public String hash(String token) {
-        if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("session token must not be blank");
+        if (token == null || !token.matches("[A-Za-z0-9_-]{43}")) {
+            throw new IllegalArgumentException("invalid opaque token format");
         }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

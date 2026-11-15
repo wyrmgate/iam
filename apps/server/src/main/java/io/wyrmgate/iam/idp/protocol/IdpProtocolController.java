@@ -74,7 +74,13 @@ public class IdpProtocolController {
             if (key == null || !keyIds.add(key.keyId())) {
                 throw new IllegalStateException("signing verification key IDs must be unique");
             }
-            if (current.keyId().equals(key.keyId())) currentPresent = true;
+            if (current.keyId().equals(key.keyId())) {
+                if (!current.signingAlgorithm().equals(key.signingAlgorithm())
+                        || !java.util.Arrays.equals(current.publicKey().getEncoded(), key.publicKey().getEncoded())) {
+                    throw new IllegalStateException("current signing key material must match published verification key");
+                }
+                currentPresent = true;
+            }
             IdpJwkEncoder.encode(key);
         }
         if (!currentPresent) {

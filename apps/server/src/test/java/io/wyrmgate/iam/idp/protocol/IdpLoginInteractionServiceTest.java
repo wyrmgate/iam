@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.idp.protocol;
 
+import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
@@ -33,9 +34,9 @@ class IdpLoginInteractionServiceTest {
     private final IdpAuthorizationCodeRepository codes = mock(IdpAuthorizationCodeRepository.class);
     private final MemoryInteractions repo = new MemoryInteractions();
     private final IdpProtocolService protocol = new IdpProtocolService(clients, sessions,
-            (t, i, a, at) -> true, codes, mock(IdpTokenIssuer.class), UUID::randomUUID);
+            (t, i, a, at) -> true, codes, mock(IdpTokenIssuer.class), UUID::randomUUID, mock(IdpSecurityEvidence.class));
     private final IdpLoginInteractionService interactions = new IdpLoginInteractionService(
-            protocol, clients, login, sessions, new IdpSessionTokenCodec(), repo);
+            protocol, clients, login, sessions, new IdpSessionTokenCodec(), repo, (t, k, id) -> true);
 
     private SsoClientProtocolQuery.ResolvedClient client(long revision) {
         return new SsoClientProtocolQuery.ResolvedClient(tenant,

@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.idp.session;
 
+import io.wyrmgate.iam.idp.runtime.IdpAttemptLimiter;
+import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -56,7 +58,7 @@ class IdpInteractiveLoginServiceTest {
         when(sessions.establish(tenant, subject, verified, now)).thenReturn(established);
 
         IdpInteractiveLoginService service = new IdpInteractiveLoginService(
-                clients, identities, credentials, sessions);
+                clients, identities, credentials, sessions, (t, k, id) -> true, mock(IdpSecurityEvidence.class), UUID::randomUUID);
 
         assertThat(service.authenticate(
                 "client-1", targetId, "alice", "correct horse".toCharArray(), now))
@@ -70,7 +72,7 @@ class IdpInteractiveLoginServiceTest {
         var identities = mock(IdentityAuthenticationQuery.class);
         var credentials = mock(CredentialAuthenticationService.class);
         var sessions = mock(IdpBrowserSessionService.class);
-        var service = new IdpInteractiveLoginService(clients, identities, credentials, sessions);
+        var service = new IdpInteractiveLoginService(clients, identities, credentials, sessions, (t, k, id) -> true, mock(IdpSecurityEvidence.class), UUID::randomUUID);
         assertThat(service.authenticate("client", UUID.randomUUID(), "alice", new char[1025], Instant.now())).isEmpty();
         assertThat(service.authenticate("client", UUID.randomUUID(), "a".repeat(513), "secret".toCharArray(), Instant.now())).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(clients, identities, credentials, sessions);
@@ -84,7 +86,7 @@ class IdpInteractiveLoginServiceTest {
         IdpBrowserSessionService sessions = mock(IdpBrowserSessionService.class);
         when(clients.resolveActive("unknown")).thenReturn(Optional.empty());
         IdpInteractiveLoginService service = new IdpInteractiveLoginService(
-                clients, identities, credentials, sessions);
+                clients, identities, credentials, sessions, (t, k, id) -> true, mock(IdpSecurityEvidence.class), UUID::randomUUID);
 
         assertThat(service.authenticate(
                 "unknown", UUID.randomUUID(), "alice", "secret".toCharArray(), Instant.now()))
