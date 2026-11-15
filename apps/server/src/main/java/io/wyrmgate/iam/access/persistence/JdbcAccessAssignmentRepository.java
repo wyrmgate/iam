@@ -145,6 +145,28 @@ public final class JdbcAccessAssignmentRepository implements AccessAssignmentRep
     }
 
     @Override
+    public boolean suppressLifecycleReview(TenantContext tenant, AccessAssignment reviewed, UUID reviewRemediationId, Instant at) {
+        if(reviewed.provenanceKind()!=AccessAssignment.ProvenanceKind.LIFECYCLE_POLICY_RULE)
+            throw new IllegalArgumentException("only a lifecycle cause may be suppressed");
+        UUID target=reviewed.targetKind()==AccessAssignment.TargetKind.ROLE?reviewed.roleId():reviewed.entitlementId();
+        return jdbc.update("""
+                INSERT INTO access.lifecycle_review_suppression
+                    (tenant_id,identity_id,identity_access_epoch,lifecycle_rule_id,target_kind,target_id,reviewed_assignment_id,review_remediation_id,created_at)
+                VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING
+                """,tenant.tenantId(),reviewed.identityId(),reviewed.identityAccessEpoch(),reviewed.provenanceRefId(),
+                reviewed.targetKind().name(),target,reviewed.id(),reviewRemediationId,Timestamp.from(at))==1;
+    }
+
+    @Override
+    public boolean lifecycleReviewSuppressed(TenantContext tenant, UUID identityId, long identityEpoch,
+            UUID ruleId, AccessAssignment.TargetKind targetKind, UUID targetId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM access.lifecycle_review_suppression
+                  WHERE tenant_id=? AND identity_id=? AND identity_access_epoch=? AND lifecycle_rule_id=? AND target_kind=? AND target_id=?)
+                """,Boolean.class,tenant.tenantId(),identityId,identityEpoch,ruleId,targetKind.name(),targetId));
+    }
+
+    @Override
     public List<AccessAssignment> findCurrentLifecyclePolicyAssignments(TenantContext tenant, UUID identityId) {
         return jdbc.query(baseSelect() + """
                  WHERE tenant_id = ? AND identity_id = ?

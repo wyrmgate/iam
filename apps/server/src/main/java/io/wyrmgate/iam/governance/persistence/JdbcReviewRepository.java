@@ -130,10 +130,10 @@ public final class JdbcReviewRepository
                 UPDATE governance.review_campaign
                 SET lifecycle_state = 'GENERATING',
                     revision = revision + 1,
-                    updated_at = ?
+                    updated_at = ?, failure_code = NULL
                 WHERE tenant_id = ?
                   AND id = ?
-                  AND lifecycle_state = 'DRAFT'
+                  AND lifecycle_state IN ('DRAFT','FAILED')
                   AND revision = ?
                 """,
                 Timestamp.from(now),
@@ -143,9 +143,34 @@ public final class JdbcReviewRepository
         if (affected != 1) {
             requireRevision(tenant, campaignId, expectedRevision);
             throw new IllegalStateException(
-                    "only DRAFT ReviewCampaign can start generation");
+                    "only DRAFT or FAILED ReviewCampaign can start generation");
         }
         return findCampaign(tenant, campaignId).orElseThrow();
+    }
+
+    @Override
+    public ReviewCampaign failGeneration(TenantContext tenant, UUID campaignId, long expectedRevision, String failureCode, Instant now) {
+        int affected=jdbc.update("""
+                UPDATE governance.review_campaign SET lifecycle_state='FAILED',failure_code=?,revision=revision+1,updated_at=?
+                WHERE tenant_id=? AND id=? AND lifecycle_state='GENERATING' AND revision=?
+                """,failureCode,Timestamp.from(now),tenant.tenantId(),campaignId,expectedRevision);
+        if(affected!=1) throw new StaleWriteException("review-campaign",campaignId,expectedRevision);
+        return findCampaign(tenant,campaignId).orElseThrow();
+    }
+
+    @Override
+    public ReviewRemediation retryRemediation(TenantContext tenant, UUID remediationId, long expectedRevision, Instant now) {
+        int affected=jdbc.update("""
+                UPDATE governance.review_remediation SET lifecycle_state='PENDING',result_code=NULL,resulting_access_state=NULL,
+                    completed_at=NULL,revision=revision+1,updated_at=?
+                WHERE tenant_id=? AND id=? AND lifecycle_state IN ('FAILED','MANUAL_REQUIRED') AND revision=?
+                """,Timestamp.from(now),tenant.tenantId(),remediationId,expectedRevision);
+        if(affected!=1){
+            var current=findRemediation(tenant,remediationId).orElseThrow();
+            if(current.revision()!=expectedRevision) throw new StaleWriteException("review-remediation",remediationId,expectedRevision);
+            throw new IllegalStateException("only failed review remediation may be retried");
+        }
+        return findRemediation(tenant,remediationId).orElseThrow();
     }
 
     @Override

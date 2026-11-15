@@ -29,6 +29,22 @@ public final class JdbcAccessRequestRepository
     }
 
     @Override
+    public List<DueItem> findDueItems(Instant at, DueItem after, int limit){
+        if(limit<1 || limit>100) throw new IllegalArgumentException("invalid expiry page limit");
+        String sql="""
+                SELECT tenant_id,id,valid_until FROM governance.request_item
+                WHERE state IN ('SUBMITTED','EVALUATING','PENDING_APPROVAL','AUTHORIZED')
+                  AND valid_until<=?
+                """;
+        var mapper=(org.springframework.jdbc.core.RowMapper<DueItem>)(rs,row)->new DueItem(
+                new TenantContext(rs.getObject("tenant_id",UUID.class)),rs.getObject("id",UUID.class),rs.getTimestamp("valid_until").toInstant());
+        String order=" ORDER BY valid_until,tenant_id,id LIMIT ?";
+        if(after==null) return jdbc.query(sql+order,mapper,Timestamp.from(at),limit);
+        return jdbc.query(sql+" AND (valid_until,tenant_id,id)>(?,?,?)"+order,mapper,Timestamp.from(at),
+                Timestamp.from(after.validUntil()),after.tenant().tenantId(),after.itemId(),limit);
+    }
+
+    @Override
     public void insertRequest(
             TenantContext tenant,
             AccessRequest request) {

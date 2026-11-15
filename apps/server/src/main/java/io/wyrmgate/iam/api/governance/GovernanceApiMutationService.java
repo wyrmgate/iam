@@ -32,6 +32,7 @@ final class GovernanceApiMutationService {
             LoggerFactory.getLogger(GovernanceApiMutationService.class);
 
     private final AccessRequestCommandService requests;
+    private final io.wyrmgate.iam.governance.application.RequestTerminationService termination;
     private final AccessRequestRepository requestRepository;
     private final ApprovalCommandService approvals;
     private final ApprovalQueryService approvalQueries;
@@ -48,7 +49,8 @@ final class GovernanceApiMutationService {
             JdbcIdempotencyRepository idempotency,
             TransactionExecutor transactions,
             SecurityAuditPort audit,
-            IdGenerator ids) {
+            IdGenerator ids, io.wyrmgate.iam.governance.application.RequestTerminationService termination) {
+        this.termination=Objects.requireNonNull(termination);
         this.requests = Objects.requireNonNull(
                 requests, "requests");
         this.requestRepository = Objects.requireNonNull(
@@ -198,6 +200,27 @@ final class GovernanceApiMutationService {
                     auditOutcome(failure),
                     now,
                     correlationId);
+            throw failure;
+        }
+    }
+
+    RequestDetail cancelRequest(AuthenticatedAdministrativeActor actor,UUID requestId,long expectedRevision,
+            String key,RequestFingerprint fingerprint,Instant now,UUID correlationId){
+        String namespace="api.governance.access-request.cancel.v1";
+        try{
+            var result=transactions.required(()->{
+                var existing=requestRepository.findRequest(actor.tenant(),requestId).orElseThrow(()->GovernanceApiException.notFound(correlationId));
+                if(!actor.identityId().equals(existing.requesterIdentityId())) throw GovernanceApiException.forbidden(correlationId);
+                var registration=register(actor,namespace,key,fingerprint,now);
+                if(registration.kind()==RegistrationKind.REPLAY) return replayRequest(actor,registration,correlationId);
+                var cancelled=termination.cancel(actor.tenant(),requestId,expectedRevision,now);
+                complete(actor,namespace,key,fingerprint,"access-request",requestId,now);
+                return cancelled;
+            });
+            recordOutcome(actor,"access-request",requestId,"access-request:cancel",AuditOutcome.SUCCESS,now,correlationId);
+            return result;
+        }catch(RuntimeException failure){
+            recordOutcome(actor,"access-request",requestId,"access-request:cancel",auditOutcome(failure),now,correlationId);
             throw failure;
         }
     }

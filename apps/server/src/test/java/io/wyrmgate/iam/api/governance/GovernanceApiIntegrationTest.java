@@ -995,7 +995,8 @@ class GovernanceApiIntegrationTest {
                         idempotency,
                         transactions,
                         audit,
-                        ids);
+                        ids,new io.wyrmgate.iam.governance.application.RequestTerminationService(requests,approvalRepository,
+                                (t,intent)->java.util.Optional.empty(),io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc, transactions)));
         GovernanceController controller =
                 new GovernanceController(
                         requests,

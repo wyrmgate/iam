@@ -24,6 +24,10 @@ public interface ReviewRepository {
             long expectedRevision,
             Instant now);
 
+    ReviewCampaign failGeneration(TenantContext tenant, UUID campaignId, long expectedRevision, String failureCode, Instant now);
+
+    ReviewRemediation retryRemediation(TenantContext tenant, UUID remediationId, long expectedRevision, Instant now);
+
     ReviewCampaign recordGenerationPage(
             TenantContext tenant,
             UUID campaignId,

@@ -18,6 +18,7 @@ public final class ReviewRemediationProcessingService {
             Duration.ofSeconds(30);
     private static final Duration RETRY_DELAY =
             Duration.ofSeconds(5);
+    private static final int MAX_ATTEMPTS = 5;
     private static final int CLAIM_BATCH = 50;
 
     private final JdbcOutboxRepository outbox;
@@ -78,12 +79,22 @@ public final class ReviewRemediationProcessingService {
                         clock.instant());
                 processed++;
             } catch (RuntimeException retryable) {
-                outbox.markFailed(
-                        event.tenant(),
-                        event.event().eventId(),
-                        clock.instant().plus(
-                                RETRY_DELAY),
-                        "review_remediation_failed");
+                if(event.event().eventVersion()!=1 || !"review-remediation".equals(event.event().aggregateType())){
+                    outbox.markTerminalFailure(event.tenant(),event.event().eventId(),"invalid_review_fact");
+                }else if(event.attemptCount()>=MAX_ATTEMPTS){
+                    Instant failedAt=clock.instant();
+                    transactions.required(()->{
+                        var current=reviews.findRemediation(event.tenant(),event.event().aggregateId()).orElse(null);
+                        if(current!=null && current.state()==RemediationState.PENDING
+                                && current.revision()==event.event().aggregateRevision()){
+                            reviews.completeRemediation(event.tenant(),current.id(),RemediationState.MANUAL_REQUIRED,"review_remediation_retry_exhausted",null,current.revision(),failedAt);
+                        }
+                        return null;
+                    });
+                    outbox.markTerminalFailure(event.tenant(),event.event().eventId(),"review_remediation_failed");
+                }else{
+                    outbox.markFailed(event.tenant(),event.event().eventId(),clock.instant().plus(RETRY_DELAY),"review_remediation_failed");
+                }
                 failed++;
             }
         }
@@ -109,7 +120,7 @@ public final class ReviewRemediationProcessingService {
                                 new IllegalArgumentException(
                                         "ReviewRemediation does not exist"));
         if (remediation.state()
-                != RemediationState.PENDING) {
+                != RemediationState.PENDING || remediation.revision()!=claimed.event().aggregateRevision()) {
             return;
         }
 
@@ -126,7 +137,7 @@ public final class ReviewRemediationProcessingService {
                             remediation.id())
                     .orElseThrow();
             if (current.state()
-                    != RemediationState.PENDING) {
+                    != RemediationState.PENDING || current.revision()!=remediation.revision()) {
                 return null;
             }
             RemediationState state =

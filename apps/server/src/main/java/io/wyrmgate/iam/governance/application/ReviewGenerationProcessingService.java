@@ -19,6 +19,7 @@ public final class ReviewGenerationProcessingService {
             Duration.ofSeconds(30);
     private static final Duration RETRY_DELAY =
             Duration.ofSeconds(5);
+    private static final int MAX_ATTEMPTS = 5;
     private static final int CLAIM_BATCH = 20;
     private static final int PAGE_SIZE = 200;
 
@@ -91,12 +92,22 @@ public final class ReviewGenerationProcessingService {
                         clock.instant());
                 processed++;
             } catch (RuntimeException retryable) {
-                outbox.markFailed(
-                        event.tenant(),
-                        event.event().eventId(),
-                        clock.instant().plus(
-                                RETRY_DELAY),
-                        "review_generation_failed");
+                if(event.event().eventVersion()!=1 || !"review-campaign".equals(event.event().aggregateType())){
+                    outbox.markTerminalFailure(event.tenant(),event.event().eventId(),"invalid_review_fact");
+                }else if(event.attemptCount()>=MAX_ATTEMPTS){
+                    Instant failedAt=clock.instant();
+                    transactions.required(()->{
+                        var current=reviews.findCampaign(event.tenant(),event.event().aggregateId()).orElse(null);
+                        if(current!=null && current.state()==CampaignState.GENERATING
+                                && current.revision()==event.event().aggregateRevision()){
+                            reviews.failGeneration(event.tenant(),current.id(),current.revision(),"review_generation_failed",failedAt);
+                        }
+                        return null;
+                    });
+                    outbox.markTerminalFailure(event.tenant(),event.event().eventId(),"review_generation_failed");
+                }else{
+                    outbox.markFailed(event.tenant(),event.event().eventId(),clock.instant().plus(RETRY_DELAY),"review_generation_failed");
+                }
                 failed++;
             }
         }
@@ -123,7 +134,7 @@ public final class ReviewGenerationProcessingService {
                                         "ReviewCampaign does not exist"));
 
         if (campaign.state()
-                != CampaignState.GENERATING) {
+                != CampaignState.GENERATING || campaign.revision()!=claimed.event().aggregateRevision()) {
             return;
         }
 
@@ -153,7 +164,7 @@ public final class ReviewGenerationProcessingService {
                                     campaign.id())
                             .orElseThrow();
             if (current.state()
-                    != CampaignState.GENERATING) {
+                    != CampaignState.GENERATING || current.revision()!=campaign.revision()) {
                 return null;
             }
             if (!Objects.equals(

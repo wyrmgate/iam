@@ -112,6 +112,14 @@ public final class ReviewService {
         });
     }
 
+    public ReviewRemediation retryRemediation(TenantContext tenant, UUID remediationId, long expectedRevision, Instant now) {
+        return transactions.required(()->{
+            var remediation=repository.retryRemediation(tenant,remediationId,expectedRevision,now);
+            work.remediationRequested(tenant,remediation);
+            return remediation;
+        });
+    }
+
     public DecisionResult decide(
             TenantContext tenant,
             UUID reviewItemId,
@@ -146,6 +154,11 @@ public final class ReviewService {
                 throw new IllegalArgumentException(
                         "actor is not the assigned reviewer");
             }
+
+            if(repository.findCampaign(tenant,item.reviewCampaignId()).orElseThrow().state()!=CampaignState.ACTIVE)
+                throw new IllegalStateException("only ACTIVE ReviewCampaign accepts decisions");
+            if(identities.accessStatus(tenant,reviewerIdentityId).status()!=IdentityAccessReferenceQuery.AccessStatus.ACCESS_ELIGIBLE)
+                throw new IllegalArgumentException("reviewer Identity is not currently eligible");
 
             ReviewDecision evidence =
                     new ReviewDecision(

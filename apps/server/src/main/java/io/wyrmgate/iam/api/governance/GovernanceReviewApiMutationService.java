@@ -16,6 +16,7 @@ import io.wyrmgate.iam.governance.domain.ReviewModels.CampaignState;
 import io.wyrmgate.iam.governance.domain.ReviewModels.DecisionValue;
 import io.wyrmgate.iam.governance.domain.ReviewModels.ItemState;
 import io.wyrmgate.iam.governance.domain.ReviewModels.ReviewCampaign;
+import io.wyrmgate.iam.governance.domain.ReviewModels.ReviewRemediation;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository;
 import io.wyrmgate.iam.platform.persistence.JdbcIdempotencyRepository.Registration;
@@ -172,11 +173,11 @@ final class GovernanceReviewApiMutationService {
                             campaignId,
                             expectedRevision);
                 }
-                if (existing.state() != CampaignState.DRAFT) {
+                if (existing.state() != CampaignState.DRAFT && existing.state()!=CampaignState.FAILED) {
                     throw GovernanceApiException.conflict(
                             correlationId,
                             "review_campaign_not_draft",
-                            "Only a DRAFT ReviewCampaign can start generation.");
+                            "Only a DRAFT or FAILED ReviewCampaign can start generation.");
                 }
                 ReviewCampaign started =
                         reviews.startGeneration(
@@ -212,6 +213,36 @@ final class GovernanceReviewApiMutationService {
                     auditOutcome(failure),
                     now,
                     correlationId);
+            throw failure;
+        }
+    }
+
+    ReviewRemediation retryRemediation(AuthenticatedAdministrativeActor actor, UUID remediationId, long expectedRevision,
+            String key, RequestFingerprint fingerprint, Instant now, UUID correlationId){
+        String namespace="api.governance.review-remediation.retry.v1";
+        try{
+            var result=transactions.required(()->{
+                var existing=queries.remediationEvidence(actor.tenant(),remediationId)
+                        .orElseThrow(()->GovernanceApiException.notFound(correlationId));
+                require(actor,AdministrativePermissions.REVIEW_CAMPAIGN_START,
+                        new AdministrativeResource("review-campaign",existing.campaign().id()),now,correlationId);
+                var registration=register(actor,namespace,key,fingerprint,now);
+                if(registration.kind()==RegistrationKind.REPLAY){
+                    requireCompleted(registration,"review-remediation",correlationId);
+                    return repository.findRemediation(actor.tenant(),registration.resourceId()).orElseThrow();
+                }
+                if(existing.remediation().revision()!=expectedRevision) throw new StaleWriteException("review-remediation",remediationId,expectedRevision);
+                if(existing.remediation().state()!=io.wyrmgate.iam.governance.domain.ReviewModels.RemediationState.MANUAL_REQUIRED
+                        && existing.remediation().state()!=io.wyrmgate.iam.governance.domain.ReviewModels.RemediationState.FAILED)
+                    throw GovernanceApiException.conflict(correlationId,"review_remediation_not_retryable","Only failed or manual-required remediation can be retried.");
+                var retried=reviews.retryRemediation(actor.tenant(),remediationId,expectedRevision,now);
+                complete(actor,namespace,key,fingerprint,"review-remediation",remediationId,now);
+                return retried;
+            });
+            recordOutcome(actor,"review-remediation",remediationId,"review-remediation:retry",AuditOutcome.SUCCESS,now,correlationId);
+            return result;
+        }catch(RuntimeException failure){
+            recordOutcome(actor,"review-remediation",remediationId,"review-remediation:retry",auditOutcome(failure),now,correlationId);
             throw failure;
         }
     }

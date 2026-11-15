@@ -471,7 +471,7 @@
     "/governance/review-campaigns/{campaignId}/start": {
       "post": {
         "operationId": "startReviewCampaign",
-        "summary": "Start durable review campaign generation",
+        "summary": "Start DRAFT or resume FAILED durable review generation",
         "parameters": [
           {
             "$ref": "#/components/parameters/ReviewCampaignId"
@@ -1247,6 +1247,113 @@
         "x-wyrmgate-authority": "Governance authoritative exception",
         "x-wyrmgate-administrative-permission": "governance-exception:revoke",
         "x-wyrmgate-idempotency": "Required"
+      }
+    },
+    "/governance/review-remediations/{remediationId}/retry": {
+      "post": {
+        "operationId": "retryReviewRemediation",
+        "summary": "Retry failed or manual-required review remediation",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ReviewRemediationId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending remediation",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewRemediation"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/governance/access-requests/{requestId}/cancel": {
+      "post": {
+        "operationId": "cancelAccessRequest",
+        "summary": "Cancel outstanding request intent without revoking applied Access",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RequestId"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled request with applied items preserved",
+            "headers": {
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     }
   },

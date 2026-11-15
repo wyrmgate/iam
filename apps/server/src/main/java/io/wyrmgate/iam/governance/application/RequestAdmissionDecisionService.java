@@ -46,11 +46,11 @@ public final class RequestAdmissionDecisionService {
 
     public RequestItem finish(TenantContext tenant, AccessRequest request, RequestItem item,
             EligibilityResult result, Instant now) {
-        if (result.outcome() == EligibilityOutcome.UNAVAILABLE) {
-            return update(tenant, item, ItemState.EVALUATING, item.approvalCaseId(), result.code(), now);
-        }
         if (item.validUntil() != null && !item.validUntil().isAfter(now)) {
             return update(tenant, item, ItemState.EXPIRED, item.approvalCaseId(), "validity_already_ended", now);
+        }
+        if (result.outcome() == EligibilityOutcome.UNAVAILABLE) {
+            return update(tenant, item, ItemState.EVALUATING, item.approvalCaseId(), result.code(), now);
         }
         var previous = item.state() == ItemState.AUTHORIZED
                 ? requests.findAdmissionContext(tenant, item.id(), item.revision()).orElse(null)

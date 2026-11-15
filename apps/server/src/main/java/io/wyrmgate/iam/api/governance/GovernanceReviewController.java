@@ -407,6 +407,21 @@ public final class GovernanceReviewController {
                 request);
     }
 
+    @PostMapping("/review-remediations/{remediationId}/retry")
+    public ResponseEntity<ReviewRemediationResource> retryRemediation(@PathVariable UUID remediationId,
+            @RequestHeader(name="If-Match",required=false) String ifMatch,
+            @RequestHeader(name="Idempotency-Key",required=false) String idempotencyKey,
+            HttpServletRequest request){
+        UUID correlationId=GovernanceApiRequestContext.resolveCorrelationId(request,ids);
+        long revision=parseIfMatch(ifMatch,correlationId);
+        String key=validateIdempotencyKey(idempotencyKey,correlationId);
+        var actor=ControlPlaneActorRequestContext.require(request);
+        var result=mutations.retryRemediation(actor,remediationId,revision,key,
+                fingerprint("review-remediation:retry",remediationId,revision),Instant.now(),correlationId);
+        return ResponseEntity.ok().header(HttpHeaders.ETAG,etag(result.revision()))
+                .header("X-Correlation-Id",correlationId.toString()).header(HttpHeaders.CACHE_CONTROL,"no-store").body(resource(result));
+    }
+
     @GetMapping("/review-remediations/{remediationId}")
     public ResponseEntity<ReviewRemediationResource> remediation(
             @PathVariable UUID remediationId,

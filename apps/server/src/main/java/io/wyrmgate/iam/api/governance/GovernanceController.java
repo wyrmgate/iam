@@ -202,6 +202,21 @@ public class GovernanceController {
                 .body(resource(submitted));
     }
 
+    @PostMapping("/access-requests/{requestId}/cancel")
+    public ResponseEntity<AccessRequestResource> cancelRequest(@PathVariable UUID requestId,
+            @RequestHeader(name="If-Match",required=false) String ifMatch,
+            @RequestHeader(name="Idempotency-Key",required=false) String idempotencyKey,
+            HttpServletRequest request){
+        UUID correlationId=GovernanceApiRequestContext.resolveCorrelationId(request,ids);
+        long revision=parseIfMatch(ifMatch,correlationId);
+        String key=validateIdempotencyKey(idempotencyKey,correlationId);
+        var actor=ControlPlaneActorRequestContext.require(request);
+        var cancelled=mutations.cancelRequest(actor,requestId,revision,key,
+                fingerprint("access-request:cancel",requestId,revision),Instant.now(),correlationId);
+        return ResponseEntity.ok().header(HttpHeaders.ETAG,etag(cancelled.request().revision()))
+                .header("X-Correlation-Id",correlationId.toString()).header(HttpHeaders.CACHE_CONTROL,"no-store").body(resource(cancelled));
+    }
+
     @GetMapping("/request-items/{itemId}")
     public ResponseEntity<RequestItemResource> getRequestItem(
             @PathVariable UUID itemId,

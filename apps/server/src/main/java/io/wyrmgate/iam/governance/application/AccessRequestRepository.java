@@ -25,6 +25,9 @@ public interface AccessRequestRepository {
     List<RequestItem> findItems(
             TenantContext tenant, UUID requestId);
 
+    record DueItem(TenantContext tenant, UUID itemId, Instant validUntil) {}
+    List<DueItem> findDueItems(Instant at, DueItem after, int limit);
+
     void recordAdmissionContext(TenantContext tenant, RequestItem item, RequestAdmissionContext context);
 
     Optional<RequestAdmissionContext> findAdmissionContext(TenantContext tenant, UUID itemId, long itemRevision);
