@@ -66,6 +66,19 @@ public final class CredentialRotationService {
         });
     }
 
+    /** Abandons an unstarted metadata plan without changing Credential authority. */
+    public CredentialRotation cancelPlan(TenantContext tenant, UUID rotationId, long expectedRevision, Instant now) {
+        return transactions.required(() -> {
+            CredentialRotation current = requireRotation(tenant, rotationId, expectedRevision);
+            repository.lockCredential(tenant, current.oldCredentialId()).orElseThrow();
+            if (current.state() != RotationState.PLANNED || current.replacementCredentialId() != null) {
+                throw new IllegalStateException("only an unstarted rotation plan may be cancelled");
+            }
+            return repository.updateRotation(tenant, rotationId, null, RotationState.CANCELLED,
+                    "cancelled-before-execution", null, expectedRevision, now, now);
+        });
+    }
+
     public CredentialRotation beginReplacement(
             TenantContext tenant,
             UUID rotationId,
@@ -103,10 +116,7 @@ public final class CredentialRotationService {
                 throw new IllegalStateException(
                         "replacement may only be attached while CREATING_REPLACEMENT");
             }
-            Credential old = repository.lockCredential(
-                            tenant,
-                            current.oldCredentialId())
-                    .orElseThrow();
+            Credential old = requireEffectiveOld(tenant, current, now);
             Credential replacement =
                     repository.lockCredential(
                             tenant,
@@ -128,6 +138,9 @@ public final class CredentialRotationService {
             }
             if (old.secretReference().equals(replacement.secretReference())) {
                 throw new IllegalArgumentException("replacement Credential must have a distinct SecretReference");
+            }
+            if (replacement.validUntil() != null && !replacement.validUntil().isAfter(now)) {
+                throw new IllegalArgumentException("replacement Credential validity has ended");
             }
             if (replacement.state()
                     == CredentialState.REVOKED
@@ -184,6 +197,7 @@ public final class CredentialRotationService {
                 throw new IllegalStateException(
                         "rotation must be VERIFYING before cutover");
             }
+            requireEffectiveOld(tenant, current, now);
             Credential replacement =
                     requireReplacement(
                             tenant, current);
@@ -327,6 +341,20 @@ public final class CredentialRotationService {
                         "CredentialRotation is not in required state "
                                 + required);
             }
+            if (next == RotationState.CREATING_REPLACEMENT || next == RotationState.VERIFYING) {
+                requireEffectiveOld(tenant, current, now);
+            }
+            if (next == RotationState.VERIFYING) {
+                Credential candidate = requireReplacement(tenant, current);
+                if (candidate.state() == CredentialState.REVOKED || candidate.state() == CredentialState.COMPROMISED
+                        || candidate.state() == CredentialState.EXPIRED
+                        || (candidate.validUntil() != null && !candidate.validUntil().isAfter(now))) {
+                    throw new IllegalStateException("replacement Credential is no longer safe for verification");
+                }
+            }
+            if (next == RotationState.REVOKING_OLD && !requireReplacement(tenant, current).effectiveAt(now)) {
+                throw new IllegalStateException("replacement Credential must remain effective before old revocation");
+            }
             UUID replacement =
                     replacementCredentialId != null
                             ? replacementCredentialId
@@ -380,6 +408,14 @@ public final class CredentialRotationService {
                     expectedRevision);
         }
         return current;
+    }
+
+    private Credential requireEffectiveOld(TenantContext tenant, CredentialRotation rotation, Instant now) {
+        Credential old = repository.lockCredential(tenant, rotation.oldCredentialId()).orElseThrow();
+        if (!old.effectiveAt(now)) {
+            throw new IllegalStateException("routine rotation requires an effective old Credential");
+        }
+        return old;
     }
 
     private Credential requireReplacement(

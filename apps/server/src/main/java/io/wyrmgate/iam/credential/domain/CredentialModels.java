@@ -33,7 +33,8 @@ public final class CredentialModels {
         COMPLETED,
         FAILED,
         MANUAL_REQUIRED,
-        FAILED_REMEDIATION
+        FAILED_REMEDIATION,
+        CANCELLED
     }
 
     public record SecretReference(
@@ -167,6 +168,9 @@ public final class CredentialModels {
                 throw new IllegalArgumentException(
                         "updatedAt must not be before createdAt");
             }
+            if (state == RotationState.CANCELLED && (replacementCredentialId != null || failureCode != null)) {
+                throw new IllegalArgumentException("cancelled rotation must be an unstarted plan");
+            }
             if (isTerminal(state) && completedAt == null) {
                 throw new IllegalArgumentException(
                         "terminal CredentialRotation requires completedAt");
@@ -182,7 +186,8 @@ public final class CredentialModels {
             return state == RotationState.COMPLETED
                     || state == RotationState.FAILED
                     || state == RotationState.MANUAL_REQUIRED
-                    || state == RotationState.FAILED_REMEDIATION;
+                    || state == RotationState.FAILED_REMEDIATION
+                    || state == RotationState.CANCELLED;
         }
     }
 

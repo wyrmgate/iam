@@ -340,6 +340,30 @@ class CredentialApiIntegrationTest {
     }
 
     @Test
+    void cancelRotationIsAuthorizedRevisionGuardedAndIdempotent() throws Exception {
+        var old = credentials.create(tenant, principalId, CredentialKind.API_KEY,
+                new SecretReference("vault", "api/cancel"), null, null, NOW);
+        var plan = rotations.plan(tenant, old.id(), actor.identityId(), NOW);
+        String path = "/api/v1/credential-rotations/" + plan.id() + ":cancel";
+        MockMvc denied = mockMvc(authorization(actor, false));
+        denied.perform(post(path).requestAttr(ACTOR_ATTRIBUTE, actor)
+                .header("If-Match", "\"rev-1\"").header("Idempotency-Key", "cancel-denied-0001"))
+                .andExpect(status().isForbidden());
+        authorized.perform(post(path).requestAttr(ACTOR_ATTRIBUTE, actor)
+                .header("If-Match", "\"rev-2\"").header("Idempotency-Key", "cancel-stale-0001"))
+                .andExpect(status().isPreconditionFailed());
+        for (int i = 0; i < 2; i++) {
+            authorized.perform(post(path).requestAttr(ACTOR_ATTRIBUTE, actor)
+                    .header("If-Match", "\"rev-1\"").header("Idempotency-Key", "cancel-success-0001"))
+                    .andExpect(status().isOk()).andExpect(header().string("ETag", "\"rev-2\""))
+                    .andExpect(jsonPath("$.processState").value("CANCELLED"));
+        }
+        assertThat(repository.findOpenRotation(tenant, old.id())).isEmpty();
+        assertThat(repository.findCredential(tenant, old.id()).orElseThrow().state().name()).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM audit.audit_record WHERE tenant_id = ? AND resource_id = ? AND action_type = 'credential:cancel-rotation' AND outcome = 'SUCCESS'", Integer.class, tenant.tenantId(), old.id())).isEqualTo(2);
+    }
+
+    @Test
     void listIsPrincipalBoundAndDefaultDeny() throws Exception {
         credentials.create(
                 tenant,

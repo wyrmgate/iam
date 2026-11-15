@@ -285,6 +285,25 @@ public class CredentialController {
                 .body(resource(created));
     }
 
+    @PostMapping("/credential-rotations/{rotationId}:cancel")
+    public ResponseEntity<CredentialRotationResource> cancelRotation(
+            @PathVariable UUID rotationId,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestBody(required = false) Map<String,Object> body,
+            HttpServletRequest request) {
+        UUID correlationId = CredentialApiRequestContext.resolveCorrelationId(request, ids);
+        validateEmptyBody(body, correlationId);
+        long expectedRevision = parseIfMatch(ifMatch, correlationId);
+        String key = validateIdempotencyKey(idempotencyKey, correlationId);
+        AuthenticatedAdministrativeActor actor = ControlPlaneActorRequestContext.require(request);
+        CredentialRotation cancelled = mutations.cancelRotation(actor, rotationId, expectedRevision, key,
+                fingerprint("credential:cancel-rotation", rotationId, expectedRevision), Instant.now(), correlationId);
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, etag(cancelled.revision()))
+                .header("X-Correlation-Id", correlationId.toString())
+                .header(HttpHeaders.CACHE_CONTROL, "no-store").body(resource(cancelled));
+    }
+
     @GetMapping("/credentials/{credentialId}/rotations")
     public ResponseEntity<CredentialRotationPage> listRotations(
             @PathVariable UUID credentialId,

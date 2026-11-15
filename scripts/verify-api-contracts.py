@@ -414,6 +414,7 @@ def verify_credential_openapi(document: dict) -> None:
         "/credentials/{credentialId}:rotate",
         "/credentials/{credentialId}/rotations",
         "/credential-rotations/{rotationId}",
+        "/credential-rotations/{rotationId}:cancel",
     }
     assert set(paths) == expected_paths
 
@@ -445,7 +446,12 @@ def verify_credential_openapi(document: dict) -> None:
         "credential:rotate"
     )
 
+    cancel = paths["/credential-rotations/{rotationId}:cancel"]["post"]
+    assert {"IfMatch", "IdempotencyKey"}.issubset(ref_names(cancel))
+    assert cancel["x-wyrmgate-administrative-permission"] == "credential:rotate"
+    assert "requestBody" not in cancel
     schemas = document["components"]["schemas"]
+    assert "CANCELLED" in schemas["CredentialRotationState"]["enum"]
     create_properties = schemas["CreateCredentialRequest"]["properties"]
     assert set(create_properties) == {
         "principalId",
