@@ -19,7 +19,16 @@ public record LeasedConnectorWork(
         String idempotencyKey,
         UUID correlationId,
         UUID causationId,
-        Map<String, Object> payload) {
+        Map<String, Object> payload,
+        ExecutionContext executionContext) {
+
+    /** Non-secret execution configuration pin; workers must resolve this exact version. */
+    public record ExecutionContext(String runtimeId,String runtimeVersion,long configurationVersion,long bindingRevision,long connectorRevision){
+        public boolean matches(io.wyrmgate.iam.integration.application.ConnectorExecutionRepository.ExecutionConfiguration c){
+            return runtimeId.equals(c.runtimeId())&&runtimeVersion.equals(c.runtimeVersion())&&configurationVersion==c.configurationVersion()
+                &&bindingRevision==c.bindingRevision()&&connectorRevision==c.connectorRevision();
+        }
+    }
 
     public LeasedConnectorWork {
         Objects.requireNonNull(workId, "workId");

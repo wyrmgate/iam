@@ -46,5 +46,5 @@ public interface ConnectorExecutionRepository {
             int contractVersion,
             boolean supportsCompletePrincipalDiscovery,
             boolean supportsCompleteEntitlementDiscovery,
-            boolean supportsCompleteGrantDiscovery) {}
+            boolean supportsCompleteGrantDiscovery,long bindingRevision,long connectorRevision) {}
 }

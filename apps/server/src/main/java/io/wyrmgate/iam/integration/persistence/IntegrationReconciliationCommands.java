@@ -24,7 +24,7 @@ public final class IntegrationReconciliationCommands {
     private record Binding(UUID target,String kind,long revision,long config,String runtime,String runtimeVersion,String contract,int contractVersion){}
     public ScheduledRun schedule(TenantContext tenant,UUID binding,long expectedRevision,String objectClass,String scopeMode,
             String checkpoint,Instant now,UUID correlation){
-        if(!java.util.Set.of("PRINCIPAL","ENTITLEMENT","GRANT").contains(objectClass)||!java.util.Set.of("FULL","INCREMENTAL").contains(scopeMode)
+        if(objectClass==null||scopeMode==null||!java.util.Set.of("PRINCIPAL","ENTITLEMENT","GRANT").contains(objectClass)||!java.util.Set.of("FULL","INCREMENTAL").contains(scopeMode)
             ||("FULL".equals(scopeMode)&&checkpoint!=null)
             ||("INCREMENTAL".equals(scopeMode)&&(checkpoint==null||checkpoint.isBlank()||checkpoint.length()>2048)))
             throw new IllegalArgumentException("invalid reconciliation scope");

@@ -76,7 +76,7 @@ public final class ConnectorWorkerController {
                         item.idempotencyKey(),
                         item.correlationId(),
                         item.causationId(),
-                        item.payload()))
+                        item.payload(),item.executionContext()))
                 .toList();
         return ResponseEntity.ok(new ConnectorWorkerApiModels.ClaimResponse(items));
     }

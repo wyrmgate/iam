@@ -13,7 +13,7 @@ public final class EnvironmentConnectorSecretProvider implements ConnectorSecret
             throw new IllegalArgumentException("connector secret reference must use env:<VARIABLE_NAME>");
         }
         String variable = reference.substring(PREFIX.length());
-        if (!variable.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+        if (!variable.matches("IAM_CONNECTOR_[A-Za-z0-9_]+")) {
             throw new IllegalArgumentException("connector secret environment variable name is invalid");
         }
         String value = System.getenv(variable);

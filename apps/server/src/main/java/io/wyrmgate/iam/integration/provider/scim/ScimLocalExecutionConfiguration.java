@@ -30,9 +30,10 @@ class ScimLocalExecutionConfiguration {
             ScimPrincipalProviderAdapter scim,
             ScimGroupProviderAdapter groups,
             ScimLocalExecutionProperties properties,
-            ObjectMapper json,ProvisioningAdmission admission) {
+            ObjectMapper json,ProvisioningAdmission admission,
+            @org.springframework.beans.factory.annotation.Value("${iam.integration.scim-local.authorized-routes:}") String routes) {
         return new ScimLocalExecutionService(
-                execution, work, desiredState, transactions, scim, groups, properties, json,admission);
+                execution, work, desiredState, transactions, scim, groups, properties, json,admission,ScimExecutionPolicy.configured(routes));
     }
 
     @Bean
