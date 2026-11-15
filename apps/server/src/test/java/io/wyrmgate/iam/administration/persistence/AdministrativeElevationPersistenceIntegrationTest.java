@@ -99,7 +99,7 @@ class AdministrativeElevationPersistenceIntegrationTest {
                 starter,
                 approvalRepository);
         approvalCommands = new ApprovalCommandService(
-                approvalRepository, (tenant, approvalCase) -> {}, ids, transactions);
+                approvalRepository, (tenant, approvalCase) -> {}, ids, transactions, (t,approvalCase,actor)->{});
         elevations = new AdministrativeElevationService(
                 new JdbcAdministrativeElevationRepository(jdbc),
                 authorityRepository,

@@ -218,7 +218,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                         new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedAccess),
                         new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
-                transactions);
+                transactions, new io.wyrmgate.iam.governance.application.CurrentApprovalActorAuthority(identityReferences,requestRepository,new io.wyrmgate.iam.governance.persistence.JdbcGovernanceExceptionRepository(jdbc),new io.wyrmgate.iam.governance.persistence.JdbcLifecycleAccessApprovalCandidateRepository(jdbc)));
     }
 
     @Test

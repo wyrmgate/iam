@@ -250,7 +250,7 @@ class GovernancePolicyRiskSoDIntegrationTest {
                 approvalRepository,
                 resultSink,
                 ids,
-                transactions);
+                transactions, (t,approvalCase,actor)->{});
 
         activeEntitlements.clear();
         currentEffective.clear();
