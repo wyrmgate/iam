@@ -38,7 +38,7 @@ class GovernanceApiConfiguration {
             JdbcIdempotencyRepository idempotency,
             TransactionExecutor transactions,
             SecurityAuditPort audit,
-            IdGenerator ids) {
+            IdGenerator ids, io.wyrmgate.iam.governance.application.RequestTerminationService termination) {
         return new GovernanceApiMutationService(
                 requests,
                 requestRepository,
@@ -47,7 +47,7 @@ class GovernanceApiConfiguration {
                 idempotency,
                 transactions,
                 audit,
-                ids);
+                ids, termination);
     }
 
     @Bean

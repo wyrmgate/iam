@@ -630,6 +630,45 @@ class AccessRequestAccessApplicationIntegrationTest {
         assertThat(conflicts.overlappingEntitlementIds(tenant,beneficiary.id(),java.util.Set.of(left,right),NOW,from)).isEmpty();
     }
 
+    @Test
+    void cancellationClosesPendingApprovalAndPreventsQueuedApplication(){
+        var requester=identity("Requester");
+        var beneficiary=identity("Beneficiary");
+        var target=entitlement();
+        var commands=requestService((t,r,item)->EligibilityResult.approvalRequired(
+                new ApprovalModels.PlanSpec(java.util.List.of(new ApprovalModels.StageSpec(ApprovalModels.DecisionMode.ANY_ONE,java.util.List.of(ids.nextId())))),
+                contextFor(t,r,item)));
+        var draft=commands.createDraft(tenant,requester.id(),beneficiary.id(),
+                java.util.List.of(new ItemSpec(TargetKind.ENTITLEMENT,target.entitlementId(),PrincipalConstraintKind.ANY,null,null,null)),NOW);
+        var submitted=commands.submit(tenant,draft.request().id(),1,NOW.plusSeconds(1));
+        var pending=commands.evaluateItem(tenant,submitted.items().getFirst().id(),2,NOW.plusSeconds(2));
+        var termination=new RequestTerminationService(requestRepository,approvalRepository,accessIntent,
+                io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc,transactions));
+        var cancelled=termination.cancel(tenant,draft.request().id(),submitted.request().revision(),NOW.plusSeconds(3));
+        assertThat(cancelled.items().getFirst().state()).isEqualTo(ItemState.CANCELLED);
+        assertThat(approvalRepository.findCase(tenant,pending.approvalCaseId()).orElseThrow().state()).isEqualTo(ApprovalModels.CaseState.CANCELLED);
+        assertThat(requestDerivedAssignmentCount(pending.id())).isZero();
+    }
+
+    @Test
+    void expiryClosesPendingApprovalWithoutEvaluator(){
+        var requester=identity("Requester");
+        var beneficiary=identity("Beneficiary");
+        var target=entitlement();
+        var commands=requestService((t,r,item)->EligibilityResult.approvalRequired(
+                new ApprovalModels.PlanSpec(java.util.List.of(new ApprovalModels.StageSpec(ApprovalModels.DecisionMode.ANY_ONE,java.util.List.of(ids.nextId())))),
+                contextFor(t,r,item)));
+        var draft=commands.createDraft(tenant,requester.id(),beneficiary.id(),
+                java.util.List.of(new ItemSpec(TargetKind.ENTITLEMENT,target.entitlementId(),PrincipalConstraintKind.ANY,null,null,NOW.plusSeconds(5))),NOW);
+        var submitted=commands.submit(tenant,draft.request().id(),1,NOW.plusSeconds(1));
+        var pending=commands.evaluateItem(tenant,submitted.items().getFirst().id(),2,NOW.plusSeconds(2));
+        var termination=new RequestTerminationService(requestRepository,approvalRepository,accessIntent,
+                io.wyrmgate.iam.testsupport.AdmissionTestSupport.coordinator(jdbc,transactions));
+        assertThat(termination.expireIfDue(tenant,pending.id(),NOW.plusSeconds(5))).isTrue();
+        assertThat(requestRepository.findItem(tenant,pending.id()).orElseThrow().state()).isEqualTo(ItemState.EXPIRED);
+        assertThat(approvalRepository.findCase(tenant,pending.approvalCaseId()).orElseThrow().state()).isEqualTo(ApprovalModels.CaseState.CANCELLED);
+    }
+
     private RequestAdmissionContext contextFor(TenantContext t, AccessRequestModels.AccessRequest request,
                                                AccessRequestModels.RequestItem item) {
         var ref = new CatalogQueryService(catalogRepository).resolveActiveEntitlement(t, item.entitlementId());

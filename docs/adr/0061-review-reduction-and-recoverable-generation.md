@@ -13,3 +13,7 @@ Valid review work is revision fenced. Malformed envelopes are terminal technical
 ## Consequences
 
 Review reduction remains independent of Governance policy availability. The Access suppression is scoped and durable, not a cross-capability write. Generation completion is distinct from remediation and technical provider convergence.
+
+## Request cancellation and expiry
+
+Requesters may cancel outstanding request intent through the revision-guarded envelope operation. Pending exact approval cases close without erasing decisions. Expiry uses validUntil and current request item state; a bounded keyset scan materializes due submitted work without relying on a positive evaluator. Cancellation and expiry use the local Access admission fence to recover committed causal results first; APPLIED history is not a reduction command. The CANCELLED envelope can contain APPLIED history. Stale fact delivery cannot create Access from cancelled or expired request intent.
