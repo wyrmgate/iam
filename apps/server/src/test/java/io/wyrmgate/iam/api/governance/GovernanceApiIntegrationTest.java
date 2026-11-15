@@ -951,7 +951,7 @@ class GovernanceApiIntegrationTest {
         var reporter=new io.wyrmgate.iam.governance.application.GovernanceObservationReportingService(repo,ids,transactions);
         UUID binding=ids.nextId();
         for(int i=0;i<2;i++) reporter.observe(tenant,binding,new io.wyrmgate.iam.governance.application.GovernanceObservationReporter.ObservationCondition(
-                "UNMAPPED_PROVIDER_ENTITLEMENT","OBSERVED_ENTITLEMENT","provider-"+i,null),NOW);
+                "UNMAPPED_PROVIDER_ENTITLEMENT","OBSERVED_ENTITLEMENT","provider-"+i,null),Instant.now());
         var result=mvc.perform(get("/api/v1/governance/findings").requestAttr(ACTOR_ATTRIBUTE,requester)
                 .param("state","OPEN").param("limit","1")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1)).andReturn();
@@ -962,7 +962,7 @@ class GovernanceApiIntegrationTest {
                 .param("state","RESOLVED").param("cursor",cursor)).andExpect(status().isBadRequest());
         mvc.perform(get("/api/v1/governance/findings/{id}",finding).requestAttr(ACTOR_ATTRIBUTE,requester))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.findingType").value("UNMAPPED_PROVIDER_ENTITLEMENT"));
-        mockMvc(audit,policyAuthorization(false)).perform(get("/api/v1/governance/findings").requestAttr(ACTOR_ATTRIBUTE,requester))
+        mockMvc(new AuditCommandService(new JdbcAuditRecordRepository(jdbc),transactions,Clock.systemUTC()),policyAuthorization(false)).perform(get("/api/v1/governance/findings").requestAttr(ACTOR_ATTRIBUTE,requester))
                 .andExpect(status().isForbidden());
     }
 
