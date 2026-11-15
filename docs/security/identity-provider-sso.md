@@ -78,3 +78,7 @@ Audit may record data-minimized semantic evidence for authentication, session li
 6. explicit federation adapter/extension boundary, external JWT/OIDC compatibility, and retained JWKS verification-key overlap — implemented.
 
 Concrete upstream OIDC/SAML login providers and optional OAuth/OIDC extensions are future product slices, not incomplete baseline behavior. Each future activation requires its own explicit accepted contract and negative security coverage.
+
+### Local password change
+
+ADR-0064 permits only a current first-party browser session's exact local PASSWORD Credential to be changed through the dedicated same-origin `/api/auth/password/change` interaction (CSRF, current password reproof, new password 15–1024 characters). Local verifier replacement, old authoritative revocation and completed rotation are atomic; old Credential revision sessions fail closed. No password-derived request fingerprint or plaintext persistence, generic enrollment, reset, external provider call or ordinary Credential secret API is introduced. Existing administrative `rotate` remains a metadata plan.

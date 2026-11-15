@@ -148,7 +148,7 @@ public class IdpBrowserSessionController {
                 .build();
     }
 
-    private static ResponseCookie clearSessionCookie() {
+    static ResponseCookie clearSessionCookie() {
         return ResponseCookie.from(IdpAuthorizationController.BROWSER_SESSION_COOKIE, "")
                 .httpOnly(true)
                 .secure(true)
@@ -158,7 +158,7 @@ public class IdpBrowserSessionController {
                 .build();
     }
 
-    private static ResponseCookie clearCsrfCookie() {
+    static ResponseCookie clearCsrfCookie() {
         return ResponseCookie.from(CSRF_COOKIE, "")
                 .httpOnly(false)
                 .secure(true)

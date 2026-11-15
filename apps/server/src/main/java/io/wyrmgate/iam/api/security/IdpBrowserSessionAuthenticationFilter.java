@@ -43,7 +43,8 @@ public final class IdpBrowserSessionAuthenticationFilter extends OncePerRequestF
         String path = request.getRequestURI().substring(request.getContextPath().length());
         return !(path.startsWith("/api/v1/")
                 || path.equals("/api/auth/session")
-                || path.equals("/api/auth/logout"));
+                || path.equals("/api/auth/logout")
+                || path.equals("/api/auth/password/change"));
     }
 
     @Override
@@ -113,7 +114,8 @@ public final class IdpBrowserSessionAuthenticationFilter extends OncePerRequestF
             return false;
         }
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        return path.startsWith("/api/v1/") || path.equals("/api/auth/logout");
+        return path.startsWith("/api/v1/") || path.equals("/api/auth/logout")
+                || path.equals("/api/auth/password/change");
     }
 
     private static String cookie(HttpServletRequest request, String name) {

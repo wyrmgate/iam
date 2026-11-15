@@ -70,6 +70,18 @@ class IdpBrowserSessionAuthenticationFilterTest {
     }
 
     @Test
+    void passwordChangeRequiresSameOriginCsrfProof() throws Exception {
+        IdpBrowserSessionAuthenticationFilter filter = new IdpBrowserSessionAuthenticationFilter(
+                mock(IdpBrowserSessionService.class), new IdpCsrfTokenCodec(), UUID::randomUUID);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/password/change");
+        request.setCookies(new Cookie(IdpAuthorizationController.BROWSER_SESSION_COOKIE, "opaque"));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, (req, res) -> { throw new AssertionError("must not continue"); });
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).contains("csrf_failed");
+    }
+
+    @Test
     void acceptsMatchingDoubleSubmitCsrfProof() throws Exception {
         IdpBrowserSessionService sessions = mock(IdpBrowserSessionService.class);
         IdpCsrfTokenCodec csrf = new IdpCsrfTokenCodec();

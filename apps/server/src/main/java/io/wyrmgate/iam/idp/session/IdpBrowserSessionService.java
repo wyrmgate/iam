@@ -144,6 +144,18 @@ public final class IdpBrowserSessionService {
                         .map(context -> new ResolvedSession(located.tenant(), context)));
     }
 
+    /** Internal exact authenticator context for the dedicated current-session password change. */
+    Optional<PasswordChangeSubject> resolvePasswordChangeSubject(String rawToken, Instant now) {
+        return hash(rawToken).flatMap(sessions::findByTokenHash)
+                .flatMap(located -> revalidate(located.tenant(), located.session(), now)
+                        .map(context -> new PasswordChangeSubject(located.tenant(), context.identityId(),
+                                context.principalId(), located.session().credentialId(),
+                                located.session().credentialRevision())));
+    }
+
+    record PasswordChangeSubject(TenantContext tenant, UUID identityId, UUID principalId,
+                                 UUID credentialId, long credentialRevision) {}
+
     public void logout(
             TenantContext tenant,
             String rawToken,
