@@ -35,6 +35,7 @@ public final class ConnectorWorkerProtocolService {
     private final ConnectorWorkerProtocolProperties properties;
     private final ObjectMapper json;
     private final Clock clock;
+    private final ProvisioningAdmission admission;
 
     public ConnectorWorkerProtocolService(
             WorkerRegistrationRepository workers,
@@ -42,8 +43,8 @@ public final class ConnectorWorkerProtocolService {
             DesiredAccessStateQuery desiredState,
             TransactionExecutor transactions,
             ConnectorWorkerProtocolProperties properties,
-            ObjectMapper json) {
-        this(workers, work, desiredState, transactions, properties, json, Clock.systemUTC());
+            ObjectMapper json, ProvisioningAdmission admission) {
+        this(workers, work, desiredState, transactions, properties, json, Clock.systemUTC(), admission);
     }
 
     ConnectorWorkerProtocolService(
@@ -53,7 +54,7 @@ public final class ConnectorWorkerProtocolService {
             TransactionExecutor transactions,
             ConnectorWorkerProtocolProperties properties,
             ObjectMapper json,
-            Clock clock) {
+            Clock clock, ProvisioningAdmission admission) {
         this.workers = Objects.requireNonNull(workers, "workers");
         this.work = Objects.requireNonNull(work, "work");
         this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
@@ -61,6 +62,7 @@ public final class ConnectorWorkerProtocolService {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.admission=Objects.requireNonNull(admission);
     }
 
     public WorkerSession establishSession(
@@ -135,6 +137,9 @@ public final class ConnectorWorkerProtocolService {
                         candidate.tenantId(), candidate.taskId(), candidate.desiredRevision(), now);
                 continue;
             }
+            var decision=admission.check(candidate);
+            if (decision==ProvisioningAdmission.Decision.RETRY) continue;
+            if (decision==ProvisioningAdmission.Decision.BLOCKED) {work.blockUnleasedProvisioning(candidate,now);continue;}
             claimed.add(work.leaseProvisioning(
                     session, candidate, now, properties.effectiveLeaseDuration()));
             if (claimed.size() == maxItems) return claimed;
@@ -154,9 +159,13 @@ public final class ConnectorWorkerProtocolService {
             WorkerRegistration worker, UUID sessionId, UUID workId,
             UUID leaseId, long leaseEpoch) {
         Instant now = clock.instant();
-        return transactions.required(() -> work.renewLease(
-                requireSession(worker, sessionId), workId, leaseId, leaseEpoch,
-                now, properties.effectiveLeaseDuration()));
+        return transactions.required(() -> {
+            var session=requireSession(worker,sessionId);
+            var candidate=work.leasedProvisioning(session,workId,leaseId,leaseEpoch);
+            if(candidate.isPresent() && admission.check(candidate.get())!=ProvisioningAdmission.Decision.ADMIT)
+                throw new WorkerProtocolException("provisioning_fence_rejected","current provisioning plan is not admissible");
+            return work.renewLease(session,workId,leaseId,leaseEpoch,now,properties.effectiveLeaseDuration());
+        });
     }
 
     public ConnectorWorkRepository.ObservationBatchResult appendObservations(

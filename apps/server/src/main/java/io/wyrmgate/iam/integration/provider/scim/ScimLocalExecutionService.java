@@ -7,6 +7,7 @@ import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Freshness;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Status;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository;
+import io.wyrmgate.iam.integration.application.ProvisioningAdmission;
 import io.wyrmgate.iam.integration.application.ConnectorPayloadGuard;
 import io.wyrmgate.iam.integration.application.WorkerProtocolException;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository.ExecutionConfiguration;
@@ -45,6 +46,7 @@ public final class ScimLocalExecutionService {
     private final ScimLocalExecutionProperties properties;
     private final ObjectMapper json;
     private final Clock clock;
+    private final ProvisioningAdmission admission;
 
     public ScimLocalExecutionService(
             ConnectorExecutionRepository execution,
@@ -54,8 +56,8 @@ public final class ScimLocalExecutionService {
             ScimPrincipalProviderAdapter scim,
             ScimGroupProviderAdapter groups,
             ScimLocalExecutionProperties properties,
-            ObjectMapper json) {
-        this(execution, work, desiredState, transactions, scim, groups, properties, json, Clock.systemUTC());
+            ObjectMapper json,ProvisioningAdmission admission) {
+        this(execution, work, desiredState, transactions, scim, groups, properties, json, Clock.systemUTC(),admission);
     }
 
     ScimLocalExecutionService(
@@ -67,7 +69,7 @@ public final class ScimLocalExecutionService {
             ScimGroupProviderAdapter groups,
             ScimLocalExecutionProperties properties,
             ObjectMapper json,
-            Clock clock) {
+            Clock clock,ProvisioningAdmission admission) {
         this.execution = Objects.requireNonNull(execution, "execution");
         this.work = Objects.requireNonNull(work, "work");
         this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
@@ -77,6 +79,7 @@ public final class ScimLocalExecutionService {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.admission=Objects.requireNonNull(admission);
     }
 
     public int executeAvailable() {
@@ -139,6 +142,9 @@ public final class ScimLocalExecutionService {
                         candidate.tenantId(), candidate.taskId(), candidate.desiredRevision(), now);
                 continue;
             }
+            var decision=admission.check(candidate);
+            if(decision==ProvisioningAdmission.Decision.RETRY)continue;
+            if(decision==ProvisioningAdmission.Decision.BLOCKED){work.blockUnleasedProvisioning(candidate,now);continue;}
             WorkerSession owner = localOwner(new TenantContext(candidate.tenantId()));
             claimed.add(new ClaimedProvisioning(
                     candidate,
@@ -200,10 +206,13 @@ public final class ScimLocalExecutionService {
             return;
         }
 
-        ExecutionConfiguration configuration = execution
-                .findExecutionConfiguration(leased.tenant(), leased.connectorBindingId())
-                .filter(value -> isCompatible(value, leased.contractId(), leased.contractVersion()))
-                .orElse(null);
+        // Obtain the immutable configuration snapshot under the current route/lease fence.
+        ExecutionConfiguration configuration = transactions.required(()-> {
+            if(admission.check(candidate)!=ProvisioningAdmission.Decision.ADMIT)return null;
+            work.renewLease(owner,leased.workId(),leased.lease().leaseId(),leased.lease().leaseEpoch(),clock.instant(),properties.effectiveLeaseDuration());
+            return execution.findExecutionConfiguration(leased.tenant(),leased.connectorBindingId())
+                    .filter(value->isCompatible(value,leased.contractId(),leased.contractVersion())).orElse(null);
+        });
         if (configuration == null || configuration.secretReference() == null
                 || configuration.secretReference().isBlank()) {
             complete(owner, leased, new WorkCompletion(

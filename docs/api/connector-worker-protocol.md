@@ -134,3 +134,7 @@ A COMPLETE report requires the existing compatible trusted discovery contract pl
 ## Bounded materialization (ADR-0075 / V35)
 
 Completion accepts provider evidence and closes discovery; a RUNNING run with pending materialization reports UNKNOWN until positive and (when verified COMPLETE) absence pages finish. Each transaction processes at most 200 positive rows and 200 absence rows. Exact completion replay remains valid; no new discovery claim or append after acceptance. A durable scheduler advances pages; current configuration/generation is rechecked every step. Final outcome, coverage and downstream fact commit together. Poll operational run status for final materialization.
+
+## Current provisioning admission (ADR-0076 / V36)
+
+New jobs pin binding, connector and configuration revisions. Local and remote claims verify current Access intent and exact mapped routes, active Tenant/Catalog for increases, safe current coalesced demand for removals. Local rechecks immediately before provider execution; remote must renew its exact lease immediately before each mutation, triggering the same admission. Rejected renewal means do not execute; provider effect already in flight remains uncertain. Unpinned historical plans or stale contexts block; no fabricated backfill. Replacement success required before removing a still-required grant from an obsolete route.

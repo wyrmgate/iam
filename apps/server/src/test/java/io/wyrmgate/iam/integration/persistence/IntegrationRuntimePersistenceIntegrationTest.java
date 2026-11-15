@@ -711,7 +711,7 @@ class IntegrationRuntimePersistenceIntegrationTest {
                 repository, repository, query, transactions,
                 new ConnectorWorkerProtocolProperties(
                         Duration.ofMinutes(15), Duration.ofSeconds(30), 50, 0, 500),
-                json);
+                json,c->io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.ADMIT);
     }
 
     private static DesiredAccessStateQuery revisionUnavailable() {

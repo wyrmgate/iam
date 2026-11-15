@@ -2,6 +2,10 @@ package io.wyrmgate.iam.integration.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolProperties;
+import io.wyrmgate.iam.integration.application.ProvisioningAdmission;
+import io.wyrmgate.iam.integration.application.CurrentProvisioningAdmission;
+import io.wyrmgate.iam.catalog.application.CatalogTargetReferenceQuery;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolService;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationCommandService;
 import io.wyrmgate.iam.integration.application.IntegrationAdministrationFactSink;
@@ -237,18 +241,26 @@ public class IntegrationRuntimeConfiguration {
     }
 
     @Bean
+    ProvisioningAdmission provisioningAdmission(JdbcIntegrationRuntimeRepository fence, DesiredProvisioningStateQuery desired,
+            GrantProvisioningRepository grants, PrincipalProvisioningRepository principals,
+            PrincipalTechnicalReferenceQuery identities,CatalogEntitlementReferenceQuery catalog,
+            CatalogTargetReferenceQuery targets,TenantOverviewQuery tenants) {
+        return new CurrentProvisioningAdmission(fence,desired,grants,principals,identities,catalog,targets,tenants);
+    }
+
+    @Bean
     ConnectorWorkerProtocolService connectorWorkerProtocolService(
             JdbcIntegrationRuntimeRepository workers,
             DesiredAccessStateQuery desiredStateQuery,
             TransactionExecutor transactions,
             ConnectorWorkerProtocolProperties properties,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,ProvisioningAdmission admission) {
         return new ConnectorWorkerProtocolService(
                 workers,
                 workers,
                 desiredStateQuery,
                 transactions,
                 properties,
-                objectMapper);
+                objectMapper,admission);
     }
 }

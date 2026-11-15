@@ -41,7 +41,7 @@ A concept must not have competing authoritative definitions in multiple formats.
 - [`security/control-plane-authentication.md`](security/control-plane-authentication.md) — external/federated and first-party control-plane authentication and bootstrap.
 - [`security/first-run-web-setup.md`](security/first-run-web-setup.md) — secured first-run web setup adapter.
 - [`security/identity-provider-sso.md`](security/identity-provider-sso.md) — first-party authentication, federation and SSO security boundary.
-- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0075.
+- [`adr/README.md`](adr/README.md) — canonical ADR index through accepted ADR-0076.
 - [`api/api-conventions.md`](api/api-conventions.md) — public/internal API conventions.
 - [`api/event-model.md`](api/event-model.md) — domain/internal/public event semantics.
 - [`api/idp-sso-contracts.md`](api/idp-sso-contracts.md) — OIDC/OAuth/JWKS/session/claim/secret-boundary implementation contract.
@@ -99,7 +99,7 @@ The agreed v3 layered architecture reconciliation is now represented durably by 
 - The first reconciled Identity backend migration is V13: Identity lifecycle transition mechanics reuse the framework-neutral lifecycle kernel while Identity retains its state/action graph, and the previously documented Organization/manager/membership/ownership model is now persisted as tenant-safe normalized authoritative state with temporal validity, typed provenance and optimistic revision. Public relationship APIs and source-driven relationship extraction remain separate future contracts.
 - [`architecture/layered-architecture.md`](architecture/layered-architecture.md) consolidates L1–L6 and Layer 6A–6I. The image-86 internal `Layer 6L` heading is treated as a labeling error; the reconciled area is 6I Runtime/Deployment/Availability/Recovery.
 
-The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0075 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
+The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0076 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
 
 OD-005 remains open until a concrete production provider environment implements the accepted ADR-0043 objectives and measured recovery/failover evidence proves them. OD-006 legacy migration/cutover remains open.
 
@@ -120,3 +120,5 @@ ADR-0073 adds bounded expired provisioning lease uncertainty handling, serialize
 ADR-0074 / V34 adds reconciliation scan generation, configuration fencing and explicit full-scan batch manifest; stale completion cannot overwrite current observations. Bounded materialization remains follow-up.
 
 ADR-0075/V35 adds durable bounded reconciliation materialization and finalization; completion acknowledgement is not final coverage.
+
+ADR-0076/V36 pins provisioning context and shares current admission between local and remote claims/renewal.

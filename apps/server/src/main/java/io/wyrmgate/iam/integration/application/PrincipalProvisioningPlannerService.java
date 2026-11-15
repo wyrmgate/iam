@@ -98,7 +98,7 @@ public final class PrincipalProvisioningPlannerService {
                     desiredPrincipal,
                     known.getFirst(),
                     "UPSERT_PRINCIPAL",
-                    reenablePayload(desiredPrincipal, known.getFirst())));
+                    reenablePayload(desiredPrincipal, known.getFirst(),existing.getFirst().principalId())));
         }
 
         var profile = profiles.resolve(tenant, desiredPrincipal.identityId());
@@ -147,6 +147,7 @@ public final class PrincipalProvisioningPlannerService {
                 payload.put("identityId", desiredPrincipal.identityId().toString());
                 payload.put("applicationTargetId",
                         desiredPrincipal.applicationTargetId().toString());
+                payload.put("principalId",principal.principalId().toString());
                 payload.put("providerStableId", target.providerPrincipalId());
                 if (target.providerVersion() != null) {
                     payload.put("providerVersion", target.providerVersion());
@@ -160,11 +161,12 @@ public final class PrincipalProvisioningPlannerService {
 
     private static Map<String,Object> reenablePayload(
             DesiredPrincipalState desiredPrincipal,
-            PrincipalProvisioningRepository.TechnicalPrincipalTarget target) {
+            PrincipalProvisioningRepository.TechnicalPrincipalTarget target, UUID principalId) {
         Map<String,Object> payload = new LinkedHashMap<>();
         payload.put("identityId", desiredPrincipal.identityId().toString());
         payload.put("applicationTargetId",
                 desiredPrincipal.applicationTargetId().toString());
+        payload.put("principalId",principalId.toString());
         payload.put("providerStableId", target.providerPrincipalId());
         if (target.providerVersion() != null) {
             payload.put("providerVersion", target.providerVersion());

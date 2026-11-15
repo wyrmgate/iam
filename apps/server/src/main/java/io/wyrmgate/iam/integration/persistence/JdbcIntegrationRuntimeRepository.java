@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository;
+import io.wyrmgate.iam.integration.application.ProvisioningPlanFence;
+import io.wyrmgate.iam.integration.application.GrantProvisioningRepository;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink;
 import io.wyrmgate.iam.integration.application.IntegrationPrincipalProvisioningFactSink;
@@ -38,7 +40,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 public final class JdbcIntegrationRuntimeRepository
-        implements WorkerRegistrationRepository, ConnectorWorkRepository, ConnectorExecutionRepository {
+        implements WorkerRegistrationRepository, ConnectorWorkRepository, ConnectorExecutionRepository, ProvisioningPlanFence {
 
     private static final TypeReference<Map<String,Object>> MAP_TYPE = new TypeReference<>() {};
     private final JdbcTemplate jdbc;
@@ -470,6 +472,76 @@ public final class JdbcIntegrationRuntimeRepository
                 WHERE tenant_id = ? AND reconciliation_run_id = ?
                 """, Integer.class, tenant.tenantId(), reconciliationRunId);
         return value == null ? 0 : value;
+    }
+
+    @Override
+    public boolean currentPlan(ProvisioningCandidate c, UUID targetId) {
+        var result=jdbc.query("""
+                SELECT b.id FROM integration.provisioning_task t
+                JOIN integration.provisioning_job j ON j.tenant_id=t.tenant_id AND j.id=t.provisioning_job_id
+                JOIN integration.connector_binding b ON b.tenant_id=j.tenant_id AND b.id=j.connector_binding_id
+                JOIN integration.connector_instance ci ON ci.tenant_id=b.tenant_id AND ci.id=b.connector_instance_id
+                WHERE t.tenant_id=? AND t.id=? AND b.id=? AND t.desired_revision=?
+                  AND t.state IN ('READY','FAILED_RETRYABLE','RUNNING')
+                  AND b.target_kind='APPLICATION_TARGET' AND b.target_id=?
+                  AND b.lifecycle_state='ACTIVE' AND ci.lifecycle_state='ACTIVE'
+                  AND b.contract_id=t.contract_id AND b.contract_version=t.contract_version
+                  AND b.revision=j.planned_binding_revision AND ci.revision=j.planned_connector_revision
+                  AND ci.configuration_version=j.planned_configuration_version
+                FOR SHARE OF b,ci
+                """,(rs,row)->rs.getObject(1,UUID.class),c.tenantId(),c.taskId(),c.connectorBindingId(),c.desiredRevision(),targetId);
+        return result.size()==1;
+    }
+
+    @Override
+    public boolean removalMappingSafe(ProvisioningCandidate c, UUID principal, UUID entitlement) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT NOT EXISTS (SELECT 1 FROM integration.principal_observation_mapping m
+                    WHERE m.tenant_id=? AND m.connector_binding_id=? AND m.provider_stable_id=?
+                      AND m.lifecycle_state='ACTIVE' AND m.principal_id<>?)
+                AND NOT EXISTS (SELECT 1 FROM integration.entitlement_observation_mapping m
+                    WHERE m.tenant_id=? AND m.connector_binding_id=? AND m.provider_stable_id=?
+                      AND m.lifecycle_state='ACTIVE' AND m.entitlement_id<>?)
+                """,Boolean.class,c.tenantId(),c.connectorBindingId(),c.payload().get("providerPrincipalId"),principal,
+                c.tenantId(),c.connectorBindingId(),c.payload().get("providerEntitlementId"),entitlement));
+    }
+
+    @Override
+    public boolean replacementSucceeded(ProvisioningCandidate c, GrantProvisioningRepository.TechnicalGrantTarget route) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM integration.provisioning_task t
+                JOIN integration.provisioning_job j ON j.tenant_id=t.tenant_id AND j.id=t.provisioning_job_id
+                WHERE t.tenant_id=? AND t.subject_kind='DESIRED_GRANT' AND t.subject_id=? AND t.desired_revision=?
+                  AND t.operation_type='ADD_GRANT' AND t.state='SUCCEEDED' AND j.connector_binding_id=?
+                  AND t.payload->>'principalId'=? AND t.payload->>'providerPrincipalId'=?
+                  AND t.payload->>'providerEntitlementId'=? AND t.payload->>'entitlementId'=?)
+                """,Boolean.class,c.tenantId(),c.subjectId(),c.desiredRevision(),route.connectorBindingId(),
+                route.principalId().toString(),route.providerPrincipalId(),route.providerEntitlementId(),c.payload().get("entitlementId")));
+    }
+
+    @Override
+    public Optional<ProvisioningCandidate> leasedProvisioning(WorkerSession session,UUID workId,UUID leaseId,long epoch) {
+        return jdbc.query("""
+                SELECT t.id,t.operation_id,t.tenant_id,j.connector_binding_id,t.operation_type,t.subject_kind,t.subject_id,
+                       t.desired_revision,t.contract_id,t.contract_version,t.idempotency_key,t.correlation_id,t.causation_id,t.payload::text
+                FROM integration.provisioning_task t JOIN integration.provisioning_job j
+                  ON j.tenant_id=t.tenant_id AND j.id=t.provisioning_job_id
+                JOIN platform.connector_work_lease l ON l.tenant_id=t.tenant_id AND l.work_id=t.id AND l.work_kind='PROVISION'
+                WHERE t.tenant_id=? AND t.id=? AND l.execution_owner_id=? AND l.lease_id=? AND l.lease_epoch=?
+                FOR UPDATE OF t
+                """,(rs,row)->new ProvisioningCandidate(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getObject(3,UUID.class),
+                    rs.getObject(4,UUID.class),rs.getString(5),rs.getString(6),rs.getObject(7,UUID.class),rs.getLong(8),
+                    rs.getString(9),rs.getInt(10),rs.getString(11),rs.getObject(12,UUID.class),rs.getObject(13,UUID.class),readMap(rs.getString(14))),
+                session.tenant().tenantId(),workId,session.id(),leaseId,epoch).stream().findFirst();
+    }
+
+    @Override
+    public void blockUnleasedProvisioning(ProvisioningCandidate c,Instant now) {
+        jdbc.update("""
+                UPDATE integration.provisioning_task SET state='BLOCKED',failure_code='provisioning_plan_fence_rejected',
+                    next_attempt_at=NULL,revision=revision+1,updated_at=GREATEST(updated_at,?)
+                WHERE tenant_id=? AND id=? AND desired_revision=? AND state IN ('READY','FAILED_RETRYABLE')
+                """,Timestamp.from(now),c.tenantId(),c.taskId(),c.desiredRevision());
     }
 
     @Override
