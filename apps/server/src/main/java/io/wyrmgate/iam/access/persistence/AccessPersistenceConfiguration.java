@@ -7,6 +7,9 @@ import io.wyrmgate.iam.access.application.AccessTargetReductionProcessingService
 import io.wyrmgate.iam.access.application.AccessTargetReductionRepository;
 import io.wyrmgate.iam.access.application.AccessTargetReductionWorkSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentCommandService;
+import io.wyrmgate.iam.access.application.AccessAdmissionCoordinator;
+import io.wyrmgate.iam.access.application.AccessAdmissionConflictQuery;
+import io.wyrmgate.iam.access.application.AccessAdmissionConflictQueryService;
 import io.wyrmgate.iam.access.application.AccessAssignmentFactSink;
 import io.wyrmgate.iam.access.application.AccessAssignmentRepository;
 import io.wyrmgate.iam.access.application.AccessAssignmentQueryService;
@@ -69,6 +72,18 @@ public class AccessPersistenceConfiguration {
     AccessAssignmentQueryService accessAssignmentQueryService(
             AccessAssignmentRepository repository) {
         return new AccessAssignmentQueryService(repository);
+    }
+
+    @Bean
+    AccessAdmissionCoordinator accessAdmissionCoordinator(JdbcTemplate jdbc, TransactionExecutor transactions) {
+        return new AccessAdmissionCoordinator(new JdbcAccessAdmissionLockRepository(jdbc), transactions);
+    }
+
+    @Bean
+    AccessAdmissionConflictQuery accessAdmissionConflictQuery(AccessAssignmentRepository assignments,
+            IdentityAccessReferenceQuery identities, CatalogAccessTargetAvailabilityQuery catalog,
+            RoleExpansionQuery roles, EffectiveAccessSemanticSupport semantics) {
+        return new AccessAdmissionConflictQueryService(assignments, identities, catalog, roles, semantics);
     }
 
     @Bean

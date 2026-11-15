@@ -85,6 +85,10 @@ public interface AccessAssignmentRepository {
             TenantContext tenant, UUID identityId, Instant snapshotAt,
             Instant afterCreatedAt, UUID afterId, int limit) { return List.of(); }
 
+    List<AccessAssignment> findAdmissionPage(TenantContext tenant, UUID identityId, long identityEpoch,
+            java.util.Set<UUID> entitlementIds, Instant from, Instant until,
+            Instant afterCreatedAt, UUID afterId, int limit);
+
     List<AccessAssignment> findTargetReductionPage(
             TenantContext tenant,
             AccessAssignment.TargetKind targetKind,
