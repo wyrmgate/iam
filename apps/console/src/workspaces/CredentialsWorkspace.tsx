@@ -49,7 +49,7 @@ function CredentialMetadataWorkspace({ principalId }: { principalId: string }) {
           name: 'validFrom',
           label: 'Valid from',
           type: 'datetime-local',
-          help: 'A future credential remains semantically ineffective until this instant even if scheduled materialization is delayed.',
+          help: 'A future Credential remains ineffective until validFrom is reached and its ACTIVE transition has committed.',
         },
         {
           name: 'validUntil',
@@ -93,7 +93,7 @@ function CredentialMetadataWorkspace({ principalId }: { principalId: string }) {
       </StatePanel>
       <Surface title="Lifecycle and validity" description="Lifecycle, time validity, and durable rotation are separate dimensions.">
         <Box component="ul" sx={{ m: 0, pl: 2.5, display: 'grid', gap: 1 }}>
-          <Typography component="li" variant="body2"><strong>SCHEDULED</strong> is not effective before validFrom.</Typography>
+          <Typography component="li" variant="body2"><strong>SCHEDULED</strong> remains ineffective until the ACTIVE transition commits at or after validFrom.</Typography>
           <Typography component="li" variant="body2"><strong>ACTIVE</strong> is effective only while validFrom/validUntil also permit it.</Typography>
           <Typography component="li" variant="body2"><strong>EXPIRED</strong> reflects the validity boundary; delayed scheduled work cannot extend access to the credential.</Typography>
           <Typography component="li" variant="body2"><strong>REVOKED</strong> is authoritative even if external provider cleanup is still pending elsewhere.</Typography>
@@ -120,6 +120,13 @@ function RotationWorkspace() {
     list: list(`${V1_ROOT}/credentials/${encodeURIComponent(activeCredentialId)}/rotations`),
     detail: (id) => `${V1_ROOT}/credential-rotations/${encodeURIComponent(id)}`,
     columns: ['processState', 'replacementCredentialId', 'failureCode', 'createdAt', 'completedAt'],
+    actions: [{
+      label: 'Cancel unstarted rotation plan',
+      path: (id) => `${V1_ROOT}/credential-rotations/${encodeURIComponent(id)}:cancel`,
+      destructive: true,
+      requireEtag: true,
+      idempotent: true,
+    }],
   }) : null, [activeCredentialId]);
 
   function openCredential() {
@@ -153,11 +160,11 @@ function RotationWorkspace() {
       <PageHeader
         eyebrow="Credential · rotation safety"
         title="Credential rotation"
-        description="Plan and read the accepted durable CredentialRotation process. The Console does not expose internal provider-execution steps or generic process-state mutation."
+        description="Plan, read, and cancel unstarted CredentialRotation plans. The Console does not expose internal provider-execution steps or generic process-state mutation."
       />
 
       <StatePanel state="informational" title="Routine rotation is a durable process, not a status edit">
-        Planning creates a separate PLANNED CredentialRotation for an effective ACTIVE credential. Replacement creation, distribution, verification, cutover, and old-credential revocation remain durable server/provider execution stages; this UI cannot advance them manually.
+        Planning creates a separate PLANNED CredentialRotation for an effective ACTIVE credential. Replacement creation, distribution, verification, cutover, and old-credential revocation remain durable server/provider execution stages; this UI cannot advance them manually. Only an unstarted PLANNED rotation without a replacement may be cancelled; cancellation preserves Credential state and releases the plan slot. Started and terminal rotations cannot be cancelled.
       </StatePanel>
 
       <StatePanel state="warning" title="Compromise and routine rotation are different operations">

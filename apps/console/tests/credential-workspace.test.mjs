@@ -50,7 +50,7 @@ test('Credential lifecycle presentation separates validity, revocation, compromi
   );
 });
 
-test('Credential rotation uses only accepted plan and read contracts and remains separate process state', () => {
+test('Credential rotation uses only accepted plan, read and cancellation contracts and remains separate process state', () => {
   assertSourceContains(
     credentialWorkspace,
     /Routine rotation is a durable process, not a status edit/,
@@ -63,6 +63,9 @@ test('Credential rotation uses only accepted plan and read contracts and remains
     /replacementCredentialId/,
     /failureCode/,
     /does not use the Credential If-Match revision/,
+    /Cancel unstarted rotation plan[\s\S]*:cancel[\s\S]*requireEtag: true[\s\S]*idempotent: true/,
+    /Only an unstarted PLANNED rotation without a replacement may be cancelled/,
+    /ACTIVE transition commits at or after validFrom/,
   );
   assertSourceExcludes(
     credentialWorkspace,

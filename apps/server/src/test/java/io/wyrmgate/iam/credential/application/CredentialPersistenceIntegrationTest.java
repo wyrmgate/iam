@@ -678,6 +678,9 @@ class CredentialPersistenceIntegrationTest {
         assertThat(change.change(tenant, actor, principal, oldId, 1, "wrong".toCharArray(), newPassword, at)).isEmpty();
         assertThat(change.change(tenant, actor, principal, oldId, 1, oldPassword, oldPassword, at)).isEmpty();
         assertThat(repository.findOpenRotation(tenant, oldId)).isEmpty();
+        var blockingPlan = rotations.plan(tenant, oldId, actor, at);
+        assertThat(change.change(tenant, actor, principal, oldId, 1, oldPassword, newPassword, at)).isEmpty();
+        rotations.cancelPlan(tenant, blockingPlan.id(), blockingPlan.revision(), at);
         assertThat(auth.verifyPassword(tenant, principal, oldPassword, at)).isPresent();
         var result = change.change(tenant, actor, principal, oldId, 1, oldPassword, newPassword, at).orElseThrow();
         assertThat(result.state()).isEqualTo(RotationState.COMPLETED);

@@ -183,3 +183,7 @@ After merge, set `MERGED`, complete required verification, then set `VERIFIED` a
 ## Authority boundary
 
 This ledger is operational coordination documentation only. In a conflict, use the project authority order: accepted ADRs and current formal requirements/specifications first, then current repository architecture/domain/interface documentation, then implementation/tests. Issue #312 controls UI concurrency mechanics but does not override those sources.
+
+### Credential v3 cancellation UI coordination (#513)
+
+Capability-local follow-up on the accepted ADR-0065 cancellation operation: branch `codex/credential-v3-rotation-closure`, initially stacked on #515, scoped to `CredentialsWorkspace.tsx` and its focused source-contract test. Existing SemanticWorkspace action, ETag, idempotency and confirmation primitives are consumed unchanged; no shared public UI lock, routing, theme or authentication changes. No internal rotation step or password-change form is introduced. Implementation and verification are tracked in #513; merge/CI evidence will be recorded there. No live DEV UI verification is claimed.
