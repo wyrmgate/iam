@@ -83,9 +83,11 @@ public final class IdpProtocolService {
             AuthorizationRequest request,
             String browserSessionToken,
             Instant now) {
-        Objects.requireNonNull(request, "request");
-        Objects.requireNonNull(now, "now");
+        return authorizeValidated(validate(request), browserSessionToken, now);
+    }
 
+    ValidatedAuthorization validate(AuthorizationRequest request) {
+        Objects.requireNonNull(request, "request");
         ResolvedClient resolved = resolveClient(request.clientId(), "invalid_request");
         SsoClientRegistration client = resolved.registration();
         if (!client.redirectUris().contains(request.redirectUri())) {
@@ -106,7 +108,23 @@ public final class IdpProtocolService {
                 request.redirectUri(),
                 state);
         String nonce = optionalNonce(request.nonce(), request.redirectUri(), state);
+        return new ValidatedAuthorization(request, resolved, scopes, challenge, nonce);
+    }
 
+    record ValidatedAuthorization(AuthorizationRequest request, ResolvedClient resolved,
+            Set<SsoClientScope> scopes, String challenge, String nonce) {
+        @Override public String toString() { return "ValidatedAuthorization[REDACTED]"; }
+    }
+
+    AuthorizationResult authorizeValidated(ValidatedAuthorization validated, String browserSessionToken, Instant now) {
+        Objects.requireNonNull(now, "now");
+        var request = validated.request();
+        var resolved = validated.resolved();
+        var client = resolved.registration();
+        String state = request.state();
+        var scopes = validated.scopes();
+        String challenge = validated.challenge();
+        String nonce = validated.nonce();
         SessionContext session = sessions.resolve(
                         resolved.tenant(), browserSessionToken, now)
                 .orElseThrow(() -> ProtocolException.redirect(

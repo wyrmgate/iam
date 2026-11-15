@@ -33,16 +33,16 @@ public final class IdpInteractiveLoginService {
 
     public Optional<IdpBrowserSessionService.EstablishedSession> authenticate(
             String clientId,
-            String applicationTargetId,
+            UUID expectedTarget,
             String nativePrincipalKey,
             char[] password,
             Instant now) {
         Objects.requireNonNull(password, "password");
         Objects.requireNonNull(now, "now");
         if (clientId == null || clientId.isBlank()
-                || applicationTargetId == null || applicationTargetId.isBlank()
+                || expectedTarget == null
                 || nativePrincipalKey == null || nativePrincipalKey.isBlank()
-                || clientId.length() > 200 || applicationTargetId.length() > 36
+                || clientId.length() > 200
                 || nativePrincipalKey.length() > 512 || password.length == 0 || password.length > 1024) {
             return Optional.empty();
         }
@@ -52,12 +52,8 @@ public final class IdpInteractiveLoginService {
             var client = clients.resolveActive(clientId.trim());
             if (client.isEmpty()) return Optional.empty();
 
-            UUID targetId;
-            try {
-                targetId = UUID.fromString(applicationTargetId.trim());
-            } catch (IllegalArgumentException invalid) {
-                return Optional.empty();
-            }
+            UUID targetId = clients.resolveAuthenticationTarget(client.get()).orElse(null);
+            if (!expectedTarget.equals(targetId)) return Optional.empty();
 
             var subject = identities.resolveEligible(
                     client.get().tenant(), targetId, nativePrincipalKey.trim());

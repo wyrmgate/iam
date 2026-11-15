@@ -54,14 +54,11 @@ public class IdpBrowserSessionController {
                     .header(HttpHeaders.PRAGMA, "no-cache")
                     .body(Map.of("error", "login_unavailable"));
         }
-        var resolved = route.orElseThrow();
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.PRAGMA, "no-cache")
                 .header(HttpHeaders.SET_COOKIE, csrfCookie(csrf.issue()).toString())
-                .body(Map.of(
-                        "clientId", resolved.clientId(),
-                        "applicationTargetId", resolved.applicationTargetId().toString()));
+                .body(Map.of("available", true));
     }
 
     @PostMapping(
@@ -70,16 +67,20 @@ public class IdpBrowserSessionController {
             produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<?> login(@RequestBody LoginRequest request,
             @CookieValue(name = CSRF_COOKIE, required = false) String csrfCookie,
-            @RequestHeader(name = CSRF_HEADER, required = false) String csrfHeader) {
+            @RequestHeader(name = CSRF_HEADER, required = false) String csrfHeader,
+            @CookieValue(name = IdpAuthorizationController.BROWSER_SESSION_COOKIE, required = false) String previousSession) {
         char[] password = request.password() == null ? new char[0] : request.password();
         try {
             if (!csrf.matches(csrfCookie, csrfHeader)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).cacheControl(CacheControl.noStore())
                         .body(Map.of("error", "csrf_failed"));
             }
+            var route = consoleLoginRoute.resolve();
+            if (route.isEmpty()) return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .cacheControl(CacheControl.noStore()).body(Map.of("error", "login_unavailable"));
             var established = login.authenticate(
-                    request.clientId(),
-                    request.applicationTargetId(),
+                    route.get().clientId(),
+                    route.get().applicationTargetId(),
                     request.principalKey(),
                     password,
                     Instant.now());
@@ -89,6 +90,7 @@ public class IdpBrowserSessionController {
                         .body(Map.of("error", "invalid_credentials"));
             }
 
+            sessions.logout(previousSession, Instant.now());
             String csrfToken = csrf.issue();
             return ResponseEntity.ok()
                     .cacheControl(CacheControl.noStore())
@@ -145,7 +147,7 @@ public class IdpBrowserSessionController {
                 .build();
     }
 
-    private static ResponseCookie sessionCookie(String token) {
+    public static ResponseCookie sessionCookie(String token) {
         return ResponseCookie.from(IdpAuthorizationController.BROWSER_SESSION_COOKIE, token)
                 .httpOnly(true)
                 .secure(true)
@@ -154,7 +156,7 @@ public class IdpBrowserSessionController {
                 .build();
     }
 
-    private static ResponseCookie csrfCookie(String token) {
+    public static ResponseCookie csrfCookie(String token) {
         return ResponseCookie.from(CSRF_COOKIE, token)
                 .httpOnly(false)
                 .secure(true)
@@ -184,8 +186,6 @@ public class IdpBrowserSessionController {
     }
 
     public record LoginRequest(
-            String clientId,
-            String applicationTargetId,
             String principalKey,
             char[] password) {
         @Override public String toString() { return "LoginRequest[REDACTED]"; }
