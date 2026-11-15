@@ -27,6 +27,21 @@ class IdpBrowserSessionControllerTest {
     }
 
     @Test
+    void legacyPublicLoginSelectorsAreRejectedBeforeAuthentication() throws Exception {
+        var login = mock(IdpInteractiveLoginService.class);
+        var sessions = mock(IdpBrowserSessionService.class);
+        var controller = new IdpBrowserSessionController(login, sessions, new IdpCsrfTokenCodec(), mock(ConsoleLoginRouteQuery.class));
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/auth/login")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"principalKey\":\"alice\",\"password\":\"test-password\",\"applicationTargetId\":\"foreign\"}"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("test-password"))));
+        verifyNoInteractions(login, sessions);
+    }
+
+    @Test
     void logoutCookieRequiresProofEvenIfAnotherAuthenticationTransportIsPresent() {
         var sessions = mock(IdpBrowserSessionService.class);
         var csrf = new IdpCsrfTokenCodec();

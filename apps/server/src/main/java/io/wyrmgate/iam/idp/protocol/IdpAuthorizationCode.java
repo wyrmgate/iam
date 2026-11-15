@@ -59,6 +59,8 @@ public record IdpAuthorizationCode(
         }
     }
 
+    @Override public String toString() { return "IdpAuthorizationCode[REDACTED]"; }
+
     private static String requireHash(String value, String name) {
         value = requireText(value, name, 64);
         if (!value.matches("[0-9a-f]{64}")) {

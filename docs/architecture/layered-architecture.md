@@ -99,7 +99,7 @@ Layer 5 is provider-specific anti-corruption/execution infrastructure. The agree
 - **5A Identity source / HR / directory adapters**;
 - **5B SaaS / directory provisioning adapters**;
 - **5C Cloud / infrastructure adapters**;
-- **5D External IdP / federation adapters**;
+- **5D External IdP / federation adapters** — ADR-0071: Integration-owned trust/link semantic ports and typed provider verification; no implicit provider activation;
 - **5E Connector runtime / remote-worker adapters**;
 - **5F Secret-provider adapters**;
 - **5G Notification adapters**;

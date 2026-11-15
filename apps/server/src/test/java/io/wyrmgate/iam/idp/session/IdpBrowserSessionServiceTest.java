@@ -178,6 +178,31 @@ class IdpBrowserSessionServiceTest {
                 .isInstanceOf(IdpBrowserSessionService.InvalidCredentialProofException.class);
     }
 
+    @Test
+    void unavailableMandatoryEvidencePreventsSessionReleaseButNotRevocation() {
+        var repository = new InMemorySessions();
+        var identities = mock(IdentityAuthenticationQuery.class);
+        var credentials = mock(CredentialAuthenticationService.class);
+        var audit = mock(io.wyrmgate.iam.audit.application.SecurityAuditPort.class);
+        var evidence = new IdpSecurityEvidence(audit, UUID::randomUUID);
+        var subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
+        when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
+        when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
+        var service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials,
+                new IdpSessionTokenCodec(), UUID::randomUUID, evidence);
+        var proof = new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1);
+        when(audit.append(eq(TENANT), any(io.wyrmgate.iam.audit.application.AuditRecordDraft.class)))
+                .thenThrow(new IllegalStateException("Audit unavailable"));
+        assertThatThrownBy(() -> service.establish(TENANT, subject, proof, NOW)).isInstanceOf(IllegalStateException.class);
+        assertThat(repository.single().revokedAt()).isEqualTo(NOW);
+        org.mockito.Mockito.reset(audit);
+        var established = service.establish(TENANT, subject, proof, NOW.plusSeconds(1));
+        when(audit.append(eq(TENANT), any(io.wyrmgate.iam.audit.application.AuditRecordDraft.class)))
+                .thenThrow(new IllegalStateException("Audit unavailable"));
+        service.logout(TENANT, established.token(), NOW.plusSeconds(2));
+        assertThat(service.resolve(TENANT, established.token(), NOW.plusSeconds(3))).isEmpty();
+    }
+
     private static TenantOverviewQuery activeTenants() {
         var tenants = mock(TenantOverviewQuery.class);
         when(tenants.find(TENANT.tenantId())).thenReturn(Optional.of(tenant(TenantLifecycleState.ACTIVE, 1)));

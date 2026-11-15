@@ -47,7 +47,8 @@ public class IdpProtocolController {
                                 "id_token_signing_alg_values_supported",
                                 List.of(IdpJoseAlgorithms.joseName(current.signingAlgorithm()))),
                         Map.entry("code_challenge_methods_supported", List.of("S256")),
-                        Map.entry("scopes_supported", List.of("openid", "profile", "email")),
+                        Map.entry("scopes_supported", List.of("openid")),
+                        Map.entry("claims_supported", List.of("iss", "sub", "aud", "iat", "exp", "auth_time", "nonce")),
                         Map.entry("token_endpoint_auth_methods_supported", List.of("none"))));
     }
 

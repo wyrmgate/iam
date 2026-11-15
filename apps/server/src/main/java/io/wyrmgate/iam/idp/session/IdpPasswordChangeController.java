@@ -6,6 +6,7 @@ import io.wyrmgate.iam.audit.application.SecurityAuditPort;
 import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.credential.application.LocalPasswordChangeService;
 import io.wyrmgate.iam.idp.protocol.IdpAuthorizationController;
+import io.wyrmgate.iam.idp.runtime.IdpAttemptLimiter;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import java.time.Instant;
 import java.util.Arrays;
@@ -37,13 +38,15 @@ public final class IdpPasswordChangeController {
     private final LocalPasswordChangeService changes;
     private final SecurityAuditPort audit;
     private final IdGenerator ids;
+    private final IdpAttemptLimiter limiter;
 
     public IdpPasswordChangeController(IdpBrowserSessionService sessions,
-            LocalPasswordChangeService changes, SecurityAuditPort audit, IdGenerator ids) {
+            LocalPasswordChangeService changes, SecurityAuditPort audit, IdGenerator ids, IdpAttemptLimiter limiter) {
         this.sessions = sessions;
         this.changes = changes;
         this.audit = audit;
         this.ids = ids;
+        this.limiter = limiter;
     }
 
     @PostMapping(path = "/api/auth/password/change", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -68,6 +71,13 @@ public final class IdpPasswordChangeController {
             var target = subject.orElseThrow();
             boolean changed;
             try {
+                if (current.length == 0 || current.length > LocalPasswordChangeService.MAX_PASSWORD_LENGTH
+                        || replacement.length < LocalPasswordChangeService.MIN_NEW_PASSWORD_LENGTH
+                        || replacement.length > LocalPasswordChangeService.MAX_PASSWORD_LENGTH
+                        || !limiter.acquire(target.tenant(), IdpAttemptLimiter.Kind.TENANT_LOGIN, target.tenant().tenantId())
+                        || !limiter.acquire(target.tenant(), IdpAttemptLimiter.Kind.PRINCIPAL_LOGIN, target.principalId())) {
+                    return error(HttpStatus.BAD_REQUEST, "password_change_rejected", correlation);
+                }
                 changed = changes.change(target.tenant(), target.identityId(), target.principalId(),
                         target.credentialId(), target.credentialRevision(), current, replacement, now).isPresent();
             } catch (RuntimeException unavailable) {

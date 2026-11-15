@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.idp.federation;
 
+import io.wyrmgate.iam.integration.application.federation.FederatedAuthenticationAdapter;
+
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,7 +68,7 @@ public final class FederationAdapterRegistry {
 
     public record Descriptor(
             String providerKey,
-            FederationProtocol protocol,
+            io.wyrmgate.iam.integration.application.federation.FederationTrustQuery.Protocol protocol,
             String requestType) {
     }
 }
