@@ -717,7 +717,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
     private TargetEntitlement entitlement() {
         String suffix = ids.nextId().toString()
-                .substring(0, 8);
+                .substring(24);
         var application = catalog.createApplication(
                 tenant,
                 "app-" + suffix,
