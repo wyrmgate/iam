@@ -23,18 +23,6 @@ public final class AccessRequestApprovalResultSink
 
     public AccessRequestApprovalResultSink(
             AccessRequestRepository requests,
-            AuthorizedAccessIntentSink authorizedAccess) {
-        this(
-                requests,
-                authorizedAccess,
-                null,
-                null,
-                null,
-                null);
-    }
-
-    public AccessRequestApprovalResultSink(
-            AccessRequestRepository requests,
             AuthorizedAccessIntentSink authorizedAccess,
             AccessRequestEligibilityEvaluator evaluator,
             ApprovalRepository approvals,
@@ -43,10 +31,10 @@ public final class AccessRequestApprovalResultSink
         this.requests = Objects.requireNonNull(requests, "requests");
         this.authorizedAccess = Objects.requireNonNull(
                 authorizedAccess, "authorizedAccess");
-        this.evaluator = evaluator;
-        this.approvals = approvals;
-        this.starter = starter;
-        this.submittedItems = submittedItems;
+        this.evaluator = Objects.requireNonNull(evaluator, "evaluator");
+        this.approvals = Objects.requireNonNull(approvals, "approvals");
+        this.starter = Objects.requireNonNull(starter, "starter");
+        this.submittedItems = Objects.requireNonNull(submittedItems, "submittedItems");
     }
 
     @Override
@@ -83,15 +71,6 @@ public final class AccessRequestApprovalResultSink
                     "rejected",
                     item.revision(),
                     approvalCase.updatedAt());
-            return;
-        }
-
-        if (evaluator == null) {
-            authorize(
-                    tenant,
-                    item,
-                    approvalCase,
-                    "approved");
             return;
         }
 

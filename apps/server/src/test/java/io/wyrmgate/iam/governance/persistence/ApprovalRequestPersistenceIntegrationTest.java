@@ -47,6 +47,7 @@ class ApprovalRequestPersistenceIntegrationTest {
     private static JdbcApprovalRepository approvalRepository;
     private static JdbcAccessRequestRepository requestRepository;
     private static ApprovalCommandService approvals;
+    private static AccessRequestEligibilityEvaluator currentEvaluator;
 
     private TenantContext tenant;
 
@@ -67,13 +68,18 @@ class ApprovalRequestPersistenceIntegrationTest {
                 approvalRepository,
                 new AccessRequestApprovalResultSink(
                         requestRepository,
-                        (requestedTenant, item) -> { }),
+                        (requestedTenant, item) -> { },
+                        (t, request, item) -> currentEvaluator.evaluate(t, request, item),
+                        approvalRepository,
+                        new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions),
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
                 transactions);
     }
 
     @BeforeEach
     void reset() {
+        currentEvaluator = (t, request, item) -> EligibilityResult.unavailable("mandatory_evaluator_unavailable");
         jdbc.execute("""
                 TRUNCATE TABLE
                     governance.approval_decision,
@@ -192,11 +198,13 @@ class ApprovalRequestPersistenceIntegrationTest {
                                         new StageSpec(
                                                 DecisionMode.ANY_ONE,
                                                 List.of(approver)))));
+        currentEvaluator = evaluator;
         AccessRequestCommandService requests =
                 new AccessRequestCommandService(
                         requestRepository,
                         evaluator,
                         approvals,
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
                         (requestedTenant, authorizedItem) -> { },
                         ids,
                         transactions);
@@ -249,7 +257,44 @@ class ApprovalRequestPersistenceIntegrationTest {
         assertThat(after.state())
                 .isEqualTo(ItemState.AUTHORIZED);
         assertThat(after.evaluationCode())
-                .isEqualTo("approved");
+                .isEqualTo("approval_required");
+    }
+
+    @Test
+    void finalApprovalWithUnavailableEvaluatorCannotAuthorizeAndQueuesRetry() {
+        UUID requester = ids.nextId();
+        UUID approver = ids.nextId();
+        currentEvaluator = (t, request, item) -> EligibilityResult.approvalRequired(
+                new PlanSpec(List.of(new StageSpec(DecisionMode.ANY_ONE, List.of(approver)))));
+        var outbox = new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc);
+        var commands = new AccessRequestCommandService(
+                requestRepository, (t, request, item) -> currentEvaluator.evaluate(t, request, item),
+                approvals, new JdbcSubmittedRequestItemSink(outbox, ids),
+                new JdbcAuthorizedAccessIntentSink(outbox, ids), ids, transactions);
+        var draft = commands.createDraft(tenant, requester, requester,
+                List.of(new ItemSpec(TargetKind.ENTITLEMENT, ids.nextId(),
+                        PrincipalConstraintKind.ANY, null, null, null)), NOW);
+        var submitted = commands.submit(tenant, draft.request().id(), 1, NOW.plusSeconds(1));
+        var item = submitted.items().getFirst();
+        var pending = commands.evaluateItem(tenant, item.id(), item.revision(), NOW.plusSeconds(2));
+        currentEvaluator = (t, request, current) -> EligibilityResult.unavailable("mandatory_evaluator_unavailable");
+        var approved = approvals.decide(tenant, pending.approvalCaseId(), approver,
+                DecisionValue.APPROVE, null, 1, NOW.plusSeconds(3));
+        assertThat(approved.state()).isEqualTo(CaseState.APPROVED);
+        var after = requestRepository.findItem(tenant, item.id()).orElseThrow();
+        assertThat(after.state()).isEqualTo(ItemState.EVALUATING);
+        assertThat(after.accessAssignmentId()).isNull();
+        assertThat(after.evaluationCode()).isEqualTo("mandatory_evaluator_unavailable");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM platform.outbox_event
+                WHERE tenant_id = ? AND aggregate_id = ?
+                  AND event_type = 'governance.request-item-submitted'
+                """, Long.class, tenant.tenantId(), item.id())).isEqualTo(2L);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM platform.outbox_event
+                WHERE tenant_id = ? AND aggregate_id = ?
+                  AND event_type = 'governance.request-item-authorized'
+                """, Long.class, tenant.tenantId(), item.id())).isZero();
     }
 
     @Test
@@ -266,6 +311,7 @@ class ApprovalRequestPersistenceIntegrationTest {
                                     "policy service unavailable");
                         },
                         approvals,
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
                         (requestedTenant, authorizedItem) -> { },
                         ids,
                         transactions);

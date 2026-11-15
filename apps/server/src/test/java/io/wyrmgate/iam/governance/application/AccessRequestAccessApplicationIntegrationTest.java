@@ -90,6 +90,7 @@ class AccessRequestAccessApplicationIntegrationTest {
     private JdbcApprovalRepository approvalRepository;
     private AuthorizedAccessIntentSink authorizedAccess;
     private ApprovalCommandService approvals;
+    private AccessRequestEligibilityEvaluator currentEvaluator;
 
     @BeforeAll
     static void start() {
@@ -210,7 +211,11 @@ class AccessRequestAccessApplicationIntegrationTest {
                 approvalRepository,
                 new AccessRequestApprovalResultSink(
                         requestRepository,
-                        authorizedAccess),
+                        authorizedAccess,
+                        (t, request, item) -> currentEvaluator.evaluate(t, request, item),
+                        approvalRepository,
+                        new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions),
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
                 transactions);
     }
@@ -526,10 +531,12 @@ class AccessRequestAccessApplicationIntegrationTest {
 
     private AccessRequestCommandService requestService(
             AccessRequestEligibilityEvaluator evaluator) {
+        currentEvaluator = evaluator;
         return new AccessRequestCommandService(
                 requestRepository,
                 evaluator,
                 approvals,
+                new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
                 authorizedAccess,
                 ids,
                 transactions);

@@ -163,7 +163,12 @@ class GovernanceApiIntegrationTest {
                 approvalRepository,
                 new AccessRequestApprovalResultSink(
                         requests,
-                        authorizedSink),
+                        authorizedSink,
+                        (requestedTenant, request, item) -> EligibilityResult.approvalRequired(
+                                new PlanSpec(List.of(new StageSpec(DecisionMode.ANY_ONE, List.of(approverId))))),
+                        approvalRepository,
+                        new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions),
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
                 transactions);
         approvalQueries =
