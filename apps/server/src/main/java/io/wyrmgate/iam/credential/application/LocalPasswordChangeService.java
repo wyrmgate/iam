@@ -57,7 +57,7 @@ public final class LocalPasswordChangeService {
         Objects.requireNonNull(now);
         Objects.requireNonNull(currentPassword);
         Objects.requireNonNull(newPassword);
-        if (expectedRevision < 1 || currentPassword.length == 0
+        if (expectedRevision < 1 || currentPassword.length == 0 || currentPassword.length > MAX_PASSWORD_LENGTH
                 || newPassword.length < MIN_NEW_PASSWORD_LENGTH || newPassword.length > MAX_PASSWORD_LENGTH
                 || Arrays.equals(currentPassword, newPassword)) return Optional.empty();
         char[] current = currentPassword.clone();
