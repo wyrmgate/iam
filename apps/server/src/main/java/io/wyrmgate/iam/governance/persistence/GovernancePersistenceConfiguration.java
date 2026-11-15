@@ -485,9 +485,9 @@ public class GovernancePersistenceConfiguration {
     ObservedAccessDriftEvaluationService observedAccessDriftEvaluationService(
             IntegrationObservedAccessQuery observedAccess,
             PrincipalObservationReferenceQuery principalReferences,
-            GovernanceObservationReporter reporter, GovernanceFindingRepository findings) {
-        return new ObservedAccessDriftEvaluationService(
-                observedAccess, principalReferences, reporter, findings);
+            GovernanceObservationReporter reporter, GovernanceFindingRepository findings, IdentityAccessReferenceQuery identities,
+            io.wyrmgate.iam.access.application.ExactTechnicalGrantDemandQuery demand, GovernancePolicyService policies) {
+        return new ObservedAccessDriftEvaluationService(observedAccess, principalReferences, reporter, findings,identities,demand,policies);
     }
 
     @Bean
