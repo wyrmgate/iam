@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.idp.protocol;
 
+import java.security.Signature;
 import io.wyrmgate.iam.catalog.domain.SsoClientScope;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
@@ -103,7 +104,12 @@ public final class IdpJwtIssuer implements IdpTokenIssuer {
             String encodedHeader = base64Url(json.writeValueAsBytes(header));
             String encodedClaims = base64Url(json.writeValueAsBytes(claims));
             String signingInput = encodedHeader + "." + encodedClaims;
-            byte[] signature = signingKeys.sign(signingInput.getBytes(StandardCharsets.US_ASCII));
+            byte[] input = signingInput.getBytes(StandardCharsets.US_ASCII);
+            byte[] signature = signingKeys.sign(input);
+            Signature verifier = Signature.getInstance(material.signingAlgorithm());
+            verifier.initVerify(material.publicKey());
+            verifier.update(input);
+            if (!verifier.verify(signature)) throw new IllegalStateException("Signing key changed or signature did not verify");
             return signingInput + "." + base64Url(signature);
         } catch (Exception exception) {
             throw new IllegalStateException("Unable to encode IdP token claims", exception);

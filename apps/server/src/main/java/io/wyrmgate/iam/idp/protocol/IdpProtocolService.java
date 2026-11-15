@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.idp.protocol;
 
+import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
+import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
 import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery.ResolvedClient;
 import io.wyrmgate.iam.catalog.domain.SsoClientRegistration;
@@ -42,6 +44,7 @@ public final class IdpProtocolService {
     private final IdpAuthorizationCodeRepository authorizationCodes;
     private final IdpTokenIssuer tokens;
     private final IdGenerator ids;
+    private final IdpSecurityEvidence evidence;
     private final Duration authorizationCodeLifetime;
 
     public IdpProtocolService(
@@ -50,7 +53,7 @@ public final class IdpProtocolService {
             IdpApplicationAccessQuery applicationAccess,
             IdpAuthorizationCodeRepository authorizationCodes,
             IdpTokenIssuer tokens,
-            IdGenerator ids) {
+            IdGenerator ids, IdpSecurityEvidence evidence) {
         this(
                 clients,
                 sessions,
@@ -58,6 +61,7 @@ public final class IdpProtocolService {
                 authorizationCodes,
                 tokens,
                 ids,
+                evidence,
                 DEFAULT_AUTHORIZATION_CODE_LIFETIME);
     }
 
@@ -68,6 +72,7 @@ public final class IdpProtocolService {
             IdpAuthorizationCodeRepository authorizationCodes,
             IdpTokenIssuer tokens,
             IdGenerator ids,
+            IdpSecurityEvidence evidence,
             Duration authorizationCodeLifetime) {
         this.clients = Objects.requireNonNull(clients, "clients");
         this.sessions = Objects.requireNonNull(sessions, "sessions");
@@ -75,6 +80,7 @@ public final class IdpProtocolService {
         this.authorizationCodes = Objects.requireNonNull(authorizationCodes, "authorizationCodes");
         this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.ids = Objects.requireNonNull(ids, "ids");
+        this.evidence = Objects.requireNonNull(evidence);
         this.authorizationCodeLifetime =
                 requirePositive(authorizationCodeLifetime, "authorizationCodeLifetime");
     }
@@ -125,9 +131,10 @@ public final class IdpProtocolService {
         var scopes = validated.scopes();
         String challenge = validated.challenge();
         String nonce = validated.nonce();
-        SessionContext session = sessions.resolve(
-                        resolved.tenant(), browserSessionToken, now)
-                .orElseThrow(() -> ProtocolException.redirect(
+        Optional<SessionContext> eligibleSession;
+        try { eligibleSession = sessions.resolve(resolved.tenant(), browserSessionToken, now); }
+        catch (RuntimeException unavailable) { throw ProtocolException.redirect("temporarily_unavailable", request.redirectUri(), state); }
+        SessionContext session = eligibleSession.orElseThrow(() -> ProtocolException.redirect(
                         "login_required", client.redirectUris().contains(request.redirectUri())
                                 ? request.redirectUri()
                                 : null, state));
@@ -146,6 +153,8 @@ public final class IdpProtocolService {
                         "temporarily_unavailable", request.redirectUri(), state);
             }
             if (!allowed) {
+                evidence.bestEffort(resolved.tenant(), session.identityId(), "authentication:authorize", "sso-client", client.id(),
+                        AuditOutcome.DENIED, session.sessionId(), null, now);
                 throw ProtocolException.redirect(
                         "access_denied", request.redirectUri(), state);
             }
@@ -170,7 +179,13 @@ public final class IdpProtocolService {
                 now,
                 now.plus(authorizationCodeLifetime),
                 null);
-        authorizationCodes.insert(resolved.tenant(), code);
+        try {
+            authorizationCodes.insert(resolved.tenant(), code);
+            evidence.required(resolved.tenant(), session.identityId(), "authentication:authorize", "idp-code",
+                    code.id(), code.id(), session.sessionId(), now);
+        } catch (RuntimeException unavailable) {
+            throw ProtocolException.redirect("temporarily_unavailable", request.redirectUri(), state);
+        }
         return new AuthorizationResult(request.redirectUri(), rawCode, state);
     }
 
@@ -204,6 +219,7 @@ public final class IdpProtocolService {
                 || !current.redirectUris().contains(code.redirectUri())
                 || !PKCE_VERIFIER.matcher(nullToEmpty(request.codeVerifier())).matches()
                 || !pkceMatches(request.codeVerifier(), code.pkceChallenge())) {
+            deniedCode(tenant, code, now);
             throw ProtocolException.direct("invalid_grant");
         }
 
@@ -221,17 +237,30 @@ public final class IdpProtocolService {
                 throw ProtocolException.direct("invalid_grant");
             }
         } catch (ProtocolException denied) {
+            deniedCode(tenant, code, now);
             throw denied;
         } catch (RuntimeException unavailable) {
             throw ProtocolException.direct("temporarily_unavailable");
         }
 
-        IdpTokenIssuer.TokenPair issued = tokens.issue(tenant, code, now);
+        final IdpTokenIssuer.TokenPair issued;
+        try {
+            issued = tokens.issue(tenant, code, now);
+            evidence.required(tenant, code.identityId(), "authentication:token", "idp-code",
+                    code.id(), code.id(), code.browserSessionId(), now);
+        } catch (RuntimeException unavailable) {
+            throw ProtocolException.direct("temporarily_unavailable");
+        }
         return new TokenResult(
                 issued.accessToken(),
                 issued.idToken(),
                 issued.expiresInSeconds(),
                 scopeValue(code.scopes()));
+    }
+
+    private void deniedCode(TenantContext tenant, IdpAuthorizationCode code, Instant now) {
+        evidence.bestEffort(tenant, null, "authentication:token", "idp-code", code.id(),
+                AuditOutcome.DENIED, code.id(), code.browserSessionId(), now);
     }
 
     private ResolvedClient resolveClient(String clientId, String error) {

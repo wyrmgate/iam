@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.idp.protocol;
 
+import io.wyrmgate.iam.idp.runtime.IdpAttemptLimiter;
 import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
 import io.wyrmgate.iam.idp.session.IdpBrowserSessionService;
 import io.wyrmgate.iam.idp.session.IdpInteractiveLoginService;
@@ -15,17 +16,21 @@ final class IdpLoginInteractionService {
     private final IdpBrowserSessionService sessions;
     private final IdpSessionTokenCodec tokens;
     private final IdpLoginInteractionRepository interactions;
+    private final IdpAttemptLimiter limiter;
 
     IdpLoginInteractionService(IdpProtocolService protocol, SsoClientProtocolQuery clients,
             IdpInteractiveLoginService login, IdpBrowserSessionService sessions, IdpSessionTokenCodec tokens,
-            IdpLoginInteractionRepository interactions) {
+            IdpLoginInteractionRepository interactions, IdpAttemptLimiter limiter) {
         this.protocol = protocol; this.clients = clients; this.login = login;
-        this.sessions = sessions; this.tokens = tokens; this.interactions = interactions;
+        this.sessions = sessions; this.tokens = tokens; this.interactions = interactions; this.limiter = limiter;
     }
 
     Started begin(IdpProtocolService.ValidatedAuthorization validated, Instant now) {
         var r = validated.request();
         var client = validated.resolved();
+        if (!limiter.acquire(client.tenant(), IdpAttemptLimiter.Kind.INTERACTION, client.tenant().tenantId())) {
+            throw IdpProtocolService.ProtocolException.redirect("temporarily_unavailable", r.redirectUri(), r.state());
+        }
         var target = clients.resolveAuthenticationTarget(client).orElseThrow(() ->
                 IdpProtocolService.ProtocolException.redirect("login_required", r.redirectUri(), r.state()));
         var form = tokens.issue();

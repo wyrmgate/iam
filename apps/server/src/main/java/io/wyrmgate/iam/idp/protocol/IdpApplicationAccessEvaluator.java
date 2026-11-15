@@ -1,5 +1,8 @@
 package io.wyrmgate.iam.idp.protocol;
 
+import io.wyrmgate.iam.catalog.application.CatalogTargetReferenceQuery;
+import java.util.HashMap;
+import java.util.Map;
 import io.wyrmgate.iam.access.application.EffectiveAccessQuery;
 import io.wyrmgate.iam.catalog.application.CatalogQueryModels.PagePosition;
 import io.wyrmgate.iam.catalog.application.CatalogQueryService;
@@ -20,6 +23,7 @@ import java.util.UUID;
 public final class IdpApplicationAccessEvaluator implements IdpApplicationAccessQuery {
 
     private static final int PAGE_SIZE = 200;
+    private static final int MAX_PAGES = 10;
 
     private final CatalogQueryService catalog;
     private final EffectiveAccessQuery effectiveAccess;
@@ -38,11 +42,14 @@ public final class IdpApplicationAccessEvaluator implements IdpApplicationAccess
             UUID applicationId,
             Instant at) {
         PagePosition after = null;
-        do {
+        Map<UUID, Boolean> activeTargets = new HashMap<>();
+        for (int pages = 0; pages < MAX_PAGES; pages++) {
             var page = catalog.listEntitlements(tenant, applicationId, after, PAGE_SIZE);
             Set<UUID> activeEntitlements = new LinkedHashSet<>();
             page.items().stream()
                     .filter(item -> item.lifecycleState() == CatalogLifecycleState.ACTIVE)
+                    .filter(item -> activeTargets.computeIfAbsent(item.applicationTargetId(), target ->
+                            catalog.validateActiveTarget(tenant, target) == CatalogTargetReferenceQuery.Validation.VALID))
                     .map(item -> item.id())
                     .forEach(activeEntitlements::add);
             if (!activeEntitlements.isEmpty()
@@ -51,8 +58,11 @@ public final class IdpApplicationAccessEvaluator implements IdpApplicationAccess
                             .isEmpty()) {
                 return true;
             }
-            after = page.nextPosition();
-        } while (after != null);
-        return false;
+            var next = page.nextPosition();
+            if (next == null) return false;
+            if (next.equals(after)) throw new IllegalStateException("access evaluation cursor did not advance");
+            after = next;
+        }
+        throw new IllegalStateException("governed application access evaluation exceeded page budget");
     }
 }

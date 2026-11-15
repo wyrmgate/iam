@@ -1,5 +1,6 @@
 package io.wyrmgate.iam.idp.protocol;
 
+import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -237,7 +238,7 @@ class IdpProtocolServiceTest {
                 new IdpTokenIssuer.TokenPair("id.jwt", "access.jwt", 300);
         IdGenerator ids = UUID::randomUUID;
         return new IdpProtocolService(
-                clients, sessions, access, codes, tokenIssuer, ids);
+                clients, sessions, access, codes, tokenIssuer, ids, mock(IdpSecurityEvidence.class));
     }
 
     private static SsoClientProtocolQuery clientQuery(SsoClientRegistration client) {
