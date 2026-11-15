@@ -238,3 +238,7 @@ The authenticated governed actor is always the requester; clients cannot assert 
 Revoke is an explicit authority-reduction operation with If-Match and causal idempotency. Semantic expiration remains clock-based even if scheduler materialization is late. Exception mutation never writes Access persistence.
 
 Permissions are `governance-exception:read|create|revoke`, default-deny and outside INITIAL_TENANT_ADMIN. Audit outcome evidence is data-minimized; business reason, approval-plan detail and SoD context are not copied into AuditRecord.
+
+### Material request authorization (ADR-0058, V25)
+
+Positive RequestItem decisions retain immutable admission context at the item revision. Approval reuse requires unchanged material context and plan hash. Completed approval evidence survives evaluator outage. Before first application, Governance revalidates current policy and context; Access compares the expected Identity epoch and Catalog target fingerprint. A previously committed causal result is recovered first. Changed material context may require successor approval; stale Identity epoch or missing historical context cancels an unapplied item; unavailable evaluation retries without new authority. Concurrent independent admissions remain GOV-V3-03.

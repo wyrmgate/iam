@@ -185,7 +185,7 @@ public final class AccessRequestAccessApplicationService {
         AccessIntentCommand.Result application = replay.findApplied(claimed.tenant(), requested).orElse(null);
         if (application == null) {
             if (item.validUntil() != null && !item.validUntil().isAfter(now)) {
-                recordTerminalApplicationOutcome(claimed, item, ItemState.EXPIRED, now);
+                recordTerminalApplicationOutcome(claimed, item, ItemState.EXPIRED, "validity_already_ended", now);
                 return;
             }
             var eligibility = RequestAdmissionDecisionService.evaluate(evaluator, claimed.tenant(), request, item);
@@ -207,7 +207,7 @@ public final class AccessRequestAccessApplicationService {
             } catch (AccessAssignmentCommandException rejected) {
                 ItemState terminal = terminalState(rejected.code());
                 if (terminal == null) throw rejected;
-                recordTerminalApplicationOutcome(claimed, item, terminal, now);
+                recordTerminalApplicationOutcome(claimed, item, terminal, rejected.code(), now);
                 return;
             }
         }
@@ -256,6 +256,7 @@ public final class AccessRequestAccessApplicationService {
             ClaimedOutboxEvent claimed,
             RequestItem item,
             ItemState terminalState,
+            String code,
             Instant now) {
         transactions.required(() -> {
             RequestItem current = requests.findItem(
@@ -263,7 +264,7 @@ public final class AccessRequestAccessApplicationService {
                             item.id())
                     .orElseThrow(() -> new IllegalStateException(
                             "RequestItem disappeared during terminal access application"));
-            if (current.state() != ItemState.AUTHORIZED) {
+            if (current.state() != ItemState.AUTHORIZED || current.revision() != item.revision()) {
                 return current;
             }
             return requests.updateItemState(
@@ -272,7 +273,7 @@ public final class AccessRequestAccessApplicationService {
                     terminalState,
                     current.approvalCaseId(),
                     null,
-                    current.evaluationCode(),
+                    code,
                     current.revision(),
                     now);
         });

@@ -528,6 +528,72 @@ class AccessRequestAccessApplicationIntegrationTest {
                 authorized.id())).isZero();
     }
 
+    @Test
+    void queuedAuthorizationRevalidatesBeforeCreationAndRecoversCommittedResultBeforePolicy() {
+        Identity requester = identity("Requester");
+        Identity beneficiary = identity("Beneficiary");
+        var target = entitlement();
+        var commands = requestService((t, r, item) -> EligibilityResult.authorized(contextFor(t, r, item)));
+        var draft = commands.createDraft(tenant, requester.id(), beneficiary.id(),
+                List.of(new ItemSpec(TargetKind.ENTITLEMENT, target.entitlementId(),
+                        PrincipalConstraintKind.ANY, null, null, null)), NOW);
+        var submitted = commands.submit(tenant, draft.request().id(), 1, NOW.plusSeconds(1));
+        var authorized = commands.evaluateItem(tenant, submitted.items().getFirst().id(), 2, NOW.plusSeconds(2));
+        currentEvaluator = (t, r, item) -> EligibilityResult.unavailable("policy_unavailable");
+        assertThat(processor(accessIntent, NOW.plusSeconds(3)).processAvailable().failed()).isEqualTo(1);
+        assertThat(requestDerivedAssignmentCount(authorized.id())).isZero();
+
+        currentEvaluator = (t, r, item) -> EligibilityResult.authorized(contextFor(t, r, item));
+        AccessIntentCommand crashAfterCommit = (t, request, admission, at) -> {
+            accessIntent.applyRequestedAccess(t, request, admission, at);
+            throw new IllegalStateException("simulated crash after Access commit");
+        };
+        assertThat(processor(crashAfterCommit, NOW.plusSeconds(9)).processAvailable().failed()).isEqualTo(1);
+        assertThat(requestDerivedAssignmentCount(authorized.id())).isEqualTo(1);
+        currentEvaluator = (t, r, item) -> EligibilityResult.denied("policy_denied");
+        assertThat(processor(accessIntent, NOW.plusSeconds(15)).processAvailable().processed()).isEqualTo(1);
+        assertThat(requestRepository.findItem(tenant, authorized.id()).orElseThrow().state()).isEqualTo(ItemState.APPLIED);
+        assertThat(requestDerivedAssignmentCount(authorized.id())).isEqualTo(1);
+    }
+
+    @Test
+    void queuedAuthorizationCannotApplyWhenCurrentPolicyDenies() {
+        Identity requester = identity("Requester");
+        Identity beneficiary = identity("Beneficiary");
+        var target = entitlement();
+        var commands = requestService((t, r, item) -> EligibilityResult.authorized(contextFor(t, r, item)));
+        var draft = commands.createDraft(tenant, requester.id(), beneficiary.id(),
+                List.of(new ItemSpec(TargetKind.ENTITLEMENT, target.entitlementId(),
+                        PrincipalConstraintKind.ANY, null, null, null)), NOW);
+        var submitted = commands.submit(tenant, draft.request().id(), 1, NOW.plusSeconds(1));
+        var authorized = commands.evaluateItem(tenant, submitted.items().getFirst().id(), 2, NOW.plusSeconds(2));
+        currentEvaluator = (t, r, item) -> EligibilityResult.denied("policy_denied");
+        assertThat(processor(accessIntent, NOW.plusSeconds(3)).processAvailable().processed()).isEqualTo(1);
+        assertThat(requestRepository.findItem(tenant, authorized.id()).orElseThrow().state()).isEqualTo(ItemState.DENIED);
+        assertThat(requestDerivedAssignmentCount(authorized.id())).isZero();
+    }
+
+    @Test
+    void queuedAuthorizationCannotCrossIdentityEligibilityEpoch() {
+        Identity requester = identity("Requester");
+        Identity beneficiary = identity("Beneficiary");
+        var target = entitlement();
+        var commands = requestService((t, r, item) -> EligibilityResult.authorized(contextFor(t, r, item)));
+        var draft = commands.createDraft(tenant, requester.id(), beneficiary.id(),
+                List.of(new ItemSpec(TargetKind.ENTITLEMENT, target.entitlementId(),
+                        PrincipalConstraintKind.ANY, null, null, null)), NOW);
+        var submitted = commands.submit(tenant, draft.request().id(), 1, NOW.plusSeconds(1));
+        var authorized = commands.evaluateItem(tenant, submitted.items().getFirst().id(), 2, NOW.plusSeconds(2));
+        currentEvaluator = (t, r, item) -> {
+            var old = contextFor(t, r, item);
+            return EligibilityResult.authorized(new RequestAdmissionContext(old.identityEpoch() + 1,
+                    old.policyVersionId(), old.targetFingerprint(), old.riskFingerprint(), ids.nextId()));
+        };
+        assertThat(processor(accessIntent, NOW.plusSeconds(3)).processAvailable().processed()).isEqualTo(1);
+        assertThat(requestRepository.findItem(tenant, authorized.id()).orElseThrow().state()).isEqualTo(ItemState.CANCELLED);
+        assertThat(requestDerivedAssignmentCount(authorized.id())).isZero();
+    }
+
     private RequestAdmissionContext contextFor(TenantContext t, AccessRequestModels.AccessRequest request,
                                                AccessRequestModels.RequestItem item) {
         var ref = new CatalogQueryService(catalogRepository).resolveActiveEntitlement(t, item.entitlementId());

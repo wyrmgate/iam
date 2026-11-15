@@ -292,6 +292,12 @@ class ApprovalRequestPersistenceIntegrationTest {
                 WHERE tenant_id = ? AND aggregate_id = ?
                   AND event_type = 'governance.request-item-authorized'
                 """, Long.class, tenant.tenantId(), item.id())).isZero();
+        currentEvaluator = (t, request, current) -> EligibilityResult.approvalRequired(
+                new PlanSpec(List.of(new StageSpec(DecisionMode.ANY_ONE, List.of(approver)))),
+                io.wyrmgate.iam.testsupport.RequestAdmissionTestSupport.context());
+        var recovered = commands.evaluateItem(tenant, item.id(), after.revision(), NOW.plusSeconds(4));
+        assertThat(recovered.state()).isEqualTo(ItemState.AUTHORIZED);
+        assertThat(recovered.approvalCaseId()).isEqualTo(approved.id());
     }
 
     @Test
