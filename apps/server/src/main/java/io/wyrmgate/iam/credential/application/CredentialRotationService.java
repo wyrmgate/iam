@@ -49,40 +49,20 @@ public final class CredentialRotationService {
                     "rotation initiator Identity does not exist");
         }
 
-        Credential old = repository.findCredential(
-                        tenant, oldCredentialId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "old Credential does not exist"));
-        if (repository.findOpenRotation(
-                tenant, oldCredentialId).isPresent()) {
-            throw new IllegalStateException(
-                    "routine rotation already exists for Credential");
-        }
-        if (!old.effectiveAt(now)) {
-            throw new IllegalArgumentException(
-                    "routine rotation requires an effective ACTIVE Credential");
-        }
-
-        CredentialRotation rotation =
-                new CredentialRotation(
-                        ids.nextId(),
-                        oldCredentialId,
-                        null,
-                        initiatorIdentityId,
-                        RotationState.PLANNED,
-                        null,
-                        null,
-                        1,
-                        now,
-                        now,
-                        null);
         return transactions.required(() -> {
-            repository.insertRotation(
-                    tenant, rotation);
-            return repository.findRotation(
-                            tenant, rotation.id())
-                    .orElseThrow();
+            Credential old = repository.lockCredential(tenant, oldCredentialId)
+                    .orElseThrow(() -> new IllegalArgumentException("old Credential does not exist"));
+            if (repository.findOpenRotation(tenant, oldCredentialId).isPresent()) {
+                throw new IllegalStateException("routine rotation already exists for Credential");
+            }
+            if (!old.effectiveAt(now)) {
+                throw new IllegalArgumentException("routine rotation requires an effective ACTIVE Credential");
+            }
+            CredentialRotation rotation = new CredentialRotation(
+                    ids.nextId(), oldCredentialId, null, initiatorIdentityId,
+                    RotationState.PLANNED, null, null, 1, now, now, null);
+            repository.insertRotation(tenant, rotation);
+            return repository.findRotation(tenant, rotation.id()).orElseThrow();
         });
     }
 
@@ -123,12 +103,12 @@ public final class CredentialRotationService {
                 throw new IllegalStateException(
                         "replacement may only be attached while CREATING_REPLACEMENT");
             }
-            Credential old = repository.findCredential(
+            Credential old = repository.lockCredential(
                             tenant,
                             current.oldCredentialId())
                     .orElseThrow();
             Credential replacement =
-                    repository.findCredential(
+                    repository.lockCredential(
                             tenant,
                             replacementCredentialId)
                             .orElseThrow(() ->
@@ -142,6 +122,12 @@ public final class CredentialRotationService {
             if (replacement.id().equals(old.id())) {
                 throw new IllegalArgumentException(
                         "replacement Credential must differ from old Credential");
+            }
+            if (old.kind() != replacement.kind()) {
+                throw new IllegalArgumentException("replacement Credential must have the same kind");
+            }
+            if (old.secretReference().equals(replacement.secretReference())) {
+                throw new IllegalArgumentException("replacement Credential must have a distinct SecretReference");
             }
             if (replacement.state()
                     == CredentialState.REVOKED
@@ -251,7 +237,7 @@ public final class CredentialRotationService {
                 throw new IllegalStateException(
                         "rotation must be REVOKING_OLD before completion");
             }
-            Credential old = repository.findCredential(
+            Credential old = repository.lockCredential(
                             tenant,
                             current.oldCredentialId())
                     .orElseThrow();
@@ -345,11 +331,7 @@ public final class CredentialRotationService {
                     replacementCredentialId != null
                             ? replacementCredentialId
                             : current.replacementCredentialId();
-            if (next.ordinal()
-                    >= RotationState.DISTRIBUTING.ordinal()
-                    && next.ordinal()
-                    <= RotationState.COMPLETED.ordinal()
-                    && replacement == null) {
+            if (requiresReplacement(next) && replacement == null) {
                 throw new IllegalStateException(
                         "rotation requires replacement Credential before "
                                 + next);
@@ -367,6 +349,13 @@ public final class CredentialRotationService {
                             ? now
                             : null);
         });
+    }
+
+    private static boolean requiresReplacement(RotationState state) {
+        return switch (state) {
+            case DISTRIBUTING, VERIFYING, CUTOVER_COMPLETE, REVOKING_OLD, COMPLETED -> true;
+            default -> false;
+        };
     }
 
     private CredentialRotation requireRotation(
@@ -401,7 +390,7 @@ public final class CredentialRotationService {
             throw new IllegalStateException(
                     "rotation does not have a replacement Credential");
         }
-        return repository.findCredential(
+        return repository.lockCredential(
                         tenant,
                         rotation.replacementCredentialId())
                 .orElseThrow(() ->

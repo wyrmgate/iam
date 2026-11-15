@@ -238,6 +238,7 @@ class CredentialPersistenceIntegrationTest {
                 .isEqualTo(CredentialState.SCHEDULED);
         assertThat(scheduled.effectiveAt(NOW))
                 .isFalse();
+        assertThat(scheduled.effectiveAt(validFrom)).isFalse();
 
         CredentialBoundaryProcessingService activation =
                 new CredentialBoundaryProcessingService(
@@ -256,6 +257,7 @@ class CredentialPersistenceIntegrationTest {
                 .isEqualTo(CredentialState.ACTIVE);
         assertThat(active.effectiveAt(validFrom))
                 .isTrue();
+        assertThat(active.effectiveAt(validUntil)).isFalse();
 
         CredentialBoundaryProcessingService expiry =
                 new CredentialBoundaryProcessingService(
@@ -381,6 +383,15 @@ class CredentialPersistenceIntegrationTest {
                         IllegalArgumentException.class)
                 .hasMessageContaining(
                         "same Principal");
+
+        Credential wrongKind = activeCredential(principalId, CredentialKind.API_KEY, "api/wrong-kind");
+        assertThatThrownBy(() -> rotations.attachReplacement(tenant, creating.id(), wrongKind.id(),
+                creating.revision(), NOW.plusSeconds(2))).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("same kind");
+        Credential sameReference = activeCredential(principalId, CredentialKind.OAUTH_CLIENT_SECRET, "oauth/client-old");
+        assertThatThrownBy(() -> rotations.attachReplacement(tenant, creating.id(), sameReference.id(),
+                creating.revision(), NOW.plusSeconds(2))).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("distinct SecretReference");
 
         Credential replacement =
                 activeCredential(
@@ -543,6 +554,18 @@ class CredentialPersistenceIntegrationTest {
                         IllegalStateException.class)
                 .hasMessageContaining(
                         "must be effective before cutover");
+    }
+
+    @Test
+    void localVerifierRequiresExactTenantAndCredentialOwnership() {
+        var store = new io.wyrmgate.iam.credential.persistence.JdbcLocalPasswordVerifierStore(jdbc);
+        UUID id = ids.nextId();
+        char[] password = "test-password".toCharArray();
+        var reference = store.ensure(tenant, id, password, NOW);
+        assertThat(store.matches(tenant, id, reference, password)).isTrue();
+        assertThat(store.matches(new TenantContext(ids.nextId()), id, reference, password)).isFalse();
+        assertThat(store.matches(tenant, ids.nextId(), reference, password)).isFalse();
+        java.util.Arrays.fill(password, '\\0');
     }
 
     private Credential activeCredential(

@@ -1,6 +1,8 @@
 package io.wyrmgate.iam.credential.application;
 
 import io.wyrmgate.iam.credential.domain.CredentialModels.SecretReference;
+import io.wyrmgate.iam.platform.tenant.TenantContext;
+import java.util.UUID;
 
 /**
  * Private adapter boundary for checking presented authenticator material.
@@ -18,5 +20,6 @@ public interface CredentialSecretVerifier {
      * Performs a constant-time-equivalent verifier operation where supported by the backing
      * provider. Implementations must not retain {@code presentedSecret} after this call.
      */
-    boolean matches(SecretReference reference, char[] presentedSecret);
+    boolean matches(TenantContext tenant, UUID credentialId,
+                    SecretReference reference, char[] presentedSecret);
 }

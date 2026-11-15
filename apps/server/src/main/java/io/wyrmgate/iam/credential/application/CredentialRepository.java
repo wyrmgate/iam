@@ -19,6 +19,9 @@ public interface CredentialRepository {
             TenantContext tenant,
             UUID credentialId);
 
+    /** Locks the current authoritative Credential within the caller's transaction. */
+    Optional<Credential> lockCredential(TenantContext tenant, UUID credentialId);
+
     List<Credential> listCredentials(
             TenantContext tenant,
             UUID principalId,

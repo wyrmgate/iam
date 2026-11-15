@@ -28,6 +28,7 @@ class CredentialAuthenticationServiceTest {
         when(repository.findEffectiveCredentials(
                         TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW))
                 .thenReturn(List.of(credential));
+        when(repository.findCredential(TENANT, credential.id())).thenReturn(java.util.Optional.of(credential));
         CredentialSecretVerifier verifier = new CredentialSecretVerifier() {
             @Override
             public boolean supports(String providerType) {
@@ -35,8 +36,9 @@ class CredentialAuthenticationServiceTest {
             }
 
             @Override
-            public boolean matches(SecretReference reference, char[] presentedSecret) {
-                return Arrays.equals(presentedSecret, "correct horse".toCharArray());
+            public boolean matches(TenantContext tenant, UUID credentialId, SecretReference reference, char[] presentedSecret) {
+                return TENANT.equals(tenant) && credential.id().equals(credentialId)
+                        && Arrays.equals(presentedSecret, "correct horse".toCharArray());
             }
         };
         CredentialAuthenticationService service =
@@ -83,6 +85,17 @@ class CredentialAuthenticationServiceTest {
                 .isFalse();
     }
 
+    @Test
+    void credentialChangedDuringVerificationDoesNotProduceProof() {
+        CredentialRepository repository = mock(CredentialRepository.class);
+        Credential credential = passwordCredential("vault", 1);
+        when(repository.findEffectiveCredentials(TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW))
+                .thenReturn(List.of(credential));
+        when(repository.findCredential(TENANT, credential.id())).thenReturn(java.util.Optional.empty());
+        assertThat(new CredentialAuthenticationService(repository, List.of(matchingVerifier("vault")))
+                .verifyPassword(TENANT, PRINCIPAL_ID, "secret".toCharArray(), NOW)).isEmpty();
+    }
+
     private static CredentialSecretVerifier matchingVerifier(String provider) {
         return new CredentialSecretVerifier() {
             @Override
@@ -91,7 +104,7 @@ class CredentialAuthenticationServiceTest {
             }
 
             @Override
-            public boolean matches(SecretReference reference, char[] presentedSecret) {
+            public boolean matches(TenantContext tenant, UUID credentialId, SecretReference reference, char[] presentedSecret) {
                 return true;
             }
         };
