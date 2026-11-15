@@ -10,6 +10,8 @@ import io.wyrmgate.iam.credential.application.CredentialRotationService;
 import io.wyrmgate.iam.credential.application.CredentialSecretVerifier;
 import io.wyrmgate.iam.credential.application.CredentialService;
 import io.wyrmgate.iam.credential.application.PasswordCredentialEnrollmentService;
+import io.wyrmgate.iam.credential.application.LocalPasswordChangeService;
+import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
 import io.wyrmgate.iam.credential.application.PasswordSecretEnrollment;
 import io.wyrmgate.iam.identity.application.IdentityAccessReferenceQuery;
 import io.wyrmgate.iam.platform.id.IdGenerator;
@@ -95,6 +97,15 @@ public class CredentialPersistenceConfiguration {
                 identities,
                 ids,
                 transactions);
+    }
+
+    @Bean
+    LocalPasswordChangeService localPasswordChangeService(CredentialRepository repository,
+            CredentialService credentials, CredentialRotationService rotations,
+            CredentialBoundaryScheduler boundaries, IdentityAuthenticationQuery identities,
+            JdbcLocalPasswordVerifierStore localVerifier, IdGenerator ids, TransactionExecutor transactions) {
+        return new LocalPasswordChangeService(repository, credentials, rotations, boundaries,
+                identities, localVerifier, localVerifier, ids, transactions);
     }
 
     @Bean

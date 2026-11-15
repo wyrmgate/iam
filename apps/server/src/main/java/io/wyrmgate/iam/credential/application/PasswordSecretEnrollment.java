@@ -11,7 +11,7 @@ public interface PasswordSecretEnrollment {
     String PROVIDER_TYPE = "wyrmgate-local-password-v1";
 
     /**
-     * Idempotently establishes verifier material for the exact bootstrap Credential.
+     * Idempotently establishes verifier material for the exact system-managed local Credential (installation or authorized local change).
      * Implementations must never persist or log the presented plaintext password.
      */
     SecretReference ensure(
