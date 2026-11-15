@@ -77,10 +77,16 @@ public final class IdpBrowserSessionService {
         Objects.requireNonNull(subject, "subject");
         Objects.requireNonNull(credential, "credential");
         Objects.requireNonNull(now, "now");
-        if (!subject.principalId().equals(credential.principalId())) {
+        if (!tenant.tenantId().equals(credential.tenantId())
+                || !subject.principalId().equals(credential.principalId())) {
             throw new IllegalArgumentException("credential proof does not belong to authentication subject");
         }
 
+        if (identities.eligibleSubject(tenant, subject.principalId()).filter(subject::equals).isEmpty()
+                || !credentials.isStillValid(tenant, subject.principalId(), credential.credentialId(),
+                        credential.credentialRevision(), now)) {
+            throw new InvalidCredentialProofException();
+        }
         IdpSessionTokenCodec.IssuedToken issued = tokens.issue();
         Instant absoluteExpiry = now.plus(absoluteTimeout);
         Instant idleExpiry = minimum(now.plus(idleTimeout), absoluteExpiry);
@@ -220,6 +226,10 @@ public final class IdpBrowserSessionService {
 
     private static Instant minimum(Instant left, Instant right) {
         return left.isBefore(right) ? left : right;
+    }
+
+    static final class InvalidCredentialProofException extends IllegalStateException {
+        InvalidCredentialProofException() { super("authentication proof is no longer current"); }
     }
 
     public record ResolvedSession(TenantContext tenant, SessionContext context) {

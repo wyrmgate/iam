@@ -66,8 +66,12 @@ public final class IdpInteractiveLoginService {
                     client.get().tenant(), subject.get().principalId(), privatePassword, now);
             if (verified.isEmpty()) return Optional.empty();
 
-            return Optional.of(sessions.establish(
-                    client.get().tenant(), subject.get(), verified.get(), now));
+            try {
+                return Optional.of(sessions.establish(
+                        client.get().tenant(), subject.get(), verified.get(), now));
+            } catch (IdpBrowserSessionService.InvalidCredentialProofException stale) {
+                return Optional.empty();
+            }
         } finally {
             Arrays.fill(privatePassword, '\0');
         }

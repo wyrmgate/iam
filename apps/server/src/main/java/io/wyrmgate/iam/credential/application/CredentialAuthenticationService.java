@@ -13,6 +13,8 @@ import java.util.UUID;
 /** Credential-owned semantic service for first-party local password verification. */
 public final class CredentialAuthenticationService {
 
+    static final int MAX_PASSWORD_CANDIDATES = 8;
+
     private final CredentialRepository credentials;
     private final List<CredentialSecretVerifier> verifiers;
 
@@ -44,18 +46,17 @@ public final class CredentialAuthenticationService {
 
         char[] privateCopy = Arrays.copyOf(presentedSecret, presentedSecret.length);
         try {
-            for (Credential credential : credentials.findEffectiveCredentials(
-                    tenant,
-                    principalId,
-                    CredentialKind.PASSWORD,
-                    at)) {
+            List<Credential> candidates = credentials.findEffectiveCredentials(
+                    tenant, principalId, CredentialKind.PASSWORD, at, MAX_PASSWORD_CANDIDATES + 1);
+            if (candidates.size() > MAX_PASSWORD_CANDIDATES) return Optional.empty();
+            for (Credential credential : candidates) {
                 CredentialSecretVerifier verifier = uniqueVerifier(
                         credential.secretReference().providerType());
                 if (verifier != null
                         && verifier.matches(tenant, credential.id(), credential.secretReference(), privateCopy)
                         && isStillValid(tenant, principalId, credential.id(), credential.revision(), at)) {
                     return Optional.of(new VerifiedCredential(
-                            principalId, credential.id(), credential.revision()));
+                            tenant.tenantId(), principalId, credential.id(), credential.revision()));
                 }
             }
             return Optional.empty();
@@ -99,10 +100,12 @@ public final class CredentialAuthenticationService {
 
     /** Proof that Credential verified one authenticator for exactly one Principal. */
     public record VerifiedCredential(
+            UUID tenantId,
             UUID principalId,
             UUID credentialId,
             long credentialRevision) {
         public VerifiedCredential {
+            Objects.requireNonNull(tenantId, "tenantId");
             Objects.requireNonNull(principalId, "principalId");
             Objects.requireNonNull(credentialId, "credentialId");
             if (credentialRevision < 1) {

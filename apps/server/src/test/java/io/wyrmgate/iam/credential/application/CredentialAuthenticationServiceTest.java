@@ -26,7 +26,7 @@ class CredentialAuthenticationServiceTest {
         CredentialRepository repository = mock(CredentialRepository.class);
         Credential credential = passwordCredential("vault", 3);
         when(repository.findEffectiveCredentials(
-                        TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW))
+                        TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW, 9))
                 .thenReturn(List.of(credential));
         when(repository.findCredential(TENANT, credential.id())).thenReturn(java.util.Optional.of(credential));
         CredentialSecretVerifier verifier = new CredentialSecretVerifier() {
@@ -47,7 +47,7 @@ class CredentialAuthenticationServiceTest {
 
         assertThat(service.verifyPassword(TENANT, PRINCIPAL_ID, presented, NOW))
                 .contains(new CredentialAuthenticationService.VerifiedCredential(
-                        PRINCIPAL_ID, credential.id(), 3));
+                        TENANT.tenantId(), PRINCIPAL_ID, credential.id(), 3));
         assertThat(presented).containsExactly("correct horse".toCharArray());
     }
 
@@ -56,7 +56,7 @@ class CredentialAuthenticationServiceTest {
         CredentialRepository repository = mock(CredentialRepository.class);
         Credential credential = passwordCredential("vault", 1);
         when(repository.findEffectiveCredentials(
-                        TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW))
+                        TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW, 9))
                 .thenReturn(List.of(credential));
         CredentialSecretVerifier one = matchingVerifier("vault");
         CredentialSecretVerifier two = matchingVerifier("vault");
@@ -89,11 +89,23 @@ class CredentialAuthenticationServiceTest {
     void credentialChangedDuringVerificationDoesNotProduceProof() {
         CredentialRepository repository = mock(CredentialRepository.class);
         Credential credential = passwordCredential("vault", 1);
-        when(repository.findEffectiveCredentials(TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW))
+        when(repository.findEffectiveCredentials(TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW, 9))
                 .thenReturn(List.of(credential));
         when(repository.findCredential(TENANT, credential.id())).thenReturn(java.util.Optional.empty());
         assertThat(new CredentialAuthenticationService(repository, List.of(matchingVerifier("vault")))
                 .verifyPassword(TENANT, PRINCIPAL_ID, "secret".toCharArray(), NOW)).isEmpty();
+    }
+
+    @Test
+    void excessivePasswordCandidatesFailClosedWithoutVerifyingAny() {
+        CredentialRepository repository = mock(CredentialRepository.class);
+        Credential credential = passwordCredential("vault", 1);
+        when(repository.findEffectiveCredentials(TENANT, PRINCIPAL_ID, CredentialKind.PASSWORD, NOW, 9))
+                .thenReturn(java.util.Collections.nCopies(9, credential));
+        CredentialSecretVerifier verifier = mock(CredentialSecretVerifier.class);
+        assertThat(new CredentialAuthenticationService(repository, List.of(verifier))
+                .verifyPassword(TENANT, PRINCIPAL_ID, "secret".toCharArray(), NOW)).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(verifier);
     }
 
     private static CredentialSecretVerifier matchingVerifier(String provider) {

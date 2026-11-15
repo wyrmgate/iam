@@ -33,7 +33,8 @@ public interface CredentialRepository {
             TenantContext tenant,
             UUID principalId,
             CredentialKind kind,
-            Instant at);
+            Instant at,
+            int limit);
 
     Credential updateCredentialState(
             TenantContext tenant,

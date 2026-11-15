@@ -79,7 +79,7 @@ class InstallationBootstrapServiceTest {
         when(credentialAuthentication.verifyPassword(
                         eq(new TenantContext(tenantId)), eq(principalId), any(char[].class), eq(NOW)))
                 .thenReturn(Optional.of(new CredentialAuthenticationService.VerifiedCredential(
-                        principalId, credentialId, 1)));
+                        tenantId, principalId, credentialId, 1)));
 
         SsoClientRegistration registration = mock(SsoClientRegistration.class);
         when(registration.id()).thenReturn(registrationId);

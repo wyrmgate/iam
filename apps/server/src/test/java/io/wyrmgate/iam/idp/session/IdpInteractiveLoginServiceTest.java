@@ -42,7 +42,7 @@ class IdpInteractiveLoginServiceTest {
                 Set.of(SsoClientScope.OPENID), false, SsoClientLifecycleState.ACTIVE,
                 1, now.minusSeconds(60), now.minusSeconds(60));
         AuthenticationSubject subject = new AuthenticationSubject(principalId, identityId, 1, 1);
-        VerifiedCredential verified = new VerifiedCredential(principalId, credentialId, 2);
+        VerifiedCredential verified = new VerifiedCredential(tenant.tenantId(), principalId, credentialId, 2);
         IdpBrowserSessionService.EstablishedSession established = mock(IdpBrowserSessionService.EstablishedSession.class);
 
         when(clients.resolveActive("client-1"))
