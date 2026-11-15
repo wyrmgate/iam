@@ -71,3 +71,15 @@ test('Integration workspace stays on accepted public administration routes and c
     /:enable|:claim|:complete|:renew|provider-native editor|generic status editor/,
   );
 });
+
+
+test('full reconciliation scheduling uses the exact loaded binding and a causal retry key', () => {
+  assertSourceContains(integrationWorkspace,
+    /Schedule full reconciliation/,
+    /scopeMode: 'FULL', checkpoint: null/,
+    /binding\.data\.id\)\}:reconcile/,
+    /etag: binding\.etag, idempotencyKey: key/,
+    /retry\.current\?\.fingerprint !== fingerprint/,
+    /Accepted scheduling is not provider completion or verified coverage/,
+  );
+});

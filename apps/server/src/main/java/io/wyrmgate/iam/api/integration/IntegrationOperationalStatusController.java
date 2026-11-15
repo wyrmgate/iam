@@ -282,7 +282,7 @@ public final class IntegrationOperationalStatusController {
     private static IntegrationOperationalApiModels.ReconciliationRunResource run(
             ReconciliationRunStatus value) {
         return new IntegrationOperationalApiModels.ReconciliationRunResource(
-                value.id(), value.connectorBindingId(), value.operationId(), value.scopeObjectClass(),
+                value.id(), value.connectorBindingId(), value.operationId(), value.scopeObjectClass(), value.scopeMode(),
                 value.state(), value.reportedCoverage(), value.effectiveCompleteness(),
                 value.configurationVersion(), value.runtimeId(), value.runtimeVersion(),
                 value.contractId(), value.contractVersion(), value.nextAttemptAt(), value.failureCode(),

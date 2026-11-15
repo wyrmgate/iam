@@ -65,6 +65,7 @@ final class IntegrationOperationalApiModels {
             UUID connectorBindingId,
             UUID operationId,
             String scopeObjectClass,
+            String scopeMode,
             String state,
             String reportedCoverage,
             String effectiveCompleteness,

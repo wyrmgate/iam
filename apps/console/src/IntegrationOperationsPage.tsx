@@ -53,7 +53,7 @@ const specs: Spec[] = [
     label: 'Reconciliation runs',
     title: 'Reconciliation Runs',
     description: 'Provider reconciliation process/coverage status. Observation remains non-authoritative until explicitly mapped through accepted IAM semantics.',
-    columns: ['state', 'scopeObjectClass', 'reportedCoverage', 'effectiveCompleteness', 'failureCode'],
+    columns: ['state', 'scopeObjectClass', 'scopeMode', 'reportedCoverage', 'effectiveCompleteness', 'failureCode'],
     list: (cursor) => withCursor(`${V1_ROOT}/reconciliation-runs`, cursor),
     detail: (id) => `${V1_ROOT}/reconciliation-runs/${encodeURIComponent(id)}`,
   },

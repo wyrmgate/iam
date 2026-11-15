@@ -1,7 +1,8 @@
-import { V1_ROOT } from '../api';
+import { useRef, useState } from 'react';
+import { ApiError, apiRequest, createIdempotencyKey, V1_ROOT, type ApiResult } from '../api';
 import { IntegrationOperationsPage } from '../IntegrationOperationsPage';
 import { type Spec, Workspace, WorkspaceTabs } from '../SemanticWorkspace';
-import { Box, StatePanel, Surface, Typography } from '../ui';
+import { Box, Button, SelectInput, StatePanel, Surface, TextInput, Typography } from '../ui';
 import { nullable } from './workspaceSpecHelpers';
 
 const connectorSpec: Spec = {
@@ -93,6 +94,94 @@ function ConnectorWorkspace() {
   );
 }
 
+type ReconcileBinding = { id: string; targetKind: string; lifecycleState: string };
+type ScheduledRun = { id: string; state: string; scopeMode: string };
+
+function ReconciliationScheduler() {
+  const [bindingId, setBindingId] = useState('');
+  const [binding, setBinding] = useState<ApiResult<ReconcileBinding> | null>(null);
+  const [objectClass, setObjectClass] = useState('PRINCIPAL');
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [run, setRun] = useState<ScheduledRun | null>(null);
+  const retry = useRef<{ fingerprint: string; key: string } | null>(null);
+
+  function showError(error: unknown) {
+    setMessage(error instanceof ApiError
+      ? error.status === 412 ? 'Binding revision changed. Reload the binding before scheduling.'
+        : error.status === 403 ? 'Administrative authorization denied this operation.'
+          : `Request failed (${error.status}).${error.correlationId ? ` Correlation: ${error.correlationId}` : ''}`
+      : 'Request failed. Retry the same operation to preserve its causal identity.');
+  }
+
+  async function loadBinding() {
+    setPending(true);
+    setMessage(null);
+    setBinding(null);
+    setRun(null);
+    try {
+      const result = await apiRequest<ReconcileBinding>(`${V1_ROOT}/connector-bindings/${encodeURIComponent(bindingId.trim())}`);
+      if (!result.etag || result.data.lifecycleState !== 'ACTIVE') {
+        setMessage('Scheduling requires an active binding with a current revision.');
+        return;
+      }
+      setBinding(result);
+      setObjectClass('PRINCIPAL');
+    } catch (error) {
+      showError(error);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function schedule() {
+    if (!binding?.etag || pending) return;
+    setPending(true);
+    setMessage(null);
+    setRun(null);
+    const body = { objectClass, scopeMode: 'FULL', checkpoint: null };
+    const fingerprint = JSON.stringify([binding.data.id, binding.etag, body]);
+    if (retry.current?.fingerprint !== fingerprint) {
+      retry.current = { fingerprint, key: createIdempotencyKey() };
+    }
+    const key = retry.current.key;
+    try {
+      const result = await apiRequest<ScheduledRun>(`${V1_ROOT}/connector-bindings/${encodeURIComponent(binding.data.id)}:reconcile`, {
+        method: 'POST', etag: binding.etag, idempotencyKey: key, body,
+      });
+      setRun(result.data);
+      retry.current = null;
+    } catch (error) {
+      showError(error);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Surface title="Schedule full reconciliation" description="Load an active binding and schedule durable discovery. Accepted scheduling is not provider completion or verified coverage.">
+      <Box sx={{ display: 'grid', gap: 2 }}>
+        <TextInput label="Connector binding ID" value={bindingId} disabled={pending}
+          onChange={(event) => { setBindingId(event.target.value); setBinding(null); setRun(null); setMessage(null); }} />
+        <Button variant="outlined" disabled={pending || !bindingId.trim()} onClick={() => void loadBinding()}>Load binding revision</Button>
+        {binding ? <>
+          <Typography variant="body2">Loaded binding: {binding.data.id} · {binding.data.targetKind}</Typography>
+          <SelectInput label="Object class" value={objectClass} disabled={pending}
+            options={binding.data.targetKind === 'SOURCE_SYSTEM' ? ['PRINCIPAL'] : ['PRINCIPAL', 'ENTITLEMENT', 'GRANT']}
+            onChange={(event) => setObjectClass(event.target.value)} />
+          <Button variant="contained" disabled={pending || !!run} onClick={() => void schedule()}>
+            {pending ? 'Working…' : 'Schedule full reconciliation'}
+          </Button>
+        </> : null}
+        {message ? <StatePanel severity="error">{message}</StatePanel> : null}
+        {run ? <StatePanel title="Reconciliation accepted">
+          Run {run.id} · {run.scopeMode} · {run.state}. Open the Operations workspace to inspect current coverage and progress. Load the binding again to schedule another run.
+        </StatePanel> : null}
+      </Box>
+    </Surface>
+  );
+}
+
 function BindingWorkspace() {
   return (
     <Box sx={{ display: 'grid', gap: 2 }}>
@@ -106,6 +195,7 @@ function BindingWorkspace() {
           <Typography component="li" variant="body2">This workspace opens existing bindings and preserves the accepted explicit disable operation; it does not invent a generic binding status editor.</Typography>
         </Box>
       </Surface>
+      <ReconciliationScheduler />
       <Workspace spec={bindingSpec} />
     </Box>
   );

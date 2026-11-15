@@ -114,7 +114,7 @@ public final class JdbcIntegrationOperationalStatusRepository
     @Override
     public Optional<ReconciliationRunStatus> findReconciliationRun(TenantContext tenant, UUID id) {
         return jdbc.query("""
-                SELECT id, connector_binding_id, operation_id, scope_object_class, state,
+                SELECT id, connector_binding_id, operation_id, scope_object_class, scope_mode, state,
                        reported_coverage, effective_completeness, configuration_version,
                        runtime_id, runtime_version, contract_id, contract_version, next_attempt_at,
                        failure_code, correlation_id, causation_id, revision, started_at, completed_at,
@@ -129,7 +129,7 @@ public final class JdbcIntegrationOperationalStatusRepository
     public List<ReconciliationRunStatus> findReconciliationRunPage(
             TenantContext tenant, PagePosition after, int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT id, connector_binding_id, operation_id, scope_object_class, state,
+                SELECT id, connector_binding_id, operation_id, scope_object_class, scope_mode, state,
                        reported_coverage, effective_completeness, configuration_version,
                        runtime_id, runtime_version, contract_id, contract_version, next_attempt_at,
                        failure_code, correlation_id, causation_id, revision, started_at, completed_at,
@@ -209,6 +209,7 @@ public final class JdbcIntegrationOperationalStatusRepository
                 rs.getObject("connector_binding_id", UUID.class),
                 rs.getObject("operation_id", UUID.class),
                 rs.getString("scope_object_class"),
+                rs.getString("scope_mode"),
                 rs.getString("state"),
                 rs.getString("reported_coverage"),
                 rs.getString("effective_completeness"),

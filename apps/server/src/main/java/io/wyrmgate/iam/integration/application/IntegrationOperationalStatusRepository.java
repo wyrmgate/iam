@@ -57,6 +57,7 @@ public interface IntegrationOperationalStatusRepository {
             UUID connectorBindingId,
             UUID operationId,
             String scopeObjectClass,
+            String scopeMode,
             String state,
             String reportedCoverage,
             String effectiveCompleteness,

@@ -59,7 +59,15 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
 
         String taskJson = JSON.writeValueAsString(repository.findProvisioningTask(contextA, task).orElseThrow());
         String attemptJson = JSON.writeValueAsString(repository.findProvisioningAttempt(contextA, attempt).orElseThrow());
-        String runJson = JSON.writeValueAsString(repository.findReconciliationRun(contextA, run).orElseThrow());
+        var runStatus = repository.findReconciliationRun(contextA, run).orElseThrow();
+        assertThat(runStatus.scopeMode()).isEqualTo("INCREMENTAL");
+        assertThat(repository.findReconciliationRunPage(contextA, null, 10))
+                .anySatisfy(value -> {
+                    assertThat(value.id()).isEqualTo(run);
+                    assertThat(value.scopeMode()).isEqualTo("INCREMENTAL");
+                });
+        assertThat(repository.findReconciliationRun(new TenantContext(tenantB), run)).isEmpty();
+        String runJson = JSON.writeValueAsString(runStatus);
 
         assertThat(taskJson)
                 .doesNotContain("super-secret-idempotency", "raw-provider-secret", "payload");
@@ -142,13 +150,13 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO integration.reconciliation_run (
-                    id, tenant_id, connector_binding_id, operation_id, scope_object_class,
+                    id, tenant_id, connector_binding_id, operation_id, scope_object_class, scope_mode,
                     state, reported_coverage, effective_completeness, configuration_version,
                     runtime_id, runtime_version, contract_id, contract_version,
                     checkpoint_start, checkpoint_end, next_attempt_at, failure_code,
                     completion_lease_epoch, completion_fingerprint, correlation_id, causation_id,
                     revision, started_at, completed_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'PRINCIPAL', 'FAILED', 'PARTIAL', 'PARTIAL', 1,
+                VALUES (?, ?, ?, ?, 'PRINCIPAL', 'INCREMENTAL', 'FAILED', 'PARTIAL', 'PARTIAL', 1,
                         'scim', '1', 'principal.v1', 1,
                         'checkpoint-secret-start', 'checkpoint-secret-end', ?, 'provider_unavailable',
                         7, 'completion-secret', ?, NULL, 2, ?, ?, ?, ?)
