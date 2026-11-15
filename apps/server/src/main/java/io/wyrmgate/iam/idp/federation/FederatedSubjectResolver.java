@@ -11,8 +11,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Current-state composition only. Not wired to a callback or session issuer until Integration supplies
- * durable trust/link and replay contracts. All unavailable mandatory reads fail closed.
+/** Current-state composition after the adapter consumes its durable callback fence. All unavailable mandatory reads fail closed.
  */
 public final class FederatedSubjectResolver {
     private final FederationTrustQuery federation;

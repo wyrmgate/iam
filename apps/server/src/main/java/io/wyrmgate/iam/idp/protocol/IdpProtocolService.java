@@ -175,7 +175,7 @@ public final class IdpProtocolService {
                 scopes,
                 challenge,
                 nonce,
-                session.createdAt(),
+                session.authenticatedAt(),
                 now,
                 now.plus(authorizationCodeLifetime),
                 null);
@@ -229,7 +229,7 @@ public final class IdpProtocolService {
             if (!session.sessionId().equals(code.browserSessionId())
                     || !session.principalId().equals(code.principalId())
                     || !session.identityId().equals(code.identityId())
-                    || !session.createdAt().equals(code.authTime())) {
+                    || !session.authenticatedAt().equals(code.authTime())) {
                 throw ProtocolException.direct("invalid_grant");
             }
             if (current.requiresGovernedAccess() && !applicationAccess.hasCurrentAccess(

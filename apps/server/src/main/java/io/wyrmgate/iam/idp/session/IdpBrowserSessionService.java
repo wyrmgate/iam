@@ -1,6 +1,8 @@
 package io.wyrmgate.iam.idp.session;
 
 import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
+import io.wyrmgate.iam.idp.federation.FederatedAuthenticationAnchor;
+import io.wyrmgate.iam.idp.federation.FederatedSubjectResolver;
 import io.wyrmgate.iam.audit.domain.AuditOutcome;
 import io.wyrmgate.iam.credential.application.CredentialAuthenticationService;
 import io.wyrmgate.iam.credential.application.CredentialAuthenticationService.VerifiedCredential;
@@ -34,6 +36,7 @@ public final class IdpBrowserSessionService {
     private final IdpSessionTokenCodec tokens;
     private final IdGenerator ids;
     private final IdpSecurityEvidence evidence;
+    private final FederatedSubjectResolver federation;
     private final Duration idleTimeout;
     private final Duration absoluteTimeout;
 
@@ -43,7 +46,7 @@ public final class IdpBrowserSessionService {
             TenantOverviewQuery tenants,
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
-            IdGenerator ids, IdpSecurityEvidence evidence) {
+            IdGenerator ids, IdpSecurityEvidence evidence,FederatedSubjectResolver federation) {
         this(
                 sessions,
                 identities,
@@ -51,7 +54,7 @@ public final class IdpBrowserSessionService {
                 credentials,
                 tokens,
                 ids,
-                evidence,
+                evidence,federation,
                 DEFAULT_IDLE_TIMEOUT,
                 DEFAULT_ABSOLUTE_TIMEOUT);
     }
@@ -63,7 +66,7 @@ public final class IdpBrowserSessionService {
             CredentialAuthenticationService credentials,
             IdpSessionTokenCodec tokens,
             IdGenerator ids,
-            IdpSecurityEvidence evidence,
+            IdpSecurityEvidence evidence,FederatedSubjectResolver federation,
             Duration idleTimeout,
             Duration absoluteTimeout) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
@@ -73,6 +76,7 @@ public final class IdpBrowserSessionService {
         this.tokens = Objects.requireNonNull(tokens, "tokens");
         this.ids = Objects.requireNonNull(ids, "ids");
         this.evidence = Objects.requireNonNull(evidence, "evidence");
+        this.federation=Objects.requireNonNull(federation);
         this.idleTimeout = requirePositive(idleTimeout, "idleTimeout");
         this.absoluteTimeout = requirePositive(absoluteTimeout, "absoluteTimeout");
         if (idleTimeout.compareTo(absoluteTimeout) > 0) {
@@ -136,6 +140,20 @@ public final class IdpBrowserSessionService {
                         absoluteExpiry));
     }
 
+    /** Establish only from an exact current federated anchor resolved from verified one-use provider proof. */
+    public EstablishedSession establishFederated(TenantContext tenant,FederatedAuthenticationAnchor anchor,Instant now) {
+        if(!federation.isStillValid(tenant,anchor,now))throw new InvalidCredentialProofException();
+        var issued=tokens.issue();
+        Instant absolute=minimum(now.plus(absoluteTimeout),anchor.expiresAt());
+        Instant idle=minimum(now.plus(idleTimeout),absolute);
+        var session=new IdpBrowserSession(ids.nextId(),anchor.principalId(),anchor.identityId(),null,0,
+                anchor.tenantRevision(),anchor.principalRevision(),anchor.identityRevision(),issued.hash(),now,now,idle,absolute,null,anchor);
+        sessions.insert(tenant,session);
+        try{evidence.required(tenant,anchor.identityId(),"authentication:session-established","idp-session",session.id(),session.id(),null,now);}
+        catch(RuntimeException unavailable){sessions.revoke(tenant,session.id(),now);throw unavailable;}
+        return new EstablishedSession(issued.value(),new SessionContext(session.id(),session.principalId(),session.identityId(),now,idle,absolute,anchor.authenticatedAt()));
+    }
+
     /**
      * Resolves and revalidates a session against current Identity/Principal and Credential state.
      * Invalid sessions are revoked opportunistically and never produce actor context.
@@ -179,6 +197,7 @@ public final class IdpBrowserSessionService {
     /** Internal exact authenticator context for the dedicated current-session password change. */
     Optional<PasswordChangeSubject> resolvePasswordChangeSubject(String rawToken, Instant now) {
         return hash(rawToken).flatMap(sessions::findByTokenHash)
+                .filter(located->located.session().federatedAnchor()==null)
                 .flatMap(located -> revalidate(located.tenant(), located.session(), now)
                         .map(context -> new PasswordChangeSubject(located.tenant(), context.identityId(),
                                 context.principalId(), located.session().credentialId(),
@@ -235,12 +254,9 @@ public final class IdpBrowserSessionService {
                 || !subject.get().identityId().equals(session.identityId())
                 || !Objects.equals(session.principalRevision(), subject.get().principalRevision())
                 || !Objects.equals(session.identityRevision(), subject.get().identityRevision())
-                || !credentials.isStillValid(
-                        tenant,
-                        session.principalId(),
-                        session.credentialId(),
-                        session.credentialRevision(),
-                        now)) {
+                || !(session.federatedAnchor()!=null
+                        ? federation.isStillValid(tenant,session.federatedAnchor(),now)
+                        : credentials.isStillValid(tenant,session.principalId(),session.credentialId(),session.credentialRevision(),now))) {
             revokeQuietly(tenant, session, now);
             return Optional.empty();
         }
@@ -264,7 +280,7 @@ public final class IdpBrowserSessionService {
                 session.identityId(),
                 session.createdAt(),
                 idleExpiry,
-                session.absoluteExpiresAt()));
+                session.absoluteExpiresAt(),session.authenticatedAt()));
     }
 
     private Optional<Long> activeTenantRevision(TenantContext tenant) {
@@ -318,7 +334,10 @@ public final class IdpBrowserSessionService {
             UUID identityId,
             Instant createdAt,
             Instant idleExpiresAt,
-            Instant absoluteExpiresAt) {
+            Instant absoluteExpiresAt,Instant authenticatedAt) {
+        public SessionContext(UUID sessionId,UUID principalId,UUID identityId,Instant createdAt,Instant idleExpiresAt,Instant absoluteExpiresAt){
+            this(sessionId,principalId,identityId,createdAt,idleExpiresAt,absoluteExpiresAt,createdAt);
+        }
         public SessionContext {
             Objects.requireNonNull(sessionId, "sessionId");
             Objects.requireNonNull(principalId, "principalId");
@@ -326,6 +345,7 @@ public final class IdpBrowserSessionService {
             Objects.requireNonNull(createdAt, "createdAt");
             Objects.requireNonNull(idleExpiresAt, "idleExpiresAt");
             Objects.requireNonNull(absoluteExpiresAt, "absoluteExpiresAt");
+            Objects.requireNonNull(authenticatedAt,"authenticatedAt");
         }
     }
 

@@ -1,6 +1,7 @@
 package io.wyrmgate.iam.idp.session;
 
 import io.wyrmgate.iam.platform.tenant.TenantContext;
+import io.wyrmgate.iam.idp.federation.FederatedAuthenticationAnchor;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -20,27 +21,32 @@ public final class JdbcIdpBrowserSessionRepository
 
     @Override
     public void insert(TenantContext tenant, IdpBrowserSession session) {
+        var anchor=session.federatedAnchor();
+        if(anchor!=null&&!tenant.tenantId().equals(anchor.tenantId()))throw new IllegalArgumentException("foreign session anchor");
         jdbc.update("""
                 INSERT INTO platform.idp_browser_session (
                     id, tenant_id, principal_id, identity_id,
                     credential_id, credential_revision, tenant_revision, principal_revision, identity_revision, token_hash,
                     created_at, last_seen_at, idle_expires_at,
-                    absolute_expires_at, revoked_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    absolute_expires_at, revoked_at, federation_trust_id,federation_trust_revision,
+                    federation_link_id,federation_link_revision,federation_authenticated_at,federation_proof_expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?)
                 """,
                 session.id(),
                 tenant.tenantId(),
                 session.principalId(),
                 session.identityId(),
                 session.credentialId(),
-                session.credentialRevision(),
+                anchor==null?session.credentialRevision():null,
                 session.tenantRevision(), session.principalRevision(), session.identityRevision(),
                 session.tokenHash(),
                 Timestamp.from(session.createdAt()),
                 Timestamp.from(session.lastSeenAt()),
                 Timestamp.from(session.idleExpiresAt()),
                 Timestamp.from(session.absoluteExpiresAt()),
-                timestamp(session.revokedAt()));
+                timestamp(session.revokedAt()),anchor==null?null:anchor.trustId(),anchor==null?null:anchor.trustRevision(),
+                anchor==null?null:anchor.linkId(),anchor==null?null:anchor.linkRevision(),
+                anchor==null?null:Timestamp.from(anchor.authenticatedAt()),anchor==null?null:Timestamp.from(anchor.expiresAt()));
     }
 
     @Override
@@ -48,10 +54,11 @@ public final class JdbcIdpBrowserSessionRepository
             TenantContext tenant,
             String tokenHash) {
         return jdbc.query("""
-                SELECT id, principal_id, identity_id,
+                SELECT tenant_id,id, principal_id, identity_id,
                        credential_id, credential_revision, tenant_revision, principal_revision, identity_revision, token_hash,
                        created_at, last_seen_at, idle_expires_at,
-                       absolute_expires_at, revoked_at
+                       absolute_expires_at, revoked_at, federation_trust_id,federation_trust_revision,
+                       federation_link_id,federation_link_revision,federation_authenticated_at,federation_proof_expires_at
                 FROM platform.idp_browser_session
                 WHERE tenant_id = ? AND token_hash = ?
                 """,
@@ -68,7 +75,8 @@ public final class JdbcIdpBrowserSessionRepository
                 SELECT tenant_id, id, principal_id, identity_id,
                        credential_id, credential_revision, tenant_revision, principal_revision, identity_revision, token_hash,
                        created_at, last_seen_at, idle_expires_at,
-                       absolute_expires_at, revoked_at
+                       absolute_expires_at, revoked_at, federation_trust_id,federation_trust_revision,
+                       federation_link_id,federation_link_revision,federation_authenticated_at,federation_proof_expires_at
                 FROM platform.idp_browser_session
                 WHERE token_hash = ?
                 """,
@@ -83,10 +91,11 @@ public final class JdbcIdpBrowserSessionRepository
     @Override
     public Optional<IdpBrowserSession> findById(TenantContext tenant, UUID sessionId) {
         return jdbc.query("""
-                SELECT id, principal_id, identity_id,
+                SELECT tenant_id,id, principal_id, identity_id,
                        credential_id, credential_revision, tenant_revision, principal_revision, identity_revision, token_hash,
                        created_at, last_seen_at, idle_expires_at,
-                       absolute_expires_at, revoked_at
+                       absolute_expires_at, revoked_at, federation_trust_id,federation_trust_revision,
+                       federation_link_id,federation_link_revision,federation_authenticated_at,federation_proof_expires_at
                 FROM platform.idp_browser_session
                 WHERE tenant_id = ? AND id = ?
                 """, (rs, row) -> session(rs), tenant.tenantId(), sessionId)
@@ -135,6 +144,13 @@ public final class JdbcIdpBrowserSessionRepository
     }
 
     private static IdpBrowserSession session(ResultSet rs) throws SQLException {
+        UUID trust=rs.getObject("federation_trust_id",UUID.class);
+        FederatedAuthenticationAnchor anchor=trust==null?null:new FederatedAuthenticationAnchor(
+                rs.getObject("tenant_id",UUID.class),rs.getLong("tenant_revision"),trust,rs.getLong("federation_trust_revision"),
+                rs.getObject("federation_link_id",UUID.class),rs.getLong("federation_link_revision"),
+                rs.getObject("principal_id",UUID.class),rs.getLong("principal_revision"),rs.getObject("identity_id",UUID.class),
+                rs.getLong("identity_revision"),rs.getTimestamp("federation_authenticated_at").toInstant(),
+                rs.getTimestamp("federation_proof_expires_at").toInstant());
         return new IdpBrowserSession(
                 rs.getObject("id", UUID.class),
                 rs.getObject("principal_id", UUID.class),
@@ -149,7 +165,7 @@ public final class JdbcIdpBrowserSessionRepository
                 rs.getTimestamp("last_seen_at").toInstant(),
                 rs.getTimestamp("idle_expires_at").toInstant(),
                 rs.getTimestamp("absolute_expires_at").toInstant(),
-                instant(rs.getTimestamp("revoked_at")));
+                instant(rs.getTimestamp("revoked_at")),anchor);
     }
 
     private static Timestamp timestamp(Instant value) {

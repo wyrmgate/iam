@@ -1,6 +1,8 @@
 package io.wyrmgate.iam.idp.session;
 
 import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
+import io.wyrmgate.iam.idp.federation.FederatedAuthenticationAnchor;
+import io.wyrmgate.iam.idp.federation.FederatedSubjectResolver;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,7 +52,7 @@ class IdpBrowserSessionServiceTest {
                 credentials,
                 new IdpSessionTokenCodec(),
                 ids,
-                mock(IdpSecurityEvidence.class),
+                mock(IdpSecurityEvidence.class),mock(FederatedSubjectResolver.class),
                 Duration.ofMinutes(30),
                 Duration.ofHours(8));
         VerifiedCredential verified = new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 6);
@@ -78,7 +80,7 @@ class IdpBrowserSessionServiceTest {
                 mock(CredentialAuthenticationService.class),
                 new IdpSessionTokenCodec(),
                 UUID::randomUUID,
-                mock(IdpSecurityEvidence.class),
+                mock(IdpSecurityEvidence.class),mock(FederatedSubjectResolver.class),
                 Duration.ofMinutes(30),
                 Duration.ofHours(8));
         AuthenticationSubject subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
@@ -99,7 +101,7 @@ class IdpBrowserSessionServiceTest {
         AuthenticationSubject subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         IdpBrowserSessionService service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials,
-                new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class));
+                new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class),mock(FederatedSubjectResolver.class));
         assertThatThrownBy(() -> service.establish(TENANT, subject,
                 new VerifiedCredential(UUID.randomUUID(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -126,7 +128,7 @@ class IdpBrowserSessionServiceTest {
                 credentials,
                 new IdpSessionTokenCodec(),
                 UUID::randomUUID,
-                mock(IdpSecurityEvidence.class),
+                mock(IdpSecurityEvidence.class),mock(FederatedSubjectResolver.class),
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(10));
         IdpBrowserSessionService.EstablishedSession established = service.establish(
@@ -144,7 +146,7 @@ class IdpBrowserSessionServiceTest {
         var subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
-        var service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials, new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class));
+        var service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials, new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class),mock(FederatedSubjectResolver.class));
         var established = service.establish(TENANT, subject, new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1), NOW);
         UUID id = established.context().sessionId();
         assertThat(service.revalidateAuthorizationCodeSession(TENANT, id, NOW.plusSeconds(60))).isPresent();
@@ -163,7 +165,7 @@ class IdpBrowserSessionServiceTest {
         var subject = new AuthenticationSubject(PRINCIPAL_ID, IDENTITY_ID, 1, 1);
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
-        var service = new IdpBrowserSessionService(repository, identities, tenants, credentials, new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class));
+        var service = new IdpBrowserSessionService(repository, identities, tenants, credentials, new IdpSessionTokenCodec(), UUID::randomUUID, mock(IdpSecurityEvidence.class),mock(FederatedSubjectResolver.class));
         var proof = new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1);
         var first = service.establish(TENANT, subject, proof, NOW);
         // Even if reactivated before the next request, the old revision cannot authenticate.
@@ -189,7 +191,7 @@ class IdpBrowserSessionServiceTest {
         when(identities.eligibleSubject(TENANT, PRINCIPAL_ID)).thenReturn(Optional.of(subject));
         when(credentials.isStillValid(eq(TENANT), eq(PRINCIPAL_ID), eq(CREDENTIAL_ID), eq(1L), any(Instant.class))).thenReturn(true);
         var service = new IdpBrowserSessionService(repository, identities, activeTenants(), credentials,
-                new IdpSessionTokenCodec(), UUID::randomUUID, evidence);
+                new IdpSessionTokenCodec(), UUID::randomUUID, evidence,mock(FederatedSubjectResolver.class));
         var proof = new VerifiedCredential(TENANT.tenantId(), PRINCIPAL_ID, CREDENTIAL_ID, 1);
         when(audit.append(eq(TENANT), any(io.wyrmgate.iam.audit.application.AuditRecordDraft.class)))
                 .thenThrow(new IllegalStateException("Audit unavailable"));
@@ -201,6 +203,31 @@ class IdpBrowserSessionServiceTest {
                 .thenThrow(new IllegalStateException("Audit unavailable"));
         service.logout(TENANT, established.token(), NOW.plusSeconds(2));
         assertThat(service.resolve(TENANT, established.token(), NOW.plusSeconds(3))).isEmpty();
+    }
+
+    @Test
+    void federatedSessionPinsAnchorWithoutCredentialAndCannotChangePassword() {
+        var repository=new InMemorySessions();
+        var identities=mock(IdentityAuthenticationQuery.class);
+        var credentials=mock(CredentialAuthenticationService.class);
+        var federation=mock(FederatedSubjectResolver.class);
+        var anchor=new FederatedAuthenticationAnchor(TENANT.tenantId(),1,UUID.randomUUID(),2,UUID.randomUUID(),3,
+                PRINCIPAL_ID,1,IDENTITY_ID,1,NOW.minusSeconds(5),NOW.plusSeconds(120));
+        when(identities.eligibleSubject(TENANT,PRINCIPAL_ID)).thenReturn(Optional.of(new AuthenticationSubject(PRINCIPAL_ID,IDENTITY_ID,1,1)));
+        when(federation.isStillValid(eq(TENANT),eq(anchor),any(Instant.class))).thenReturn(true);
+        var service=new IdpBrowserSessionService(repository,identities,activeTenants(),credentials,new IdpSessionTokenCodec(),
+                UUID::randomUUID,mock(IdpSecurityEvidence.class),federation);
+        var established=service.establishFederated(TENANT,anchor,NOW);
+        assertThat(repository.single().credentialId()).isNull();
+        assertThat(repository.single().federatedAnchor()).isEqualTo(anchor);
+        assertThat(established.context().absoluteExpiresAt()).isEqualTo(anchor.expiresAt());
+        assertThat(established.context().authenticatedAt()).isEqualTo(anchor.authenticatedAt());
+        assertThat(service.resolve(TENANT,established.token(),NOW.plusSeconds(1))).isPresent();
+        assertThat(service.resolvePasswordChangeSubject(established.token(),NOW.plusSeconds(1))).isEmpty();
+        when(federation.isStillValid(eq(TENANT),eq(anchor),any(Instant.class))).thenReturn(false);
+        assertThat(service.revalidateAuthorizationCodeSession(TENANT,established.context().sessionId(),NOW.plusSeconds(2))).isEmpty();
+        assertThat(repository.single().revokedAt()).isEqualTo(NOW.plusSeconds(2));
+        org.mockito.Mockito.verifyNoInteractions(credentials);
     }
 
     private static TenantOverviewQuery activeTenants() {
@@ -273,7 +300,7 @@ class IdpBrowserSessionServiceTest {
                     current.credentialId(), current.credentialRevision(), current.tenantRevision(),
                     current.principalRevision(), current.identityRevision(), current.tokenHash(),
                     current.createdAt(), lastSeenAt, idleExpiresAt,
-                    current.absoluteExpiresAt(), revokedAt);
+                    current.absoluteExpiresAt(), revokedAt,current.federatedAnchor());
         }
     }
 }

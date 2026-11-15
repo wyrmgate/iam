@@ -38,6 +38,27 @@ public class IdpProtocolRuntimeConfiguration {
     }
 
     @Bean
+    JdbcIdpFederationInteraction idpFederationInteraction(JdbcTemplate jdbc){return new JdbcIdpFederationInteraction(jdbc);}
+    @Bean
+    io.wyrmgate.iam.integration.application.federation.OidcUpstreamAdapter oidcUpstreamAdapter(
+        io.wyrmgate.iam.integration.application.federation.FederationTrustRepository trusts,JdbcIdpFederationInteraction pending,IdpProtocolProperties properties,
+        @org.springframework.beans.factory.annotation.Value("${iam.idp.federation.allowed-origins:}") String origins){
+        var allowed=java.util.Arrays.stream(origins.split(",")).map(String::trim).filter(v->!v.isEmpty()).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return new io.wyrmgate.iam.integration.application.federation.OidcUpstreamAdapter(trusts,pending,
+            new io.wyrmgate.iam.integration.application.federation.HttpOidcTokenExchange(allowed),properties.requiredIssuer()+IdpFederationFlow.CALLBACK);
+    }
+    @Bean
+    IdpFederationFlow idpFederationFlow(IdpLoginInteractionService local,JdbcIdpFederationInteraction pending,
+        io.wyrmgate.iam.integration.application.federation.FederationTrustRepository trusts,
+        io.wyrmgate.iam.integration.application.federation.OidcUpstreamAdapter adapter,
+        io.wyrmgate.iam.idp.federation.FederatedSubjectResolver resolver,io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery principals,
+        IdpBrowserSessionService sessions,IdpProtocolService protocol,IdpSessionTokenCodec tokens,
+        @org.springframework.beans.factory.annotation.Value("${iam.idp.federation.enabled:false}") boolean enabled,
+        @org.springframework.beans.factory.annotation.Value("${iam.idp.federation.allowed-origins:}") String origins){
+        var allowed=java.util.Arrays.stream(origins.split(",")).map(String::trim).filter(v->!v.isEmpty()).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return new IdpFederationFlow(enabled,allowed,local,pending,trusts,adapter,resolver,principals,sessions,protocol,tokens);
+    }
+    @Bean
     IdpApplicationAccessQuery idpApplicationAccessEvaluator(
             CatalogQueryService catalog,
             EffectiveAccessQuery effectiveAccess) {

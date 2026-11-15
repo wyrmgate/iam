@@ -34,7 +34,8 @@ final class IntegrationAdminApiErrorHandler {
         UUID correlationId = IntegrationAdminApiRequestContext.forError(request, ids);
         HttpStatus status = switch (error.code()) {
             case "not_found", "connector_not_found" -> HttpStatus.NOT_FOUND;
-            case "external_subject_already_registered",
+            case "federation_stale" -> HttpStatus.PRECONDITION_FAILED;
+            case "federation_conflict", "external_subject_already_registered",
                  "worker_permission_outside_scope",
                  "invalid_worker_scope" -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
