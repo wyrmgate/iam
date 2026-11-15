@@ -3,7 +3,10 @@ package io.wyrmgate.iam.idp.federation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.wyrmgate.iam.administration.domain.ExternalAuthenticationSubject;
+import io.wyrmgate.iam.integration.application.federation.FederatedAuthenticationAdapter;
+import io.wyrmgate.iam.integration.application.federation.VerifiedFederatedSubject;
+import io.wyrmgate.iam.integration.application.federation.FederationTrustQuery.*;
+import java.util.UUID;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -25,12 +28,13 @@ class FederationAdapterRegistryTest {
 
         assertThat(registry.descriptor("oidc-corp")).contains(
                 new FederationAdapterRegistry.Descriptor(
-                        "oidc-corp", FederationProtocol.OIDC, OidcCallback.class.getName()));
-        VerifiedFederatedSubject verified = adapter.authenticate(
-                new OidcCallback("subject-123"), Instant.parse("2026-10-10T05:00:00Z"));
-        assertThat(verified.subject())
-                .isEqualTo(new ExternalAuthenticationSubject(
-                        "https://issuer.example.test", "subject-123"));
+                        "oidc-corp", Protocol.OIDC, OidcCallback.class.getName()));
+        Instant now = Instant.parse("2026-10-10T05:00:00Z");
+        var context = new VerificationContext(new Trust(UUID.randomUUID(), UUID.randomUUID(), 1,
+                Protocol.OIDC, "oidc-corp", "https://issuer.example.test", "client"), UUID.randomUUID(), now.plusSeconds(60));
+        VerifiedFederatedSubject verified = adapter.authenticate(context, new OidcCallback("subject-123"), now);
+        assertThat(verified.exactSubject()).isEqualTo("subject-123");
+        assertThat(verified.context()).isEqualTo(context);
     }
 
     @Test
@@ -59,8 +63,8 @@ class FederationAdapterRegistryTest {
         }
 
         @Override
-        public FederationProtocol protocol() {
-            return FederationProtocol.OIDC;
+        public Protocol protocol() {
+            return Protocol.OIDC;
         }
 
         @Override
@@ -69,11 +73,8 @@ class FederationAdapterRegistryTest {
         }
 
         @Override
-        public VerifiedFederatedSubject authenticate(OidcCallback request, Instant now) {
-            return new VerifiedFederatedSubject(
-                    new ExternalAuthenticationSubject(
-                            "https://issuer.example.test", request.subject()),
-                    now);
+        public VerifiedFederatedSubject authenticate(VerificationContext context, OidcCallback request, Instant now) {
+            return new VerifiedFederatedSubject(context, request.subject(), now, now.plusSeconds(60));
         }
     }
 }

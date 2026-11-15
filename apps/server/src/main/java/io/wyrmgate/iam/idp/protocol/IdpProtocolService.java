@@ -35,7 +35,7 @@ public final class IdpProtocolService {
 
     private static final Pattern PKCE_CHALLENGE = Pattern.compile("[A-Za-z0-9_-]{43}");
     private static final Pattern PKCE_VERIFIER = Pattern.compile("[A-Za-z0-9\\-._~]{43,128}");
-    private static final Pattern OPAQUE_CODE = Pattern.compile("[A-Za-z0-9_-]{32,256}");
+    private static final Pattern OPAQUE_CODE = Pattern.compile("[A-Za-z0-9_-]{43}");
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final SsoClientProtocolQuery clients;

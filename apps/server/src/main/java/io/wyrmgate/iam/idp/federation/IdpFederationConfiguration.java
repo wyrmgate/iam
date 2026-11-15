@@ -1,5 +1,7 @@
 package io.wyrmgate.iam.idp.federation;
 
+import io.wyrmgate.iam.integration.application.federation.FederatedAuthenticationAdapter;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
