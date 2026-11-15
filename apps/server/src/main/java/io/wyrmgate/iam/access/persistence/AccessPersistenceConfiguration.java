@@ -88,6 +88,13 @@ public class AccessPersistenceConfiguration {
     }
 
     @Bean
+    io.wyrmgate.iam.access.application.ExactTechnicalGrantDemandQuery exactTechnicalGrantDemandQuery(
+            AccessAssignmentRepository assignments, IdentityAccessReferenceQuery identities, CatalogAccessReferenceQuery references,
+            CatalogAccessTargetAvailabilityQuery catalog, RoleExpansionQuery roles, EffectiveAccessSemanticSupport semantics){
+        return new io.wyrmgate.iam.access.application.ExactTechnicalGrantDemandQueryService(assignments,identities,references,catalog,roles,semantics);
+    }
+
+    @Bean
     AccessAssignmentCommandService accessAssignmentCommandService(
             AccessAssignmentRepository repository,
             IdentityAccessReferenceQuery identityReferences,

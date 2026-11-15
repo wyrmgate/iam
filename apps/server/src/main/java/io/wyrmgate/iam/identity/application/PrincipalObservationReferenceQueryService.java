@@ -15,6 +15,12 @@ public final class PrincipalObservationReferenceQueryService
     }
 
     @Override
+    public java.util.List<UUID> principalIds(TenantContext tenant,UUID identityId,UUID after,int limit){
+        if(limit<1 || limit>101) throw new IllegalArgumentException("principal observation page limit");
+        return principals.listByIdentityAfterId(tenant,identityId,after,limit).stream().map(p->p.id()).toList();
+    }
+
+    @Override
     public Validation validate(
             TenantContext tenant,
             UUID principalId,
