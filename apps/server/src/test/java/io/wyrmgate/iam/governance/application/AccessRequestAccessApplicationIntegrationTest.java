@@ -83,7 +83,7 @@ class AccessRequestAccessApplicationIntegrationTest {
     private static RoleExpansionQueryService roleExpansion;
 
     private static JdbcAccessAssignmentRepository assignmentRepository;
-    private static AccessIntentCommand accessIntent;
+    private static AccessIntentCommandService accessIntent;
 
     private TenantContext tenant;
     private JdbcAccessRequestRepository requestRepository;
@@ -211,10 +211,8 @@ class AccessRequestAccessApplicationIntegrationTest {
                 approvalRepository,
                 new AccessRequestApprovalResultSink(
                         requestRepository,
-                        authorizedAccess,
                         (t, request, item) -> currentEvaluator.evaluate(t, request, item),
-                        approvalRepository,
-                        new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions),
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedAccess),
                         new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
                 transactions);
@@ -238,7 +236,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
         AccessRequestCommandService requests =
                 requestService((t, request, item) ->
-                        EligibilityResult.authorized());
+                        EligibilityResult.authorized(contextFor(t, request, item)));
         var draft = requests.createDraft(
                 tenant,
                 requester.id(),
@@ -314,6 +312,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                         requestedAccess(
                                 applied,
                                 beneficiary.id()),
+                        admissionFor(applied),
                         NOW.plusSeconds(4));
         assertThat(replay.accessAssignmentId())
                 .isEqualTo(assignment.id());
@@ -330,12 +329,11 @@ class AccessRequestAccessApplicationIntegrationTest {
 
         AccessRequestCommandService requests =
                 requestService((t, request, item) ->
-                        EligibilityResult.approvalRequired(
-                                new PlanSpec(List.of(
+                        EligibilityResult.approvalRequired(new PlanSpec(List.of(
                                         new StageSpec(
                                                 DecisionMode.ANY_ONE,
                                                 List.of(
-                                                        approver.id()))))));
+                                                        approver.id())))), contextFor(t, request, item)));
         var draft = requests.createDraft(
                 tenant,
                 requester.id(),
@@ -374,13 +372,13 @@ class AccessRequestAccessApplicationIntegrationTest {
                 .isEqualTo(ItemState.AUTHORIZED);
 
         AtomicBoolean failFirst = new AtomicBoolean(true);
-        AccessIntentCommand flaky = (requestedTenant, request, now) -> {
+        AccessIntentCommand flaky = (requestedTenant, request, admission, now) -> {
             if (failFirst.getAndSet(false)) {
                 throw new IllegalStateException(
                         "temporary Access failure");
             }
             return accessIntent.applyRequestedAccess(
-                    requestedTenant, request, now);
+                    requestedTenant, request, admission, now);
         };
 
         var firstAttempt = processor(
@@ -413,6 +411,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                         requestedAccess(
                                 applied,
                                 beneficiary.id()),
+                        admissionFor(applied),
                         NOW.plusSeconds(11));
         assertThat(replay.accessAssignmentId())
                 .isEqualTo(applied.accessAssignmentId());
@@ -428,7 +427,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
         AccessRequestCommandService requests =
                 requestService((t, request, item) ->
-                        EligibilityResult.authorized());
+                        EligibilityResult.authorized(contextFor(t, request, item)));
         var draft = requests.createDraft(
                 tenant,
                 requester.id(),
@@ -452,7 +451,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                 2,
                 NOW.plusSeconds(2));
 
-        AccessIntentCommand terminal = (requestedTenant, request, now) -> {
+        AccessIntentCommand terminal = (requestedTenant, request, admission, now) -> {
             throw new AccessAssignmentCommandException(
                     "identity_not_access_eligible",
                     "Identity is no longer access-eligible");
@@ -487,7 +486,7 @@ class AccessRequestAccessApplicationIntegrationTest {
 
         AccessRequestCommandService requests =
                 requestService((t, request, item) ->
-                        EligibilityResult.authorized());
+                        EligibilityResult.authorized(contextFor(t, request, item)));
         var draft = requests.createDraft(
                 tenant,
                 requester.id(),
@@ -511,7 +510,7 @@ class AccessRequestAccessApplicationIntegrationTest {
                 2,
                 NOW.plusSeconds(2));
 
-        AccessIntentCommand expired = (requestedTenant, request, now) -> {
+        AccessIntentCommand expired = (requestedTenant, request, admission, now) -> {
             throw new AccessAssignmentCommandException(
                     "validity_already_ended",
                     "Validity already ended");
@@ -529,17 +528,30 @@ class AccessRequestAccessApplicationIntegrationTest {
                 authorized.id())).isZero();
     }
 
+    private RequestAdmissionContext contextFor(TenantContext t, AccessRequestModels.AccessRequest request,
+                                               AccessRequestModels.RequestItem item) {
+        var ref = new CatalogQueryService(catalogRepository).resolveActiveEntitlement(t, item.entitlementId());
+        return new RequestAdmissionContext(
+                identityReferences.accessStatus(t, request.beneficiaryIdentityId()).accessEligibilityEpoch(),
+                new java.util.UUID(0, 1),
+                io.wyrmgate.iam.catalog.application.AccessTargetFingerprint.entitlement(item.entitlementId(), ref.applicationTargetId()),
+                "sha256:" + "b".repeat(64), ids.nextId());
+    }
+
+    private AccessIntentCommand.Admission admissionFor(AccessRequestModels.RequestItem item) {
+        var context = requestRepository.findAdmissionContext(tenant, item.id(), item.revision() - 1).orElseThrow();
+        return new AccessIntentCommand.Admission(context.identityEpoch(), context.targetFingerprint());
+    }
+
     private AccessRequestCommandService requestService(
             AccessRequestEligibilityEvaluator evaluator) {
         currentEvaluator = evaluator;
         return new AccessRequestCommandService(
-                requestRepository,
-                evaluator,
-                approvals,
-                new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
-                authorizedAccess,
-                ids,
-                transactions);
+                        requestRepository,
+                        evaluator,
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedAccess),
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
+                        ids, transactions);
     }
 
     private AccessRequestAccessApplicationService processor(
@@ -548,7 +560,8 @@ class AccessRequestAccessApplicationIntegrationTest {
         return new AccessRequestAccessApplicationService(
                 outbox,
                 requestRepository,
-                command,
+                command, accessIntent, currentEvaluator,
+                new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requestRepository, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedAccess),
                 transactions,
                 Clock.fixed(now, ZoneOffset.UTC));
     }

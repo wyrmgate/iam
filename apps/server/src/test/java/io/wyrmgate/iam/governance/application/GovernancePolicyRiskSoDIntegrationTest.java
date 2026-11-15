@@ -219,6 +219,8 @@ class GovernancePolicyRiskSoDIntegrationTest {
                         catalog,
                         roles,
                         effectiveAccess,
+                        (t, subject, rules, at) -> java.util.Map.of(),
+                        identities,
                         ids,
                         transactions,
                         Clock.fixed(
@@ -231,10 +233,8 @@ class GovernancePolicyRiskSoDIntegrationTest {
         AccessRequestApprovalResultSink resultSink =
                 new AccessRequestApprovalResultSink(
                         requests,
-                        (requestedTenant, item) -> { },
                         evaluator,
-                        approvalRepository,
-                        starter,
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, starter, (requestedTenant, item) -> { }),
                         new SubmittedRequestItemSink() {
                             @Override
                             public void submitted(
@@ -858,13 +858,11 @@ class GovernancePolicyRiskSoDIntegrationTest {
 
     private AccessRequestCommandService requestCommands() {
         return new AccessRequestCommandService(
-                requests,
-                evaluator,
-                approvals,
-                new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
-                (requestedTenant, item) -> { },
-                ids,
-                transactions);
+                        requests,
+                        evaluator,
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), (requestedTenant, item) -> { }),
+                        new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids),
+                        ids, transactions);
     }
 
     private PolicyVersion activate(

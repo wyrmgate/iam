@@ -163,11 +163,8 @@ class GovernanceApiIntegrationTest {
                 approvalRepository,
                 new AccessRequestApprovalResultSink(
                         requests,
-                        authorizedSink,
-                        (requestedTenant, request, item) -> EligibilityResult.approvalRequired(
-                                new PlanSpec(List.of(new StageSpec(DecisionMode.ANY_ONE, List.of(approverId))))),
-                        approvalRepository,
-                        new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions),
+                        (requestedTenant, request, item) -> EligibilityResult.approvalRequired(new PlanSpec(List.of(new StageSpec(DecisionMode.ANY_ONE, List.of(approverId)))), io.wyrmgate.iam.testsupport.RequestAdmissionTestSupport.context()),
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedSink),
                         new io.wyrmgate.iam.governance.persistence.JdbcSubmittedRequestItemSink(new io.wyrmgate.iam.platform.persistence.JdbcOutboxRepository(jdbc), ids)),
                 ids,
                 transactions);
@@ -179,18 +176,15 @@ class GovernanceApiIntegrationTest {
                 new AccessRequestCommandService(
                         requests,
                         (requestedTenant, request, item) ->
-                                EligibilityResult.approvalRequired(
-                                        new PlanSpec(List.of(
+                                EligibilityResult.approvalRequired(new PlanSpec(List.of(
                                                 new StageSpec(
                                                         DecisionMode.ANY_ONE,
                                                         List.of(
-                                                                approverId))))),
-                        approvalCommands,
+                                                                approverId)))), io.wyrmgate.iam.testsupport.RequestAdmissionTestSupport.context()),
+                        new io.wyrmgate.iam.governance.application.RequestAdmissionDecisionService(requests, approvalRepository, new io.wyrmgate.iam.governance.application.ApprovalCaseStartService(approvalRepository, ids, transactions), authorizedSink),
                         new JdbcSubmittedRequestItemSink(
                                 outbox, ids),
-                        authorizedSink,
-                        ids,
-                        transactions);
+                        ids, transactions);
         evaluator =
                 new AccessRequestEvaluationProcessingService(
                         outbox,
