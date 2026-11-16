@@ -1,6 +1,6 @@
 # VF-FND G1 follow-up — guarded IdP comparison (E2/E3)
 
-Status: **Proposed / diagnostic evidence**, not an accepted ADR or production implementation decision.
+Status: **Executed bounded follow-up; G2 recommendation Proposed**, not an accepted ADR or production implementation decision.
 2026-11-16. [G1 follow-up authorization and initial evidence #538](https://github.com/wyrmgate/iam/issues/538#issuecomment-6906631263), #540/#541/#517. [Original experiment plan](vf-fnd-engineering-experiments.md), [G1 evidence](vf-fnd-g1-evidence.md), [ADR-0087](../../adr/0087-idp-protocol-engine-evaluation.md). No E1b, E5, releases, customer access, merges or production implementation.
 
 ## Baseline and method
@@ -21,8 +21,33 @@ The previous #545 default Spring provider diagnostics already showed wrong PKCE 
 
 - [Run 43799392217](https://github.com/wyrmgate/iam/actions/runs/43799392217) e4128d0: 27 existing control tests and two E3 replay tests passed; three A/B tests setup errors (missing originating browser-session row; V42 FK). [Run 43799468766](https://github.com/wyrmgate/iam/actions/runs/43799468766) 671652a: same 29 passes, one controller assertion and two setup errors due same missing persisted session. Corrected with actual JDBC browser session establishment and current revision semantic ports, not weakening FK or changing product code.
 - E3 actual observed in both runs: 1/20 successful assertion authentications across two provider instances; recreated provider denied; distinct registered client with same jti accepted; invalid signature/subject/audience/expiry/overlong assertion denied before replay reserve; bounded cleanup; unavailable replay table denied. Test schema only; no production retention, registered key transport, credential revision/current governed service eligibility or end-to-end client_credentials issuance. Actual database outage is simulated by temporarily renaming test table, not a network failure.
-- [Run 43799557939](https://github.com/wyrmgate/iam/actions/runs/43799557939) at 77d70e588667653709de1d1afe862acbda6bf20f: corrected A/B fixture with actual JDBC sessions, 20-way redemption, 11 negative paths, persisted idle-expiry check, real MVC authorization/redirect/token/discovery/JWKS, 1000 measured redemptions per alternative at concurrency 10 after 50 warmups. Execution result to be reconciled here before final G2 recommendation; do not infer pass from queued/running status.
+- [Run 43799557939](https://github.com/wyrmgate/iam/actions/runs/43799557939) at 77d70e588667653709de1d1afe862acbda6bf20f: corrected A/B fixture with actual JDBC sessions, 20-way redemption, 11 negative paths, persisted idle-expiry check, real MVC authorization/redirect/token/discovery/JWKS, 1000 measured redemptions per alternative at concurrency 10 after 50 warmups. Completed success, job 133076118644, inspected raw logs; [artifact 14195594270](https://github.com/wyrmgate/iam/actions/runs/43799557939/artifacts/14195594270) includes dependency tree and test reports. 32 tests, 0 failures/errors/skipped (27 existing + 5 new).
 
-## G2 recommendation (provisional pending final A/B evidence)
+## Final executed evidence — 77d70e5
 
-Retain current IAM protocol authority and durable code/session mechanisms regardless of JWT engine. Do not adopt default Spring authorization-server runtime. Evaluate incremental library use behind existing signing/technical ports only if full accepted profile and key custody, dependency review and measurable maintenance improvement are shown. Prioritize new governed service credentials with durable replay protection; actual profile/registration/current authority, bounded retention/rotation and Storage successor verifier are separate gates. All ADRs remain Proposed; independent QA/security review and explicit human decision required. No G3 authorization.
+| Scenario | A retained IAM | B guarded token-generation hybrid |
+|---|---|---|
+| 20 simultaneous code redemptions through actual JDBC repository | 1 success, 19 invalid_grant | 1 success, 19 invalid_grant |
+| Stored authorization code | SHA-256 digest, consumed_at set | Same |
+| Eleven negative paths | PKCE, redirect, registration revision, logout, Identity/Principal/Tenant/Credential revision, access denial, evaluator outage, signing unavailable: all denied and code burned | Same |
+| Cross-tenant code redemption | Denied; foreign code not burned; correct tenant may subsequently redeem | Same |
+| Session idle expiry | Persisted value unchanged by redemption | Same |
+| Existing controller-level HTTP contract | Authorize exact redirect/state/S256; token response and serial replay denial; discovery and public JWKS; exact legacy claims/opaque subject/auth_time/nonce, 300s TTL, signed RS256; no private JWK parameter | Same |
+| E3 actual client assertion replay | 1/20 across 2 provider instances; new provider denied, second client isolated, malformed/wrong key/audience/sub/expiry/overlong denied; storage outage fail closed; bounded expiry cleanup | Shared separate candidate fixture |
+
+Actual IAM controls: TenantIsolationSchemaIntegrationTest 6, IdpBrowserSessionServiceTest 8, IdpJwtIssuerTest 1, IdpProtocolServiceTest 6, IdpInteractionPersistenceIntegrationTest 1, IdpRuntimePersistenceIntegrationTest 3, PersistenceArchitectureTest 2. New GuardedHybridExperimentTest 3 and AssertionReplayExperimentTest 2. Hosted Java25.0.5 Maven3.10.0, PG18.4 via Testcontainers, actual V42 migrations, Boot4.1.1. Candidate version previously resolved 7.1.1 on same BOM; exact current tree archived. No direct live HTTP server: standalone MockMvc controllers, synthetic semantic authority ports and mocked evidence. Session service, JDBC session/code repositories and signing mechanics real, same synthetic fixture. No full Spring HTTP filter-chain or authorization-code provider replacement.
+
+### Comparative latency
+
+| Metric (ms) | A | B |
+|---|---:|---:|
+| p50 | 86.990 | 86.411 |
+| p95 | 121.691 | 119.014 |
+| p99 | 137.074 | 145.117 |
+| Errors | 0 | 0 |
+
+1,000 exchanges per alternative, concurrency 10, warmup 50, pre-created codes, timed service redemption (includes actual JDBC and signing, excludes authorization setup, network ingress, live domain evaluation/Audit, external signing). Sequential A then B on one hosted runner, no repeat runs/confidence intervals or production load evidence. Both below ADR-0043 numerical thresholds in fixture; not SLO acceptance. No compelling performance advantage.
+
+## G2 recommendation — retain existing engine, selective mature components
+
+Recommend A (retain/refactor existing first-party protocol service, current IdpJwtIssuer and durable code/session mechanisms) as the G2 baseline; do not adopt default Spring authorization-server runtime or replace the current signer merely to reuse a framework. B is technically feasible for the tested legacy RS256 slice, but needs explicit claim reconstruction, transient framework objects and a custom signing adapter; no demonstrated maintenance/latency advantage, no RS384/512/rotation/production key custody and full dependency review. Retain B as a reversible evaluated option, not rejected as a library. Prefer supported mature components for new governed service-client assertion verification and service-token issuance behind IAM-owned ports, subject to separate G2 contract/implementation design and G3 authorization. Durable replay fixture supports feasibility but actual registration/credential/current authority, key transport/rotation, bounded replay retention, full service grant and Storage successor verifier remain open. ADR-0087 remains Proposed pending human acceptance of this recommendation; no architecture merge or implementation authorized. E1a/E4 earlier findings unchanged; E1b/E5 not authorized. Same-session implementation verification only; independent QA/security review required.
