@@ -65,6 +65,45 @@ class IdpJwtIssuerTest {
         verifySignature(pair, issued.accessToken());
     }
 
+    @Test
+    void allSupportedRsaAlgorithmsAndRotationUseSamePublicationPolicy() throws Exception {
+        var generator=KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        var pair=generator.generateKeyPair();
+        var previous=new SigningKeyMaterial("old","SHA256withRSA",generator.generateKeyPair().getPublic());
+        var now=Instant.parse("2026-11-16T00:00:00Z");
+        for (String algorithm : java.util.List.of("SHA256withRSA","SHA384withRSA","SHA512withRSA")) {
+            var current=new SigningKeyMaterial("current",algorithm,pair.getPublic());
+            var published=new java.util.concurrent.atomic.AtomicReference<>(java.util.List.of(previous,current));
+            SigningKeyProvider provider=new SigningKeyProvider(){
+                public SigningKeyMaterial currentSigningKey(){return current;}
+                public Optional<SigningKeyMaterial> verificationKey(String kid){return published.get().stream().filter(k->k.keyId().equals(kid)).findFirst();}
+                public java.util.List<SigningKeyMaterial> verificationKeys(){return published.get();}
+                public byte[] sign(byte[] payload){
+                    try {var s=Signature.getInstance(algorithm);s.initSign(pair.getPrivate());s.update(payload);return s.sign();}
+                    catch(Exception e){throw new IllegalStateException(e);}
+                }
+            };
+            var props=new IdpProtocolProperties(true,"https://idp.example.test");
+            var issuer=new IdpJwtIssuer(props,provider,JsonMapper.builder().build());
+            var controller=new IdpProtocolController(props,provider);
+            var token=issuer.issue(new TenantContext(UUID.randomUUID()),code(UUID.randomUUID(),now),now);
+            var jwt=com.nimbusds.jwt.SignedJWT.parse(token.accessToken());
+            assertThat(jwt.getHeader().getAlgorithm().getName()).isEqualTo(IdpJoseAlgorithms.joseName(algorithm));
+            assertThat(jwt.verify(new com.nimbusds.jose.crypto.RSASSAVerifier((java.security.interfaces.RSAPublicKey)pair.getPublic()))).isTrue();
+            assertThat(controller.jwks().getBody().toString()).contains("old","current");
+            // Duplicate *retained* IDs used to allow issuance even when JWKS was unusable.
+            published.set(java.util.List.of(current,previous,previous));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,()->issuer.issue(
+                    new TenantContext(UUID.randomUUID()),code(UUID.randomUUID(),now),now));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,controller::jwks);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,controller::discovery);
+            published.set(java.util.List.of(current));
+            assertThat(controller.jwks().getBody().toString()).doesNotContain("old");
+            assertThat(issuer.issue(new TenantContext(UUID.randomUUID()),code(UUID.randomUUID(),now),now).accessToken()).isNotBlank();
+        }
+    }
+
     private static IdpAuthorizationCode code(UUID identityId, Instant now) {
         return new IdpAuthorizationCode(
                 UUID.randomUUID(),
