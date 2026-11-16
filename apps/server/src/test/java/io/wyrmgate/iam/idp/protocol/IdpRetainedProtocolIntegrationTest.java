@@ -69,6 +69,8 @@ class IdpRetainedProtocolIntegrationTest {
         final JdbcIdpBrowserSessionRepository sessionRepo=new JdbcIdpBrowserSessionRepository(jdbc);
         final IdpSecurityEvidence evidence=mock(IdpSecurityEvidence.class);
         final IdpProtocolService service;
+        final AtomicInteger committedResponseLosses=new AtomicInteger();
+        final java.util.concurrent.atomic.AtomicBoolean loseConsumeResponse=new java.util.concurrent.atomic.AtomicBoolean();
         final MockMvc mvc;
         Fixture(){
             var t=new TenantTestFixture(jdbc,UUID::randomUUID);
@@ -97,7 +99,23 @@ class IdpRetainedProtocolIntegrationTest {
                 sessions,(tnt,i,a,at)->{
                     if("OUTAGE".equals(authority.get()))throw new IllegalStateException("fixture unavailable");
                     return !"DENY".equals(authority.get());
-                },new JdbcIdpAuthorizationCodeRepository(jdbc),(tnt,code,at)->{
+                },new IdpAuthorizationCodeRepository(){
+                    private final JdbcIdpAuthorizationCodeRepository delegate=new JdbcIdpAuthorizationCodeRepository(jdbc);
+                    public void insert(TenantContext tenant,IdpAuthorizationCode code){delegate.insert(tenant,code);}
+                    public Optional<IdpAuthorizationCode> consume(TenantContext tenant,String hash,Instant at){
+                        var result=delegate.consume(tenant,hash,at);
+                        if(result.isPresent()&&loseConsumeResponse.compareAndSet(true,false)){
+                            // The actual autocommit UPDATE RETURNING has finished. Observe on a separate
+                            // connection before withholding its result from the protocol service.
+                            var committed=jdbc.queryForObject("select consumed_at is not null from platform.idp_authorization_code where tenant_id=? and code_hash=?",
+                                Boolean.class,tenant.tenantId(),hash);
+                            assertEquals(Boolean.TRUE,committed);
+                            committedResponseLosses.incrementAndGet();
+                            throw new org.springframework.dao.DataAccessResourceFailureException("fixture committed result lost");
+                        }
+                        return result;
+                    }
+                },(tnt,code,at)->{
                     if("SIGN_FAIL".equals(authority.get()))throw new IllegalStateException("fixture signing unavailable");
                     var result=signer.issue(tnt,code,at);issues.incrementAndGet();return result;
                 },UUID::randomUUID,evidence);
@@ -174,6 +192,25 @@ class IdpRetainedProtocolIntegrationTest {
             System.out.println("Retained IdP: 20-way redemption successes="+success+"; eleven failure paths burn; idle unchanged; foreign tenant cannot consume");
         }
     }
+    @Test void committedConsumeResultLossNeverSignsOrRestoresAndRetryDenies() {
+        var f=new Fixture();
+        String raw=f.code();
+        var before=f.sessionRepo.findById(f.tenant,f.session).orElseThrow().idleExpiresAt();
+        f.loseConsumeResponse.set(true);
+        f.denied(raw,VERIFIER,CLIENT,REDIRECT,"temporarily_unavailable");
+        assertEquals(1,f.committedResponseLosses.get());
+        assertTrue(f.consumed(raw));
+        assertEquals(0,f.issues.get());
+        f.denied(raw,VERIFIER,CLIENT,REDIRECT,"invalid_grant");
+        assertTrue(f.consumed(raw));
+        assertEquals(0,f.issues.get());
+        assertEquals(before,f.sessionRepo.findById(f.tenant,f.session).orElseThrow().idleExpiresAt());
+        // A fresh authorization flow can still succeed; only the original code is burned.
+        f.redeem(f.code(),VERIFIER,CLIENT,REDIRECT);
+        assertEquals(1,f.issues.get());
+        System.out.println("G3 acceptance: actual committed JDBC consume result lost at repository boundary; durable consumed, zero issue, retry denied, fresh flow succeeds");
+    }
+
     @Test void actualMvcEndpointsAndLegacyClaimProfile() throws Exception {
         {
             var f=new Fixture();
