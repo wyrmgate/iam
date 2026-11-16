@@ -104,8 +104,8 @@ class AssertionReplayExperimentTest {
         assertThrows(OAuth2AuthenticationException.class,()->provider(CLIENT).authenticate(req(CLIENT,token)));
         String client2="synthetic-service-2";
         assertTrue(provider(client2).authenticate(req(client2,signed(key,client2,ENDPOINT,client2,"same-jti",now,now.plusSeconds(60)))).isAuthenticated());
-        assertEquals(2,jdbc.queryForObject("select count(*) from experiment.assertion_replay",Integer.class));
-        assertEquals(0,jdbc.queryForObject("select count(*) from experiment.assertion_replay where jti_hash=? or jti_hash=?",Integer.class,"same-jti",token));
+        String digest=HexFormat.of().formatHex(IdpJwtIssuer.sha256("same-jti".getBytes(StandardCharsets.UTF_8)));
+        assertEquals(2,jdbc.queryForObject("select count(*) from experiment.assertion_replay where jti_hash=?",Integer.class,digest));
         System.out.println("E3 durable assertion replay: 1 of 20 across 2 providers; recreated provider denied; separate client isolated");
     }
     @Test void invalidAssertionsDoNotReserveReplayAndExpiryCleanupIsBounded() throws Exception{
