@@ -1,7 +1,7 @@
 # ADR-0085: Shared Platform Kernel adoption boundary
 
 - Status: Accepted
-- Acceptance scope: G2 core-first policy; draft PR #544, not yet effective on main
+- Acceptance scope: G2 core-first policy; effective on main upon authorized documentation merge #544
 - Date: 2026-11-16
 - Product direction: [#539 approval](https://github.com/wyrmgate/iam/issues/539#issuecomment-6905749487).
 - Preserves: ADR-0001, 0005, 0008–0010, 0051, 0053, 0055, 0059, 0083.
