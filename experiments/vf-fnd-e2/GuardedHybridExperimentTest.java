@@ -248,7 +248,17 @@ class GuardedHybridExperimentTest {
                 .andExpect(jsonPath("$.issuer").value(ISS)).andExpect(jsonPath("$.grant_types_supported[0]").value("authorization_code"));
             f.mvc.perform(get("/oauth2/jwks")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.keys[0].kid").value("fixture-key")).andExpect(jsonPath("$.keys[0].d").doesNotExist());
-            String code=f.code();
+            var challenge=Base64.getUrlEncoder().withoutPadding().encodeToString(IdpJwtIssuer.sha256(VERIFIER.getBytes(StandardCharsets.US_ASCII)));
+            var redirect=f.mvc.perform(get("/oauth2/authorize")
+                .cookie(new jakarta.servlet.http.Cookie(IdpAuthorizationController.BROWSER_SESSION_COOKIE,"fixture-browser"))
+                .param("response_type","code").param("client_id",CLIENT).param("redirect_uri",REDIRECT)
+                .param("scope","openid profile").param("state","state-1234567890abcdef").param("nonce",NONCE)
+                .param("code_challenge",challenge).param("code_challenge_method","S256"))
+                .andExpect(status().isFound()).andReturn().getResponse().getHeader("Location");
+            assertNotNull(redirect);assertTrue(redirect.startsWith(REDIRECT+"?"));
+            var query=org.springframework.web.util.UriComponentsBuilder.fromUriString(redirect).build().getQueryParams();
+            assertEquals("state-1234567890abcdef",query.getFirst("state"));
+            String code=query.getFirst("code");assertNotNull(code);
             var response=f.mvc.perform(post("/oauth2/token").contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .param("grant_type","authorization_code").param("code",code).param("client_id",CLIENT)
                 .param("redirect_uri",REDIRECT).param("code_verifier",VERIFIER))
@@ -262,6 +272,11 @@ class GuardedHybridExperimentTest {
             assertEquals(List.of(CLIENT),a.getAudience());assertEquals(List.of(CLIENT),i.getAudience());
             assertEquals(CLIENT,a.getStringClaim("client_id"));assertEquals("openid profile",a.getStringClaim("scope"));
             assertEquals(a.getSubject(),i.getSubject());assertEquals(NONCE,i.getStringClaim("nonce"));
+            String expectedSubject=Base64.getUrlEncoder().withoutPadding().encodeToString(IdpJwtIssuer.sha256(
+                ("wyrmgate-sub-v1|"+f.tenant.tenantId()+"|"+f.identity).getBytes(StandardCharsets.UTF_8)));
+            assertEquals(expectedSubject,a.getSubject());
+            assertEquals(f.now.minusSeconds(60).getEpochSecond(),i.getLongClaim("auth_time"));
+            assertNull(a.getClaim("auth_time"));
             assertEquals(300,(i.getExpirationTime().getTime()-i.getIssueTime().getTime())/1000);
             assertEquals(300,(a.getExpirationTime().getTime()-a.getIssueTime().getTime())/1000);
             f.mvc.perform(post("/oauth2/token").contentType(MediaType.APPLICATION_FORM_URLENCODED)
