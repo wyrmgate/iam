@@ -57,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.*;
         "iam.auth.token-profile=access-jwt", "iam.idp.enabled=false", "iam.otel.enabled=false",
         "iam.signing.enabled=false", "iam.bootstrap.installation.enabled=false", "iam.bootstrap.web.enabled=false"
 })
+@org.springframework.context.annotation.Import(ExternalBearerAuthorityIntegrationTest.CursorKeys.class)
 class ExternalBearerAuthorityIntegrationTest {
     static final PostgreSQLContainer DB = new PostgreSQLContainer("postgres:18.4-alpine");
     static final String AUD = "fixture-api", SUBJECT = "synthetic-operator";
@@ -99,6 +100,31 @@ class ExternalBearerAuthorityIntegrationTest {
         @Override public int getOrder() { return DirtiesContextTestExecutionListener.ORDER - 1; }
         @Override public void afterTestClass(TestContext context) {
             try { DB.stop(); } finally { ISSUER.stop(0); }
+        }
+    }
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
+    static class CursorKeys {
+        @org.springframework.context.annotation.Bean
+        io.wyrmgate.iam.platform.crypto.SigningKeyProvider fixtureCursorSigner() throws Exception {
+            var generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            var pair = generator.generateKeyPair();
+            var material = new io.wyrmgate.iam.platform.crypto.SigningKeyMaterial(
+                    "cursor-fixture", "SHA256withRSA", pair.getPublic());
+            return new io.wyrmgate.iam.platform.crypto.SigningKeyProvider() {
+                public io.wyrmgate.iam.platform.crypto.SigningKeyMaterial currentSigningKey() { return material; }
+                public java.util.Optional<io.wyrmgate.iam.platform.crypto.SigningKeyMaterial> verificationKey(String id) {
+                    return material.keyId().equals(id) ? java.util.Optional.of(material) : java.util.Optional.empty();
+                }
+                public byte[] sign(byte[] input) {
+                    try {
+                        var signature = java.security.Signature.getInstance(material.signingAlgorithm());
+                        signature.initSign(pair.getPrivate());
+                        signature.update(input);
+                        return signature.sign();
+                    } catch (Exception ex) { throw new IllegalStateException("fixture cursor signing failed", ex); }
+                }
+            };
         }
     }
     @LocalServerPort int port;
