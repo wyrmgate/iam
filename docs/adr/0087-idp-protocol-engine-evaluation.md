@@ -1,6 +1,7 @@
 # ADR-0087: First-party IdP protocol engine evaluation
 
-- Status: Accepted (G2 engine selection; draft PR #544, not yet effective on main)
+- Status: Accepted
+- Acceptance scope: G2 engine selection; draft PR #544, not yet effective on main
 - Date: 2026-11-16
 - G2 approval: [2026-11-16](https://github.com/wyrmgate/iam/issues/538#issuecomment-6906844883); retain/refactor A.
 - Preserves: ADR-0042, 0063–0071, 0077–0079. Related ADR-0086 (semantic direction approved), #541, #517.
