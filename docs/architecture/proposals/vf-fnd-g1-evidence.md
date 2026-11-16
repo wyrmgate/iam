@@ -69,3 +69,8 @@ G2: ADR-0088 conditional principle reasonable; keep V42 incremental baseline unt
 | E5 | Blocked; no live tests | #542 after accepted contracts and approved implementation/release/environment |
 
 G1 execution completed bounded probes; planned full coverage remains partial. G2 review can proceed with these findings, not a blanket pass. G3 production implementation and merge explicitly gated. No customer data, public deployment, Kernel release, active migrations or runtime production code altered. Separate human QA/security review remains required; no fabricated signoffs.
+
+
+## G1 follow-up — E2/E3 (2026-11-16)
+
+[Executed guarded-hybrid comparison](vf-fnd-g1-e2-followup.md): IAM draft #546, head `77d70e588667653709de1d1afe862acbda6bf20f`, [run 43799557939](https://github.com/wyrmgate/iam/actions/runs/43799557939), 32 tests passed. Retain existing IAM code/session guards and token issuer as recommended G2 baseline; guarded Spring token-generation hybrid preserved tested RS256 invariants but no compelling maintenance or latency improvement (p95 121.691 vs 119.014 ms, p99 137.074 vs 145.117 ms). Actual Spring client assertion provider + disposable PostgreSQL replay fence admitted 1/20 concurrent attempts, recreated provider denied. Prefer selective mature components for new governed service credentials, with durable replay and actual authority/key/consumer contracts still gated. No default Spring authorization-server replacement, no production dependency/implementation, no ADR acceptance or merge. Full evidence and limitations in linked follow-up.
