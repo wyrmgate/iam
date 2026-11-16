@@ -1,7 +1,7 @@
 # ADR-0087: First-party IdP protocol engine evaluation
 
 - Status: Accepted
-- Acceptance scope: G2 engine selection; draft PR #544, not yet effective on main
+- Acceptance scope: G2 engine selection; effective on main upon authorized documentation merge #544
 - Date: 2026-11-16
 - G2 approval: [2026-11-16](https://github.com/wyrmgate/iam/issues/538#issuecomment-6906844883); retain/refactor A.
 - Preserves: ADR-0042, 0063–0071, 0077–0079. Related ADR-0086 (semantic direction approved), #541, #517.
@@ -16,4 +16,4 @@ Retain/refactor the current IdpProtocolService, IdpJwtIssuer/IdpTokenIssuer, JDB
 A retain/refactor selected. B guarded Spring Security 7.1.1 JwtGenerator hybrid feasible for tested legacy RS256 slice, but explicit claim reconstruction, transient framework projections and custom signing adapter did not show compelling maintenance/performance improvement. Default Spring provider diagnostics #545 failed IAM consume-on-failure, atomic concurrent code redemption and narrower client assertion replay policy; not generic production vulnerability claim. C sole external IdP rejected (first-party requirement); federation remains supported. [G1 follow-up](../architecture/proposals/vf-fnd-g1-e2-followup.md) #546 head 77d70e588667653709de1d1afe862acbda6bf20f, run 43799557939: 32 tests pass, 1/20 code exchanges each, 11 denied paths burn, idle unchanged, legacy claims; p95 A 121.691 vs B 119.014ms, p99 137.074 vs 145.117ms; synthetic not SLO. Durable assertion replay candidate 1/20 across two providers; exact audience and scoped jti fixture. No live service issuance or production key custody evidence. Revisit B only with measurable maintenance/security benefit and full accepted profile/rotation/authority conformance, dependency review, no brittle forks/duplicate authority.
 
 ## Consequences and remaining gates
-G3 implementation requires explicit authorization and applicable canonical ADR merge; #517 existing regression oracle, #541 bounded new slices, #540/Storage #17–19 detailed contract. Independent QA/security, full filter chain, actual domain/Audit, signing rotation, federation, dependency/license/CVE review and service issuance remain required. ADR-0043 targets unchanged. No new production dependency/schema, release, implementation or merge authorized.
+G3 implementation requires explicit authorization and applicable canonical ADR merge; #517 existing regression oracle, #541 bounded new slices, #540/Storage #17–19 detailed contract. Independent QA/security, full filter chain, actual domain/Audit, signing rotation, federation, dependency/license/CVE review and service issuance remain required. ADR-0043 targets unchanged. No new production dependency/schema or release authorized by this ADR. Initial G3 permits bounded draft PRs only; implementation merges separately gated.
