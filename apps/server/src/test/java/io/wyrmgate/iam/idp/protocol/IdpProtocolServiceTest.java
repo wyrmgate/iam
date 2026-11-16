@@ -229,6 +229,45 @@ class IdpProtocolServiceTest {
         }
     }
 
+    @Test
+    void clientLookupOutageNeverConsumesCodeOrSigns() {
+        var clients = mock(SsoClientProtocolQuery.class);
+        when(clients.resolveActive(CLIENT_ID)).thenThrow(new IllegalStateException("internal connection detail"));
+        var codes = mock(IdpAuthorizationCodeRepository.class);
+        var signer = mock(IdpTokenIssuer.class);
+        var sessions = mock(IdpBrowserSessionService.class);
+        var service = new IdpProtocolService(clients, sessions, (t,i,a,at)->true, codes,
+                signer, UUID::randomUUID, mock(IdpSecurityEvidence.class));
+        assertThatThrownBy(() -> service.redeem(new TokenRequest("authorization_code","A".repeat(43),
+                CLIENT_ID,REDIRECT_URI,VERIFIER),NOW))
+                .isInstanceOf(ProtocolException.class)
+                .extracting(e -> ((ProtocolException)e).error()).isEqualTo("temporarily_unavailable");
+        verifyNoInteractions(codes, signer, sessions);
+    }
+
+    @Test
+    void uncertainCodeConsumeNeverSignsOrRestoresAndRetryUsesStore() {
+        var sessions = mock(IdpBrowserSessionService.class);
+        when(sessions.resolve(TENANT, SESSION_TOKEN, NOW)).thenReturn(Optional.of(sessionContext()));
+        var codes = mock(IdpAuthorizationCodeRepository.class);
+        var signer = mock(IdpTokenIssuer.class);
+        var service = new IdpProtocolService(clientQuery(client(false)), sessions,
+                (t,i,a,at)->true,codes,signer,UUID::randomUUID,mock(IdpSecurityEvidence.class));
+        String raw = "A".repeat(43);
+        String digest = java.util.HexFormat.of().formatHex(IdpJwtIssuer.sha256(raw.getBytes(StandardCharsets.US_ASCII)));
+        when(codes.consume(TENANT,digest,NOW)).thenThrow(new IllegalStateException("commit outcome uncertain"));
+        when(codes.consume(TENANT,digest,NOW.plusSeconds(1))).thenReturn(Optional.empty());
+        var request = new TokenRequest("authorization_code",raw,CLIENT_ID,REDIRECT_URI,VERIFIER);
+        assertThatThrownBy(() -> service.redeem(request,NOW)).isInstanceOf(ProtocolException.class)
+                .extracting(e -> ((ProtocolException)e).error()).isEqualTo("temporarily_unavailable");
+        assertThatThrownBy(() -> service.redeem(request,NOW.plusSeconds(1))).isInstanceOf(ProtocolException.class)
+                .extracting(e -> ((ProtocolException)e).error()).isEqualTo("invalid_grant");
+        verify(codes).consume(TENANT,digest,NOW);
+        verify(codes).consume(TENANT,digest,NOW.plusSeconds(1));
+        org.mockito.Mockito.verifyNoMoreInteractions(codes);
+        verifyNoInteractions(signer,sessions);
+    }
+
     private static IdpProtocolService service(
             SsoClientProtocolQuery clients,
             IdpBrowserSessionService sessions,
