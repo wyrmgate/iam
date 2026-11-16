@@ -123,7 +123,9 @@ public final class IntegrationOperationalStatusController {
                 correlationId);
         var value = queries.findProvisioningTask(actor.tenant(), id)
                 .orElseThrow(() -> IntegrationAdminApiException.notFound(correlationId));
-        return ok(task(value), correlationId);
+        return ResponseEntity.ok().eTag("\"rev-"+value.revision()+"\"")
+                .header(HttpHeaders.CACHE_CONTROL,"no-store").header("X-Correlation-Id",correlationId.toString())
+                .body(task(value));
     }
 
     @GetMapping("/provisioning-tasks/{taskId}/attempts")

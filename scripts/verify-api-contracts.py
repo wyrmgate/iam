@@ -371,6 +371,7 @@ def verify_integration_admin_openapi(document: dict) -> None:
         "/api/v1/connector-bindings/{id}",
         "/api/v1/connector-bindings/{id}:disable",
         "/api/v1/connector-bindings/{id}:reconcile",
+        "/api/v1/provisioning-tasks/{id}:recover",
         "/api/v1/connector-bindings/{bindingId}/entitlement-mappings",
         "/api/v1/entitlement-observation-mappings/{id}",
         "/api/v1/entitlement-observation-mappings/{id}:unmap",
@@ -385,15 +386,20 @@ def verify_integration_admin_openapi(document: dict) -> None:
     assert document.get("security") == [{"bearerAuth": []}]
     assert document.get("x-wyrmgate-idempotency") == "all mutations require Idempotency-Key"
     assert document.get("x-wyrmgate-concurrency") == (
-        "updates, disable operations, and reconciliation scheduling require strong revision If-Match"
+        "updates, disable operations, reconciliation scheduling, and provisioning recovery require strong revision If-Match"
     )
     schedule = document["paths"]["/api/v1/connector-bindings/{id}:reconcile"]["post"]
     assert {"IfMatch", "IdempotencyKey", "ResourceId"}.issubset(ref_names(schedule))
     assert schedule["x-wyrmgate-administrative-permission"] == "connector-binding:reconcile"
     assert {"202", "400", "403", "404", "409", "412"}.issubset(schedule["responses"])
     assert schedule["requestBody"]["$ref"] == "#/components/requestBodies/ReconciliationScheduleRequest"
+    recovery = document["paths"]["/api/v1/provisioning-tasks/{id}:recover"]["post"]
+    assert {"IfMatch", "IdempotencyKey", "ResourceId"}.issubset(ref_names(recovery))
+    assert recovery["x-wyrmgate-administrative-permission"] == "provisioning-task:recover"
+    assert {"200", "400", "403", "404", "409", "412"}.issubset(recovery["responses"])
     schemas = document["components"]["schemas"]
-    for name in ("ReconciliationScheduleRequest", "ScheduledReconciliationRun"):
+    for name in ("ReconciliationScheduleRequest", "ScheduledReconciliationRun",
+                 "ProvisioningRecoveryRequest", "ProvisioningRecoveryDecision"):
         assert schemas[name]["additionalProperties"] is False
     assert "secretReference" not in schemas["ConnectorResource"]["properties"]
     secret_reference = schemas["ConnectorCreateRequest"]["properties"]["secretReference"]

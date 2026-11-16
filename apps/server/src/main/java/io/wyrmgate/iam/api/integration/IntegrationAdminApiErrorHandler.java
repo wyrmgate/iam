@@ -35,7 +35,7 @@ final class IntegrationAdminApiErrorHandler {
         HttpStatus status = switch (error.code()) {
             case "not_found", "connector_not_found", "binding_not_found", "run_not_found" -> HttpStatus.NOT_FOUND;
             case "federation_stale", "stale_revision" -> HttpStatus.PRECONDITION_FAILED;
-            case "federation_conflict", "external_subject_already_registered",
+            case "recovery_conflict", "federation_conflict", "external_subject_already_registered",
                  "worker_permission_outside_scope",
                  "invalid_worker_scope" -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
