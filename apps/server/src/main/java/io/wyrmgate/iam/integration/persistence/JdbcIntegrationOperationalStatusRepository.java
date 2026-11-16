@@ -161,9 +161,13 @@ public final class JdbcIntegrationOperationalStatusRepository
 
     private static void appendAfter(
             StringBuilder sql, List<Object> args, String timestampColumn, PagePosition after) {
+        appendAfter(sql,args,timestampColumn,"id",after);
+    }
+
+    private static void appendAfter(StringBuilder sql,List<Object> args,String timestampColumn,String idColumn,PagePosition after) {
         if (after == null) return;
         sql.append(" AND (").append(timestampColumn).append(" < ? OR (")
-                .append(timestampColumn).append(" = ? AND id < ?))");
+                .append(timestampColumn).append(" = ? AND ").append(idColumn).append(" < ?))");
         Timestamp timestamp = Timestamp.from(after.sortAt());
         args.add(timestamp);
         args.add(timestamp);
