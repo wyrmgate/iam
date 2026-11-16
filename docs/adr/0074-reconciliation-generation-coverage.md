@@ -13,3 +13,7 @@ SCIM local reports the batch count and permits PRINCIPAL discovery through the e
 ## Consequences
 
 The first safety tranche still uses existing completion materialization; durable bounded materialization and exact discovery-scope scheduling remain follow-up. No filtered scope gains full-scope absence authority. Future provider contracts must prove their traversal semantics and configuration scope.
+
+## Amendment (2026-11-16)
+
+Explicit scheduled runs allocate generation and exact binding/connector revisions in the scheduling transaction, rather than silently rebasing to configuration at first claim. Legacy runs with no generation still pin on first lease. A changed route fails unleased scheduled work without materializing absence; the finalized-generation fence remains unchanged.

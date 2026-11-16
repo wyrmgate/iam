@@ -121,6 +121,21 @@ class IntegrationAdminOpenApiAlignmentTest {
     }
 
     @Test
+    void verifiedRecoveryIsAnExplicitRevisionedCommand() throws Exception {
+        JsonNode document=contract();
+        assertRecordMatchesSchema(document,"ProvisioningRecoveryRequest",ProvisioningRecoveryController.RecoverRequest.class);
+        assertRecordMatchesSchema(document,"ProvisioningRecoveryDecision",
+                io.wyrmgate.iam.integration.persistence.VerifiedProvisioningRecovery.Decision.class);
+        JsonNode operation=document.path("paths").path("/api/v1/provisioning-tasks/{id}:recover").path("post");
+        assertThat(parameterRefs(operation)).containsExactly("ResourceId","IfMatch","IdempotencyKey");
+        assertThat(requestBodyRef(operation)).isEqualTo("ProvisioningRecoveryRequest");
+        assertThat(operation.path("x-wyrmgate-administrative-permission").asText()).isEqualTo("provisioning-task:recover");
+        var method=Arrays.stream(ProvisioningRecoveryController.class.getDeclaredMethods())
+                .filter(m->m.getName().equals("recover")).findFirst().orElseThrow();
+        assertThat(method.getAnnotation(PostMapping.class).value()).containsExactly("/provisioning-tasks/{id}:recover");
+    }
+
+    @Test
     void controllerMappingsRemainAlignedWithPublishedControlPlanePaths() throws Exception {
         assertPost("createConnector", "/connectors");
         assertPatch("updateConnector", "/connectors/{id}");

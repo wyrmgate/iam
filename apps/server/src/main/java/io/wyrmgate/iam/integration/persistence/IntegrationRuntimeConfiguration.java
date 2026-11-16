@@ -253,6 +253,14 @@ public class IntegrationRuntimeConfiguration {
     }
 
     @Bean
+    VerifiedProvisioningRecovery verifiedProvisioningRecovery(JdbcTemplate jdbc,ObjectMapper json,IdGenerator ids,
+            DesiredProvisioningStateQuery desired,GrantProvisioningRepository grants,
+            PrincipalProvisioningRepository principals,PrincipalTechnicalReferenceQuery identities,
+            JdbcIntegrationRuntimeRepository fence) {
+        return new VerifiedProvisioningRecovery(jdbc,json,ids,desired,grants,principals,identities,fence);
+    }
+
+    @Bean
     ProvisioningEffectRecoveryProcessor provisioningEffectRecoveryProcessor(JdbcTemplate jdbc,ObjectMapper json,
             DesiredProvisioningStateQuery desired,GrantProvisioningRepository grants,
             JdbcIntegrationRuntimeRepository fence,TransactionExecutor transactions) {

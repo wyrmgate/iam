@@ -134,3 +134,5 @@ ADR-0080/V40 records late success without reopening expired mutation work and ad
 ADR-0081/V41 adds explicit reconciliation scheduling and durable positive source delivery through Identity-owned source import commands; no automatic source absence trust.
 
 ADR-0082 adds deployment-authorized exact local SCIM routes and non-secret worker execution configuration pins; local execution remains opt-in.
+
+ADR-0083/V42 adds explicit verified provisioning recovery against a quiesced, current complete scan; immutable recovery decision and a separate corrective plan where safe. Original tasks/attempts remain historical evidence. See Integration administration contract and #524.

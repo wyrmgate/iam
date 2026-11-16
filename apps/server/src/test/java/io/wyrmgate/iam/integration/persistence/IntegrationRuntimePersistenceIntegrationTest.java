@@ -9,6 +9,12 @@ import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolProperties;
 import io.wyrmgate.iam.integration.application.ConnectorWorkerProtocolService;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery;
+import io.wyrmgate.iam.access.application.DesiredProvisioningStateQuery;
+import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.DesiredGrantState;
+import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.DesiredPrincipalState;
+import io.wyrmgate.iam.access.application.DesiredStateProjectionRepository.DesiredPresence;
+import io.wyrmgate.iam.identity.application.PrincipalTechnicalReferenceQuery;
+import io.wyrmgate.iam.integration.application.IntegrationAdministrationException;
 import io.wyrmgate.iam.access.application.DesiredAccessStateQuery.Freshness;
 import io.wyrmgate.iam.integration.application.WorkerProtocolException;
 import io.wyrmgate.iam.integration.domain.ReconciliationCompleteness;
@@ -383,6 +389,81 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void concurrentFirstAccountAdmissionsSerializeAcrossRevisions() throws Exception {
+        TenantContext tenant=tenant("create-concurrency");
+        UUID binding=connector(tenant,"runtime.test","1.0",true), cause=ids.nextId();
+        UUID first=createProvisioning(tenant,binding,cause,1), second=createProvisioning(tenant,binding,cause,2);
+        var a=new ConnectorWorkRepository.ProvisioningCandidate(first,ids.nextId(),tenant.tenantId(),binding,
+                "UPSERT_PRINCIPAL","DESIRED_PRINCIPAL",cause,1,"test.principal",1,"first",ids.nextId(),null,Map.of());
+        var b=new ConnectorWorkRepository.ProvisioningCandidate(second,ids.nextId(),tenant.tenantId(),binding,
+                "UPSERT_PRINCIPAL","DESIRED_PRINCIPAL",cause,2,"test.principal",1,"second",ids.nextId(),null,Map.of());
+        var acquired=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        try(var executor=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var firstClaim=executor.submit(()->transactions.required(()->{
+                var decision=repository.principalCreationAdmission(a);
+                acquired.countDown();
+                try{if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("test timeout");}
+                catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+                jdbc.update("UPDATE integration.provisioning_task SET state='RUNNING' WHERE id=?",first);
+                return decision;
+            }));
+            try {
+                assertThat(acquired.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                assertThat(transactions.required(()->repository.principalCreationAdmission(b)))
+                        .isEqualTo(io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.RETRY);
+            } finally {release.countDown();}
+            assertThat(firstClaim.get(10,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.ADMIT);
+        }
+        assertThat(transactions.required(()->repository.principalCreationAdmission(b)))
+                .isEqualTo(io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.RETRY);
+    }
+
+    @Test
+    void scheduledReconciliationPinsConfigurationAndFailsStaleWorkWithoutAbsence() {
+        TenantContext tenant=tenant("scheduled-pins");
+        UUID binding=connector(tenant,"runtime.test","1.0",true);
+        var commands=new IntegrationReconciliationCommands(jdbc,ids,null,
+                (t,target)->io.wyrmgate.iam.catalog.application.CatalogTargetReferenceQuery.Validation.VALID);
+        var run=transactions.required(()->commands.schedule(tenant,binding,1,"PRINCIPAL","FULL",null,NOW,ids.nextId()));
+        assertThat(jdbc.queryForObject("SELECT binding_revision FROM integration.reconciliation_run WHERE id=?",Long.class,run.id())).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT scan_generation FROM integration.reconciliation_run WHERE id=?",Long.class,run.id())).isPositive();
+        jdbc.update("UPDATE integration.connector_binding SET revision=2 WHERE id=?",binding);
+        assertThat(transactions.required(()->repository.failStaleReconciliation(100,NOW.plusSeconds(1)))).isEqualTo(1);
+        assertThat(commands.read(tenant,run.id()).state()).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT effective_completeness FROM integration.reconciliation_run WHERE id=?",String.class,run.id())).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void uncertainCreateBlocksLaterDesiredRevisionAndPreservesAttemptEvidence() {
+        TenantContext tenant=tenant("uncertain-create-fence");
+        UUID binding=connector(tenant,"runtime.test","1.0",true);
+        UUID cause=ids.nextId();
+        UUID task=createProvisioning(tenant,binding,cause,1);
+        WorkerExternalSubject workerSubject=new WorkerExternalSubject("https://issuer.example","create-fence-worker");
+        worker(tenant,workerSubject,binding,WorkerCapability.PROVISION);
+        var registration=repository.findEnabledByExternalSubject(workerSubject).orElseThrow();
+        var service=service((t,kind,id)->Freshness.current(1));
+        var session=service.establishSession(registration,"pod-create-fence",List.of(1),
+                List.of(runtimeAdvertisement("runtime.test","1.0",WorkerCapability.PROVISION)));
+        var lease=service.claim(registration,session.id(),1,0).getFirst();
+        service.complete(registration,session.id(),task,lease.lease().leaseId(),lease.lease().leaseEpoch(),
+                new ConnectorWorkRepository.WorkCompletion("FAILED_RETRYABLE","TRANSIENT","transport_failure",
+                        null,null,null,null,Map.of(),null,null));
+        assertThat(taskState(task)).isEqualTo("BLOCKED");
+        assertThat(jdbc.queryForObject("SELECT failure_code FROM integration.provisioning_task WHERE id=?",String.class,task))
+                .isEqualTo("provider_create_effect_unknown");
+        assertThat(jdbc.queryForObject("SELECT outcome FROM integration.provisioning_attempt WHERE task_id=?",String.class,task))
+                .isEqualTo("FAILED_RETRYABLE");
+        UUID next=createProvisioning(tenant,binding,cause,2);
+        var candidate=new ConnectorWorkRepository.ProvisioningCandidate(next,ids.nextId(),tenant.tenantId(),binding,
+                "UPSERT_PRINCIPAL","DESIRED_PRINCIPAL",cause,2,"test.principal",1,"new-key",ids.nextId(),null,Map.of());
+        assertThat(transactions.required(()->repository.principalCreationAdmission(candidate)))
+                .isEqualTo(io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.RETRY);
+    }
+
+    @Test
     void provisioningAbsentDesiredStateSupersedesWhileUnavailableVerificationLeavesWorkUnclaimed() {
         TenantContext tenant = tenant("freshness");
         UUID binding = connector(tenant, "runtime.test", "1.0", true);
@@ -594,6 +675,141 @@ class IntegrationRuntimePersistenceIntegrationTest {
                 .isInstanceOf(WorkerProtocolException.class)
                 .hasMessageContaining("forbidden secret-shaped");
         assertThat(stagingCount(runId)).isZero();
+    }
+
+    @Test
+    void verifiedRecoveryRequiresCurrentFullEvidenceAndCreatesOnlyOneCorrectivePlan() {
+        TenantContext tenant=tenant("verified-recovery");
+        TenantContext other=tenant("foreign-recovery");
+        UUID binding=groupConnector(tenant,true,true);
+        UUID target=jdbc.queryForObject("SELECT target_id FROM integration.connector_binding WHERE id=?",UUID.class,binding);
+        UUID cause=ids.nextId(), principal=ids.nextId(), entitlement=ids.nextId(), identity=ids.nextId();
+        UUID task=createProvisioning(tenant,binding,"DESIRED_GRANT",cause,1);
+        Instant blocked=NOW.minusSeconds(20);
+        jdbc.update("""
+                UPDATE integration.provisioning_job SET planned_binding_revision=1,planned_connector_revision=1,
+                    planned_configuration_version=1 WHERE id=(SELECT provisioning_job_id FROM integration.provisioning_task WHERE id=?)
+                """,task);
+        jdbc.update("""
+                UPDATE integration.provisioning_task SET contract_id='test.group',operation_type='ADD_GRANT',
+                    state='BLOCKED',failure_code='provider_effect_unknown_after_lease_expiry',revision=2,
+                    attempt_count=1,created_at=?,updated_at=?,payload=?::jsonb WHERE id=?
+                """,Timestamp.from(blocked),Timestamp.from(blocked),
+                "{\"principalId\":\""+principal+"\",\"entitlementId\":\""+entitlement+"\",\"providerPrincipalId\":\"u-a\",\"providerEntitlementId\":\"g-a\"}",task);
+        var desired=new DesiredProvisioningStateQuery(){
+            public Result desiredGrant(TenantContext t,UUID id){return Result.current(new DesiredGrantState(cause,identity,target,entitlement,"ANY",principal,DesiredPresence.ABSENT,2,1,NOW));}
+            public PrincipalResult desiredPrincipal(TenantContext t,UUID id){return PrincipalResult.unavailable();}
+            public TechnicalGrantDemand technicalGrantDemand(TenantContext t,UUID a,UUID e,UUID p){return TechnicalGrantDemand.NOT_REQUIRED;}
+        };
+        var recovery=new VerifiedProvisioningRecovery(jdbc,json,ids,desired,new JdbcGrantProvisioningRepository(jdbc,json,ids),
+                new JdbcPrincipalProvisioningRepository(jdbc,json,ids),new PrincipalTechnicalReferenceQuery(){
+                    public Result resolve(TenantContext t,UUID id){return Result.unavailable();}
+                    public List<Result> activeForIdentityTarget(TenantContext t,UUID i,UUID a){return List.of();}
+                    public List<Result> forIdentityTarget(TenantContext t,UUID i,UUID a){return List.of();}
+                },repository);
+        WorkerExternalSubject workerSubject=new WorkerExternalSubject("https://issuer.example","verified-recovery-worker");
+        groupWorker(tenant,workerSubject,binding,WorkerCapability.RECONCILE);
+        var service=service(revisionUnavailable());
+        var registration=repository.findEnabledByExternalSubject(workerSubject).orElseThrow();
+        var session=service.establishSession(registration,"recovery",List.of(1),
+                List.of(groupRuntimeAdvertisement(WorkerCapability.RECONCILE)));
+        UUID partial=createGroupReconciliation(tenant,binding,"GRANT");
+        var lease=service.claim(registration,session.id(),1,0).getFirst();
+        append(service,registration,session.id(),partial,lease.lease().leaseId(),lease.lease().leaseEpoch(),
+                List.of(new ConnectorWorkRepository.ProviderObservation("GRANT","grant-a","v1",
+                        Map.of("principalProviderId","u-a","entitlementProviderId","g-a"))));
+        service.complete(registration,session.id(),partial,lease.lease().leaseId(),lease.lease().leaseEpoch(),success(ReconciliationCompleteness.PARTIAL));
+        UUID operator=ids.nextId(), correlation=ids.nextId();
+        Instant quiesced=NOW.minusSeconds(10);
+        assertThatThrownBy(()->transactions.required(()->recovery.recover(tenant,task,2,partial,null,quiesced,operator,Instant.now(),correlation)))
+                .isInstanceOf(IntegrationAdministrationException.class).hasMessageContaining("complete full scan");
+
+        UUID full=createGroupReconciliation(tenant,binding,"GRANT");
+        var next=service.claim(registration,session.id(),1,0).getFirst();
+        append(service,registration,session.id(),full,next.lease().leaseId(),next.lease().leaseEpoch(),
+                List.of(new ConnectorWorkRepository.ProviderObservation("GRANT","grant-a","v2",
+                        Map.of("principalProviderId","u-a","entitlementProviderId","g-a"))));
+        service.complete(registration,session.id(),full,next.lease().leaseId(),next.lease().leaseEpoch(),success(ReconciliationCompleteness.COMPLETE));
+        assertThat(effectiveCompleteness(full)).isEqualTo("COMPLETE");
+        assertThatThrownBy(()->transactions.required(()->recovery.recover(other,task,2,full,null,quiesced,operator,Instant.now(),correlation)))
+                .isInstanceOf(IntegrationAdministrationException.class).hasMessageContaining("not found");
+        assertThatThrownBy(()->transactions.required(()->recovery.recover(tenant,task,1,full,null,quiesced,operator,Instant.now(),correlation)))
+                .isInstanceOf(IntegrationAdministrationException.class).hasMessageContaining("revision");
+        assertThatThrownBy(()->transactions.required(()->recovery.recover(tenant,task,2,full,null,NOW.plusSeconds(1),operator,Instant.now(),correlation)))
+                .isInstanceOf(IntegrationAdministrationException.class).hasMessageContaining("quiesced route");
+        var decision=transactions.required(()->recovery.recover(tenant,task,2,full,null,quiesced,operator,Instant.now(),correlation));
+        assertThat(decision.disposition()).isEqualTo("CORRECTIVE_PLAN_CREATED");
+        assertThat(decision.observation()).isEqualTo("PRESENT");
+        assertThat(decision.desiredRevision()).isEqualTo(2);
+        assertThat(taskState(task)).isEqualTo("BLOCKED");
+        assertThat(attemptCount(task)).isZero();
+        assertThat(jdbc.queryForObject("SELECT operation_type FROM integration.provisioning_task WHERE provisioning_job_id=?",
+                String.class,decision.correctiveJobId())).isEqualTo("REMOVE_GRANT");
+        assertThat(recovery.read(tenant,decision.id()).id()).isEqualTo(decision.id());
+        assertThatThrownBy(()->transactions.required(()->recovery.recover(tenant,task,2,full,null,quiesced,operator,Instant.now(),correlation)))
+                .isInstanceOf(IntegrationAdministrationException.class).hasMessageContaining("already has a recovery decision");
+        assertThatThrownBy(()->recovery.read(other,decision.id())).isInstanceOf(IntegrationAdministrationException.class);
+        var projected=new JdbcIntegrationOperationalStatusRepository(jdbc).findProvisioningTask(tenant,task).orElseThrow();
+        assertThat(projected.recoveryDecisionId()).isEqualTo(decision.id());
+        assertThat(projected.recoveryCorrectiveJobId()).isEqualTo(decision.correctiveJobId());
+        assertThat(projected.state()).isEqualTo("BLOCKED");
+        assertThatThrownBy(()->jdbc.update("UPDATE integration.provisioning_recovery_decision SET disposition='MATCHES_DESIRED' WHERE id=?",decision.id()))
+                .isInstanceOf(org.springframework.dao.DataAccessException.class);
+    }
+
+    @Test
+    void uncertainCreateRequiresPositiveExactMappedPrincipalAndNeverCreatesAnotherAccount() {
+        TenantContext tenant=tenant("uncertain-create-recovery");
+        UUID binding=connector(tenant,"runtime.test","1.0",true);
+        UUID target=jdbc.queryForObject("SELECT target_id FROM integration.connector_binding WHERE id=?",UUID.class,binding);
+        UUID cause=ids.nextId(), principal=ids.nextId(), identity=ids.nextId(), operator=ids.nextId(), correlation=ids.nextId();
+        UUID task=createProvisioning(tenant,binding,cause,1);
+        Instant blocked=NOW.minusSeconds(20), quiesced=NOW.minusSeconds(10);
+        jdbc.update("UPDATE integration.provisioning_job SET planned_binding_revision=1,planned_connector_revision=1,planned_configuration_version=1 WHERE id=(SELECT provisioning_job_id FROM integration.provisioning_task WHERE id=?)",task);
+        jdbc.update("""
+                UPDATE integration.provisioning_task SET state='BLOCKED',failure_code='provider_effect_unknown_after_lease_expiry',
+                    revision=2,attempt_count=1,created_at=?,updated_at=?,payload=?::jsonb WHERE id=?
+                """,Timestamp.from(blocked),Timestamp.from(blocked),
+                "{\"identityId\":\""+identity+"\",\"applicationTargetId\":\""+target+"\",\"userName\":\"never-a-correlation-key\"}",task);
+        var desired=new DesiredProvisioningStateQuery(){
+            public Result desiredGrant(TenantContext t,UUID id){return Result.unavailable();}
+            public PrincipalResult desiredPrincipal(TenantContext t,UUID id){return PrincipalResult.current(new DesiredPrincipalState(cause,identity,target,DesiredPresence.PRESENT,2,1,NOW));}
+            public TechnicalGrantDemand technicalGrantDemand(TenantContext t,UUID a,UUID e,UUID p){return TechnicalGrantDemand.UNAVAILABLE;}
+        };
+        var recovery=new VerifiedProvisioningRecovery(jdbc,json,ids,desired,new JdbcGrantProvisioningRepository(jdbc,json,ids),
+                new JdbcPrincipalProvisioningRepository(jdbc,json,ids),new PrincipalTechnicalReferenceQuery(){
+                    public Result resolve(TenantContext t,UUID id){return id.equals(principal)?Result.active(principal,identity,target,"not-provider-correlation"):Result.unavailable();}
+                    public List<Result> activeForIdentityTarget(TenantContext t,UUID i,UUID a){return List.of();}
+                    public List<Result> forIdentityTarget(TenantContext t,UUID i,UUID a){return List.of();}
+                },repository);
+        WorkerExternalSubject workerSubject=new WorkerExternalSubject("https://issuer.example","uncertain-create-worker");
+        worker(tenant,workerSubject,binding,WorkerCapability.RECONCILE);
+        var service=service(revisionUnavailable());
+        var registration=repository.findEnabledByExternalSubject(workerSubject).orElseThrow();
+        var session=service.establishSession(registration,"recover-create",List.of(1),
+                List.of(runtimeAdvertisement("runtime.test","1.0",WorkerCapability.RECONCILE)));
+        UUID full=createReconciliation(tenant,binding,"runtime.test","1.0",1);
+        var lease=service.claim(registration,session.id(),1,0).getFirst();
+        append(service,registration,session.id(),full,lease.lease().leaseId(),lease.lease().leaseEpoch(),
+                List.of(new ConnectorWorkRepository.ProviderObservation("PRINCIPAL","provider-account","v1",
+                        Map.of("active",true,"userName","never-a-correlation-key"))));
+        service.complete(registration,session.id(),full,lease.lease().leaseId(),lease.lease().leaseEpoch(),success(ReconciliationCompleteness.COMPLETE));
+        assertThatThrownBy(()->transactions.required(()->recovery.recover(tenant,task,2,full,null,quiesced,operator,Instant.now(),correlation)))
+                .isInstanceOf(IntegrationAdministrationException.class).hasMessageContaining("explicitly mapped");
+        assertThatThrownBy(()->transactions.required(()->recovery.recover(tenant,task,2,full,principal,quiesced,operator,Instant.now(),correlation)))
+                .isInstanceOf(IntegrationAdministrationException.class).hasMessageContaining("active principal mapping");
+        jdbc.update("""
+                INSERT INTO integration.principal_observation_mapping
+                    (id,tenant_id,connector_binding_id,provider_stable_id,principal_id,lifecycle_state,revision,created_at,updated_at)
+                VALUES (?,?,?,'provider-account',?,'ACTIVE',1,?,?)
+                """,ids.nextId(),tenant.tenantId(),binding,principal,Timestamp.from(NOW),Timestamp.from(NOW));
+        var decision=transactions.required(()->recovery.recover(tenant,task,2,full,principal,quiesced,operator,Instant.now(),correlation));
+        assertThat(decision.disposition()).isEqualTo("MATCHES_DESIRED");
+        assertThat(decision.observation()).isEqualTo("ACTIVE");
+        assertThat(decision.correctiveJobId()).isNull();
+        assertThat(taskState(task)).isEqualTo("BLOCKED");
+        assertThat(attemptCount(task)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM integration.provisioning_task WHERE tenant_id=?",Integer.class,tenant.tenantId())).isEqualTo(1);
     }
 
     private UUID groupConnector(

@@ -123,7 +123,9 @@ public final class IntegrationOperationalStatusController {
                 correlationId);
         var value = queries.findProvisioningTask(actor.tenant(), id)
                 .orElseThrow(() -> IntegrationAdminApiException.notFound(correlationId));
-        return ok(task(value), correlationId);
+        return ResponseEntity.ok().eTag("\"rev-"+value.revision()+"\"")
+                .header(HttpHeaders.CACHE_CONTROL,"no-store").header("X-Correlation-Id",correlationId.toString())
+                .body(task(value));
     }
 
     @GetMapping("/provisioning-tasks/{taskId}/attempts")
@@ -257,7 +259,7 @@ public final class IntegrationOperationalStatusController {
     private static IntegrationOperationalApiModels.ProvisioningJobResource job(
             ProvisioningJobStatus value) {
         return new IntegrationOperationalApiModels.ProvisioningJobResource(
-                value.id(), value.connectorBindingId(), value.state(), value.revision(),
+                value.id(), value.connectorBindingId(), value.state(), value.fulfillmentState(), value.taskCount(), value.blockedTaskCount(), value.revision(),
                 value.correlationId(), value.causationId(), value.createdAt(), value.updatedAt());
     }
 
@@ -267,7 +269,9 @@ public final class IntegrationOperationalStatusController {
                 value.id(), value.provisioningJobId(), value.operationId(), value.operationType(),
                 value.subjectKind(), value.subjectId(), value.desiredRevision(), value.contractId(),
                 value.contractVersion(), value.state(), value.attemptCount(), value.nextAttemptAt(),
-                value.failureCode(), value.revision(), value.correlationId(), value.causationId(),
+                value.failureCode(), value.recoveryDecisionId(), value.recoveryRunId(), value.recoveryObservation(),
+                value.recoveryDisposition(), value.recoveryCorrectiveJobId(), value.recoveryRecordedAt(),
+                value.revision(), value.correlationId(), value.causationId(),
                 value.createdAt(), value.updatedAt());
     }
 

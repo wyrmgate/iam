@@ -64,7 +64,7 @@ The ConnectorInstance `secretReference` remains opaque and write-only through th
 
 Example reference:
 
-`env:WYRM_SCIM_ACME_TOKEN`
+`env:IAM_CONNECTOR_ACME_TOKEN`
 
 Only the provider adapter resolves the reference. The resulting bearer token is used to construct the outbound Authorization header and is never placed in connector-worker tasks, ordinary API responses, outbox facts, audit, errors, observations, or ProvisioningAttempt metadata.
 
@@ -206,3 +206,7 @@ Before claim, and again immediately before provider mutation, the executor check
 Local SCIM execution and remote connector workers are alternative execution placements over the same Integration-owned business/process state. They must not execute the same active lease simultaneously. The shared lease ID/epoch fencing, desired-state freshness, immutable ProvisioningAttempt, reconciliation completeness, and secret rules remain authoritative regardless of placement.
 
 Provider credentials are resolved only by the execution environment that performs the outbound SCIM call. Local execution currently uses the `ConnectorSecretProvider` implementation documented above; remote workers continue to receive only opaque configuration/reference information permitted by the connector-worker protocol and never raw secret material.
+
+## Verified discovery and creation safety
+
+A full SCIM listing is complete only when page metadata proves contiguous coverage, totals remain consistent, stable resource IDs do not repeat, and the bounded verification set is not exceeded. Missing group members downgrade grant coverage; positive observations remain valid. Incremental checkpoints never assert full coverage. An ambiguous first-account mutation failure blocks the original task; later desired revisions cannot create a second account while an earlier create is running, succeeded, or has uncertain effects. Resolve using verified recovery and an explicit Identity Principal mapping. The optional idempotency header is not a provider guarantee.

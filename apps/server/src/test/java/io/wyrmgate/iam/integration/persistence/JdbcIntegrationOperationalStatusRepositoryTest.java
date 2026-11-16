@@ -54,6 +54,9 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
         assertThat(repository.findProvisioningJob(contextA, foreignJob)).isEmpty();
 
         UUID task = task(tenantA, newestJob, base.plusSeconds(5));
+        var rollup=repository.findProvisioningJob(contextA,newestJob).orElseThrow();
+        assertThat(rollup.taskCount()).isEqualTo(1);
+        assertThat(rollup.fulfillmentState()).isEqualTo("RUNNING");
         UUID attempt = attempt(tenantA, task, base.plusSeconds(6));
         UUID run = reconciliationRun(tenantA, bindingA, base.plusSeconds(7));
 
@@ -65,6 +68,9 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
 
         // A late successful provider effect remains immutable evidence while recovery is a distinct projection.
         UUID late = lateSuccess(tenantA, task, base.plusSeconds(8));
+        var blockedRollup=repository.findProvisioningJob(contextA,newestJob).orElseThrow();
+        assertThat(blockedRollup.fulfillmentState()).isEqualTo("BLOCKED");
+        assertThat(blockedRollup.blockedTaskCount()).isEqualTo(1);
         var recovery = repository.findProvisioningAttempt(contextA, late).orElseThrow();
         assertThat(recovery.outcome()).isEqualTo("SUCCEEDED");
         assertThat(recovery.effectRecoveryState()).isEqualTo("MANUAL");

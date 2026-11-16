@@ -137,7 +137,7 @@ public final class ScimGroupProviderAdapter {
         Objects.requireNonNull(batchConsumer, "batchConsumer");
 
         int startIndex = parseCheckpoint(checkpoint);
-        boolean startedAtBeginning = startIndex == 1;
+        var coverage = new ScimDiscoveryCoverage(checkpoint);
         int pages = 0;
         int observed = 0;
         char[] secret = secrets.resolve(secretReference);
@@ -155,6 +155,7 @@ public final class ScimGroupProviderAdapter {
                     if (mode == DiscoveryMode.ENTITLEMENT) {
                         observations.add(entitlementObservation(group));
                     } else {
+                        if(!group.containsKey("members")||group.get("members")==null)coverage.incomplete();
                         observations.addAll(grantObservations(group));
                     }
                 }
@@ -163,29 +164,12 @@ public final class ScimGroupProviderAdapter {
                     observed += observations.size();
                 }
 
-                int pageStart = integer(document.get("startIndex"), startIndex);
-                int itemsPerPage = integer(document.get("itemsPerPage"), resources.size());
-                int totalResults = integer(document.get("totalResults"), -1);
+                var page=coverage.accept(document,resources,startIndex,configuration.pageSize());
                 pages++;
-
-                if (resources.isEmpty()) {
-                    return new DiscoveryResult(
-                            observed,
-                            startedAtBeginning
-                                    ? ReconciliationCompleteness.COMPLETE
-                                    : ReconciliationCompleteness.PARTIAL,
-                            null);
-                }
-                int next = pageStart + Math.max(itemsPerPage, resources.size());
-                if (totalResults >= 0 && next > totalResults) {
-                    return new DiscoveryResult(
-                            observed,
-                            startedAtBeginning
-                                    ? ReconciliationCompleteness.COMPLETE
-                                    : ReconciliationCompleteness.PARTIAL,
-                            null);
-                }
-                startIndex = next;
+                if(!page.valid())return new DiscoveryResult(observed,ReconciliationCompleteness.PARTIAL,null);
+                if(page.end())return new DiscoveryResult(observed,
+                        coverage.complete()?ReconciliationCompleteness.COMPLETE:ReconciliationCompleteness.PARTIAL,null);
+                startIndex=page.next();
             }
             return new DiscoveryResult(
                     observed,

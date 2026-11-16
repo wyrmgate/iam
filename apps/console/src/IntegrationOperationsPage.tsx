@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { ApiError, apiRequest, V1_ROOT, withCursor, type ApiResult } from './api';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, apiRequest, createIdempotencyKey, V1_ROOT, withCursor, type ApiResult } from './api';
 import {
   Button,
+  Box,
+  CheckboxInput,
   DataTable,
   Page,
   PageHeader,
@@ -35,7 +37,7 @@ const specs: Spec[] = [
     label: 'Provisioning jobs',
     title: 'Provisioning Jobs',
     description: 'Integration-owned fulfillment process status. This is operational state, not Access authoritative intent or desired provider state.',
-    columns: ['state', 'connectorBindingId', 'createdAt', 'updatedAt', 'correlationId'],
+    columns: ['fulfillmentState', 'taskCount', 'blockedTaskCount', 'connectorBindingId', 'updatedAt'],
     list: (cursor) => withCursor(`${V1_ROOT}/provisioning-jobs`, cursor),
     detail: (id) => `${V1_ROOT}/provisioning-jobs/${encodeURIComponent(id)}`,
   },
@@ -44,7 +46,7 @@ const specs: Spec[] = [
     label: 'Provisioning tasks',
     title: 'Provisioning Tasks',
     description: 'Bounded technical fulfillment tasks. Provider execution payloads, idempotency keys and worker lease state are never exposed here.',
-    columns: ['state', 'operationType', 'subjectKind', 'attemptCount', 'failureCode'],
+    columns: ['state', 'operationType', 'subjectKind', 'attemptCount', 'failureCode', 'recoveryDisposition'],
     list: (cursor) => withCursor(`${V1_ROOT}/provisioning-tasks`, cursor),
     detail: (id) => `${V1_ROOT}/provisioning-tasks/${encodeURIComponent(id)}`,
   },
@@ -72,6 +74,62 @@ function ErrorState({ error }: { error: unknown }) {
 function valueText(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
   return typeof value === 'object' ? '[structured]' : String(value);
+}
+
+type RecoveryDecision = { id: string; disposition: string; observation: string; correctiveJobId?: string | null };
+
+function VerifiedRecovery({ task, refresh }: { task: ApiResult<Resource>; refresh: () => Promise<void> }) {
+  const [runId, setRunId] = useState('');
+  const [principalId, setPrincipalId] = useState('');
+  const [quiesced, setQuiesced] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [decision, setDecision] = useState<RecoveryDecision | null>(null);
+  const causal = useRef<{ fingerprint: string; key: string } | null>(null);
+  const allowed = ['provider_effect_unknown_after_lease_expiry', 'provider_create_effect_unknown', 'late_provider_success_requires_recovery', 'retry_budget_exhausted'];
+  if (task.data.state !== 'BLOCKED' || !allowed.includes(String(task.data.failureCode)) || task.data.recoveryDecisionId) return null;
+
+  async function recover() {
+    if (!task.etag || !confirmed || !runId.trim() || !quiesced || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const time = new Date(quiesced);
+      if (Number.isNaN(time.getTime())) throw new Error('Enter a valid execution quiescence time.');
+      const body = { reconciliationRunId: runId.trim(), principalId: principalId.trim() || null, executionQuiescedAt: time.toISOString() };
+      const fingerprint = JSON.stringify([task.data.id, task.etag, body]);
+      if (causal.current?.fingerprint !== fingerprint) causal.current = { fingerprint, key: createIdempotencyKey() };
+      const result = await apiRequest<RecoveryDecision>(`${V1_ROOT}/provisioning-tasks/${encodeURIComponent(String(task.data.id))}:recover`, {
+        method: 'POST', etag: task.etag, idempotencyKey: causal.current.key, body,
+      });
+      setDecision(result.data);
+      await refresh();
+    } catch (cause) {
+      setError(cause);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Surface title="Verify and recover blocked provisioning" description="Never retry an uncertain mutation blindly. Stop prior external execution, then complete a new full reconciliation of the exact binding.">
+      <Box sx={{ display: 'grid', gap: 2 }}>
+        <TextInput label="Verified reconciliation run ID" value={runId} disabled={pending} onChange={(event) => setRunId(event.target.value)} />
+        <TextInput label="Governed Principal ID (required for uncertain create)" value={principalId} disabled={pending} onChange={(event) => setPrincipalId(event.target.value)} />
+        <TextInput label="Execution quiesced at (local time)" type="datetime-local" value={quiesced} disabled={pending}
+          slotProps={{ inputLabel: { shrink: true } }} onChange={(event) => setQuiesced(event.target.value)} />
+        <CheckboxInput label="I verified prior external execution stopped before this full scan" checked={confirmed} disabled={pending} onChange={setConfirmed} />
+        <Button variant="contained" disabled={pending || !!decision || !task.etag || !confirmed || !runId.trim() || !quiesced} onClick={() => void recover()}>
+          {pending ? 'Verifying…' : 'Record verified recovery'}
+        </Button>
+        {error !== null ? <ErrorState error={error} /> : null}
+        {decision ? <StatePanel title="Recovery decision recorded">
+          {decision.disposition} · {decision.observation}. Original task stays blocked. {decision.correctiveJobId ? `New corrective job: ${decision.correctiveJobId}; provider completion is not implied.` : 'No corrective provider work is required for the verified observation.'}
+        </StatePanel> : null}
+      </Box>
+    </Surface>
+  );
 }
 
 function OperationalWorkspace({ spec }: { spec: Spec }) {
@@ -169,6 +227,7 @@ function OperationalWorkspace({ spec }: { spec: Spec }) {
         </div>
       </Surface>
 
+      {detail && spec.id === 'tasks' ? <VerifiedRecovery key={String(detail.data.id)} task={detail} refresh={() => lookup(String(detail.data.id))} /> : null}
       {detail ? (
         <Surface title="Resource detail">
           <dl className="resource-details">

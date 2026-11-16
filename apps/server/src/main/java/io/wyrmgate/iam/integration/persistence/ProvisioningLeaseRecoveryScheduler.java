@@ -15,5 +15,6 @@ public final class ProvisioningLeaseRecoveryScheduler {
     @Scheduled(fixedDelayString = "${iam.integration.provisioning-recovery.poll-interval:PT1M}")
     public void recover() {
         transactions.required(() -> repository.blockExpiredProvisioning(100, Instant.now()));
+        transactions.required(() -> repository.failStaleReconciliation(100, Instant.now()));
     }
 }
