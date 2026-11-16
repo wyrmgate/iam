@@ -23,7 +23,7 @@ jobs:
           java-version: '25'
       - name: Actual IAM server and artifact verification
         run: |
-          sh apps/server/mvnw -B -ntp --strict-checksums -f apps/server/pom.xml -Dtest=KernelControlPlaneIdentityAdapterTest,ControlPlaneActorResolutionFilterTest,IdpBrowserSessionAuthenticationFilterTest,PersistenceArchitectureTest test
+          sh apps/server/mvnw -B -ntp --strict-checksums -f apps/server/pom.xml -Dtest=KernelControlPlaneIdentityAdapterTest,ControlPlaneActorResolutionFilterTest,IdpBrowserSessionAuthenticationFilterTest,PersistenceArchitectureTest,ExternalBearerAuthorityIntegrationTest test
           sh apps/server/mvnw -B -ntp --strict-checksums -f apps/server/pom.xml dependency:tree -Dincludes=io.github.vyrnforge:platform-kernel
           echo '88bd473f9e909d3031b5efce02e1b4189df1d731893190b9910767c3d97eef2e  '"$HOME/.m2/repository/io/github/vyrnforge/platform-kernel/0.3.2/platform-kernel-0.3.2.jar" | sha256sum -c -
           java -version
