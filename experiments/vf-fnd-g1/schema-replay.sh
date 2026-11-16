@@ -36,7 +36,7 @@ literal = r"'[A-Z0-9_]+'::character varying"
 pattern = re.compile(r"\(\(ARRAY\[("+literal+r"(?:, "+literal+r")*)\]\)::text\[\]\)")
 for stem in ('source','candidate'):
     data=(p/(stem+'-schema.sql')).read_text()
-    data,n=pattern.subn(lambda m: 'ARRAY['+', '.join('('+v+')::text' for v in m.group(1).split(', '))+']',data)
+    data,n=pattern.subn(lambda m: '(ARRAY['+', '.join('('+v+')::text' for v in m.group(1).split(', '))+'])',data)
     (p/(stem+'-normalized.sql')).write_text(data)
     print(stem,'narrow cast normalization count',n)
 PY
