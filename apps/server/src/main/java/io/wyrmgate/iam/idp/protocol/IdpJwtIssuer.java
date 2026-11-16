@@ -43,7 +43,7 @@ public final class IdpJwtIssuer implements IdpTokenIssuer {
         this.signingKeys = Objects.requireNonNull(signingKeys, "signingKeys");
         this.json = Objects.requireNonNull(json, "json");
         this.tokenLifetime = requirePositive(tokenLifetime);
-        IdpJwkEncoder.encode(signingKeys.currentSigningKey());
+        IdpVerificationKeySet.validated(signingKeys, signingKeys.currentSigningKey());
     }
 
     @Override
@@ -94,13 +94,7 @@ public final class IdpJwtIssuer implements IdpTokenIssuer {
     private String sign(String type, Map<String, Object> claims) {
         SigningKeyMaterial material = signingKeys.currentSigningKey();
         String algorithm = IdpJoseAlgorithms.joseName(material.signingAlgorithm());
-        var published = signingKeys.verificationKeys();
-        if (published == null || published.stream().filter(key -> key != null && material.keyId().equals(key.keyId())).count() != 1
-                || published.stream().noneMatch(key -> key != null && material.keyId().equals(key.keyId())
-                        && material.signingAlgorithm().equals(key.signingAlgorithm())
-                        && java.util.Arrays.equals(material.publicKey().getEncoded(), key.publicKey().getEncoded()))) {
-            throw new IllegalStateException("current signing key is not uniquely published");
-        }
+        IdpVerificationKeySet.validated(signingKeys, material);
 
         Map<String, Object> header = new LinkedHashMap<>();
         header.put("alg", algorithm);
