@@ -1,7 +1,7 @@
 # ADR-0084: Staged IAM replatforming and integrated release gates
 
 - Status: Accepted
-- Acceptance scope: G2 direction; draft PR #544, not yet effective on main
+- Acceptance scope: G2 direction; effective on main upon authorized documentation merge #544
 - Date: 2026-11-16
 - G2 approval: [2026-11-16](https://github.com/wyrmgate/iam/issues/538#issuecomment-6906844883). Scope limited to architectural direction; implementation and merge gated.
 - Preserves: ADR-0001, 0002, 0003, 0005, 0009, 0042, 0043, 0051–0083.
@@ -22,4 +22,4 @@ IAM main acaf766 / V42 includes substantial domain behavior and regression evide
 - Staged replatform: selected; costs comparison and transition effort, but allows cleaner architecture and reversible slices. Do not maintain two authoritative writers during transition.
 
 ## Review / acceptance
-G2 approves P01/P05 architectural direction; actual beta cohort, scope and service tier remain open. Architecture and Product review bounded implementation slices; QA maps A01–A08/C01–C12 to exact baseline/target evidence; Security reviews invariants; Delivery tracks no duplicate #503/#513/#517/#524/#537 work; Platform/Data confirm #543 inventory and rollback. Revisit if migration feasibility or critical invariants invalidate slice strategy. Formal #438 folds accepted amendments into controlled successor only after evidence. No merge/implementation authorization from G2; canonical main remains unchanged until separately authorized.
+G2 approves P01/P05 architectural direction; actual beta cohort, scope and service tier remain open. Architecture and Product review bounded implementation slices; QA maps A01–A08/C01–C12 to exact baseline/target evidence; Security reviews invariants; Delivery tracks no duplicate #503/#513/#517/#524/#537 work; Platform/Data confirm #543 inventory and rollback. Revisit if migration feasibility or critical invariants invalidate slice strategy. Formal #438 folds accepted amendments into controlled successor only after evidence. G2 alone did not authorize implementation or merge; see initial G3 authorization record and scoped gates.
