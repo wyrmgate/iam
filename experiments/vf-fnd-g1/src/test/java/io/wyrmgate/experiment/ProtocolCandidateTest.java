@@ -1,6 +1,14 @@
 package io.wyrmgate.experiment;
 
 import java.time.Duration;
+import java.util.List;
+import com.nimbusds.jose.jwk.*;
+import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.SignedJWT;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.authorization.token.JwtGenerator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,5 +72,39 @@ class ProtocolCandidateTest {
         active.set(true);available.set(false);
         assertThrows(OAuth2AuthenticationException.class,()->provider.authenticate(
             new OAuth2ClientCredentialsAuthenticationToken(principal,Set.of("files.write"),Map.of("resource",RESOURCE))));
+    }
+
+    @Test void actualJwtGeneratorCanSeparateResourceAudienceAndClientIdentity() throws Exception {
+        var registered=RegisteredClient.withId("fixture-jwt")
+            .clientId(CLIENT).clientAuthenticationMethod(ClientAuthenticationMethod.PRIVATE_KEY_JWT)
+            .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+            .scope("files.write").tokenSettings(TokenSettings.builder()
+                .accessTokenTimeToLive(Duration.ofMinutes(5)).build()).build();
+        var principal=new OAuth2ClientAuthenticationToken(registered,ClientAuthenticationMethod.PRIVATE_KEY_JWT,null);
+        RSAKey key=new RSAKeyGenerator(2048).keyID("synthetic").generate();
+        var generator=new JwtGenerator(new NimbusJwtEncoder(new ImmutableJWKSet<>(new JWKSet(key))));
+        generator.setJwtCustomizer(ctx->{
+            ctx.getJwsHeader().type("at+jwt");
+            ctx.getClaims().audience(List.of(RESOURCE)).subject("service-opaque-fixture")
+                .claim("client_id",CLIENT).claim("scope","files.write");
+        });
+        var provider=new OAuth2ClientCredentialsAuthenticationProvider(new InMemoryOAuth2AuthorizationService(),generator);
+        var standard=new OAuth2ClientCredentialsAuthenticationValidator();
+        provider.setAuthenticationValidator(ctx->{
+            standard.accept(ctx);
+            var grant=(OAuth2ClientCredentialsAuthenticationToken)ctx.getAuthentication();
+            if(!RESOURCE.equals(grant.getAdditionalParameters().get("resource"))) throw new OAuth2AuthenticationException("invalid_grant");
+        });
+        var result=(OAuth2AccessTokenAuthenticationToken)provider.authenticate(
+            new OAuth2ClientCredentialsAuthenticationToken(principal,Set.of("files.write"),Map.of("resource",RESOURCE)));
+        var jwt=SignedJWT.parse(result.getAccessToken().getTokenValue());
+        assertTrue(jwt.verify(new RSASSAVerifier(key.toRSAPublicKey())));
+        assertEquals("at+jwt",jwt.getHeader().getType().toString());
+        assertEquals(List.of(RESOURCE),jwt.getJWTClaimsSet().getAudience());
+        assertEquals(CLIENT,jwt.getJWTClaimsSet().getStringClaim("client_id"));
+        assertEquals("service-opaque-fixture",jwt.getJWTClaimsSet().getSubject());
+        assertNotNull(jwt.getJWTClaimsSet().getJWTID());
+        assertNull(jwt.getJWTClaimsSet().getClaim("auth_time"));
+        assertNull(result.getRefreshToken());
     }
 }
