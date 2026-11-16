@@ -3,11 +3,8 @@ package io.wyrmgate.iam.idp.protocol;
 import io.wyrmgate.iam.platform.crypto.SigningKeyMaterial;
 import io.wyrmgate.iam.platform.crypto.SigningKeyProvider;
 import java.net.URI;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +29,7 @@ public class IdpProtocolController {
     @GetMapping("/.well-known/openid-configuration")
     ResponseEntity<Map<String, Object>> discovery() {
         SigningKeyMaterial current = signingKeys.currentSigningKey();
+        IdpVerificationKeySet.validated(signingKeys, current);
         String base = issuer.toString();
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
@@ -63,35 +61,6 @@ public class IdpProtocolController {
     }
 
     private List<SigningKeyMaterial> publishableVerificationKeys() {
-        SigningKeyMaterial current = signingKeys.currentSigningKey();
-        List<SigningKeyMaterial> keys = signingKeys.verificationKeys();
-        if (keys == null || keys.isEmpty()) {
-            throw new IllegalStateException("at least one signing verification key is required");
-        }
-
-        Set<String> keyIds = new HashSet<>();
-        boolean currentPresent = false;
-        for (SigningKeyMaterial key : keys) {
-            if (key == null || !keyIds.add(key.keyId())) {
-                throw new IllegalStateException("signing verification key IDs must be unique");
-            }
-            if (current.keyId().equals(key.keyId())) {
-                if (!current.signingAlgorithm().equals(key.signingAlgorithm())
-                        || !java.util.Arrays.equals(current.publicKey().getEncoded(), key.publicKey().getEncoded())) {
-                    throw new IllegalStateException("current signing key material must match published verification key");
-                }
-                currentPresent = true;
-            }
-            IdpJwkEncoder.encode(key);
-        }
-        if (!currentPresent) {
-            throw new IllegalStateException("current signing key must be published for verification");
-        }
-
-        return keys.stream()
-                .sorted(Comparator
-                        .comparing((SigningKeyMaterial key) -> !current.keyId().equals(key.keyId()))
-                        .thenComparing(SigningKeyMaterial::keyId))
-                .toList();
+        return IdpVerificationKeySet.validated(signingKeys, signingKeys.currentSigningKey());
     }
 }
