@@ -1,0 +1,18 @@
+# ADR-0087: First-party IdP protocol engine evaluation
+
+- Status: Proposed
+- Date: 2026-11-16
+- Product direction: approve comparison, not library selection ([#539](https://github.com/wyrmgate/iam/issues/539#issuecomment-6905749487)).
+- Preserves: ADR-0042, 0063–0071, 0077–0079. Related ADR-0086 (proposed), #541, #517.
+
+## Context
+IAM acaf766 uses Java25 Spring Boot4.1.1 and custom IdpJwtIssuer/IdpTokenIssuer/session/protocol code. Existing semantic guards and current-state redemption are valuable. Broader standard OAuth features add security burden. Spring Authorization Server moved into Spring Security 7; official [getting started](https://docs.spring.io/spring-security/reference/servlet/oauth2/authorization-server/getting-started.html) and [configuration model](https://docs.spring.io/spring-security/reference/servlet/oauth2/authorization-server/configuration-model.html) expose client repository, authorization service and token generator customization. This makes it a plausible comparator, not proof of compatibility or correct authorization.
+
+## Proposed decision
+Compare current protocol edge (control A) against Spring Security OAuth2 Authorization Server (candidate B) using isolated synthetic fixtures and exact dependency/BOM resolution. Candidate uses framework only at protocol/technical layers; Catalog remains authoritative registration; adapter may project into RegisteredClientRepository but not maintain independent mutable authority. AuthorizationService stores bounded protocol state only; exact code one-use, digest-only stored secrets, client/redirect/PKCE and session/Identity/Principal/Credential/Access/Tenant revisions preserved. No token issuance after denied/unavailable checks; consumed code not restored. Session revalidation monotonic and logout, upstream exact trust/link and federated anchor, signing-key custody/public overlap and non-enumerating evidence preserved. Resource/audience and client_credentials candidate tests per proposed ADR-0086; no default enablement of refresh, registration, delegation, introspection or unsupported grants. Prevent framework default endpoints/security paths from bypassing gates. Do not let framework auth/user tables replace canonical Identity.
+
+## Alternatives and decision rule
+A retain/refactor existing edge: fallback when candidate needs unsafe forks or duplicates ownership; maintain standards/regression burden. B mature in-process library: preferred if all mandatory security semantics pass without brittle fork or second authority and measurable maintenance improvement. C external IdP sole authority: reject under first-party requirement; federation remains legitimate. Compare candidate and control using same fixtures, bounded latency, dependency CVE/license checks, diff/adapter burden and operational upgrade costs. Security/Architecture review E2 report; no selection until exact evidence. If failing hard gate, stop; record gap, retain existing behavior and consider smaller adapter.
+
+## Acceptance and consequences
+E2 in [experiment plans](../architecture/proposals/vf-fnd-engineering-experiments.md): exact Maven/BOM dependency report, isolated code+PKCE/concurrent redemption, stale/revoked subject and unavailable governance, current session and code consumption, issuer/JWKS, confidential client and service token candidate, no leaked secrets, existing regression and protocol negative matrix. Record p95/p99 vs control at identical synthetic load; ADR-0043 objectives remain (token p95 <=500ms p99 <=1.5s under agreed normal load). Synthetic latency not production capacity proof. Candidate discarded or selected via follow-up accepted ADR revision/PR. No implementation dependency, feature flag activation or migration in this proposal.
