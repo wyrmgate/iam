@@ -1040,6 +1040,7 @@ public final class JdbcIntegrationRuntimeRepository
         boolean trustedComplete = "SUCCEEDED".equals(completion.outcome())
                 && reported == ReconciliationCompleteness.COMPLETE
                 && materialize && current.completeSupported()
+                && "FULL".equals(jdbc.queryForObject("SELECT scope_mode FROM integration.reconciliation_run WHERE tenant_id=? AND id=?",String.class,session.tenant().tenantId(),runId))
                 && leaseEpoch == 1 && run.checkpointStart() == null && completion.nextCheckpoint() == null
                 && hasCompleteBatchManifest(session.tenant(), runId, completion.metadata());
         ReconciliationCompleteness effective = trustedComplete
@@ -1156,6 +1157,13 @@ public final class JdbcIntegrationRuntimeRepository
                 current,current,Timestamp.from(now),Timestamp.from(now),tenant.tenantId(),runId);
         if (!finished.isEmpty()) {
             var result=finished.getFirst();
+            if(current && "PRINCIPAL".equals(result.objectClass()))jdbc.update("""
+                    INSERT INTO integration.source_import_delivery(tenant_id,reconciliation_run_id,source_system_id,state,updated_at)
+                    SELECT r.tenant_id,r.id,b.target_id,'PENDING',? FROM integration.reconciliation_run r
+                    JOIN integration.connector_binding b ON b.tenant_id=r.tenant_id AND b.id=r.connector_binding_id
+                    WHERE r.tenant_id=? AND r.id=? AND b.target_kind='SOURCE_SYSTEM' AND r.state IN ('SUCCEEDED','FAILED')
+                    ON CONFLICT DO NOTHING
+                    """,Timestamp.from(now),tenant.tenantId(),runId);
             // Even abandoned partial materialization may have produced positive observations.
             if ("ENTITLEMENT".equals(result.objectClass()) || "GRANT".equals(result.objectClass())) {
                 observedAccessFacts.inputChanged(tenant,result.binding(),

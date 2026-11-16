@@ -240,6 +240,11 @@ public final class SourceCorrelationService {
         });
     }
 
+    /** Semantic existence check for Integration-owned source import scheduling. */
+    public boolean sourceSystemExists(TenantContext tenant, UUID sourceSystemId) {
+        return repository.findSourceSystem(tenant,sourceSystemId).isPresent();
+    }
+
     private void requireSourceSystem(TenantContext tenant, UUID sourceSystemId) {
         if (repository.findSourceSystem(tenant, sourceSystemId).isEmpty()) {
             throw new IllegalArgumentException("source system does not exist");

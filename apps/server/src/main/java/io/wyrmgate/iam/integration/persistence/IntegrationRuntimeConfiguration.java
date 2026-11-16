@@ -241,6 +241,18 @@ public class IntegrationRuntimeConfiguration {
     }
 
     @Bean
+    IntegrationReconciliationCommands integrationReconciliationCommands(JdbcTemplate jdbc,IdGenerator ids,
+            io.wyrmgate.iam.identity.application.SourceCorrelationService identity,CatalogTargetReferenceQuery targets){
+        return new IntegrationReconciliationCommands(jdbc,ids,identity,targets);
+    }
+
+    @Bean
+    SourceImportDeliveryProcessor sourceImportDeliveryProcessor(JdbcTemplate jdbc,
+            io.wyrmgate.iam.identity.application.SourceCorrelationService identity,TransactionExecutor tx){
+        return new SourceImportDeliveryProcessor(jdbc,identity,tx);
+    }
+
+    @Bean
     ProvisioningEffectRecoveryProcessor provisioningEffectRecoveryProcessor(JdbcTemplate jdbc,ObjectMapper json,
             DesiredProvisioningStateQuery desired,GrantProvisioningRepository grants,
             JdbcIntegrationRuntimeRepository fence,TransactionExecutor transactions) {
