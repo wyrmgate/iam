@@ -1,7 +1,7 @@
 # ADR-0086: Ecosystem resource audiences and governed service identity
 
 - Status: Accepted
-- Acceptance scope: G2 semantic direction only; draft PR #544, not yet effective on main
+- Acceptance scope: G2 semantic direction only; effective on main upon authorized documentation merge #544
 - Date: 2026-11-16
 - Product direction: [#540 approval](https://github.com/wyrmgate/iam/issues/540#issuecomment-6905750084).
 - Scoped amendment to ADR-0042 on authorized merge: resource audience and governed client credentials are approved target scope, not enabled runtime behavior; preserves ADR-0049, 0051, 0052, 0063–0071, 0077–0079.
