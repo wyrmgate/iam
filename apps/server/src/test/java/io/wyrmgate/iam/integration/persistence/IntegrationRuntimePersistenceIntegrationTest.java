@@ -389,6 +389,34 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void uncertainCreateBlocksLaterDesiredRevisionAndPreservesAttemptEvidence() {
+        TenantContext tenant=tenant("uncertain-create-fence");
+        UUID binding=connector(tenant,"runtime.test","1.0",true);
+        UUID cause=ids.nextId();
+        UUID task=createProvisioning(tenant,binding,cause,1);
+        WorkerExternalSubject workerSubject=new WorkerExternalSubject("https://issuer.example","create-fence-worker");
+        worker(tenant,workerSubject,binding,WorkerCapability.PROVISION);
+        var registration=repository.findEnabledByExternalSubject(workerSubject).orElseThrow();
+        var service=service((t,kind,id)->Freshness.current(1));
+        var session=service.establishSession(registration,"pod-create-fence",List.of(1),
+                List.of(runtimeAdvertisement("runtime.test","1.0",WorkerCapability.PROVISION)));
+        var lease=service.claim(registration,session.id(),1,0).getFirst();
+        service.complete(registration,session.id(),task,lease.lease().leaseId(),lease.lease().leaseEpoch(),
+                new ConnectorWorkRepository.WorkCompletion("FAILED_RETRYABLE","TRANSIENT","transport_failure",
+                        null,null,null,null,Map.of(),null,null));
+        assertThat(taskState(task)).isEqualTo("BLOCKED");
+        assertThat(jdbc.queryForObject("SELECT failure_code FROM integration.provisioning_task WHERE id=?",String.class,task))
+                .isEqualTo("provider_create_effect_unknown");
+        assertThat(jdbc.queryForObject("SELECT outcome FROM integration.provisioning_attempt WHERE task_id=?",String.class,task))
+                .isEqualTo("FAILED_RETRYABLE");
+        UUID next=createProvisioning(tenant,binding,cause,2);
+        var candidate=new ConnectorWorkRepository.ProvisioningCandidate(next,ids.nextId(),tenant.tenantId(),binding,
+                "UPSERT_PRINCIPAL","DESIRED_PRINCIPAL",cause,2,"test.principal",1,"new-key",ids.nextId(),null,Map.of());
+        assertThat(transactions.required(()->repository.principalCreationAdmission(candidate)))
+                .isEqualTo(io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.RETRY);
+    }
+
+    @Test
     void provisioningAbsentDesiredStateSupersedesWhileUnavailableVerificationLeavesWorkUnclaimed() {
         TenantContext tenant = tenant("freshness");
         UUID binding = connector(tenant, "runtime.test", "1.0", true);

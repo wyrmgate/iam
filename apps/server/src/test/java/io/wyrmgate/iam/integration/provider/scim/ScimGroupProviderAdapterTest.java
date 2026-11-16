@@ -119,6 +119,21 @@ class ScimGroupProviderAdapterTest {
     }
 
     @Test
+    void omittedMembersKeepPositiveGrantsButCannotProveAbsence() {
+        server.createContext("/scim/v2/Groups", exchange -> respond(exchange,200,"""
+                {"startIndex":1,"itemsPerPage":2,"totalResults":2,"Resources":[
+                  {"id":"g-1","members":[{"value":"u-1","type":"User"}]},
+                  {"id":"g-2"}
+                ]}
+                """));
+        server.start();
+        List<ProviderObservation> observed=new ArrayList<>();
+        var result=adapter().discoverGrants(configuration(),"fixture-ref",null,observed::addAll);
+        assertThat(result.coverage()).isEqualTo(ReconciliationCompleteness.PARTIAL);
+        assertThat(observed).hasSize(1);
+    }
+
+    @Test
     void addAndRemoveMembershipUseScimPatchWithConcurrencyAndNoSecretPersistence() throws Exception {
         server.createContext("/scim/v2/Groups/g-1", exchange -> {
             assertThat(exchange.getRequestMethod()).isEqualTo("PATCH");
