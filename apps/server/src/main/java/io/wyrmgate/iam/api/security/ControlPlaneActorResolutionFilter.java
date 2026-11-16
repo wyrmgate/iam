@@ -63,7 +63,6 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
             var assurance = assuranceResolver.resolve(jwtAuthentication.getToken());
             ControlPlaneActorRequestContext.set(
                     request, resolved.orElseThrow().withAssurance(assurance));
-            filterChain.doFilter(request, response);
         } catch (IllegalArgumentException invalidSubject) {
             SemanticAuthenticationFailureWriter.write(
                     response,
@@ -71,6 +70,7 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
                     "unresolved_actor",
                     "Authenticated subject is not bound to a Wyrmgate control-plane actor.",
                     idGenerator);
+            return;
         } catch (RuntimeException unavailable) {
             SemanticAuthenticationFailureWriter.write(
                     response,
@@ -78,6 +78,10 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
                     "authentication_context_unavailable",
                     "Control-plane actor resolution is temporarily unavailable.",
                     idGenerator);
+            return;
         }
+        // Authentication-context classification applies only to actor resolution, not downstream
+        // authorization, controller or persistence failures.
+        filterChain.doFilter(request, response);
     }
 }
