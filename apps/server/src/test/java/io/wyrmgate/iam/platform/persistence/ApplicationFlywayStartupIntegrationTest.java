@@ -5,15 +5,22 @@ import static io.wyrmgate.iam.platform.persistence.FlywayTestSupport.assertFully
 
 import java.util.List;
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.TestContext;
+import org.springframework.test.context.TestExecutionListeners;
+import org.springframework.test.context.support.AbstractTestExecutionListener;
+import org.springframework.test.context.support.DirtiesContextTestExecutionListener;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@TestExecutionListeners(listeners = ApplicationFlywayStartupIntegrationTest.DatabaseCleanup.class,
+        mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS)
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {
@@ -35,9 +42,17 @@ class ApplicationFlywayStartupIntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
-    @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
+    public static class DatabaseCleanup extends AbstractTestExecutionListener {
+        @Override
+        public int getOrder() {
+            // afterTestClass runs in reverse order: evict/close the context first.
+            return DirtiesContextTestExecutionListener.ORDER - 1;
+        }
+
+        @Override
+        public void afterTestClass(TestContext testContext) {
+            POSTGRES.stop();
+        }
     }
 
     @Autowired
