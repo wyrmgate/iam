@@ -53,12 +53,15 @@ public final class JdbcIntegrationOperationalStatusRepository
     @Override
     public Optional<ProvisioningTaskStatus> findProvisioningTask(TenantContext tenant, UUID id) {
         return jdbc.query("""
-                SELECT id, provisioning_job_id, operation_id, operation_type, subject_kind, subject_id,
-                       desired_revision, contract_id, contract_version, state, attempt_count,
-                       next_attempt_at, failure_code, revision, correlation_id, causation_id,
-                       created_at, updated_at
-                FROM integration.provisioning_task
-                WHERE tenant_id = ? AND id = ?
+                SELECT t.id, t.provisioning_job_id, t.operation_id, t.operation_type, t.subject_kind, t.subject_id,
+                       t.desired_revision, t.contract_id, t.contract_version, t.state, t.attempt_count,
+                       t.next_attempt_at, t.failure_code, t.revision, t.correlation_id, t.causation_id,
+                       t.created_at, t.updated_at, d.id AS recovery_decision_id, d.reconciliation_run_id AS recovery_run_id,
+                       d.observation AS recovery_observation, d.disposition AS recovery_disposition,
+                       d.corrective_job_id AS recovery_corrective_job_id, d.recorded_at AS recovery_recorded_at
+                FROM integration.provisioning_task t
+                LEFT JOIN integration.provisioning_recovery_decision d ON d.tenant_id=t.tenant_id AND d.task_id=t.id
+                WHERE t.tenant_id = ? AND t.id = ?
                 """, JdbcIntegrationOperationalStatusRepository::task,
                 tenant.tenantId(), id).stream().findFirst();
     }
@@ -67,17 +70,20 @@ public final class JdbcIntegrationOperationalStatusRepository
     public List<ProvisioningTaskStatus> findProvisioningTaskPage(
             TenantContext tenant, PagePosition after, int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT id, provisioning_job_id, operation_id, operation_type, subject_kind, subject_id,
-                       desired_revision, contract_id, contract_version, state, attempt_count,
-                       next_attempt_at, failure_code, revision, correlation_id, causation_id,
-                       created_at, updated_at
-                FROM integration.provisioning_task
-                WHERE tenant_id = ?
+                SELECT t.id, t.provisioning_job_id, t.operation_id, t.operation_type, t.subject_kind, t.subject_id,
+                       t.desired_revision, t.contract_id, t.contract_version, t.state, t.attempt_count,
+                       t.next_attempt_at, t.failure_code, t.revision, t.correlation_id, t.causation_id,
+                       t.created_at, t.updated_at, d.id AS recovery_decision_id, d.reconciliation_run_id AS recovery_run_id,
+                       d.observation AS recovery_observation, d.disposition AS recovery_disposition,
+                       d.corrective_job_id AS recovery_corrective_job_id, d.recorded_at AS recovery_recorded_at
+                FROM integration.provisioning_task t
+                LEFT JOIN integration.provisioning_recovery_decision d ON d.tenant_id=t.tenant_id AND d.task_id=t.id
+                WHERE t.tenant_id = ?
                 """);
         List<Object> args = new ArrayList<>();
         args.add(tenant.tenantId());
-        appendAfter(sql, args, "created_at", after);
-        sql.append(" ORDER BY created_at DESC, id DESC LIMIT ?");
+        appendAfter(sql, args, "t.created_at", "t.id", after);
+        sql.append(" ORDER BY t.created_at DESC, t.id DESC LIMIT ?");
         args.add(limit);
         return jdbc.query(sql.toString(), JdbcIntegrationOperationalStatusRepository::task, args.toArray());
     }
@@ -191,6 +197,12 @@ public final class JdbcIntegrationOperationalStatusRepository
                 rs.getInt("attempt_count"),
                 instant(rs, "next_attempt_at"),
                 rs.getString("failure_code"),
+                rs.getObject("recovery_decision_id", UUID.class),
+                rs.getObject("recovery_run_id", UUID.class),
+                rs.getString("recovery_observation"),
+                rs.getString("recovery_disposition"),
+                rs.getObject("recovery_corrective_job_id", UUID.class),
+                instant(rs, "recovery_recorded_at"),
                 rs.getLong("revision"),
                 rs.getObject("correlation_id", UUID.class),
                 rs.getObject("causation_id", UUID.class),

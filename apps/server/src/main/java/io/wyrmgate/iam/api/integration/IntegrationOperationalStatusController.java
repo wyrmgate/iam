@@ -269,7 +269,9 @@ public final class IntegrationOperationalStatusController {
                 value.id(), value.provisioningJobId(), value.operationId(), value.operationType(),
                 value.subjectKind(), value.subjectId(), value.desiredRevision(), value.contractId(),
                 value.contractVersion(), value.state(), value.attemptCount(), value.nextAttemptAt(),
-                value.failureCode(), value.revision(), value.correlationId(), value.causationId(),
+                value.failureCode(), value.recoveryDecisionId(), value.recoveryRunId(), value.recoveryObservation(),
+                value.recoveryDisposition(), value.recoveryCorrectiveJobId(), value.recoveryRecordedAt(),
+                value.revision(), value.correlationId(), value.causationId(),
                 value.createdAt(), value.updatedAt());
     }
 

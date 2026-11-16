@@ -83,3 +83,17 @@ test('full reconciliation scheduling uses the exact loaded binding and a causal 
     /Accepted scheduling is not provider completion or verified coverage/,
   );
 });
+
+
+test('verified recovery uses exact task revision, explicit evidence and causal retry, not a generic retry', async () => {
+  const operations=await readConsoleSource('IntegrationOperationsPage.tsx');
+  assertSourceContains(operations,
+    /Verify and recover blocked provisioning/,
+    /:recover/,
+    /executionQuiescedAt/,
+    /etag: task\.etag, idempotencyKey: causal\.current\.key/,
+    /prior external execution stopped before this full scan/,
+    /Original task stays blocked/,
+  );
+  assertSourceExcludes(operations, /:retry|:force|:complete/);
+});
