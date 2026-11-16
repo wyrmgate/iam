@@ -32,9 +32,11 @@ jobs:
           sh apps/server/mvnw --batch-mode --no-transfer-progress --strict-checksums -f experiments/vf-fnd-g1/pom.xml dependency:tree
           sha256sum ~/.m2/repository/io/github/vyrnforge/platform-kernel/0.3.2/platform-kernel-0.3.2.jar
       - name: Existing IAM control and schema constraints
+        if: always()
         run: |
           sh apps/server/mvnw --batch-mode --no-transfer-progress -f apps/server/pom.xml -Dtest=IdpJwtIssuerTest,IdpProtocolServiceTest,IdpBrowserSessionServiceTest,PersistenceArchitectureTest,TenantIsolationSchemaIntegrationTest test
       - name: E4 disposable V42 baseline and schema replay
+        if: always()
         run: bash experiments/vf-fnd-g1/schema-replay.sh
       - name: Upload experiment reports
         if: always()
