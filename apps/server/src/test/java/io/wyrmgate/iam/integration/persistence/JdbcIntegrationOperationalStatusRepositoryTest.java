@@ -54,6 +54,9 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
         assertThat(repository.findProvisioningJob(contextA, foreignJob)).isEmpty();
 
         UUID task = task(tenantA, newestJob, base.plusSeconds(5));
+        var rollup=repository.findProvisioningJob(contextA,newestJob).orElseThrow();
+        assertThat(rollup.taskCount()).isEqualTo(1);
+        assertThat(rollup.fulfillmentState()).isEqualTo("RUNNING");
         UUID attempt = attempt(tenantA, task, base.plusSeconds(6));
         UUID run = reconciliationRun(tenantA, bindingA, base.plusSeconds(7));
 

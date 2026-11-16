@@ -25,10 +25,23 @@ public final class JdbcIntegrationOperationalStatusRepository
     @Override
     public Optional<ProvisioningJobStatus> findProvisioningJob(TenantContext tenant, UUID id) {
         return jdbc.query("""
-                SELECT id, connector_binding_id, state, revision, correlation_id, causation_id,
-                       created_at, updated_at
-                FROM integration.provisioning_job
-                WHERE tenant_id = ? AND id = ?
+                SELECT j.id,j.connector_binding_id,j.state,j.revision,j.correlation_id,j.causation_id,
+                       j.created_at,j.updated_at, d.task_count,d.blocked_count,
+                       CASE WHEN d.task_count=0 THEN j.state
+                            WHEN d.blocked_count>0 THEN 'BLOCKED'
+                            WHEN d.active_count>0 THEN 'RUNNING'
+                            WHEN d.failed_count>0 THEN 'FAILED'
+                            WHEN d.superseded_count=d.task_count THEN 'CANCELLED'
+                            ELSE 'COMPLETED' END AS fulfillment_state
+                FROM integration.provisioning_job j
+                CROSS JOIN LATERAL (SELECT count(*) AS task_count,
+                    count(*) FILTER(WHERE t.state='BLOCKED') AS blocked_count,
+                    count(*) FILTER(WHERE t.state IN ('READY','RUNNING','FAILED_RETRYABLE')) AS active_count,
+                    count(*) FILTER(WHERE t.state='FAILED_FINAL') AS failed_count,
+                    count(*) FILTER(WHERE t.state='SUPERSEDED') AS superseded_count
+                    FROM integration.provisioning_task t
+                    WHERE t.tenant_id=j.tenant_id AND t.provisioning_job_id=j.id) d
+                WHERE j.tenant_id = ? AND j.id = ?
                 """, JdbcIntegrationOperationalStatusRepository::job,
                 tenant.tenantId(), id).stream().findFirst();
     }
@@ -37,15 +50,28 @@ public final class JdbcIntegrationOperationalStatusRepository
     public List<ProvisioningJobStatus> findProvisioningJobPage(
             TenantContext tenant, PagePosition after, int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT id, connector_binding_id, state, revision, correlation_id, causation_id,
-                       created_at, updated_at
-                FROM integration.provisioning_job
-                WHERE tenant_id = ?
+                SELECT j.id,j.connector_binding_id,j.state,j.revision,j.correlation_id,j.causation_id,
+                       j.created_at,j.updated_at, d.task_count,d.blocked_count,
+                       CASE WHEN d.task_count=0 THEN j.state
+                            WHEN d.blocked_count>0 THEN 'BLOCKED'
+                            WHEN d.active_count>0 THEN 'RUNNING'
+                            WHEN d.failed_count>0 THEN 'FAILED'
+                            WHEN d.superseded_count=d.task_count THEN 'CANCELLED'
+                            ELSE 'COMPLETED' END AS fulfillment_state
+                FROM integration.provisioning_job j
+                CROSS JOIN LATERAL (SELECT count(*) AS task_count,
+                    count(*) FILTER(WHERE t.state='BLOCKED') AS blocked_count,
+                    count(*) FILTER(WHERE t.state IN ('READY','RUNNING','FAILED_RETRYABLE')) AS active_count,
+                    count(*) FILTER(WHERE t.state='FAILED_FINAL') AS failed_count,
+                    count(*) FILTER(WHERE t.state='SUPERSEDED') AS superseded_count
+                    FROM integration.provisioning_task t
+                    WHERE t.tenant_id=j.tenant_id AND t.provisioning_job_id=j.id) d
+                WHERE j.tenant_id = ?
                 """);
         List<Object> args = new ArrayList<>();
         args.add(tenant.tenantId());
-        appendAfter(sql, args, "created_at", after);
-        sql.append(" ORDER BY created_at DESC, id DESC LIMIT ?");
+        appendAfter(sql, args, "j.created_at", "j.id", after);
+        sql.append(" ORDER BY j.created_at DESC, j.id DESC LIMIT ?");
         args.add(limit);
         return jdbc.query(sql.toString(), JdbcIntegrationOperationalStatusRepository::job, args.toArray());
     }
@@ -179,6 +205,7 @@ public final class JdbcIntegrationOperationalStatusRepository
                 rs.getObject("id", UUID.class),
                 rs.getObject("connector_binding_id", UUID.class),
                 rs.getString("state"),
+                rs.getString("fulfillment_state"),rs.getLong("task_count"),rs.getLong("blocked_count"),
                 rs.getLong("revision"),
                 rs.getObject("correlation_id", UUID.class),
                 rs.getObject("causation_id", UUID.class),

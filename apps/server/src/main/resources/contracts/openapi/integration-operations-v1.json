@@ -404,7 +404,10 @@
           "revision",
           "correlationId",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "fulfillmentState",
+          "taskCount",
+          "blockedTaskCount"
         ],
         "properties": {
           "id": {
@@ -448,6 +451,28 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "fulfillmentState": {
+            "type": "string",
+            "enum": [
+              "PLANNED",
+              "RUNNING",
+              "COMPLETED",
+              "FAILED",
+              "CANCELLED",
+              "BLOCKED"
+            ],
+            "description": "Derived technical task rollup; original job state remains unchanged."
+          },
+          "taskCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "blockedTaskCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },

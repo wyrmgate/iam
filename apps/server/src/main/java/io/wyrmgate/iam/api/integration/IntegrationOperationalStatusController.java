@@ -259,7 +259,7 @@ public final class IntegrationOperationalStatusController {
     private static IntegrationOperationalApiModels.ProvisioningJobResource job(
             ProvisioningJobStatus value) {
         return new IntegrationOperationalApiModels.ProvisioningJobResource(
-                value.id(), value.connectorBindingId(), value.state(), value.revision(),
+                value.id(), value.connectorBindingId(), value.state(), value.fulfillmentState(), value.taskCount(), value.blockedTaskCount(), value.revision(),
                 value.correlationId(), value.causationId(), value.createdAt(), value.updatedAt());
     }
 

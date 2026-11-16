@@ -37,7 +37,7 @@ const specs: Spec[] = [
     label: 'Provisioning jobs',
     title: 'Provisioning Jobs',
     description: 'Integration-owned fulfillment process status. This is operational state, not Access authoritative intent or desired provider state.',
-    columns: ['state', 'connectorBindingId', 'createdAt', 'updatedAt', 'correlationId'],
+    columns: ['fulfillmentState', 'taskCount', 'blockedTaskCount', 'connectorBindingId', 'updatedAt'],
     list: (cursor) => withCursor(`${V1_ROOT}/provisioning-jobs`, cursor),
     detail: (id) => `${V1_ROOT}/provisioning-jobs/${encodeURIComponent(id)}`,
   },

@@ -861,6 +861,32 @@ public final class JdbcIntegrationRuntimeRepository
         return blocked;
     }
 
+    /** Finish unclaimable work after monotonic route/configuration changes. No provider effects are inferred. */
+    public int failStaleReconciliation(int limit,Instant now) {
+        if(limit<1||limit>200)throw new IllegalArgumentException("limit must be 1..200");
+        return jdbc.update("""
+                WITH stale AS (
+                    SELECT r.tenant_id,r.id FROM integration.reconciliation_run r
+                    JOIN integration.connector_binding b ON b.tenant_id=r.tenant_id AND b.id=r.connector_binding_id
+                    JOIN integration.connector_instance ci ON ci.tenant_id=b.tenant_id AND ci.id=b.connector_instance_id
+                    WHERE r.state='RUNNING' AND r.completion_lease_epoch IS NULL
+                      AND (b.lifecycle_state<>'ACTIVE' OR ci.lifecycle_state<>'ACTIVE'
+                        OR r.configuration_version<>ci.configuration_version OR r.runtime_id<>ci.runtime_id
+                        OR r.runtime_version<>ci.runtime_version OR r.contract_id<>b.contract_id
+                        OR r.contract_version<>b.contract_version
+                        OR (r.binding_revision IS NOT NULL AND
+                           (r.binding_revision<>b.revision OR r.connector_revision<>ci.revision)))
+                      AND NOT EXISTS (SELECT 1 FROM platform.connector_work_lease l
+                        WHERE l.tenant_id=r.tenant_id AND l.work_kind='RECONCILE' AND l.work_id=r.id AND l.lease_expires_at>?)
+                    ORDER BY r.updated_at,r.id LIMIT ? FOR UPDATE OF r SKIP LOCKED
+                )
+                UPDATE integration.reconciliation_run r SET state='FAILED',failure_code='reconciliation_configuration_stale',
+                    reported_coverage='UNKNOWN',effective_completeness='UNKNOWN',next_attempt_at=NULL,
+                    completed_at=GREATEST(r.updated_at,?),updated_at=GREATEST(r.updated_at,?),revision=r.revision+1
+                FROM stale s WHERE r.tenant_id=s.tenant_id AND r.id=s.id
+                """,Timestamp.from(now),limit,Timestamp.from(now),Timestamp.from(now));
+    }
+
     private CompletionResult completeProvisioning(
             WorkerSession session, UUID taskId, UUID leaseId, long leaseEpoch,
             WorkCompletion completion, String fingerprint, Instant now) {

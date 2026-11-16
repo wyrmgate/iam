@@ -18,8 +18,8 @@ final class ScimDiscoveryCoverage {
         Integer start=number(document.get("startIndex"));
         Integer items=number(document.get("itemsPerPage"));
         if(count!=null&&count==0&&resources.isEmpty()) {
-            if(start==null)start=requestedStart;
-            if(items==null)items=0;
+            if(!document.containsKey("startIndex"))start=requestedStart;
+            if(!document.containsKey("itemsPerPage"))items=0;
         }
         if(count==null||start==null||items==null||start!=requestedStart||items!=resources.size()
                 ||items>requestedCount||count<0||(total!=null&&!total.equals(count))
