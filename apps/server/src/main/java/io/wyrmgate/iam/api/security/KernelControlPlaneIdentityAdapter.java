@@ -1,6 +1,6 @@
 package io.wyrmgate.iam.api.security;
 
-import io.vyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
+import io.wyrmgate.iam.administration.application.AuthenticatedAdministrativeActor;
 import io.wyrmgate.iam.administration.domain.ExternalAuthenticationSubject;
 import io.vyrnforge.platform.kernel.context.IdentityReference;
 import io.vyrnforge.platform.kernel.context.TenantContext;
