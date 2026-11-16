@@ -1,0 +1,33 @@
+name: VF-FND E2 Guarded Hybrid
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/vf-fnd-e2/**'
+      - '.github/workflows/vf-fnd-e2-hybrid.yml'
+permissions:
+  contents: read
+jobs:
+  isolated:
+    if: github.head_ref == 'experiment/vf-fnd-e2-guarded-hybrid'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Prepare and test disposable server copy
+        run: bash experiments/vf-fnd-e2/run.sh
+      - name: Upload sanitized test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2-guarded-hybrid
+          path: |
+            /tmp/vf-fnd-e2/server/target/surefire-reports/
+            /tmp/vf-fnd-e2/dependency-tree.txt
+          if-no-files-found: warn
