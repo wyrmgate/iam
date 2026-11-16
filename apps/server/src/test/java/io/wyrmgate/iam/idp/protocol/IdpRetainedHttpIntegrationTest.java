@@ -19,9 +19,12 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.TestContext;
+import org.springframework.test.context.TestExecutionListeners;
+import org.springframework.test.context.support.AbstractTestExecutionListener;
+import org.springframework.test.context.support.DirtiesContextTestExecutionListener;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.json.JsonMapper;
@@ -29,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Actual local embedded server, V42 fresh installation and security filter chains. */
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@TestExecutionListeners(listeners = IdpRetainedHttpIntegrationTest.DatabaseCleanup.class,
+        mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS)
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT, properties={
     "server.address=127.0.0.1","iam.auth.enabled=false","iam.idp.enabled=true",
     "iam.idp.issuer=https://iam.example.invalid","iam.idp.federation.enabled=false",
@@ -49,13 +54,15 @@ class IdpRetainedHttpIntegrationTest {
         r.add("spring.datasource.password",DB::getPassword);
         r.add("iam.bootstrap.installation.password",()->PASSWORD);
     }
-    @AfterAll
-    static void stopPostgresAfterContext(@Autowired ConfigurableApplicationContext context) {
-        // Close the web server, schedulers and connection pool before stopping the database.
-        // DirtiesContext removes this closed context from the Spring test cache.
-        try {
-            context.close();
-        } finally {
+    public static class DatabaseCleanup extends AbstractTestExecutionListener {
+        @Override
+        public int getOrder() {
+            // afterTestClass runs in reverse order: evict/close the context first.
+            return DirtiesContextTestExecutionListener.ORDER - 1;
+        }
+
+        @Override
+        public void afterTestClass(TestContext testContext) {
             DB.stop();
         }
     }
