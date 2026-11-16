@@ -87,7 +87,9 @@ public final class InstallationBootstrapService {
             char[] password,
             Instant now) {
         Objects.requireNonNull(input, "input");
-        Objects.requireNonNull(now, "now");
+        // PostgreSQL persists timestamps at microsecond precision. Reuse a representable
+        // instant across bootstrap steps so a reloaded creation time cannot round past now.
+        now = Objects.requireNonNull(now, "now").truncatedTo(java.time.temporal.ChronoUnit.MICROS);
 
         InstallationBootstrapPlan plan = repository.find().orElse(null);
         if (plan != null && plan.state() == InstallationBootstrapState.SEALED) {

@@ -114,7 +114,7 @@ class InstallationBootstrapServiceTest {
                         "admin",
                         "https://wyrmgate.example/callback"),
                 password,
-                NOW);
+                NOW.plusNanos(999));
 
         assertEquals(InstallationBootstrapState.SEALED, result.state());
         assertEquals(tenantId, result.tenantId());

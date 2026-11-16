@@ -200,14 +200,31 @@ public final class IdpProtocolService {
             throw ProtocolException.direct("invalid_grant");
         }
 
-        ResolvedClient resolved = resolveClient(request.clientId(), "invalid_grant");
+        final ResolvedClient resolved;
+        try {
+            resolved = resolveClient(request.clientId(), "invalid_grant");
+        } catch (ProtocolException denied) {
+            throw denied;
+        } catch (RuntimeException unavailable) {
+            // Never consume a code until the authoritative client and tenant are resolved.
+            throw ProtocolException.direct("temporarily_unavailable");
+        }
         TenantContext tenant = resolved.tenant();
         SsoClientRegistration current = resolved.registration();
 
         String codeHash = hex(IdpJwtIssuer.sha256(
                 request.code().getBytes(StandardCharsets.US_ASCII)));
-        IdpAuthorizationCode code = authorizationCodes.consume(tenant, codeHash, now)
-                .orElseThrow(() -> ProtocolException.direct("invalid_grant"));
+        final IdpAuthorizationCode code;
+        try {
+            code = authorizationCodes.consume(tenant, codeHash, now)
+                    .orElseThrow(() -> ProtocolException.direct("invalid_grant"));
+        } catch (ProtocolException denied) {
+            throw denied;
+        } catch (RuntimeException unavailable) {
+            // A commit may have succeeded before the connection failed. Never restore or issue
+            // on an uncertain consume; let the durable one-use boundary decide a later retry.
+            throw ProtocolException.direct("temporarily_unavailable");
+        }
 
         // A code is burned before validating all bindings so every redemption attempt is single-use.
         if (!current.id().equals(code.clientRegistrationId())

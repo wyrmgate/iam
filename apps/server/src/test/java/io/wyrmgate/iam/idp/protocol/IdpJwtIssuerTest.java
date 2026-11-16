@@ -65,6 +65,190 @@ class IdpJwtIssuerTest {
         verifySignature(pair, issued.accessToken());
     }
 
+    @Test
+    void allSupportedRsaAlgorithmsAndRotationUseSamePublicationPolicy() throws Exception {
+        var generator=KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        var pair=generator.generateKeyPair();
+        var previous=new SigningKeyMaterial("old","SHA256withRSA",generator.generateKeyPair().getPublic());
+        var now=Instant.parse("2026-11-16T00:00:00Z");
+        for (String algorithm : java.util.List.of("SHA256withRSA","SHA384withRSA","SHA512withRSA")) {
+            var current=new SigningKeyMaterial("current",algorithm,pair.getPublic());
+            var published=new java.util.concurrent.atomic.AtomicReference<>(java.util.List.of(previous,current));
+            SigningKeyProvider provider=new SigningKeyProvider(){
+                public SigningKeyMaterial currentSigningKey(){return current;}
+                public Optional<SigningKeyMaterial> verificationKey(String kid){return published.get().stream().filter(k->k.keyId().equals(kid)).findFirst();}
+                public java.util.List<SigningKeyMaterial> verificationKeys(){return published.get();}
+                public byte[] sign(byte[] payload){
+                    try {var s=Signature.getInstance(algorithm);s.initSign(pair.getPrivate());s.update(payload);return s.sign();}
+                    catch(Exception e){throw new IllegalStateException(e);}
+                }
+            };
+            var props=new IdpProtocolProperties(true,"https://idp.example.test");
+            var issuer=new IdpJwtIssuer(props,provider,JsonMapper.builder().build());
+            var controller=new IdpProtocolController(props,provider);
+            var token=issuer.issue(new TenantContext(UUID.randomUUID()),code(UUID.randomUUID(),now),now);
+            var jwt=com.nimbusds.jwt.SignedJWT.parse(token.accessToken());
+            assertThat(jwt.getHeader().getAlgorithm().getName()).isEqualTo(IdpJoseAlgorithms.joseName(algorithm));
+            assertThat(jwt.verify(new com.nimbusds.jose.crypto.RSASSAVerifier((java.security.interfaces.RSAPublicKey)pair.getPublic()))).isTrue();
+            assertThat(controller.jwks().getBody().toString()).contains("old","current");
+            // Duplicate *retained* IDs used to allow issuance even when JWKS was unusable.
+            published.set(java.util.List.of(current,previous,previous));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,()->issuer.issue(
+                    new TenantContext(UUID.randomUUID()),code(UUID.randomUUID(),now),now));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,controller::jwks);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,controller::discovery);
+            published.set(java.util.List.of(current));
+            assertThat(controller.jwks().getBody().toString()).doesNotContain("old");
+            assertThat(issuer.issue(new TenantContext(UUID.randomUUID()),code(UUID.randomUUID(),now),now).accessToken()).isNotBlank();
+        }
+    }
+
+    @Test
+    void weakCurrentOrRetainedRsaKeysFailStartupAndEveryPublicationPath() throws Exception {
+        var generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        var strongPair = generator.generateKeyPair();
+        generator.initialize(1024);
+        var weakPair = generator.generateKeyPair();
+        var props = new IdpProtocolProperties(true, "https://idp.example.test");
+        var now = Instant.parse("2026-11-16T00:00:00Z");
+        for (String algorithm : java.util.List.of("SHA256withRSA", "SHA384withRSA", "SHA512withRSA")) {
+            var strong = new SigningKeyMaterial("strong", algorithm, strongPair.getPublic());
+            var weak = new SigningKeyMaterial("weak", algorithm, weakPair.getPublic());
+            var current = new java.util.concurrent.atomic.AtomicReference<>(strong);
+            var published = new java.util.concurrent.atomic.AtomicReference<>(java.util.List.of(strong));
+            var signCalls = new java.util.concurrent.atomic.AtomicInteger();
+            SigningKeyProvider provider = new SigningKeyProvider() {
+                public SigningKeyMaterial currentSigningKey() { return current.get(); }
+                public Optional<SigningKeyMaterial> verificationKey(String kid) {
+                    return published.get().stream().filter(k -> k.keyId().equals(kid)).findFirst();
+                }
+                public java.util.List<SigningKeyMaterial> verificationKeys() { return published.get(); }
+                public byte[] sign(byte[] payload) {
+                    signCalls.incrementAndGet();
+                    try {
+                        var signature = Signature.getInstance(algorithm);
+                        signature.initSign(strongPair.getPrivate());
+                        signature.update(payload);
+                        return signature.sign();
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                }
+            };
+            var controller = new IdpProtocolController(props, provider);
+            var issuer = new IdpJwtIssuer(props, provider, JsonMapper.builder().build());
+            var tenant = new TenantContext(UUID.randomUUID());
+            var authorizationCode = code(UUID.randomUUID(), now);
+            assertThat(issuer.issue(tenant, authorizationCode, now).accessToken()).isNotBlank();
+            assertThat(controller.discovery().getBody()).isNotNull();
+            assertThat(controller.jwks().getBody()).isNotNull();
+            int before = signCalls.get();
+
+            // Weak retained material must invalidate the entire published set, even with a strong current key.
+            published.set(java.util.List.of(strong, weak));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> new IdpProtocolController(props, provider));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, controller::discovery);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, controller::jwks);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> issuer.issue(tenant, authorizationCode, now));
+            assertThat(signCalls.get()).isEqualTo(before);
+
+            // A weak current key also fails every path before signing.
+            current.set(weak);
+            published.set(java.util.List.of(weak, strong));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> new IdpProtocolController(props, provider));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, controller::discovery);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, controller::jwks);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> issuer.issue(tenant, authorizationCode, now));
+            assertThat(signCalls.get()).isEqualTo(before);
+
+            // Restoring a valid set restores issuance, discovery and JWKS.
+            current.set(strong);
+            published.set(java.util.List.of(strong));
+            assertThat(issuer.issue(tenant, authorizationCode, now).accessToken()).isNotBlank();
+            assertThat(controller.discovery().getBody()).isNotNull();
+            assertThat(controller.jwks().getBody()).isNotNull();
+        }
+    }
+
+    @Test
+    void realSignatureRolloverRetainsPriorVerificationAndFailsClosedOnConcurrentSwap() throws Exception {
+        var generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        var oldPair = generator.generateKeyPair();
+        var newPair = generator.generateKeyPair();
+        var oldKey = new SigningKeyMaterial("roll-old", "SHA256withRSA", oldPair.getPublic());
+        var newKey = new SigningKeyMaterial("roll-new", "SHA256withRSA", newPair.getPublic());
+        var current = new java.util.concurrent.atomic.AtomicReference<>(oldKey);
+        var published = new java.util.concurrent.atomic.AtomicReference<>(java.util.List.of(oldKey));
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var pause = new java.util.concurrent.atomic.AtomicBoolean(false);
+        SigningKeyProvider provider = new SigningKeyProvider() {
+            public SigningKeyMaterial currentSigningKey() { return current.get(); }
+            public Optional<SigningKeyMaterial> verificationKey(String kid) {
+                return published.get().stream().filter(k -> k.keyId().equals(kid)).findFirst();
+            }
+            public java.util.List<SigningKeyMaterial> verificationKeys() { return published.get(); }
+            public byte[] sign(byte[] payload) {
+                try {
+                    if (pause.compareAndSet(true, false)) {
+                        entered.countDown();
+                        if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                            throw new IllegalStateException("rollover fixture timeout");
+                    }
+                    var signature = Signature.getInstance("SHA256withRSA");
+                    signature.initSign(current.get().equals(oldKey) ? oldPair.getPrivate() : newPair.getPrivate());
+                    signature.update(payload);
+                    return signature.sign();
+                } catch (Exception ex) { throw new IllegalStateException(ex); }
+            }
+        };
+        var props = new IdpProtocolProperties(true, "https://idp.example.test");
+        var json = JsonMapper.builder().build();
+        var issuer = new IdpJwtIssuer(props, provider, json);
+        var controller = new IdpProtocolController(props, provider);
+        var now = Instant.parse("2026-11-16T00:00:00Z");
+        var tenant = new TenantContext(UUID.randomUUID());
+        var authorizationCode = code(UUID.randomUUID(), now);
+        var oldToken = com.nimbusds.jwt.SignedJWT.parse(issuer.issue(tenant, authorizationCode, now).accessToken());
+        assertThat(oldToken.getHeader().getKeyID()).isEqualTo("roll-old");
+        // Publish replacement while still issuing with old key.
+        published.set(java.util.List.of(oldKey, newKey));
+        assertThat(controller.jwks().getBody().toString()).contains("roll-old", "roll-new");
+        pause.set(true);
+        try (var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var pending = pool.submit(() -> issuer.issue(tenant, authorizationCode, now));
+            try {
+                assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                // Signer changes between captured metadata and actual private-key signing.
+                current.set(newKey);
+            } finally { release.countDown(); }
+            var failure = org.junit.jupiter.api.Assertions.assertThrows(java.util.concurrent.ExecutionException.class,
+                    () -> pending.get(10, java.util.concurrent.TimeUnit.SECONDS));
+            assertThat(failure.getCause()).isInstanceOf(IllegalStateException.class);
+        }
+        var next = com.nimbusds.jwt.SignedJWT.parse(issuer.issue(tenant, authorizationCode, now.plusSeconds(1)).accessToken());
+        assertThat(next.getHeader().getKeyID()).isEqualTo("roll-new");
+        var overlap = com.nimbusds.jose.jwk.JWKSet.parse(json.writeValueAsString(controller.jwks().getBody()));
+        var oldPublic = (com.nimbusds.jose.jwk.RSAKey) overlap.getKeyByKeyId("roll-old");
+        var newPublic = (com.nimbusds.jose.jwk.RSAKey) overlap.getKeyByKeyId("roll-new");
+        assertThat(oldToken.verify(new com.nimbusds.jose.crypto.RSASSAVerifier(oldPublic.toRSAPublicKey()))).isTrue();
+        assertThat(next.verify(new com.nimbusds.jose.crypto.RSASSAVerifier(newPublic.toRSAPublicKey()))).isTrue();
+        // Withdrawal is a fixture action, not a claim that production retention/cache policy is proved.
+        published.set(java.util.List.of(newKey));
+        var withdrawn = com.nimbusds.jose.jwk.JWKSet.parse(json.writeValueAsString(controller.jwks().getBody()));
+        assertThat(withdrawn.getKeyByKeyId("roll-old")).isNull();
+        assertThat(next.verify(new com.nimbusds.jose.crypto.RSASSAVerifier(
+                ((com.nimbusds.jose.jwk.RSAKey) withdrawn.getKeyByKeyId("roll-new")).toRSAPublicKey()))).isTrue();
+        System.out.println("G3 acceptance: real RSA rollover publish-before-switch, concurrent mismatch denied, old/new signatures verify during overlap, old key withdrawn");
+    }
+
     private static IdpAuthorizationCode code(UUID identityId, Instant now) {
         return new IdpAuthorizationCode(
                 UUID.randomUUID(),

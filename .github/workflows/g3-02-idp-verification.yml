@@ -1,0 +1,32 @@
+name: G3-02 Retained IdP verification
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/server/src/**'
+      - '.github/workflows/g3-02-idp-verification.yml'
+permissions:
+  contents: read
+jobs:
+  retained-idp:
+    if: github.head_ref == 'feature/vf-fnd-g3-02-idp-hardening'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Existing and new IdP regression, real V42 HTTP and JDBC
+        run: |
+          sh apps/server/mvnw -B -ntp --strict-checksums -f apps/server/pom.xml -Dtest=IdpRetainedHttpIntegrationTest,IdpRetainedProtocolIntegrationTest,IdpProtocolServiceTest,IdpJwtIssuerTest,IdpProtocolFoundationTest,IdpBrowserSessionServiceTest,IdpBrowserSessionAuthenticationFilterTest,IdpBrowserSessionControllerTest,IdpInteractiveLoginServiceTest,IdpLoginInteractionServiceTest,IdpRuntimePersistenceIntegrationTest,IdpInteractionPersistenceIntegrationTest,FederatedSubjectResolverTest,FederationAdapterRegistryTest,FederationTrustPersistenceIntegrationTest,ApplicationFlywayStartupIntegrationTest,InstallationBootstrapServiceTest,PersistenceArchitectureTest test
+      - name: Upload sanitized test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: g3-02-idp-verification
+          path: apps/server/target/surefire-reports/
+          if-no-files-found: warn
