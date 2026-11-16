@@ -370,6 +370,7 @@ def verify_integration_admin_openapi(document: dict) -> None:
         "/api/v1/connector-bindings",
         "/api/v1/connector-bindings/{id}",
         "/api/v1/connector-bindings/{id}:disable",
+        "/api/v1/connector-bindings/{id}:reconcile",
         "/api/v1/connector-bindings/{bindingId}/entitlement-mappings",
         "/api/v1/entitlement-observation-mappings/{id}",
         "/api/v1/entitlement-observation-mappings/{id}:unmap",
@@ -384,9 +385,16 @@ def verify_integration_admin_openapi(document: dict) -> None:
     assert document.get("security") == [{"bearerAuth": []}]
     assert document.get("x-wyrmgate-idempotency") == "all mutations require Idempotency-Key"
     assert document.get("x-wyrmgate-concurrency") == (
-        "updates and disable operations require strong revision If-Match"
+        "updates, disable operations, and reconciliation scheduling require strong revision If-Match"
     )
+    schedule = document["paths"]["/api/v1/connector-bindings/{id}:reconcile"]["post"]
+    assert {"IfMatch", "IdempotencyKey", "ResourceId"}.issubset(ref_names(schedule))
+    assert schedule["x-wyrmgate-administrative-permission"] == "connector-binding:reconcile"
+    assert {"202", "400", "403", "404", "409", "412"}.issubset(schedule["responses"])
+    assert schedule["requestBody"]["$ref"] == "#/components/requestBodies/ReconciliationScheduleRequest"
     schemas = document["components"]["schemas"]
+    for name in ("ReconciliationScheduleRequest", "ScheduledReconciliationRun"):
+        assert schemas[name]["additionalProperties"] is False
     assert "secretReference" not in schemas["ConnectorResource"]["properties"]
     secret_reference = schemas["ConnectorCreateRequest"]["properties"]["secretReference"]
     assert secret_reference.get("writeOnly") is True

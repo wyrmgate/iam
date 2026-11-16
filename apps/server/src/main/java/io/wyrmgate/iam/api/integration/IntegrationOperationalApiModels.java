@@ -53,6 +53,9 @@ final class IntegrationOperationalApiModels {
             Instant completedAt,
             String outcome,
             String failureCategory,
+            String effectRecoveryState,
+            String effectRecoveryReason,
+            Instant effectRecoveryUpdatedAt,
             UUID correlationId,
             UUID causationId) {}
 
@@ -65,6 +68,7 @@ final class IntegrationOperationalApiModels {
             UUID connectorBindingId,
             UUID operationId,
             String scopeObjectClass,
+            String scopeMode,
             String state,
             String reportedCoverage,
             String effectiveCompleteness,

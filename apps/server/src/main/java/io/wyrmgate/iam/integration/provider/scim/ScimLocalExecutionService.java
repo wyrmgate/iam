@@ -47,6 +47,7 @@ public final class ScimLocalExecutionService {
     private final ObjectMapper json;
     private final Clock clock;
     private final ProvisioningAdmission admission;
+    private final ScimExecutionPolicy policy;
 
     public ScimLocalExecutionService(
             ConnectorExecutionRepository execution,
@@ -56,8 +57,8 @@ public final class ScimLocalExecutionService {
             ScimPrincipalProviderAdapter scim,
             ScimGroupProviderAdapter groups,
             ScimLocalExecutionProperties properties,
-            ObjectMapper json,ProvisioningAdmission admission) {
-        this(execution, work, desiredState, transactions, scim, groups, properties, json, Clock.systemUTC(),admission);
+            ObjectMapper json,ProvisioningAdmission admission,ScimExecutionPolicy policy) {
+        this(execution, work, desiredState, transactions, scim, groups, properties, json, Clock.systemUTC(),admission,policy);
     }
 
     ScimLocalExecutionService(
@@ -69,7 +70,7 @@ public final class ScimLocalExecutionService {
             ScimGroupProviderAdapter groups,
             ScimLocalExecutionProperties properties,
             ObjectMapper json,
-            Clock clock,ProvisioningAdmission admission) {
+            Clock clock,ProvisioningAdmission admission,ScimExecutionPolicy policy) {
         this.execution = Objects.requireNonNull(execution, "execution");
         this.work = Objects.requireNonNull(work, "work");
         this.desiredState = Objects.requireNonNull(desiredState, "desiredState");
@@ -80,6 +81,7 @@ public final class ScimLocalExecutionService {
         this.json = Objects.requireNonNull(json, "json");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.admission=Objects.requireNonNull(admission);
+        this.policy=Objects.requireNonNull(policy);
     }
 
     public int executeAvailable() {
@@ -215,7 +217,7 @@ public final class ScimLocalExecutionService {
                     .filter(value->isCompatible(value,leased.contractId(),leased.contractVersion())).orElse(null);
         });
         if (configuration == null || configuration.secretReference() == null
-                || configuration.secretReference().isBlank()) {
+                || configuration.secretReference().isBlank()||!policy.permits(leased.tenant(),configuration)) {
             complete(owner, leased, new WorkCompletion(
                     "FAILED_FINAL", "VALIDATION", "connector_configuration_unavailable",
                     null, null, null, null, Map.of(), null, null));
@@ -307,12 +309,14 @@ public final class ScimLocalExecutionService {
 
     private void executeReconciliation(LeasedConnectorWork leased) {
         WorkerSession owner = localOwner(leased.tenant());
-        ExecutionConfiguration configuration = execution
-                .findExecutionConfiguration(leased.tenant(), leased.connectorBindingId())
+        ExecutionConfiguration configuration = transactions.required(()->{
+            work.renewLease(owner,leased.workId(),leased.lease().leaseId(),leased.lease().leaseEpoch(),clock.instant(),properties.effectiveLeaseDuration());
+            return execution.findExecutionConfiguration(leased.tenant(), leased.connectorBindingId())
                 .filter(value -> isCompatible(value, leased.contractId(), leased.contractVersion()))
-                .orElse(null);
+                .filter(value->leased.executionContext()!=null&&leased.executionContext().matches(value)).orElse(null);
+        });
         if (configuration == null || configuration.secretReference() == null
-                || configuration.secretReference().isBlank()) {
+                || configuration.secretReference().isBlank()||!policy.permits(leased.tenant(),configuration)) {
             complete(owner, leased, new WorkCompletion(
                     "FAILED_FINAL", "VALIDATION", "connector_configuration_unavailable",
                     null, null, null, null, Map.of(),
@@ -482,8 +486,19 @@ public final class ScimLocalExecutionService {
                 );
     }
 
+    private static void validateConfiguration(Map<String,Object> configuration){
+        var allowed=java.util.Set.of("baseUri","pageSize","maxPagesPerExecution","requestTimeout","requestTimeoutSeconds","idempotencyHeader");
+        if(!allowed.containsAll(configuration.keySet())||!(configuration.get("baseUri") instanceof String))throw new IllegalArgumentException("invalid SCIM configuration fields");
+        for(String key:java.util.List.of("pageSize","maxPagesPerExecution","requestTimeoutSeconds"))if(configuration.containsKey(key)&&!(configuration.get(key) instanceof Integer))throw new IllegalArgumentException("invalid SCIM numeric field");
+        for(String key:java.util.List.of("requestTimeout","idempotencyHeader"))if(configuration.containsKey(key)&&!(configuration.get(key) instanceof String))throw new IllegalArgumentException("invalid SCIM text field");
+        if(configuration.containsKey("requestTimeout")&&configuration.containsKey("requestTimeoutSeconds"))throw new IllegalArgumentException("ambiguous timeout");
+        String header=text(configuration,"idempotencyHeader");
+        if(header!=null&&!(header.equalsIgnoreCase("Idempotency-Key")||header.toLowerCase(java.util.Locale.ROOT).startsWith("x-idempotency-")))throw new IllegalArgumentException("unsupported idempotency header");
+    }
+
     private static ScimPrincipalProviderAdapter.Configuration scimConfiguration(
             Map<String,Object> configuration) {
+        validateConfiguration(configuration);
         String baseUri = requiredText(configuration, "baseUri");
         int pageSize = integer(configuration, "pageSize", 100);
         int maxPages = integer(configuration, "maxPagesPerExecution", 1000);

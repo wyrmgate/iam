@@ -58,8 +58,36 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
         UUID run = reconciliationRun(tenantA, bindingA, base.plusSeconds(7));
 
         String taskJson = JSON.writeValueAsString(repository.findProvisioningTask(contextA, task).orElseThrow());
-        String attemptJson = JSON.writeValueAsString(repository.findProvisioningAttempt(contextA, attempt).orElseThrow());
-        String runJson = JSON.writeValueAsString(repository.findReconciliationRun(contextA, run).orElseThrow());
+        var attemptStatus = repository.findProvisioningAttempt(contextA, attempt).orElseThrow();
+        assertThat(attemptStatus.effectRecoveryState()).isNull();
+        assertThat(attemptStatus.effectRecoveryReason()).isNull();
+        String attemptJson = JSON.writeValueAsString(attemptStatus);
+
+        // A late successful provider effect remains immutable evidence while recovery is a distinct projection.
+        UUID late = lateSuccess(tenantA, task, base.plusSeconds(8));
+        var recovery = repository.findProvisioningAttempt(contextA, late).orElseThrow();
+        assertThat(recovery.outcome()).isEqualTo("SUCCEEDED");
+        assertThat(recovery.effectRecoveryState()).isEqualTo("MANUAL");
+        assertThat(recovery.effectRecoveryReason()).isEqualTo("historical_route_changed");
+        assertThat(recovery.effectRecoveryUpdatedAt()).isEqualTo(base.plusSeconds(10));
+        var attempts = repository.findProvisioningAttemptPage(contextA, task, null, 10);
+        assertThat(attempts).extracting(value -> value.id()).containsExactly(late, attempt);
+        assertThat(attempts.getFirst().effectRecoveryState()).isEqualTo("MANUAL");
+        var remaining = repository.findProvisioningAttemptPage(contextA, task,
+                new PagePosition(attempts.getFirst().completedAt(), late), 10);
+        assertThat(remaining).extracting(value -> value.id()).containsExactly(attempt);
+        assertThat(repository.findProvisioningAttempt(new TenantContext(tenantB), late)).isEmpty();
+        assertThat(repository.findProvisioningAttemptPage(new TenantContext(tenantB), task, null, 10)).isEmpty();
+        assertThat(JSON.writeValueAsString(recovery)).doesNotContain("late-provider-secret", "leaseId", "metadata");
+        var runStatus = repository.findReconciliationRun(contextA, run).orElseThrow();
+        assertThat(runStatus.scopeMode()).isEqualTo("INCREMENTAL");
+        assertThat(repository.findReconciliationRunPage(contextA, null, 10))
+                .anySatisfy(value -> {
+                    assertThat(value.id()).isEqualTo(run);
+                    assertThat(value.scopeMode()).isEqualTo("INCREMENTAL");
+                });
+        assertThat(repository.findReconciliationRun(new TenantContext(tenantB), run)).isEmpty();
+        String runJson = JSON.writeValueAsString(runStatus);
 
         assertThat(taskJson)
                 .doesNotContain("super-secret-idempotency", "raw-provider-secret", "payload");
@@ -138,17 +166,42 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
         return id;
     }
 
+    private static UUID lateSuccess(UUID tenantId, UUID taskId, Instant now) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                UPDATE integration.provisioning_task
+                SET state='BLOCKED', attempt_count=2, failure_code='provider_effect_unknown_after_lease_expiry',
+                    updated_at=?
+                WHERE tenant_id=? AND id=?
+                """, Timestamp.from(now), tenantId, taskId);
+        jdbc.update("""
+                INSERT INTO integration.provisioning_attempt (
+                    id, tenant_id, task_id, attempt_number, lease_id, lease_epoch,
+                    started_at, completed_at, outcome, provider_object_id, metadata,
+                    completion_fingerprint, correlation_id)
+                VALUES (?, ?, ?, 2, ?, 2, ?, ?, 'SUCCEEDED', 'late-provider-secret',
+                        '{}'::jsonb, 'late-fingerprint', ?)
+                """, id, tenantId, taskId, UUID.randomUUID(), Timestamp.from(now),
+                Timestamp.from(now.plusSeconds(1)), UUID.randomUUID());
+        jdbc.update("""
+                INSERT INTO integration.provisioning_effect_recovery
+                    (tenant_id, attempt_id, state, reason, created_at, updated_at)
+                VALUES (?, ?, 'MANUAL', 'historical_route_changed', ?, ?)
+                """, tenantId, id, Timestamp.from(now.plusSeconds(1)), Timestamp.from(now.plusSeconds(2)));
+        return id;
+    }
+
     private static UUID reconciliationRun(UUID tenantId, UUID bindingId, Instant now) {
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO integration.reconciliation_run (
-                    id, tenant_id, connector_binding_id, operation_id, scope_object_class,
+                    id, tenant_id, connector_binding_id, operation_id, scope_object_class, scope_mode,
                     state, reported_coverage, effective_completeness, configuration_version,
                     runtime_id, runtime_version, contract_id, contract_version,
                     checkpoint_start, checkpoint_end, next_attempt_at, failure_code,
                     completion_lease_epoch, completion_fingerprint, correlation_id, causation_id,
                     revision, started_at, completed_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'PRINCIPAL', 'FAILED', 'PARTIAL', 'PARTIAL', 1,
+                VALUES (?, ?, ?, ?, 'PRINCIPAL', 'INCREMENTAL', 'FAILED', 'PARTIAL', 'PARTIAL', 1,
                         'scim', '1', 'principal.v1', 1,
                         'checkpoint-secret-start', 'checkpoint-secret-end', ?, 'provider_unavailable',
                         7, 'completion-secret', ?, NULL, 2, ?, ?, ?, ?)

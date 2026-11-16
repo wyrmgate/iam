@@ -58,7 +58,7 @@ Every claimed work item contains:
 - correlation/causation IDs;
 - bounded connector-edge payload.
 
-After lease expiry, the work may be claimed again with a higher epoch. Renew/observation/completion requests must carry the current lease ID and epoch. A stale generation cannot overwrite a newer attempt.
+After lease expiry, read-only reconciliation may be reclaimed with a higher epoch. Expired provisioning mutations become BLOCKED rather than being blindly replayed (ADR-0073). Renew/observation/completion requests must carry the applicable lease ID and epoch. A stale generation cannot overwrite current state; ADR-0080 allows narrowly scoped exact expired-lease success as immutable evidence only.
 
 At-least-once delivery is expected. Provider-side operations must use the stable operation/idempotency identity where the provider permits it, and Wyrmgate remains responsible for revalidation before changing Integration process state.
 
@@ -112,7 +112,7 @@ A causal work attempt is not silently upgraded to a different wire/schema versio
 
 The first runtime slice is intentionally bounded:
 
-- worker registrations are Integration-owned server-side state; no worker registration management API is exposed yet;
+- worker registrations are Integration-owned server-side state; the governed public administration API manages registrations, scope and permissions without exposing execution operations;
 - remote reconciliation supports negotiated `PRINCIPAL`, `ENTITLEMENT`, and `GRANT` observations under protocol v1; each observation batch must match the run's object-class scope;
 - positive observations from PARTIAL/UNKNOWN runs may materialize, but unseen observations are marked absent only after Integration validates effective `COMPLETE` coverage;
 - ProvisioningJob, ProvisioningTask and immutable ProvisioningAttempt persistence are implemented;
@@ -121,7 +121,7 @@ The first runtime slice is intentionally bounded:
 - provisioning work revalidates through Access-owned `DesiredAccessStateQuery`; matching `CURRENT` revision is claimable, `ABSENT` or revision mismatch becomes `SUPERSEDED`, and `UNAVAILABLE` leaves work unclaimed;
 - connector/provider credentials remain external opaque secret references and never transit ordinary worker payloads;
 - an opt-in in-process SCIM executor may execute the same Integration-owned durable work using the same lease/fencing and completion persistence; this does not change worker protocol v1 or grant local execution any additional governance authority;
-- multi-region routing, broker transport, raw-secret delivery, credential/source-record observation runtime support, and additional provider contracts remain future slices.
+- multi-region routing, broker transport, raw-secret delivery, credential observation runtime support, and additional provider contracts remain future slices.
 
 ## Mutation lease uncertainty (ADR-0073)
 
@@ -138,3 +138,9 @@ Completion accepts provider evidence and closes discovery; a RUNNING run with pe
 ## Current provisioning admission (ADR-0076 / V36)
 
 New jobs pin binding, connector and configuration revisions. Local and remote claims verify current Access intent and exact mapped routes, active Tenant/Catalog for increases, safe current coalesced demand for removals. Local rechecks immediately before provider execution; remote must renew its exact lease immediately before each mutation, triggering the same admission. Rejected renewal means do not execute; provider effect already in flight remains uncertain. Unpinned historical plans or stale contexts block; no fabricated backfill. Replacement success required before removing a still-required grant from an obsolete route.
+
+## Provider-effect recovery and exact execution context (ADR-0080–0082)
+
+A late successful mutation with the exact expired lease may be recorded as immutable attempt evidence while the task remains BLOCKED. Bounded recovery evaluates current desired demand and exact mapping/configuration before creating a causal corrective grant plan; uncertain or obsolete-route effects require operational remediation. No arbitrary retry or status override.
+
+The lease envelope includes a non-secret executionContext pin: runtime ID/version, configuration version, binding and connector revision. Remote executors must resolve exactly that authorized configuration and renew immediately before mutation; absent legacy pins are not executable. Local SCIM execution defaults to deny unless the deployment authorizes the exact tenant, connector, HTTPS base URI and opaque environment secret reference. FULL and INCREMENTAL are explicit reconciliation scopes; incremental coverage never authorizes absence, and source delivery remains Identity-owned through semantic commands.

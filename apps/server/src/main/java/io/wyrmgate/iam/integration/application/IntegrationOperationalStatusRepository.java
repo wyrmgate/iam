@@ -49,6 +49,9 @@ public interface IntegrationOperationalStatusRepository {
             Instant completedAt,
             String outcome,
             String failureCategory,
+            String effectRecoveryState,
+            String effectRecoveryReason,
+            Instant effectRecoveryUpdatedAt,
             UUID correlationId,
             UUID causationId) {}
 
@@ -57,6 +60,7 @@ public interface IntegrationOperationalStatusRepository {
             UUID connectorBindingId,
             UUID operationId,
             String scopeObjectClass,
+            String scopeMode,
             String state,
             String reportedCoverage,
             String effectiveCompleteness,

@@ -263,6 +263,9 @@
           "completedAt": { "type": "string", "format": "date-time" },
           "outcome": { "type": "string", "enum": ["SUCCEEDED", "FAILED_RETRYABLE", "FAILED_FINAL", "SUPERSEDED", "SKIPPED"] },
           "failureCategory": { "type": ["string", "null"], "enum": ["TRANSIENT", "RATE_LIMITED", "AUTHENTICATION", "AUTHORIZATION", "VALIDATION", "UNSUPPORTED", "PROVIDER", null] },
+          "effectRecoveryState": { "type": ["string", "null"], "enum": ["PENDING", "RESOLVED", "PLANNED", "MANUAL", null], "description": "Separate mutable recovery projection; null when no recovery item exists." },
+          "effectRecoveryReason": { "type": ["string", "null"], "maxLength": 128, "description": "Normalized Integration recovery reason, never provider detail." },
+          "effectRecoveryUpdatedAt": { "type": ["string", "null"], "format": "date-time" },
           "correlationId": { "type": "string", "format": "uuid" },
           "causationId": { "type": ["string", "null"], "format": "uuid" }
         }
@@ -279,12 +282,13 @@
       "ReconciliationRunResource": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "connectorBindingId", "operationId", "scopeObjectClass", "state", "reportedCoverage", "effectiveCompleteness", "configurationVersion", "runtimeId", "runtimeVersion", "contractId", "contractVersion", "correlationId", "revision", "startedAt", "createdAt", "updatedAt"],
+        "required": ["id", "connectorBindingId", "operationId", "scopeObjectClass", "scopeMode", "state", "reportedCoverage", "effectiveCompleteness", "configurationVersion", "runtimeId", "runtimeVersion", "contractId", "contractVersion", "correlationId", "revision", "startedAt", "createdAt", "updatedAt"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "connectorBindingId": { "type": "string", "format": "uuid" },
           "operationId": { "type": "string", "format": "uuid" },
-          "scopeObjectClass": { "type": "string", "enum": ["PRINCIPAL"] },
+          "scopeObjectClass": { "type": "string", "enum": ["PRINCIPAL", "ENTITLEMENT", "GRANT"] },
+          "scopeMode": { "type": "string", "enum": ["FULL", "INCREMENTAL"] },
           "state": { "type": "string", "enum": ["RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"] },
           "reportedCoverage": { "type": "string", "enum": ["COMPLETE", "PARTIAL", "UNKNOWN"] },
           "effectiveCompleteness": { "type": "string", "enum": ["COMPLETE", "PARTIAL", "UNKNOWN"] },

@@ -19,7 +19,7 @@ Every operation consumes the trusted control-plane actor context and evaluates A
 The implemented permission families are:
 
 - `connector:read|create|update|disable`
-- `connector-binding:read|create|update|disable`
+- `connector-binding:read|create|update|disable|reconcile`
 - `connector-worker:read|create|update|disable`
 - `entitlement-observation-mapping:read|create|retire`
 - `principal-observation-mapping:read|create|retire`
@@ -198,10 +198,22 @@ Integration owns explicit tenant-bound FederationTrust and FederatedSubjectLink 
 
 ## Exact provider realization (ADR-0072)
 
-New grant provisioning requires both a present observed account explicitly mapped to the governed Principal and a present observed entitlement mapped to the Catalog Entitlement in the same active binding. No native Principal key fallback. Multiple eligible routes deny; historical reduction retains exact prior evidence under ADR-0056. Existing account operations resolve exact binding mappings or compatible successful account-provisioning provenance. No automatic mapping backfill. Claim/execution fencing and repair remain subsequent #524 slices.
+New grant provisioning requires both a present observed account explicitly mapped to the governed Principal and a present observed entitlement mapped to the Catalog Entitlement in the same active binding. No native Principal key fallback. Multiple eligible routes deny; historical reduction retains exact prior evidence under ADR-0056. Existing account operations resolve exact binding mappings or compatible successful account-provisioning provenance. No automatic mapping backfill. ADR-0076 implements current claim/execution fencing; ADR-0080 implements bounded recovery of confirmed grant effects. Unknown effects remain blocked pending explicit evidence/remediation.
 
 ## Federation administration (ADR-0077/V37)
 
 Dedicated read/create/retire permissions for `/api/v1/federation-trusts` and `/api/v1/federated-subject-links`. POST creates with Idempotency-Key; GET exact ID returns strong revision ETag; POST `/{id}:retire` requires If-Match and Idempotency-Key. Initial OIDC trust accepts issuer, audience, settings.authorizationEndpoint/tokenEndpoint/keyId/publicKeySpki (public RSA SPKI base64 only), HTTPS same-origin endpoints, public-client PKCE RS256 profile. Link accepts trustId, exactSubject, principalId; active unique same-tenant exact subject, eligible Principal through Identity query. Retire trust invalidates links logically; retire/create for remap/key replacement, history retained. No automatic upstream authentication activation.
 
 ADR-0079: `POST /api/v1/federation-trusts/{id}:bind-client` requires `federation-trust:bind-client`, If-Match, Idempotency-Key and body `{ "clientId": "..." }`. Resolves the current same-tenant interactive Catalog registration, binds once and advances trust revision. One active trust per registration; retirement/recreation for replacement. Binding requires mandatory Audit evidence. Public callback only enabled by deployment opt-in and allowed origin.
+
+## Reconciliation scheduling (ADR-0081/V41)
+
+`POST /api/v1/connector-bindings/{id}:reconcile` requires `connector-binding:reconcile`, strong binding revision `If-Match` and causal `Idempotency-Key`. The typed request contains `objectClass` (PRINCIPAL, ENTITLEMENT or GRANT), `scopeMode` (FULL or INCREMENTAL) and optional `checkpoint`. FULL requires no checkpoint; INCREMENTAL requires a bounded nonblank checkpoint (positive startIndex for SCIM). SOURCE_SYSTEM requires PRINCIPAL and exactly one current active source binding. Server validation owns the final decision.
+
+The command schedules durable work without provider I/O and returns 202 with a Location referencing the run, correlation ID and data-minimized run status. An identical retry returns the same run; a changed fingerprint conflicts. Status reads require separate reconciliation-run:read authority. The operational run projection includes scopeMode, never the checkpoint itself. Accepted scheduling is not provider completion or verified coverage; INCREMENTAL never implies absence. Source imports are delivered via bounded Identity-owned semantic commands and do not create governed Principal authority.
+
+The Console's first scheduling action deliberately supports FULL only; it loads the binding revision before submission, uses a stable causal key for retries and reports the resulting run ID separately from the binding. Provider-specific checkpoint entry remains an explicit API operation.
+
+## Provider-effect recovery visibility (ADR-0080)
+
+Provisioning attempt list/detail reads include nullable `effectRecoveryState`, `effectRecoveryReason` and `effectRecoveryUpdatedAt` from the distinct Integration-owned recovery projection. Existing attempt read authorization and tenant scope apply. These fields do not mutate or reinterpret the immutable attempt outcome: PENDING is recovery awaiting evaluation, RESOLVED matches current demand, PLANNED means a corrective plan was created (not completed), and MANUAL requires evidence-based investigation. No recovery record is represented by null fields. Only normalized recovery codes are exposed; provider payloads, identifiers, lease data and completion fingerprints remain excluded. An uncertain mutation with no successful attempt remains visible as a BLOCKED task with its failure code; this read surface is not permission to retry, acknowledge, or override it.

@@ -305,6 +305,9 @@ public final class JdbcIntegrationRuntimeRepository
                  AND sx.contract_id = r.contract_id AND sx.contract_version = r.contract_version
                 WHERE r.tenant_id = ?
                   AND r.state = 'RUNNING' AND r.completion_lease_epoch IS NULL
+                  AND r.configuration_version=ci.configuration_version AND r.runtime_id=ci.runtime_id AND r.runtime_version=ci.runtime_version
+                  AND r.contract_id=b.contract_id AND r.contract_version=b.contract_version
+                  AND (r.binding_revision IS NULL OR (r.binding_revision=b.revision AND r.connector_revision=ci.revision))
                   AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= ?)
                   AND b.lifecycle_state = 'ACTIVE' AND ci.lifecycle_state = 'ACTIVE'
                   AND NOT EXISTS (
@@ -415,6 +418,9 @@ public final class JdbcIntegrationRuntimeRepository
                   AND b.contract_id = r.contract_id
                   AND b.contract_version = r.contract_version
                   AND r.state = 'RUNNING' AND r.completion_lease_epoch IS NULL
+                  AND r.configuration_version=ci.configuration_version AND r.runtime_id=ci.runtime_id AND r.runtime_version=ci.runtime_version
+                  AND r.contract_id=b.contract_id AND r.contract_version=b.contract_version
+                  AND (r.binding_revision IS NULL OR (r.binding_revision=b.revision AND r.connector_revision=ci.revision))
                   AND (r.next_attempt_at IS NULL OR r.next_attempt_at <= ?)
                   AND b.lifecycle_state = 'ACTIVE'
                   AND ci.lifecycle_state = 'ACTIVE'
@@ -449,7 +455,7 @@ public final class JdbcIntegrationRuntimeRepository
                        b.contract_id, b.contract_version,
                        b.supports_complete_principal_discovery,
                        b.supports_complete_entitlement_discovery,
-                       b.supports_complete_grant_discovery
+                       b.supports_complete_grant_discovery,b.revision,ci.revision
                 FROM integration.connector_binding b
                 JOIN integration.connector_instance ci
                   ON ci.tenant_id = b.tenant_id AND ci.id = b.connector_instance_id
@@ -460,7 +466,7 @@ public final class JdbcIntegrationRuntimeRepository
                         rs.getObject(1, UUID.class), rs.getObject(2, UUID.class),
                         rs.getString(3), rs.getString(4), rs.getString(5), rs.getLong(6),
                         readMap(rs.getString(7)), rs.getString(8), rs.getString(9),
-                        rs.getInt(10), rs.getBoolean(11), rs.getBoolean(12), rs.getBoolean(13)),
+                        rs.getInt(10), rs.getBoolean(11), rs.getBoolean(12), rs.getBoolean(13),rs.getLong(14),rs.getLong(15)),
                 tenant.tenantId(), connectorBindingId).stream().findFirst();
     }
 
@@ -569,7 +575,7 @@ public final class JdbcIntegrationRuntimeRepository
         return new LeasedConnectorWork(
                 c.taskId(), c.operationId(), lease, new TenantContext(c.tenantId()),
                 c.connectorBindingId(), WorkKind.PROVISION, c.contractId(), c.contractVersion(),
-                c.desiredRevision(), null, c.idempotencyKey(), c.correlationId(), c.causationId(), c.payload());
+                c.desiredRevision(), null, c.idempotencyKey(), c.correlationId(), c.causationId(), c.payload(),provisioningContext(c));
     }
 
     @Override
@@ -589,7 +595,23 @@ public final class JdbcIntegrationRuntimeRepository
                 c.runId(), c.operationId(), lease, new TenantContext(c.tenantId()),
                 c.connectorBindingId(), WorkKind.RECONCILE, c.contractId(), c.contractVersion(),
                 null, c.checkpoint(), "reconcile:" + c.operationId(),
-                c.correlationId(), c.causationId(), c.payload());
+                c.correlationId(), c.causationId(), c.payload(),reconciliationContext(c));
+    }
+
+    private LeasedConnectorWork.ExecutionContext provisioningContext(ProvisioningCandidate c){
+        return jdbc.query("""
+                SELECT ci.runtime_id,ci.runtime_version,j.planned_configuration_version,j.planned_binding_revision,j.planned_connector_revision
+                FROM integration.provisioning_task t JOIN integration.provisioning_job j ON j.tenant_id=t.tenant_id AND j.id=t.provisioning_job_id
+                JOIN integration.connector_binding b ON b.tenant_id=j.tenant_id AND b.id=j.connector_binding_id
+                JOIN integration.connector_instance ci ON ci.tenant_id=b.tenant_id AND ci.id=b.connector_instance_id
+                WHERE t.tenant_id=? AND t.id=? AND j.planned_configuration_version IS NOT NULL
+                """,(rs,n)->new LeasedConnectorWork.ExecutionContext(rs.getString(1),rs.getString(2),rs.getLong(3),rs.getLong(4),rs.getLong(5)),c.tenantId(),c.taskId()).stream().findFirst().orElse(null);
+    }
+    private LeasedConnectorWork.ExecutionContext reconciliationContext(ReconciliationCandidate c){
+        return jdbc.queryForObject("""
+                SELECT runtime_id,runtime_version,configuration_version,binding_revision,connector_revision
+                FROM integration.reconciliation_run WHERE tenant_id=? AND id=?
+                """,(rs,n)->new LeasedConnectorWork.ExecutionContext(rs.getString(1),rs.getString(2),rs.getLong(3),rs.getLong(4),rs.getLong(5)),c.tenantId(),c.runId());
     }
 
     private WorkerLease lease(

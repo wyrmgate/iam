@@ -48,7 +48,7 @@ final class ConnectorWorkerApiModels {
             String idempotencyKey,
             UUID correlationId,
             UUID causationId,
-            Map<String,Object> payload) {}
+            Map<String,Object> payload,io.wyrmgate.iam.integration.domain.LeasedConnectorWork.ExecutionContext executionContext) {}
 
     record LeaseToken(UUID leaseId, long leaseEpoch, Instant leaseExpiresAt) {}
 

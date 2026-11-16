@@ -100,6 +100,27 @@ class IntegrationAdminOpenApiAlignmentTest {
     }
 
     @Test
+    void reconciliationSchedulingMatchesItsRevisionedSemanticContract() throws Exception {
+        JsonNode document = contract();
+        assertRecordMatchesSchema(document, "ReconciliationScheduleRequest",
+                ReconciliationCommandController.ScheduleRequest.class);
+        assertRecordMatchesSchema(document, "ScheduledReconciliationRun",
+                io.wyrmgate.iam.integration.persistence.IntegrationReconciliationCommands.ScheduledRun.class);
+        JsonNode operation = document.path("paths").path("/api/v1/connector-bindings/{id}:reconcile").path("post");
+        assertThat(parameterRefs(operation)).containsExactly("ResourceId", "IfMatch", "IdempotencyKey");
+        assertThat(requestBodyRef(operation)).isEqualTo("ReconciliationScheduleRequest");
+        assertThat(operation.path("x-wyrmgate-administrative-permission").asText())
+                .isEqualTo("connector-binding:reconcile");
+        assertThat(operation.path("responses").has("202")).isTrue();
+        assertThat(operation.path("responses").has("409")).isTrue();
+        assertThat(operation.path("responses").has("412")).isTrue();
+        var method = Arrays.stream(ReconciliationCommandController.class.getDeclaredMethods())
+                .filter(candidate -> candidate.getName().equals("schedule")).findFirst().orElseThrow();
+        assertThat(method.getAnnotation(PostMapping.class).value())
+                .containsExactly("/connector-bindings/{id}:reconcile");
+    }
+
+    @Test
     void controllerMappingsRemainAlignedWithPublishedControlPlanePaths() throws Exception {
         assertPost("createConnector", "/connectors");
         assertPatch("updateConnector", "/connectors/{id}");

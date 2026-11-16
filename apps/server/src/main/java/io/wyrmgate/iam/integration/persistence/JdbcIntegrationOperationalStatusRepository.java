@@ -85,10 +85,14 @@ public final class JdbcIntegrationOperationalStatusRepository
     @Override
     public Optional<ProvisioningAttemptStatus> findProvisioningAttempt(TenantContext tenant, UUID id) {
         return jdbc.query("""
-                SELECT id, task_id, attempt_number, started_at, completed_at, outcome,
-                       failure_category, correlation_id, causation_id
-                FROM integration.provisioning_attempt
-                WHERE tenant_id = ? AND id = ?
+                SELECT a.id, a.task_id, a.attempt_number, a.started_at, a.completed_at, a.outcome,
+                       a.failure_category, a.correlation_id, a.causation_id,
+                       q.state AS effect_recovery_state, q.reason AS effect_recovery_reason,
+                       q.updated_at AS effect_recovery_updated_at
+                FROM integration.provisioning_attempt a
+                LEFT JOIN integration.provisioning_effect_recovery q
+                  ON q.tenant_id = a.tenant_id AND q.attempt_id = a.id
+                WHERE a.tenant_id = ? AND a.id = ?
                 """, JdbcIntegrationOperationalStatusRepository::attempt,
                 tenant.tenantId(), id).stream().findFirst();
     }
@@ -97,10 +101,14 @@ public final class JdbcIntegrationOperationalStatusRepository
     public List<ProvisioningAttemptStatus> findProvisioningAttemptPage(
             TenantContext tenant, UUID taskId, PagePosition after, int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT id, task_id, attempt_number, started_at, completed_at, outcome,
-                       failure_category, correlation_id, causation_id
-                FROM integration.provisioning_attempt
-                WHERE tenant_id = ? AND task_id = ?
+                SELECT a.id, a.task_id, a.attempt_number, a.started_at, a.completed_at, a.outcome,
+                       a.failure_category, a.correlation_id, a.causation_id,
+                       q.state AS effect_recovery_state, q.reason AS effect_recovery_reason,
+                       q.updated_at AS effect_recovery_updated_at
+                FROM integration.provisioning_attempt a
+                LEFT JOIN integration.provisioning_effect_recovery q
+                  ON q.tenant_id = a.tenant_id AND q.attempt_id = a.id
+                WHERE a.tenant_id = ? AND a.task_id = ?
                 """);
         List<Object> args = new ArrayList<>();
         args.add(tenant.tenantId());
@@ -114,7 +122,7 @@ public final class JdbcIntegrationOperationalStatusRepository
     @Override
     public Optional<ReconciliationRunStatus> findReconciliationRun(TenantContext tenant, UUID id) {
         return jdbc.query("""
-                SELECT id, connector_binding_id, operation_id, scope_object_class, state,
+                SELECT id, connector_binding_id, operation_id, scope_object_class, scope_mode, state,
                        reported_coverage, effective_completeness, configuration_version,
                        runtime_id, runtime_version, contract_id, contract_version, next_attempt_at,
                        failure_code, correlation_id, causation_id, revision, started_at, completed_at,
@@ -129,7 +137,7 @@ public final class JdbcIntegrationOperationalStatusRepository
     public List<ReconciliationRunStatus> findReconciliationRunPage(
             TenantContext tenant, PagePosition after, int limit) {
         StringBuilder sql = new StringBuilder("""
-                SELECT id, connector_binding_id, operation_id, scope_object_class, state,
+                SELECT id, connector_binding_id, operation_id, scope_object_class, scope_mode, state,
                        reported_coverage, effective_completeness, configuration_version,
                        runtime_id, runtime_version, contract_id, contract_version, next_attempt_at,
                        failure_code, correlation_id, causation_id, revision, started_at, completed_at,
@@ -199,6 +207,9 @@ public final class JdbcIntegrationOperationalStatusRepository
                 rs.getTimestamp("completed_at").toInstant(),
                 rs.getString("outcome"),
                 rs.getString("failure_category"),
+                rs.getString("effect_recovery_state"),
+                rs.getString("effect_recovery_reason"),
+                instant(rs, "effect_recovery_updated_at"),
                 rs.getObject("correlation_id", UUID.class),
                 rs.getObject("causation_id", UUID.class));
     }
@@ -209,6 +220,7 @@ public final class JdbcIntegrationOperationalStatusRepository
                 rs.getObject("connector_binding_id", UUID.class),
                 rs.getObject("operation_id", UUID.class),
                 rs.getString("scope_object_class"),
+                rs.getString("scope_mode"),
                 rs.getString("state"),
                 rs.getString("reported_coverage"),
                 rs.getString("effective_completeness"),

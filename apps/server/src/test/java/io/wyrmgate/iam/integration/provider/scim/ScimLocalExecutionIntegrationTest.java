@@ -337,7 +337,7 @@ class ScimLocalExecutionIntegrationTest {
                 groupAdapter,
                 new ScimLocalExecutionProperties(
                         true, Duration.ofSeconds(1), Duration.ofSeconds(30), 10),
-                json,c->io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.ADMIT);
+                json,c->io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.ADMIT,(tenant,config)->true);
     }
 
     private TenantContext tenant(String name) {
