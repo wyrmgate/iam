@@ -102,6 +102,58 @@ class ControlPlaneActorResolutionFilterTest {
         assertThat(response.getContentAsString()).doesNotContain("database unavailable");
     }
 
+    @Test
+    void sameSubjectDifferentIssuerAndUntrustedTenantCannotSelectActor() throws Exception {
+        var resolver = mock(ControlPlaneActorResolver.class);
+        var ids = mock(IdGenerator.class);
+        when(ids.nextId()).thenReturn(CORRELATION_ID);
+        var actor = new AuthenticatedAdministrativeActor(new TenantContext(UUID.randomUUID()), UUID.randomUUID());
+        when(resolver.resolve(new ExternalAuthenticationSubject(ISSUER, SUBJECT))).thenReturn(Optional.of(actor));
+        when(resolver.resolve(new ExternalAuthenticationSubject("https://other.example.test", SUBJECT))).thenReturn(Optional.empty());
+        authenticate();
+        var request = protectedRequest();
+        request.addHeader("X-Tenant-Id", UUID.randomUUID().toString());
+        var filter = new ControlPlaneActorResolutionFilter(resolver, jwt -> AuthenticationAssuranceContext.baseline(), ids);
+        filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+        assertThat(ControlPlaneActorRequestContext.require(request)).isEqualTo(actor);
+
+        var jwt = Jwt.withTokenValue("fixture").header("alg","RS256")
+                .issuer("https://other.example.test").subject(SUBJECT)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt, List.of(), SUBJECT));
+        var other = protectedRequest();
+        var response = new MockHttpServletResponse();
+        filter.doFilter(other,response,new MockFilterChain());
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(other.getAttribute(ControlPlaneActorRequestContext.ATTRIBUTE)).isNull();
+    }
+
+    @Test
+    void downstreamFailuresAreNotReclassifiedAsAuthenticationContextFailures() throws Exception {
+        var resolver = mock(ControlPlaneActorResolver.class);
+        var ids = mock(IdGenerator.class);
+        var actor = new AuthenticatedAdministrativeActor(new TenantContext(UUID.randomUUID()), UUID.randomUUID());
+        when(resolver.resolve(new ExternalAuthenticationSubject(ISSUER, SUBJECT))).thenReturn(Optional.of(actor));
+        authenticate();
+        var filter = new ControlPlaneActorResolutionFilter(resolver, jwt -> AuthenticationAssuranceContext.baseline(), ids);
+
+        for (RuntimeException failure : List.of(
+                new org.springframework.security.access.AccessDeniedException("downstream authorization"),
+                new IllegalArgumentException("downstream validation"),
+                new IllegalStateException("downstream service"))) {
+            var request = protectedRequest();
+            var response = new MockHttpServletResponse();
+            var observed = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                    () -> filter.doFilter(request, response, (req, res) -> {
+                        assertThat(ControlPlaneActorRequestContext.require(request)).isEqualTo(actor);
+                        throw failure;
+                    }));
+            assertThat(observed).isSameAs(failure);
+            assertThat(response.getStatus()).isEqualTo(200);
+            assertThat(response.getContentAsString()).isEmpty();
+        }
+    }
+
     private static MockHttpServletRequest protectedRequest() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/identities");
         request.setRequestURI("/api/v1/identities");
@@ -116,6 +168,7 @@ class ControlPlaneActorResolutionFilterTest {
                 .subject(SUBJECT)
                 .issuedAt(now.minusSeconds(30))
                 .expiresAt(now.plusSeconds(300))
+                .claim("tenant_id", UUID.randomUUID().toString())
                 .claim("roles", List.of("administrator"))
                 .claim("scope", "identity:read identity:create identity:update")
                 .build();

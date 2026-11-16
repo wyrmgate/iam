@@ -8,6 +8,7 @@ import io.wyrmgate.iam.platform.id.IdGenerator;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -24,6 +25,10 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtTypeValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.SupplierJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -50,14 +55,34 @@ public class ControlPlaneSecurityConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "iam.auth", name = "enabled", havingValue = "true")
-    JwtDecoder controlPlaneJwtDecoder(ControlPlaneAuthProperties properties) {
+    JwtDecoder controlPlaneJwtDecoder(ControlPlaneAuthProperties properties,
+            @Value("${iam.auth.token-profile:legacy}") String profile) {
         String issuer = properties.requiredIssuerUri();
         String audience = properties.requiredAudience();
+        // Deployment configuration selects one validator; never select from unverified token
+        // headers or retry rejected strict tokens using legacy validation.
+        if (!"legacy".equals(profile) && !"access-jwt".equals(profile)) {
+            throw new IllegalStateException("iam.auth.token-profile must be legacy or access-jwt");
+        }
         return new SupplierJwtDecoder(() -> {
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
-            OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
-                    JwtValidators.createDefaultWithIssuer(issuer),
-                    new RequiredAudienceValidator(audience));
+            OAuth2TokenValidator<Jwt> validator;
+            if ("access-jwt".equals(profile)) {
+                // Use Spring's default timestamp/certificate checks while replacing its generic
+                // JWT type rule. This is an external control-plane profile, not R1 issuance.
+                validator = JwtValidators.createDefaultWithValidators(
+                        new JwtIssuerValidator(issuer),
+                        new JwtTypeValidator(List.of("at+jwt")),
+                        jwt -> List.of(audience).equals(jwt.getAudience()) && jwt.getExpiresAt() != null
+                                ? OAuth2TokenValidatorResult.success()
+                                : OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                                        "invalid_token", "Required access token audience or expiry is invalid", null)));
+            } else {
+                // Preserve the existing external provider compatibility contract exactly.
+                validator = new DelegatingOAuth2TokenValidator<>(
+                        JwtValidators.createDefaultWithIssuer(issuer),
+                        new RequiredAudienceValidator(audience));
+            }
             decoder.setJwtValidator(validator);
             return decoder;
         });

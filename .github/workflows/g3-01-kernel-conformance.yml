@@ -1,0 +1,46 @@
+name: G3-01 Kernel artifact conformance
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/server/pom.xml'
+      - 'apps/server/src/**'
+      - '.github/workflows/g3-01-kernel-conformance.yml'
+permissions:
+  contents: read
+jobs:
+  conformance:
+    if: github.head_ref == 'feature/vf-fnd-g3-01-kernel-core'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Actual IAM server and artifact verification
+        run: |
+          sh apps/server/mvnw -B -ntp --strict-checksums -f apps/server/pom.xml -Dtest=KernelControlPlaneIdentityAdapterTest,ControlPlaneActorResolutionFilterTest,IdpBrowserSessionAuthenticationFilterTest,PersistenceArchitectureTest,ExternalBearerAuthorityIntegrationTest test
+          sh apps/server/mvnw -B -ntp --strict-checksums -f apps/server/pom.xml dependency:tree -Dincludes=io.github.vyrnforge:platform-kernel
+          echo '88bd473f9e909d3031b5efce02e1b4189df1d731893190b9910767c3d97eef2e  '"$HOME/.m2/repository/io/github/vyrnforge/platform-kernel/0.3.2/platform-kernel-0.3.2.jar" | sha256sum -c -
+          java -version
+          git rev-parse HEAD
+      - name: Public advisory check for the only added runtime dependency
+        run: |
+          curl --fail --silent --show-error --max-time 20 --retry 2 \
+            -H 'Content-Type: application/json' \
+            --data '{"version":"0.3.2","package":{"name":"io.github.vyrnforge:platform-kernel","ecosystem":"Maven"}}' \
+            https://api.osv.dev/v1/query > "${RUNNER_TEMP}/kernel-osv.json"
+          python3 - <<'PY'
+          import json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "kernel-osv.json")) as f:
+              result = json.load(f)
+          assert isinstance(result, dict) and "error" not in result and "code" not in result, "invalid OSV response"
+          vulns = result.get("vulns", [])
+          assert isinstance(vulns, list), "invalid vulnerability result"
+          print("OSV exact Kernel 0.3.2 known advisories:", [v.get("id") for v in vulns])
+          assert not vulns, "review reported advisories before acceptance"
+          PY

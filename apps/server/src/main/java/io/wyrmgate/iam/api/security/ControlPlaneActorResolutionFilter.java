@@ -1,7 +1,6 @@
 package io.wyrmgate.iam.api.security;
 
 import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
-import io.wyrmgate.iam.administration.domain.ExternalAuthenticationSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -51,7 +50,7 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
         String issuer = jwtAuthentication.getToken().getClaimAsString("iss");
         String subject = jwtAuthentication.getToken().getSubject();
         try {
-            var resolved = actorResolver.resolve(new ExternalAuthenticationSubject(issuer, subject));
+            var resolved = actorResolver.resolve(KernelControlPlaneIdentityAdapter.externalSubject(issuer, subject));
             if (resolved.isEmpty()) {
                 SemanticAuthenticationFailureWriter.write(
                         response,
@@ -64,7 +63,6 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
             var assurance = assuranceResolver.resolve(jwtAuthentication.getToken());
             ControlPlaneActorRequestContext.set(
                     request, resolved.orElseThrow().withAssurance(assurance));
-            filterChain.doFilter(request, response);
         } catch (IllegalArgumentException invalidSubject) {
             SemanticAuthenticationFailureWriter.write(
                     response,
@@ -72,6 +70,7 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
                     "unresolved_actor",
                     "Authenticated subject is not bound to a Wyrmgate control-plane actor.",
                     idGenerator);
+            return;
         } catch (RuntimeException unavailable) {
             SemanticAuthenticationFailureWriter.write(
                     response,
@@ -79,6 +78,10 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
                     "authentication_context_unavailable",
                     "Control-plane actor resolution is temporarily unavailable.",
                     idGenerator);
+            return;
         }
+        // Authentication-context classification applies only to actor resolution, not downstream
+        // authorization, controller or persistence failures.
+        filterChain.doFilter(request, response);
     }
 }
