@@ -1,6 +1,6 @@
 # VF-FND-01 — Product scope and ecosystem foundation proposal
 
-Status: PROPOSED / decision review, not an accepted ADR or controlled specification.
+Status: strategic directions approved by Product Owner in #539 (2026-11-16); detailed scope/architecture decisions remain PROPOSED, not accepted ADRs or controlled specifications. See [ADR-0084](../../adr/0084-staged-replatforming-and-release-gates.md), [ADR-0085](../../adr/0085-platform-kernel-adoption-boundary.md), [ADR-0087](../../adr/0087-idp-protocol-engine-evaluation.md), [ADR-0088](../../adr/0088-conditional-clean-schema-and-customer-migration.md) and [experiments](vf-fnd-engineering-experiments.md).
 Date: 2026-11-16. Parent #538; work #539; companion [VF-FND-02](vf-fnd-02-identity-contract.md). This is a review artifact, not a second source of authority. Accepted ADRs and controlled specifications govern until an approved amendment. No production code, schema, customer environment or release is authorized by this document.
 
 ## 1. Evidence and decision context
@@ -57,7 +57,7 @@ One IAM modular-monolith-compatible product (Layer 1 experience, Layer 2 protoco
 
 Representative success: Identity-owned active employee -> Governance approval -> Access assignment (transaction + fact) -> Integration maps/provisions async -> Catalog/Identity/Credential/Access current checks at IdP issuance -> consumer verifies token -> resolves local actor/tenant/consumer -> membership/module entitlement and local grant -> authorized file action (local transaction + durable intent). No external call inside authoritative commit. Failure: provider times out after mutation; Integration records uncertainty, quiescence/current complete scan required before verified recovery (ADR-0083), no invalidation of approval. Leaver still reduces Access; new issuance denied; old JWT residual window and current consumer authority described in #540. Audit evidence remains in owning capability, no secrets.
 
-## 4. Proposed decision records (not accepted; no ADR numbers reserved)
+## 4. Proposed decision records (strategic direction approved; detailed ADR-0084–0088 proposed on this branch)
 
 | ID / decision | Alternatives and trade-offs | Recommendation / discriminating evidence / owner |
 |---|---|---|
