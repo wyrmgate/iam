@@ -1,6 +1,6 @@
 # VF-FND-02 — Ecosystem identity and authorization contract proposal v0.1
 
-Status: PROPOSED, review only. Date 2026-11-16. Parent #538, work #540; product/architecture [VF-FND-01](vf-fnd-01-product-foundation.md). Not a production wire contract or accepted ADR. No deployed configuration or implementation authorized. Version 0.1 here is proposal version, not Kernel wire v0.2 or IAM public API version. Actual issuer/audiences/client IDs and customer data remain unconfirmed; every example uses synthetic values.
+Status: strategic direction approved in #540 (2026-11-16); detailed contract PROPOSED, review only. [ADR-0086](../../adr/0086-ecosystem-resource-audience-and-service-identity.md) and [experiment plan](vf-fnd-engineering-experiments.md) specify decision gates. Date 2026-11-16. Parent #538, work #540; product/architecture [VF-FND-01](vf-fnd-01-product-foundation.md). Not a production wire contract or accepted ADR. No deployed configuration or implementation authorized. Version 0.1 here is proposal version, not Kernel wire v0.2 or IAM public API version. Actual issuer/audiences/client IDs and customer data remain unconfirmed; every example uses synthetic values.
 
 ## 1. Evidence and problem
 
@@ -19,7 +19,7 @@ Standards references: [OIDC Core](https://openid.net/specs/openid-connect-core-1
 | Generic multi-audience token or shared ecosystem token | Reject for initial release: confused deputy/cross-service reuse and broad privileges; no proven need |
 | Opaque introspected token only | Can support tighter revocation but introduces availability/latency dependency on IAM; evaluate for high-risk operations if bounded JWT plus current authority not sufficient |
 
-Decision proposed: resource-specific JWT access profile, one audience per token, explicitly requested resource (RFC 8707) or exact unambiguous registered default; no wildcard. ID-token audience remains relying-party client_id. Keep legacy client-audience profile only for explicitly registered old interactive clients until tested cutover, not as generic fallback. No ID token sent to API. Existing public subject stable across migration if issuer/Tenant/Identity stable; preserve IDs or explicit binding map. No automatic linking on email/name. Actual profile version, issuer and audience registration remain owner-approved configuration. Security/Architecture must accept ADR amendment before implementation; no accepted ADR number reserved.
+Decision proposed: resource-specific JWT access profile, one audience per token, explicitly requested resource (RFC 8707) or exact unambiguous registered default; no wildcard. ID-token audience remains relying-party client_id. Keep legacy client-audience profile only for explicitly registered old interactive clients until tested cutover, not as generic fallback. No ID token sent to API. Existing public subject stable across migration if issuer/Tenant/Identity stable; preserve IDs or explicit binding map. No automatic linking on email/name. Actual profile version, issuer and audience registration remain owner-approved configuration. Security/Architecture must accept ADR amendment before implementation; proposed ADR-0086 is not accepted.
 
 ## 3. Ownership and proposed model (logical, not persistence schema)
 
