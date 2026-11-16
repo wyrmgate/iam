@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.wyrmgate.iam.integration.application.ConnectorExecutionRepository;
 import io.wyrmgate.iam.integration.application.ProvisioningPlanFence;
+import io.wyrmgate.iam.integration.application.ProvisioningAdmission;
 import io.wyrmgate.iam.integration.application.GrantProvisioningRepository;
 import io.wyrmgate.iam.integration.application.ConnectorWorkRepository;
 import io.wyrmgate.iam.integration.application.IntegrationObservedAccessFactSink;
@@ -480,6 +481,33 @@ public final class JdbcIntegrationRuntimeRepository
         return value == null ? 0 : value;
     }
 
+    /** Serialize first-account creation across desired revisions and fail closed on historical effects. */
+    @Override
+    public ProvisioningAdmission.Decision principalCreationAdmission(ProvisioningCandidate c) {
+        String key="principal-create:"+c.tenantId()+":"+c.subjectId();
+        if(!Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT pg_try_advisory_xact_lock(hashtextextended(?,0))",Boolean.class,key)))
+            return ProvisioningAdmission.Decision.RETRY;
+        boolean uncertain=Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM integration.provisioning_task t
+                    WHERE t.tenant_id=? AND t.subject_kind='DESIRED_PRINCIPAL' AND t.subject_id=?
+                      AND t.operation_type='UPSERT_PRINCIPAL'
+                      AND COALESCE(t.payload->>'providerStableId','')=''
+                      AND (
+                        (t.id<>? AND t.state IN ('RUNNING','SUCCEEDED'))
+                        OR (t.state='BLOCKED' AND t.attempt_count>0)
+                        OR EXISTS (SELECT 1 FROM integration.provisioning_attempt a
+                          WHERE a.tenant_id=t.tenant_id AND a.task_id=t.id
+                            AND (a.outcome='SUCCEEDED' OR
+                              (a.outcome IN ('FAILED_RETRYABLE','FAILED_FINAL')
+                                AND COALESCE(a.failure_category,'') IN ('TRANSIENT','PROVIDER')
+                                AND COALESCE(a.provider_error_code,'')<>'desired_state_unavailable')))
+                      ))
+                """,Boolean.class,c.tenantId(),c.subjectId(),c.taskId()));
+        return uncertain?ProvisioningAdmission.Decision.RETRY:ProvisioningAdmission.Decision.ADMIT;
+    }
+
     @Override
     public boolean currentPlan(ProvisioningCandidate c, UUID targetId) {
         var result=jdbc.query("""
@@ -908,6 +936,20 @@ public final class JdbcIntegrationRuntimeRepository
                     INSERT INTO integration.provisioning_effect_recovery(tenant_id,attempt_id,state,created_at,updated_at)
                     VALUES (?,?,'PENDING',?,?)
                     """,session.tenant().tenantId(),attemptId,Timestamp.from(now),Timestamp.from(now));
+        }
+        boolean initialCreate="DESIRED_PRINCIPAL".equals(task.subjectKind())
+                && "UPSERT_PRINCIPAL".equals(task.operationType())
+                && (task.payload().get("providerStableId")==null
+                    || String.valueOf(task.payload().get("providerStableId")).isBlank());
+        boolean ambiguousCreateFailure=initialCreate
+                && (("FAILED_RETRYABLE".equals(state)
+                     && !"RATE_LIMITED".equals(completion.failureCategory())
+                     && !"desired_state_unavailable".equals(completion.providerErrorCode()))
+                    || ("FAILED_FINAL".equals(state)
+                        && ("TRANSIENT".equals(completion.failureCategory())||"PROVIDER".equals(completion.failureCategory()))));
+        if(ambiguousCreateFailure) {
+            state="BLOCKED";
+            failureCode="provider_create_effect_unknown";
         }
         if ("FAILED_RETRYABLE".equals(state) && task.attempt() >= 5) {
             state = "BLOCKED";

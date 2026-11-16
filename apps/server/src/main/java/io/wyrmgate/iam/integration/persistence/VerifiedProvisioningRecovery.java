@@ -67,7 +67,7 @@ public final class VerifiedProvisioningRecovery {
                 .orElseThrow(()->new IntegrationAdministrationException("not_found","provisioning task not found"));
         if(t.revision()!=revision)throw new IntegrationAdministrationException("stale_revision","task revision changed");
         if(!"BLOCKED".equals(t.state())||t.failure()==null||!java.util.Set.of("provider_effect_unknown_after_lease_expiry",
-                "late_provider_success_requires_recovery","retry_budget_exhausted").contains(t.failure()))
+                "late_provider_success_requires_recovery","retry_budget_exhausted","provider_create_effect_unknown").contains(t.failure()))
             throw conflict("task is not eligible for verified recovery");
         if(quiescedAt.isBefore(t.updatedAt()))throw conflict("execution quiescence must follow the blocked task revision");
         if(exists("SELECT EXISTS(SELECT 1 FROM integration.provisioning_recovery_decision WHERE tenant_id=? AND task_id=?)",tid,taskId))

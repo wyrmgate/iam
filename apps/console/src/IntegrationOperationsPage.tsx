@@ -87,7 +87,7 @@ function VerifiedRecovery({ task, refresh }: { task: ApiResult<Resource>; refres
   const [error, setError] = useState<unknown>(null);
   const [decision, setDecision] = useState<RecoveryDecision | null>(null);
   const causal = useRef<{ fingerprint: string; key: string } | null>(null);
-  const allowed = ['provider_effect_unknown_after_lease_expiry', 'late_provider_success_requires_recovery', 'retry_budget_exhausted'];
+  const allowed = ['provider_effect_unknown_after_lease_expiry', 'provider_create_effect_unknown', 'late_provider_success_requires_recovery', 'retry_budget_exhausted'];
   if (task.data.state !== 'BLOCKED' || !allowed.includes(String(task.data.failureCode)) || task.data.recoveryDecisionId) return null;
 
   async function recover() {

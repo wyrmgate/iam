@@ -88,6 +88,8 @@ public final class CurrentProvisioningAdmission implements ProvisioningAdmission
         String provider=text(c.payload(),"providerStableId");
         if(provider==null) {
             if(!upsert||!identities.forIdentityTarget(tenant,d.identityId(),d.applicationTargetId()).isEmpty())return Decision.BLOCKED;
+            var creation=fence.principalCreationAdmission(c);
+            if(creation!=Decision.ADMIT)return creation;
             var routes=principals.creationTargets(tenant,d.applicationTargetId());
             if(routes.size()!=1)return Decision.BLOCKED;
             var route=routes.getFirst();

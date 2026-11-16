@@ -487,11 +487,13 @@ public final class ScimLocalExecutionService {
     }
 
     private static void validateConfiguration(Map<String,Object> configuration){
-        var allowed=java.util.Set.of("baseUri","pageSize","maxPagesPerExecution","requestTimeout","requestTimeoutSeconds","idempotencyHeader");
+        var allowed=java.util.Set.of("baseUri","pageSize","maxPagesPerExecution","requestTimeout","requestTimeoutSeconds","idempotencyHeader","principalUserNameTemplate");
         if(!allowed.containsAll(configuration.keySet())||!(configuration.get("baseUri") instanceof String))throw new IllegalArgumentException("invalid SCIM configuration fields");
         for(String key:java.util.List.of("pageSize","maxPagesPerExecution","requestTimeoutSeconds"))if(configuration.containsKey(key)&&!(configuration.get(key) instanceof Integer))throw new IllegalArgumentException("invalid SCIM numeric field");
-        for(String key:java.util.List.of("requestTimeout","idempotencyHeader"))if(configuration.containsKey(key)&&!(configuration.get(key) instanceof String))throw new IllegalArgumentException("invalid SCIM text field");
+        for(String key:java.util.List.of("requestTimeout","idempotencyHeader","principalUserNameTemplate"))if(configuration.containsKey(key)&&!(configuration.get(key) instanceof String))throw new IllegalArgumentException("invalid SCIM text field");
         if(configuration.containsKey("requestTimeout")&&configuration.containsKey("requestTimeoutSeconds"))throw new IllegalArgumentException("ambiguous timeout");
+        String template=text(configuration,"principalUserNameTemplate");
+        if(template!=null&&(template.length()>512||!template.contains("{identityId}")||template.replace("{identityId}","").matches(".*[{}].*")))throw new IllegalArgumentException("invalid principal username template");
         String header=text(configuration,"idempotencyHeader");
         if(header!=null&&!(header.equalsIgnoreCase("Idempotency-Key")||header.toLowerCase(java.util.Locale.ROOT).startsWith("x-idempotency-")))throw new IllegalArgumentException("unsupported idempotency header");
     }
@@ -515,6 +517,7 @@ public final class ScimLocalExecutionService {
 
     private static ScimGroupProviderAdapter.Configuration groupConfiguration(
             Map<String,Object> configuration) {
+        validateConfiguration(configuration);
         String baseUri = requiredText(configuration, "baseUri");
         int pageSize = integer(configuration, "pageSize", 100);
         int maxPages = integer(configuration, "maxPagesPerExecution", 1000);
