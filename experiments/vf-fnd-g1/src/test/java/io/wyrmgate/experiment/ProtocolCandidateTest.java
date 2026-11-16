@@ -5,6 +5,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.security.oauth2.server.authorization.context.*;
 import org.springframework.security.oauth2.core.*;
 import org.springframework.security.oauth2.server.authorization.*;
 import org.springframework.security.oauth2.server.authorization.authentication.*;
@@ -16,6 +19,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class ProtocolCandidateTest {
     static final String RESOURCE="https://storage.example.invalid/api";
     static final String CLIENT="asset-backend-t1";
+    @BeforeEach void context() {
+        AuthorizationServerContextHolder.setContext(new AuthorizationServerContext() {
+            public String getIssuer() { return "https://iam.example.invalid"; }
+            public AuthorizationServerSettings getAuthorizationServerSettings() {
+                return AuthorizationServerSettings.builder().issuer(getIssuer()).build();
+            }
+        });
+    }
+    @AfterEach void clear() { AuthorizationServerContextHolder.resetContext(); }
     // Provider-only comparison. Authentication token is synthetic already-authenticated client;
     // this does not prove private_key_jwt, HTTP endpoints, or a production registration adapter.
     @Test void clientCredentialsProviderPreservesDefaultScopeAndAddsGovernedGate() {
