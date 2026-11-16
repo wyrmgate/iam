@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -76,12 +77,19 @@ public final class IdpBrowserSessionAuthenticationFilter extends OncePerRequestF
             return;
         }
 
+        Optional<IdpBrowserSessionService.ResolvedSession> resolved;
         try {
-            var resolved = sessions.resolve(rawSession, Instant.now());
-            if (resolved.isEmpty()) {
-                filterChain.doFilter(request, response);
-                return;
-            }
+            resolved = sessions.resolve(rawSession, Instant.now());
+        } catch (RuntimeException unavailable) {
+            SemanticAuthenticationFailureWriter.write(
+                    response,
+                    HttpServletResponse.SC_SERVICE_UNAVAILABLE,
+                    "authentication_context_unavailable",
+                    "First-party authentication context is temporarily unavailable.",
+                    ids);
+            return;
+        }
+        if (resolved.isPresent()) {
             var session = resolved.orElseThrow();
             var authentication = new PreAuthenticatedAuthenticationToken(
                     session.context().principalId().toString(), null, List.of());
@@ -90,15 +98,10 @@ public final class IdpBrowserSessionAuthenticationFilter extends OncePerRequestF
                     request,
                     new AuthenticatedAdministrativeActor(
                             session.tenant(), session.context().identityId()));
-            filterChain.doFilter(request, response);
-        } catch (RuntimeException unavailable) {
-            SemanticAuthenticationFailureWriter.write(
-                    response,
-                    HttpServletResponse.SC_SERVICE_UNAVAILABLE,
-                    "authentication_context_unavailable",
-                    "First-party authentication context is temporarily unavailable.",
-                    ids);
         }
+        // Let Spring Security translate downstream authentication/authorization failures.
+        // Only session resolution failures belong to the availability error boundary.
+        filterChain.doFilter(request, response);
     }
 
     private static boolean hasBearer(HttpServletRequest request) {
