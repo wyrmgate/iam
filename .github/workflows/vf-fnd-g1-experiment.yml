@@ -1,0 +1,48 @@
+name: VF-FND G1 Experiment
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'experiments/vf-fnd-g1/**'
+      - '.github/workflows/vf-fnd-g1-experiment.yml'
+permissions:
+  contents: read
+jobs:
+  iam-experiment:
+    if: github.head_ref == 'experiment/vf-fnd-g1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Environment and source baseline
+        run: |
+          java -version
+          sh apps/server/mvnw -version
+          git rev-parse HEAD
+          git rev-parse HEAD^1 || true
+      - name: E1a and E2 candidate, E3 synthetic contract
+        run: |
+          sh apps/server/mvnw --batch-mode --no-transfer-progress --strict-checksums -f experiments/vf-fnd-g1/pom.xml clean verify
+          sh apps/server/mvnw --batch-mode --no-transfer-progress --strict-checksums -f experiments/vf-fnd-g1/pom.xml dependency:tree
+          sha256sum ~/.m2/repository/io/github/vyrnforge/platform-kernel/0.3.2/platform-kernel-0.3.2.jar
+      - name: Existing IAM control and schema constraints
+        run: |
+          sh apps/server/mvnw --batch-mode --no-transfer-progress -f apps/server/pom.xml -Dtest=IdpJwtIssuerTest,IdpProtocolServiceTest,IdpBrowserSessionServiceTest,PersistenceArchitectureTest,TenantIsolationSchemaIntegrationTest test
+      - name: E4 disposable V42 baseline and schema replay
+        run: bash experiments/vf-fnd-g1/schema-replay.sh
+      - name: Upload experiment reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: g1-iam-experiment
+          path: |
+            experiments/vf-fnd-g1/target/surefire-reports/
+            apps/server/target/surefire-reports/
+            /tmp/vf-fnd-g1/
+          if-no-files-found: warn
