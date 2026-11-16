@@ -1,7 +1,7 @@
 # ADR-0088: Conditional clean persistence baseline and beta-company migration
 
 - Status: Accepted
-- Acceptance scope: G2 conditional policy; draft PR #544, not yet effective on main
+- Acceptance scope: G2 conditional policy; effective on main upon authorized documentation merge #544
 - Date: 2026-11-16
 - Product direction: conditional new baseline approved; no schema reset or migration authorized ([#539](https://github.com/wyrmgate/iam/issues/539#issuecomment-6905749487)).
 - Proposed amendment to ADR-0048 only if target chosen; preserves ADR-0010, 0005, 0047, 0051, 0053, 0043. Related #437/#438/#543; OD-006.
