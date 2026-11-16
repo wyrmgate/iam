@@ -1,0 +1,23 @@
+# ADR-0086: Ecosystem resource audiences and governed service identity
+
+- Status: Proposed
+- Date: 2026-11-16
+- Product direction: [#540 approval](https://github.com/wyrmgate/iam/issues/540#issuecomment-6905750084).
+- Proposed amendment to ADR-0042: explicit resource audience and client credentials as supported scope after acceptance; preserves ADR-0049, 0051, 0052, 0063–0071, 0077–0079.
+- Companion [identity contract v0.1](../architecture/proposals/vf-fnd-02-identity-contract.md); Storage [#17](https://github.com/vyrnforge/file-storage/issues/17), #18/#19.
+
+## Context
+Current IdpJwtIssuer (acaf766) emits access aud=client_id, no jti, 300s default. Storage FS-110B verifies exact legacy pair. This does not satisfy independent service clients and resource APIs. Owner approves separate audience and governed service credentials; concrete binding, grant and lifetime settings remain reviewable.
+
+## Proposed decision
+- New access-token profile: one explicitly registered resource audience, separate client_id, opaque stable sub, iss, iat, exp, jti, scope, signed typ at+jwt. ID token audience stays OAuth client. Resource selected by exact registered requested resource or unambiguous default; no wildcard or shared ecosystem token. RFC 8707/9068 oriented, not claim certification. Preserve old profile only for explicitly configured legacy clients, no broad verifier fallback.
+- Catalog owns typed client, resource registration and allowed client-resource/target/grant/scope binding (proposed entities, exact aggregate design pending); globally unique client ID resolves exactly one Tenant; shared resource offering may be deployment-owned with explicit tenant admission per ADR-0049, never nullable tenant shortcut. Retirement suppresses admission and triggers Access-owned reduction. Identity owns SERVICE/WORKLOAD and Principal; Credential owns client authenticator lifecycle/secret references; client metadata does not become a second account. Initial client_credentials subject is stable opaque service identity with explicit client-to-subject/Principal/credential binding and accountable owner; no human impersonation or ID token. Access/Governance current eligibility controls issuance; Administration authorizes setup, Audit owns evidence.
+- Resource verifier validates configured issuer, signature/type/time/audience/client pair and bounded trusted JWKS; exact server-side binding to local actor, tenant and consumer. Role/scope/module admission never substitutes for local purpose/resource grants. Distinct issuers with same sub do not collide. Kernel receives only trusted projection; tenantless != DEPLOYMENT. Fail closed on unavailable mandatory trust/authority; authoritative reduction proceeds independently.
+- Human auth code S256 PKCE exact redirect and current redemption checks; confidential clients additional authentication. Prefer asymmetric private_key_jwt for candidate evaluation (assertion issuer/sub client identity, exact token endpoint audience, bounded exp and one-use jti); compare mTLS and secret-based method. No method selected yet. Service grant not enabled before tests. General delegation/token exchange deferred, reject act/delegation until separate accepted decision; service does not bypass user-specific checks.
+- Proposed 300s max JWT lifetime + 30s clock tolerance (not approved setting); new issuance denied after current revocation. Existing self-contained token may survive bounded window, not universal immediate revocation. Fresh local grant denial required; remote authority/cache and transfer drain need explicit bounds and operational measurement. Emergency key removal bound determined by verifier cache. No raw credentials/tokens/keys/signed URLs in ordinary evidence.
+
+## Alternatives
+Keep client-as-audience (legacy only); single resource audience (recommended); multi-audience/shared token (reject initial release); opaque introspection (evaluate for high-risk if JWT residual cannot meet approved policy). Existing external IdP federation remains supported via exact trust/binding; no automatic claims authority.
+
+## Compatibility and evidence
+C01–C12 in companion contract. Gate actual issuer/audience/client IDs, tenant/actor binding, grant issuance/owner, credential auth method, freshness/revocation/transfer policy with Security, Product, Storage. E3 isolated contract fixtures then #18/#19 actual transport/authority and #542 live staging. Old/new routes/profiles explicitly configured; drain old tokens + tolerance/transfer leases and retire old acceptance only after migration evidence. Update canonical IdP/API/security docs and formal #438 only after acceptance. No change to runtime wire format or accepted ADR status here.
