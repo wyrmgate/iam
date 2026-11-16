@@ -3,6 +3,11 @@ package io.wyrmgate.iam.idp.protocol;
 import io.wyrmgate.iam.catalog.application.SsoClientProtocolQuery;
 import io.wyrmgate.iam.catalog.domain.*;
 import io.wyrmgate.iam.idp.runtime.IdpSecurityEvidence;
+import io.wyrmgate.iam.idp.federation.FederatedSubjectResolver;
+import io.wyrmgate.iam.credential.application.CredentialAuthenticationService;
+import io.wyrmgate.iam.identity.application.IdentityAuthenticationQuery;
+import io.wyrmgate.iam.tenancy.application.TenantOverviewQuery;
+import io.wyrmgate.iam.tenancy.domain.TenantLifecycleState;
 import io.wyrmgate.iam.idp.session.*;
 import io.wyrmgate.iam.platform.crypto.*;
 import io.wyrmgate.iam.platform.persistence.SharedPostgresIntegrationDatabase;
@@ -149,12 +154,14 @@ class GuardedHybridExperimentTest {
     }
     static final class Fixture {
         final TenantContext tenant, other;
-        final UUID reg=UUID.randomUUID(), app=UUID.randomUUID(), session=UUID.randomUUID(), principal=UUID.randomUUID(), identity=UUID.randomUUID();
+        final UUID reg=UUID.randomUUID(), app=UUID.randomUUID(), principal=UUID.randomUUID(), identity=UUID.randomUUID(), credential=UUID.randomUUID();
+        UUID session; String browserToken;
         final Instant now=Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
         final AtomicReference<String> authority=new AtomicReference<>("ALLOW");
         final AtomicReference<SsoClientRegistration> registration;
         final AtomicInteger issues=new AtomicInteger();
-        final IdpBrowserSessionService sessions=mock(IdpBrowserSessionService.class);
+        final IdpBrowserSessionService sessions;
+        final JdbcIdpBrowserSessionRepository sessionRepo=new JdbcIdpBrowserSessionRepository(jdbc);
         final IdpSecurityEvidence evidence=mock(IdpSecurityEvidence.class);
         final IdpProtocolService service;
         final MockMvc mvc;
@@ -163,13 +170,25 @@ class GuardedHybridExperimentTest {
             tenant=new TenantContext(t.createActive("E2 fixture",now).id());
             other=new TenantContext(t.createActive("E2 other",now).id());
             registration=new AtomicReference<>(client(1));
-            var sc=new IdpBrowserSessionService.SessionContext(session,principal,identity,now.minusSeconds(60),now.plusSeconds(1200),now.plusSeconds(3600));
-            when(sessions.resolve(eq(tenant),eq("fixture-browser"),any(Instant.class))).thenReturn(Optional.of(sc));
-            when(sessions.revalidateAuthorizationCodeSession(eq(tenant),eq(session),any(Instant.class))).thenAnswer(inv->
-                "SESSION_REVOKED".equals(authority.get())?Optional.empty():Optional.of(sc));
+            var identities=mock(IdentityAuthenticationQuery.class);
+            when(identities.eligibleSubject(tenant,principal)).thenAnswer(inv->Optional.of(
+                new IdentityAuthenticationQuery.AuthenticationSubject(principal,identity,
+                    "PRINCIPAL_REV".equals(authority.get())?2:1,"IDENTITY_REV".equals(authority.get())?2:1)));
+            var tenants=mock(TenantOverviewQuery.class);
+            when(tenants.find(tenant.tenantId())).thenAnswer(inv->Optional.of(
+                new TenantOverviewQuery.TenantSummary(tenant.tenantId(),"fixture",TenantLifecycleState.ACTIVE,
+                    "TENANT_REV".equals(authority.get())?2:1,now.minusSeconds(120),now)));
+            var credentials=mock(CredentialAuthenticationService.class);
+            when(credentials.isStillValid(eq(tenant),eq(principal),eq(credential),eq(1L),any(Instant.class)))
+                .thenAnswer(inv->!"CREDENTIAL_REV".equals(authority.get()));
+            sessions=new IdpBrowserSessionService(sessionRepo,identities,tenants,credentials,new IdpSessionTokenCodec(),
+                UUID::randomUUID,evidence,mock(FederatedSubjectResolver.class));
+            newSession();
             var signer=issuer(hybrid);
             service=new IdpProtocolService(id->CLIENT.equals(id)?Optional.of(new SsoClientProtocolQuery.ResolvedClient(tenant,registration.get())):
-                "other-client".equals(id)?Optional.of(new SsoClientProtocolQuery.ResolvedClient(other,registration.get())):Optional.empty(),
+                "other-client".equals(id)?Optional.of(new SsoClientProtocolQuery.ResolvedClient(other,
+                    new SsoClientRegistration(UUID.randomUUID(),app,"other-client",Set.of(REDIRECT),Set.of(SsoClientScope.OPENID),true,
+                        SsoClientLifecycleState.ACTIVE,1,now.minusSeconds(120),now.minusSeconds(30)))):Optional.empty(),
                 sessions,(tnt,i,a,at)->{
                     if("OUTAGE".equals(authority.get()))throw new IllegalStateException("fixture unavailable");
                     return !"DENY".equals(authority.get());
@@ -184,10 +203,16 @@ class GuardedHybridExperimentTest {
             return new SsoClientRegistration(reg,app,CLIENT,Set.of(REDIRECT),Set.of(SsoClientScope.OPENID,SsoClientScope.PROFILE),
                 true,SsoClientLifecycleState.ACTIVE,rev,now.minusSeconds(120),now.minusSeconds(30));
         }
+        void newSession(){
+            var established=sessions.establish(tenant,new IdentityAuthenticationQuery.AuthenticationSubject(principal,identity,1,1),
+                new CredentialAuthenticationService.VerifiedCredential(tenant.tenantId(),principal,credential,1),now.minusSeconds(60));
+            session=established.context().sessionId();browserToken=established.token();
+        }
         String code(){
+            newSession();
             var challenge=Base64.getUrlEncoder().withoutPadding().encodeToString(IdpJwtIssuer.sha256(VERIFIER.getBytes(StandardCharsets.US_ASCII)));
             return service.authorize(new IdpProtocolService.AuthorizationRequest("code",CLIENT,REDIRECT,"openid profile",
-                "state-1234567890abcdef",challenge,"S256",NONCE),"fixture-browser",now).code();
+                "state-1234567890abcdef",challenge,"S256",NONCE),browserToken,now).code();
         }
         IdpProtocolService.TokenResult redeem(String raw,String verifier,String client,String redirect){
             return service.redeem(new IdpProtocolService.TokenRequest("authorization_code",raw,client,redirect,verifier),now.plusSeconds(1));
@@ -208,6 +233,7 @@ class GuardedHybridExperimentTest {
         for(boolean hybrid:new boolean[]{false,true}){
             var f=new Fixture(hybrid);
             String raw=f.code();
+            var idleBefore=f.sessionRepo.findById(f.tenant,f.session).orElseThrow().idleExpiresAt();
             assertEquals(f.hash(raw),jdbc.queryForObject("select code_hash from platform.idp_authorization_code where tenant_id=? and code_hash=?",
                 String.class,f.tenant.tenantId(),f.hash(raw)));
             assertFalse(jdbc.queryForObject("select code_hash=? from platform.idp_authorization_code where tenant_id=? and code_hash=?",
@@ -223,11 +249,13 @@ class GuardedHybridExperimentTest {
                 for(var future:futures)if(future.get(30,TimeUnit.SECONDS))success++;
             }
             assertEquals(1,success);assertEquals(1,f.issues.get());assertTrue(f.consumed(raw));
-            for(String reason:List.of("PKCE","REDIRECT","REVISION","SESSION_REVOKED","DENY","OUTAGE","SIGN_FAIL")){
+            assertEquals(idleBefore,f.sessionRepo.findById(f.tenant,f.session).orElseThrow().idleExpiresAt());
+            for(String reason:List.of("PKCE","REDIRECT","REVISION","SESSION_REVOKED","IDENTITY_REV","PRINCIPAL_REV","TENANT_REV","CREDENTIAL_REV","DENY","OUTAGE","SIGN_FAIL")){
                 f.authority.set("ALLOW");f.registration.set(f.client(1));
                 String code=f.code();
                 if("REVISION".equals(reason))f.registration.set(f.client(2));
-                if(Set.of("SESSION_REVOKED","DENY","OUTAGE","SIGN_FAIL").contains(reason))f.authority.set(reason);
+                if("SESSION_REVOKED".equals(reason))f.sessions.logout(f.tenant,f.browserToken,f.now.plusSeconds(1));
+                if(Set.of("IDENTITY_REV","PRINCIPAL_REV","TENANT_REV","CREDENTIAL_REV","DENY","OUTAGE","SIGN_FAIL").contains(reason))f.authority.set(reason);
                 String err=Set.of("OUTAGE","SIGN_FAIL").contains(reason)?"temporarily_unavailable":"invalid_grant";
                 f.denied(code,"PKCE".equals(reason)?"b".repeat(43):VERIFIER,CLIENT,
                     "REDIRECT".equals(reason)?"https://wrong.example.test/callback":REDIRECT,err);
@@ -238,7 +266,7 @@ class GuardedHybridExperimentTest {
             String cross=f.code();f.denied(cross,VERIFIER,"other-client",REDIRECT,"invalid_grant");
             assertFalse(f.consumed(cross)); // tenant isolation: cannot burn foreign code
             f.redeem(cross,VERIFIER,CLIENT,REDIRECT);assertEquals(2,f.issues.get());
-            System.out.println("E2 "+(hybrid?"B":"A")+": 20-way redemption successes="+success+"; seven failure paths burn; foreign tenant cannot consume");
+            System.out.println("E2 "+(hybrid?"B":"A")+": 20-way redemption successes="+success+"; eleven failure paths burn; idle unchanged; foreign tenant cannot consume");
         }
     }
     @Test void actualMvcEndpointsAndLegacyClaimProfile() throws Exception {
@@ -250,7 +278,7 @@ class GuardedHybridExperimentTest {
                 .andExpect(jsonPath("$.keys[0].kid").value("fixture-key")).andExpect(jsonPath("$.keys[0].d").doesNotExist());
             var challenge=Base64.getUrlEncoder().withoutPadding().encodeToString(IdpJwtIssuer.sha256(VERIFIER.getBytes(StandardCharsets.US_ASCII)));
             var redirect=f.mvc.perform(get("/oauth2/authorize")
-                .cookie(new jakarta.servlet.http.Cookie(IdpAuthorizationController.BROWSER_SESSION_COOKIE,"fixture-browser"))
+                .cookie(new jakarta.servlet.http.Cookie(IdpAuthorizationController.BROWSER_SESSION_COOKIE,f.browserToken))
                 .param("response_type","code").param("client_id",CLIENT).param("redirect_uri",REDIRECT)
                 .param("scope","openid profile").param("state","state-1234567890abcdef").param("nonce",NONCE)
                 .param("code_challenge",challenge).param("code_challenge_method","S256"))
