@@ -68,6 +68,9 @@ class JdbcIntegrationOperationalStatusRepositoryTest {
 
         // A late successful provider effect remains immutable evidence while recovery is a distinct projection.
         UUID late = lateSuccess(tenantA, task, base.plusSeconds(8));
+        var blockedRollup=repository.findProvisioningJob(contextA,newestJob).orElseThrow();
+        assertThat(blockedRollup.fulfillmentState()).isEqualTo("BLOCKED");
+        assertThat(blockedRollup.blockedTaskCount()).isEqualTo(1);
         var recovery = repository.findProvisioningAttempt(contextA, late).orElseThrow();
         assertThat(recovery.outcome()).isEqualTo("SUCCEEDED");
         assertThat(recovery.effectRecoveryState()).isEqualTo("MANUAL");

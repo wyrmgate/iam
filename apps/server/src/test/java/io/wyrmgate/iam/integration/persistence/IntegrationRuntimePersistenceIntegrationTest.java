@@ -389,6 +389,53 @@ class IntegrationRuntimePersistenceIntegrationTest {
     }
 
     @Test
+    void concurrentFirstAccountAdmissionsSerializeAcrossRevisions() throws Exception {
+        TenantContext tenant=tenant("create-concurrency");
+        UUID binding=connector(tenant,"runtime.test","1.0",true), cause=ids.nextId();
+        UUID first=createProvisioning(tenant,binding,cause,1), second=createProvisioning(tenant,binding,cause,2);
+        var a=new ConnectorWorkRepository.ProvisioningCandidate(first,ids.nextId(),tenant.tenantId(),binding,
+                "UPSERT_PRINCIPAL","DESIRED_PRINCIPAL",cause,1,"test.principal",1,"first",ids.nextId(),null,Map.of());
+        var b=new ConnectorWorkRepository.ProvisioningCandidate(second,ids.nextId(),tenant.tenantId(),binding,
+                "UPSERT_PRINCIPAL","DESIRED_PRINCIPAL",cause,2,"test.principal",1,"second",ids.nextId(),null,Map.of());
+        var acquired=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        try(var executor=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var firstClaim=executor.submit(()->transactions.required(()->{
+                var decision=repository.principalCreationAdmission(a);
+                acquired.countDown();
+                try{if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new IllegalStateException("test timeout");}
+                catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+                jdbc.update("UPDATE integration.provisioning_task SET state='RUNNING' WHERE id=?",first);
+                return decision;
+            }));
+            try {
+                assertThat(acquired.await(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                assertThat(transactions.required(()->repository.principalCreationAdmission(b)))
+                        .isEqualTo(io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.RETRY);
+            } finally {release.countDown();}
+            assertThat(firstClaim.get(10,java.util.concurrent.TimeUnit.SECONDS))
+                    .isEqualTo(io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.ADMIT);
+        }
+        assertThat(transactions.required(()->repository.principalCreationAdmission(b)))
+                .isEqualTo(io.wyrmgate.iam.integration.application.ProvisioningAdmission.Decision.RETRY);
+    }
+
+    @Test
+    void scheduledReconciliationPinsConfigurationAndFailsStaleWorkWithoutAbsence() {
+        TenantContext tenant=tenant("scheduled-pins");
+        UUID binding=connector(tenant,"runtime.test","1.0",true);
+        var commands=new IntegrationReconciliationCommands(jdbc,ids,null,
+                (t,target)->io.wyrmgate.iam.catalog.application.CatalogTargetReferenceQuery.Validation.VALID);
+        var run=transactions.required(()->commands.schedule(tenant,binding,1,"PRINCIPAL","FULL",null,NOW,ids.nextId()));
+        assertThat(jdbc.queryForObject("SELECT binding_revision FROM integration.reconciliation_run WHERE id=?",Long.class,run.id())).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("SELECT scan_generation FROM integration.reconciliation_run WHERE id=?",Long.class,run.id())).isPositive();
+        jdbc.update("UPDATE integration.connector_binding SET revision=2 WHERE id=?",binding);
+        assertThat(transactions.required(()->repository.failStaleReconciliation(100,NOW.plusSeconds(1)))).isEqualTo(1);
+        assertThat(commands.read(tenant,run.id()).state()).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT effective_completeness FROM integration.reconciliation_run WHERE id=?",String.class,run.id())).isEqualTo("UNKNOWN");
+    }
+
+    @Test
     void uncertainCreateBlocksLaterDesiredRevisionAndPreservesAttemptEvidence() {
         TenantContext tenant=tenant("uncertain-create-fence");
         UUID binding=connector(tenant,"runtime.test","1.0",true);

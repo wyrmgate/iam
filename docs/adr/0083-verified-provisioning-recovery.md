@@ -13,3 +13,7 @@ MATCHES_DESIRED means observation at the verified scan matched current technical
 ## Consequences
 
 Dedicated default-deny task recovery authority and evidence-run read authority. No raw provider identifiers or secrets in recovery command/result. The correction uses existing provider adapter contracts; no provider I/O in the authoritative transaction. The bounded supported profile is exact grant effects and mapped principal activation effects; unresolved creates remain blocked until independent exact correlation is established.
+
+## First-account creation fence
+
+Admission serializes initial creation for the same tenant and desired-principal identity across revisions. Prior in-flight or successful creates, blocked effects and ambiguous immutable attempt evidence prevent a second create. Ambiguous initial-create provider failures transition to BLOCKED while preserving the actual attempt outcome; a known rate limit or a verified pre-call availability failure retains bounded retry. Historical uncertainty never implies account absence. The exact mapped-account recovery rule remains the only supported manual resolution of an unidentified create effect.
