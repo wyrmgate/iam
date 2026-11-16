@@ -28,6 +28,7 @@ jobs:
           git rev-parse HEAD^1 || true
       - name: E1a and E2 candidate, E3 synthetic contract
         run: |
+          bash experiments/vf-fnd-g1/prepare-iam-source.sh
           sh apps/server/mvnw --batch-mode --no-transfer-progress --strict-checksums -f experiments/vf-fnd-g1/pom.xml clean verify
           sh apps/server/mvnw --batch-mode --no-transfer-progress --strict-checksums -f experiments/vf-fnd-g1/pom.xml dependency:tree
           sha256sum ~/.m2/repository/io/github/vyrnforge/platform-kernel/0.3.2/platform-kernel-0.3.2.jar
