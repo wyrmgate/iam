@@ -99,7 +99,7 @@ The agreed v3 layered architecture reconciliation is now represented durably by 
 - The first reconciled Identity backend migration is V13: Identity lifecycle transition mechanics reuse the framework-neutral lifecycle kernel while Identity retains its state/action graph, and the previously documented Organization/manager/membership/ownership model is now persisted as tenant-safe normalized authoritative state with temporal validity, typed provenance and optimistic revision. Public relationship APIs and source-driven relationship extraction remain separate future contracts.
 - [`architecture/layered-architecture.md`](architecture/layered-architecture.md) consolidates L1–L6 and Layer 6A–6I. The image-86 internal `Layer 6L` heading is treated as a labeling error; the reconciled area is 6I Runtime/Deployment/Availability/Recovery.
 
-The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0082 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
+The current controlled formal specification checkpoint remains **v0.8**. ADR-0042 through ADR-0088 are accepted amendments newer than that checkpoint and must be folded into the next controlled BRD/FRD/SRS/DDD/SAD/Data/Security/Integration/RTM revision. Formal requirements/RTM are not silently rewritten by this repository reconciliation.
 
 OD-005 remains open until a concrete production provider environment implements the accepted ADR-0043 objectives and measured recovery/failover evidence proves them. OD-006 legacy migration/cutover remains open.
 
@@ -136,3 +136,7 @@ ADR-0081/V41 adds explicit reconciliation scheduling and durable positive source
 ADR-0082 adds deployment-authorized exact local SCIM routes and non-secret worker execution configuration pins; local execution remains opt-in.
 
 ADR-0083/V42 adds explicit verified provisioning recovery against a quiesced, current complete scan; immutable recovery decision and a separate corrective plan where safe. Original tasks/attempts remain historical evidence. See Integration administration contract and #524.
+
+## VyrnForge Foundation — G2 decision checkpoint
+
+ADR-0084–0088 accept staged replatforming, selective Kernel core adoption, resource-audience and governed service identity direction, retention/refactoring of current IdP and signer, and conditional clean persistence baseline (V42 retained). Detailed security settings and actual schema selection are not accepted. See [ADR index](adr/README.md), [G3 authorization package](architecture/proposals/vf-fnd-g3-authorization-package.md) and [G3 authorization record](https://github.com/wyrmgate/iam/issues/538#issuecomment-6907004393). Current wire/runtime contracts remain unchanged; no new grant or profile enabled. #438 controlled formal checkpoint remains gated.
