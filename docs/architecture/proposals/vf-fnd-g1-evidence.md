@@ -1,6 +1,6 @@
 # VF-FND G1 — executed experiment evidence and G2 recommendations
 
-Status: bounded G1 evidence recorded; G2 review pending. No ADR acceptance, production implementation, release, migration or merge authorized.
+Status: historical G1 evidence at original experiment checkpoint; G2 directions subsequently approved. See [G2 record](https://github.com/wyrmgate/iam/issues/538#issuecomment-6906844883) and [G3 package](vf-fnd-g3-authorization-package.md). Earlier recommendations below are preserved as historical evidence, superseded by approved ADR scope in draft #544 and E2 follow-up. No production implementation, release, migration or merge authorized.
 Date: 2026-11-16. [G1 authorization in #538](https://github.com/wyrmgate/iam/issues/538#issuecomment-6905960434); #539/#540/#541/#543, Kernel #41, Storage #17. [Experiment plan](vf-fnd-engineering-experiments.md), [draft architecture PR #544](https://github.com/wyrmgate/iam/pull/544).
 
 ## Exact evidence
