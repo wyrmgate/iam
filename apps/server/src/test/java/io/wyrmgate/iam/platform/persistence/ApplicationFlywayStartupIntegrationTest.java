@@ -10,10 +10,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {
@@ -36,8 +39,14 @@ class ApplicationFlywayStartupIntegrationTest {
     }
 
     @AfterAll
-    static void stopPostgres() {
-        POSTGRES.stop();
+    static void stopPostgresAfterContext(@Autowired ConfigurableApplicationContext context) {
+        // Close the web server, schedulers and connection pool before stopping the database.
+        // DirtiesContext removes this closed context from the Spring test cache.
+        try {
+            context.close();
+        } finally {
+            POSTGRES.stop();
+        }
     }
 
     @Autowired
