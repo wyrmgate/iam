@@ -1,6 +1,6 @@
 # VF-FND — bounded engineering experiment plan
 
-Status: G1 authorized and bounded probes executed; [evidence and G2 review](vf-fnd-g1-evidence.md). The original plan remains below as the planned criteria; full coverage is partial. Product strategic approvals on [#538](https://github.com/wyrmgate/iam/issues/538#issuecomment-6905748976), #539/#540; draft #544. ADR-0084–0088 are Proposed. G1 authorization recorded in #538; E1a/E2/E3/E4 executed on separate draft PRs #545 and Storage #87. E1b/E5 not authorized; no production implementation/merge approved. Review exact evidence before selecting any architecture or creating production implementation PRs. Read canonical main and re-pin if it moves.
+Status: G1 authorized and bounded probes executed; [evidence and G2 review](vf-fnd-g1-evidence.md). The original plan remains below as the planned criteria; full coverage is partial. Product strategic approvals on [#538](https://github.com/wyrmgate/iam/issues/538#issuecomment-6905748976), #539/#540; draft #544. G2 directions approved 2026-11-16; draft ADR-0084–0088 pending explicit canonical merge. [G3 package](vf-fnd-g3-authorization-package.md). G1 authorization recorded in #538; E1a/E2/E3/E4 executed on separate draft PRs #545 and Storage #87. E1b/E5 not authorized; no production implementation/merge approved. G2 selected retain/refactor after #546; remaining concrete settings and G3 authorization required before implementation PRs. Read canonical main and re-pin if it moves.
 
 ## Baselines and common harness
 
@@ -48,7 +48,7 @@ Owner: QA and Delivery, Platform provisions staging after authorization. Not exe
 |---|---|---|
 | G0 strategic direction (approved) | Design review and experiment plans | Product Owner #538/539/540 |
 | G1 experiment execution (authorized; bounded evidence recorded) | Isolated E1a/E2/E3 in parallel against same draft contract; E4 synthetic inventory, not customer data | Architecture/Security/Delivery; #41/#541/#540/#543 |
-| G2 detailed ADR decision | Review E1a/E2/E3; resolve actual contract parameters and candidate selection; E1b/E4 only with relevant adapter/target design; report findings, no merge | Architecture/Product/Security + Storage owner |
+| G2 decision (approved directions) | Retain/refactor engine, core-first Kernel, resource/service semantic direction, staged replatform and conditional V42 migration; detailed parameters still gated; no merge | Architecture/Product/Security + Storage owner |
 | G3 implementation authorization | Accepted ADR PRs with explicit human merge; separate implementation slices and versioned contracts; E1b/E4 evidence if applicable | IAM/Kernel/Storage owners |
 | G4 staging acceptance | E5 actual tests; evidence #542, not merely CI | QA/Platform/Delivery |
 | G5 customer/release | Actual inventory, rehearsal, approved cutover, controlled #438 and ADR-0043 | #543/Platform/Product |
