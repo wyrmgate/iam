@@ -16,6 +16,11 @@ final class IdpJwkEncoder {
             throw new IllegalStateException(
                     "first-party IdP JWKS currently supports RSA signing keys only; configured key algorithm is unsupported");
         }
+        // RFC 7518 section 3.3 requires at least 2048 bits for RS256/384/512.
+        // All current and retained keys pass this encoder through IdpVerificationKeySet.
+        if (rsa.getModulus().bitLength() < 2048) {
+            throw new IllegalStateException("first-party IdP RSA signing keys must be at least 2048 bits");
+        }
         Map<String, Object> jwk = new LinkedHashMap<>();
         jwk.put("kty", "RSA");
         jwk.put("use", "sig");
