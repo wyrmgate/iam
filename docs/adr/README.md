@@ -6,9 +6,9 @@ This directory is the canonical home for Wyrmgate IAM architecture decisions. Th
 
 Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 
-## Proposed ADRs — VF-FND review (not authoritative until accepted)
+## G2-approved ADRs — draft #544, pending explicit canonical merge
 
-Strategic direction approved in #538/#539/#540; technical decisions below remain Proposed in draft PR #544. They do not supersede accepted decisions or authorize implementation/merge.
+[G2 approval](https://github.com/wyrmgate/iam/issues/538#issuecomment-6906844883) records accepted directions only. On this draft branch, ADR-0084–0088 carry Accepted status scoped to that approval; main remains governed by 0001–0083 until explicitly authorized merge. ADR-0086 detailed contract and ADR-0088 actual schema selection remain gated. No implementation or merge authorized. [G3 authorization package](../architecture/proposals/vf-fnd-g3-authorization-package.md).
 
 - [ADR-0084 Staged IAM replatforming and integrated release gates](0084-staged-replatforming-and-release-gates.md)
 - [ADR-0085 Shared Platform Kernel adoption boundary](0085-platform-kernel-adoption-boundary.md)
