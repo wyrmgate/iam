@@ -19,6 +19,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -26,6 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Actual local embedded server, V42 fresh installation and security filter chains. */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT, properties={
     "server.address=127.0.0.1","iam.auth.enabled=false","iam.idp.enabled=true",
     "iam.idp.issuer=https://iam.example.invalid","iam.idp.federation.enabled=false",
@@ -46,7 +49,16 @@ class IdpRetainedHttpIntegrationTest {
         r.add("spring.datasource.password",DB::getPassword);
         r.add("iam.bootstrap.installation.password",()->PASSWORD);
     }
-    @AfterAll static void stop(){DB.stop();}
+    @AfterAll
+    static void stopPostgresAfterContext(@Autowired ConfigurableApplicationContext context) {
+        // Close the web server, schedulers and connection pool before stopping the database.
+        // DirtiesContext removes this closed context from the Spring test cache.
+        try {
+            context.close();
+        } finally {
+            DB.stop();
+        }
+    }
     @LocalServerPort int port;
     @Autowired InstallationBootstrapService bootstrap;
     @Autowired ConsoleLoginRouteQuery console;
