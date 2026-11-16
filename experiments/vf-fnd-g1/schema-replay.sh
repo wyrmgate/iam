@@ -6,11 +6,15 @@ out=/tmp/vf-fnd-g1
 mkdir -p "$out"
 trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
 docker run --detach --rm --name "$name" -e POSTGRES_PASSWORD=synthetic-only -e POSTGRES_USER=experiment -e POSTGRES_DB=source postgres:18.4-alpine
+ready=0
 for i in $(seq 1 60); do
-  if docker exec "$name" pg_isready -U experiment -d source >/dev/null 2>&1; then break; fi
+  if docker exec "$name" pg_isready -h 127.0.0.1 -U experiment -d source >/dev/null 2>&1; then
+    ready=$((ready+1)); if [ "$ready" -ge 2 ]; then break; fi
+  else ready=0; fi
   sleep 1
 done
-docker exec "$name" pg_isready -U experiment -d source
+test "$ready" -ge 2
+docker exec "$name" pg_isready -h 127.0.0.1 -U experiment -d source
 psql_db(){ docker exec -i "$name" psql -X -v ON_ERROR_STOP=1 -U experiment -d "$1"; }
 for f in $(find apps/server/src/main/resources/db/migration -maxdepth 1 -name 'V*__*.sql' | sort -V); do
   echo "$(basename "$f")"
