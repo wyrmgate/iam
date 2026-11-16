@@ -24,8 +24,8 @@ dump candidate > "$out/candidate-schema.sql"
 diff -u "$out/source-schema.sql" "$out/candidate-schema.sql"
 psql_db source <<'SQL'
 INSERT INTO tenancy.tenant(id,display_name,revision,created_at,updated_at,lifecycle_state) VALUES
- ('019a7f0e-2234-7abc-8def-1234567890ab','Synthetic A',1,'2026-11-16Z','2026-11-16Z','PROVISIONING'),
- ('019a7f0e-2234-7abc-8def-1234567890ac','Synthetic B',2,'2026-11-16Z','2026-11-16Z','SUSPENDED');
+ ('019a7f0e-2234-7abc-8def-1234567890ab','Synthetic A',1,'2026-11-16 00:00:00+00','2026-11-16 00:00:00+00','PROVISIONING'),
+ ('019a7f0e-2234-7abc-8def-1234567890ac','Synthetic B',2,'2026-11-16 00:00:00+00','2026-11-16 00:00:00+00','SUSPENDED');
 SQL
 # Data-only fixture, not customer migration and not Flyway history.
 docker exec "$name" pg_dump -U experiment -d source --data-only --no-owner --no-privileges --table=tenancy.tenant > "$out/tenant-fixture.sql"
