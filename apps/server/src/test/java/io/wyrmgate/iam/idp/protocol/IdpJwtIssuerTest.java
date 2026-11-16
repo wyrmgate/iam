@@ -104,6 +104,78 @@ class IdpJwtIssuerTest {
         }
     }
 
+    @Test
+    void weakCurrentOrRetainedRsaKeysFailStartupAndEveryPublicationPath() throws Exception {
+        var generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        var strongPair = generator.generateKeyPair();
+        generator.initialize(1024);
+        var weakPair = generator.generateKeyPair();
+        var props = new IdpProtocolProperties(true, "https://idp.example.test");
+        var now = Instant.parse("2026-11-16T00:00:00Z");
+        for (String algorithm : java.util.List.of("SHA256withRSA", "SHA384withRSA", "SHA512withRSA")) {
+            var strong = new SigningKeyMaterial("strong", algorithm, strongPair.getPublic());
+            var weak = new SigningKeyMaterial("weak", algorithm, weakPair.getPublic());
+            var current = new java.util.concurrent.atomic.AtomicReference<>(strong);
+            var published = new java.util.concurrent.atomic.AtomicReference<>(java.util.List.of(strong));
+            var signCalls = new java.util.concurrent.atomic.AtomicInteger();
+            SigningKeyProvider provider = new SigningKeyProvider() {
+                public SigningKeyMaterial currentSigningKey() { return current.get(); }
+                public Optional<SigningKeyMaterial> verificationKey(String kid) {
+                    return published.get().stream().filter(k -> k.keyId().equals(kid)).findFirst();
+                }
+                public java.util.List<SigningKeyMaterial> verificationKeys() { return published.get(); }
+                public byte[] sign(byte[] payload) {
+                    signCalls.incrementAndGet();
+                    try {
+                        var signature = Signature.getInstance(algorithm);
+                        signature.initSign(strongPair.getPrivate());
+                        signature.update(payload);
+                        return signature.sign();
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                }
+            };
+            var controller = new IdpProtocolController(props, provider);
+            var issuer = new IdpJwtIssuer(props, provider, JsonMapper.builder().build());
+            var tenant = new TenantContext(UUID.randomUUID());
+            var authorizationCode = code(UUID.randomUUID(), now);
+            assertThat(issuer.issue(tenant, authorizationCode, now).accessToken()).isNotBlank();
+            assertThat(controller.discovery().getBody()).isNotNull();
+            assertThat(controller.jwks().getBody()).isNotNull();
+            int before = signCalls.get();
+
+            // Weak retained material must invalidate the entire published set, even with a strong current key.
+            published.set(java.util.List.of(strong, weak));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> new IdpProtocolController(props, provider));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, controller::discovery);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, controller::jwks);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> issuer.issue(tenant, authorizationCode, now));
+            assertThat(signCalls.get()).isEqualTo(before);
+
+            // A weak current key also fails every path before signing.
+            current.set(weak);
+            published.set(java.util.List.of(weak, strong));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> new IdpProtocolController(props, provider));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, controller::discovery);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, controller::jwks);
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> issuer.issue(tenant, authorizationCode, now));
+            assertThat(signCalls.get()).isEqualTo(before);
+
+            // Restoring a valid set restores issuance, discovery and JWKS.
+            current.set(strong);
+            published.set(java.util.List.of(strong));
+            assertThat(issuer.issue(tenant, authorizationCode, now).accessToken()).isNotBlank();
+            assertThat(controller.discovery().getBody()).isNotNull();
+            assertThat(controller.jwks().getBody()).isNotNull();
+        }
+    }
+
     private static IdpAuthorizationCode code(UUID identityId, Instant now) {
         return new IdpAuthorizationCode(
                 UUID.randomUUID(),
