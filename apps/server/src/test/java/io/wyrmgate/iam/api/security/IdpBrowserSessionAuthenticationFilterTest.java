@@ -56,6 +56,31 @@ class IdpBrowserSessionAuthenticationFilterTest {
     }
 
     @Test
+    void unresolvedSessionPreservesDownstreamDenialButResolutionOutageFailsClosed() throws Exception {
+        IdpBrowserSessionService sessions = mock(IdpBrowserSessionService.class);
+        var filter = new IdpBrowserSessionAuthenticationFilter(sessions, new IdpCsrfTokenCodec(), UUID::randomUUID);
+        when(sessions.resolve(org.mockito.ArgumentMatchers.eq("revoked"), org.mockito.ArgumentMatchers.any(Instant.class)))
+                .thenReturn(Optional.empty());
+        var request = new MockHttpServletRequest("GET", "/api/v1/identities");
+        request.setCookies(new Cookie(IdpAuthorizationController.BROWSER_SESSION_COOKIE, "revoked"));
+        var response = new MockHttpServletResponse();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> filter.doFilter(request, response,
+                (req, res) -> { throw new org.springframework.security.access.AccessDeniedException("denied"); }))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+
+        when(sessions.resolve(org.mockito.ArgumentMatchers.eq("outage"), org.mockito.ArgumentMatchers.any(Instant.class)))
+                .thenThrow(new IllegalStateException("database unavailable"));
+        var outage = new MockHttpServletRequest("GET", "/api/v1/identities");
+        outage.setCookies(new Cookie(IdpAuthorizationController.BROWSER_SESSION_COOKIE, "outage"));
+        var unavailable = new MockHttpServletResponse();
+        filter.doFilter(outage, unavailable, (req, res) -> { throw new AssertionError("must not continue"); });
+        assertThat(unavailable.getStatus()).isEqualTo(503);
+        assertThat(unavailable.getContentAsString()).contains("authentication_context_unavailable");
+    }
+
+    @Test
     void rejectsCookieAuthenticatedMutationWithoutCsrfProof() throws Exception {
         IdpBrowserSessionAuthenticationFilter filter = new IdpBrowserSessionAuthenticationFilter(
                 mock(IdpBrowserSessionService.class), new IdpCsrfTokenCodec(), UUID::randomUUID);
