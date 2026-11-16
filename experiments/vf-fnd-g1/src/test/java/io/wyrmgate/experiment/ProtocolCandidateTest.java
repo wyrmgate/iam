@@ -33,7 +33,7 @@ class ProtocolCandidateTest {
         var standard=new OAuth2ClientCredentialsAuthenticationValidator();
         provider.setAuthenticationValidator(ctx->{
             standard.accept(ctx); // never replace standard scope check
-            var grant=ctx.getAuthentication();
+            var grant=(OAuth2ClientCredentialsAuthenticationToken)ctx.getAuthentication();
             if(!available.get()) throw new OAuth2AuthenticationException("temporarily_unavailable");
             if(!active.get() || !RESOURCE.equals(grant.getAdditionalParameters().get("resource")))
                 throw new OAuth2AuthenticationException("invalid_grant");
