@@ -6,6 +6,18 @@ This directory is the canonical home for Wyrmgate IAM architecture decisions. Th
 
 Each ADR is `Proposed`, `Accepted`, `Superseded`, or `Rejected`.
 
+## Proposed ADRs — VF-FND review (not authoritative until accepted)
+
+Strategic direction approved in #538/#539/#540; technical decisions below remain Proposed in draft PR #544. They do not supersede accepted decisions or authorize implementation/merge.
+
+- [ADR-0084 Staged IAM replatforming and integrated release gates](0084-staged-replatforming-and-release-gates.md)
+- [ADR-0085 Shared Platform Kernel adoption boundary](0085-platform-kernel-adoption-boundary.md)
+- [ADR-0086 Ecosystem resource audiences and governed service identity](0086-ecosystem-resource-audience-and-service-identity.md)
+- [ADR-0087 First-party IdP protocol engine evaluation](0087-idp-protocol-engine-evaluation.md)
+- [ADR-0088 Conditional clean persistence baseline and beta-company migration](0088-conditional-clean-schema-and-customer-migration.md)
+
+[Bounded experiment plan](../architecture/proposals/vf-fnd-engineering-experiments.md). ADR numbering provisional until approved merge; recheck main before acceptance.
+
 ## Current canonical ADRs
 
 - [ADR-0001 Framework-neutral capability architecture](0001-framework-neutral-capability-architecture.md)
