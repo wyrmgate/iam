@@ -1,7 +1,6 @@
 package io.wyrmgate.iam.api.security;
 
 import io.wyrmgate.iam.administration.application.ControlPlaneActorResolver;
-import io.wyrmgate.iam.administration.domain.ExternalAuthenticationSubject;
 import io.wyrmgate.iam.platform.id.IdGenerator;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -51,7 +50,7 @@ public final class ControlPlaneActorResolutionFilter extends OncePerRequestFilte
         String issuer = jwtAuthentication.getToken().getClaimAsString("iss");
         String subject = jwtAuthentication.getToken().getSubject();
         try {
-            var resolved = actorResolver.resolve(new ExternalAuthenticationSubject(issuer, subject));
+            var resolved = actorResolver.resolve(KernelControlPlaneIdentityAdapter.externalSubject(issuer, subject));
             if (resolved.isEmpty()) {
                 SemanticAuthenticationFailureWriter.write(
                         response,
