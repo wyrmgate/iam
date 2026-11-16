@@ -57,7 +57,7 @@ public final class IntegrationReconciliationCommands {
                 INSERT INTO integration.reconciliation_run(id,tenant_id,connector_binding_id,operation_id,scope_object_class,
                     scope_mode,state,configuration_version,runtime_id,runtime_version,contract_id,contract_version,checkpoint_start,
                     correlation_id,revision,started_at,created_at,updated_at,scan_generation,binding_revision,connector_revision)
-                VALUES (?,?,?,?,?,?,'RUNNING',?,?,?,?,?,?,1,?,?,?,nextval('integration.reconciliation_scan_generation_seq'),?,?)
+                VALUES (?,?,?,?,?,?,'RUNNING',?,?,?,?,?,?,?,1,?,?,?,nextval('integration.reconciliation_scan_generation_seq'),?,?)
                 """,id,tenant.tenantId(),binding,ids.nextId(),objectClass,scopeMode,b.config(),b.runtime(),b.runtimeVersion(),
                 b.contract(),b.contractVersion(),checkpoint,correlation,Timestamp.from(now),Timestamp.from(now),Timestamp.from(now),b.revision(),b.connectorRevision());
         return new ScheduledRun(id,binding,objectClass,scopeMode,1,"RUNNING");

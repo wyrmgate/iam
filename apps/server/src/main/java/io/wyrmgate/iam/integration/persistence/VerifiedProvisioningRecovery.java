@@ -120,15 +120,20 @@ public final class VerifiedProvisioningRecovery {
                     AND (completed_at IS NOT NULL OR completion_lease_epoch IS NOT NULL))
                 """,tid,t.binding(),scope,run.generation()))throw conflict("verification run has been superseded");
 
-        // No competing current plan for this desired cause. Other causes remain protected by the shared admission checks.
-        if(exists("""
-                SELECT EXISTS(SELECT 1 FROM integration.provisioning_task
-                  WHERE tenant_id=? AND subject_kind=? AND subject_id=? AND id<>?
-                    AND state IN ('READY','RUNNING','FAILED_RETRYABLE'))
-                """,tid,t.kind(),t.subject(),taskId))throw conflict("another current plan already exists");
         Map<String,Object> payload;
         try{payload=json.readValue(t.payload(),new TypeReference<Map<String,Object>>(){});}
         catch(Exception e){throw conflict("historical task route cannot be interpreted");}
+        // A never-leased duplicate initial-create cannot pass the historical creation fence.
+        // It is not competing external work and must not strand verified recovery of the original.
+        boolean initialCreate="DESIRED_PRINCIPAL".equals(t.kind())&&"UPSERT_PRINCIPAL".equals(t.operation())
+                &&text(payload,"providerStableId")==null;
+        if(exists("""
+                SELECT EXISTS(SELECT 1 FROM integration.provisioning_task
+                  WHERE tenant_id=? AND subject_kind=? AND subject_id=? AND id<>?
+                    AND state IN ('READY','RUNNING','FAILED_RETRYABLE')
+                    AND NOT (? AND state='READY' AND attempt_count=0 AND operation_type='UPSERT_PRINCIPAL'
+                             AND COALESCE(payload->>'providerStableId','')=''))
+                """,tid,t.kind(),t.subject(),taskId,initialCreate))throw conflict("another current plan already exists");
         Result result="GRANT".equals(scope)?grant(tenant,t,target,runId,payload,principalId)
                 :principal(tenant,t,target,runId,payload,principalId);
         UUID id=ids.nextId();
@@ -177,8 +182,8 @@ public final class VerifiedProvisioningRecovery {
                 SELECT present,last_observed_run_id FROM integration.observed_grant
                 WHERE tenant_id=? AND connector_binding_id=? AND principal_provider_id=? AND entitlement_provider_id=?
                 """,(rs,n)->Map.entry(rs.getBoolean(1),rs.getObject(2,UUID.class)),tenant.tenantId(),t.binding(),account,group);
-        boolean present=!observed.isEmpty()&&observed.getFirst().getKey();
-        if(present&&!runId.equals(observed.getFirst().getValue()))throw conflict("grant observation is not from the verification run");
+        boolean present=observed.stream().anyMatch(Map.Entry::getKey);
+        if(observed.stream().anyMatch(o->o.getKey()&&!runId.equals(o.getValue())))throw conflict("grant observation is not from the verification run");
         String observation=present?"PRESENT":"ABSENT";
         Map<String,Object> correction=new LinkedHashMap<>(p);
         correction.remove("providerEntitlementVersion");
