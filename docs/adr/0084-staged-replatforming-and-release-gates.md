@@ -1,6 +1,7 @@
 # ADR-0084: Staged IAM replatforming and integrated release gates
 
-- Status: Accepted (G2 direction; draft PR #544, not yet effective on main)
+- Status: Accepted
+- Acceptance scope: G2 direction; draft PR #544, not yet effective on main
 - Date: 2026-11-16
 - G2 approval: [2026-11-16](https://github.com/wyrmgate/iam/issues/538#issuecomment-6906844883). Scope limited to architectural direction; implementation and merge gated.
 - Preserves: ADR-0001, 0002, 0003, 0005, 0009, 0042, 0043, 0051–0083.
